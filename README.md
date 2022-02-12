@@ -1,2 +1,2 @@
-# vaif.com.br
+# vaif
 Desenvolvimento site vaif
