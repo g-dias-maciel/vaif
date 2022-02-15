@@ -1,12 +1,119 @@
+@use 'src/scss/reset';
+
+//Fonts
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;600;900&display=swap');
+
+
 //Colors
-$black : #000000;
-$yellow : #f9f871;
-$purple : #7a00b4;
+$main_bg_color : #000000;
+$accent_color : #f9f871;
+$primary_color : #7a00b4;
+$main_font_color: #fefefe;
 
+//Font properties
+$font_light : 300;
+$font_regular: 400;
+$font_semi: 600;
+$font_bold : 900;
 
-
+:root{
+  font-family: 'Barlow', sans-serif;
+}
 
 body {
-  background: $black;
-  color: #ffffff;
+  background: $main_bg_color;
+  color: $main_font_color;
+  font-weight: $font_regular;
+  font-size: 1.1rem;
+  line-height: 1.5;
+}
+
+h1,
+h2,
+h3{
+  text-transform: uppercase;
+  font-weight: $font_semi;
+  line-height: 0.9;
+}
+
+
+.wrapper {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.light{
+  font-weight: $font_light;
+}
+.regular{
+  font-weight: $font_regular;
+}
+.semi{
+  font-weight: $font_semi;
+}
+.bold{
+  font-weight: $font_bold;
+}
+
+
+.color__accent{
+  color: $accent_color;
+}
+
+.header__locked{
+  position: fixed;
+  top: 0;
+  width: 100%
+}
+
+header{
+  display: flex;
+  justify-content: space-between;
+  padding: 0px 20px 0px;
+  margin-bottom: 20px;
+  background-color: rgb(0 0 0 / 0.5);
+}
+
+ul{
+  list-style: none;
+}
+
+a{
+  text-decoration: none;
+  color: inherit;
+}
+
+.hero__image{
+  background-image: url("../img/hero-montain-bw-gradient_fitted.png");
+  background-size: 2000px;
+  background-repeat: no-repeat;
+  background-position: 50% 0%;
+  min-height: 550px;
+  height: 100%;
+  width: 100%;
+}
+
+.menu__option{
+  padding: 5px;
+}
+
+.logo {
+  display: flex;
+}
+
+.svg__logo{
+  margin: auto;
+  max-height: 5vh;
+}
+
+.nav_bar{
+  display: flex;
+}
+
+@media screen and (min-width: 2000px) {
+
+  .wrapper {
+    width: 80%;
+    margin: 0 auto;
+  }
 }
