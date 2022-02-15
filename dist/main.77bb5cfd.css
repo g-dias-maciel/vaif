@@ -93,6 +93,15 @@ h3 {
   line-height: 0.9;
 }
 
+ul {
+  list-style: none;
+}
+
+a {
+  text-decoration: none;
+  color: inherit;
+}
+
 .wrapper {
   width: 100%;
   margin: 0 auto;
@@ -118,27 +127,17 @@ h3 {
   color: #f9f871;
 }
 
+header {
+  display: flex;
+  justify-content: space-between;
+  padding: 0.2rem 2.5rem 0.2rem 1.5rem;
+  background-image: linear-gradient(to bottom, black, rgba(0, 0, 0, 0.1));
+}
+
 .header__locked {
   position: fixed;
   top: 0;
   width: 100%;
-}
-
-header {
-  display: flex;
-  justify-content: space-between;
-  padding: 0px 20px 0px;
-  margin-bottom: 20px;
-  background-color: rgba(0, 0, 0, 0.5);
-}
-
-ul {
-  list-style: none;
-}
-
-a {
-  text-decoration: none;
-  color: inherit;
 }
 
 .hero__image {
@@ -151,10 +150,6 @@ a {
   width: 100%;
 }
 
-.menu__option {
-  padding: 5px;
-}
-
 .logo {
   display: flex;
 }
@@ -162,10 +157,39 @@ a {
 .svg__logo {
   margin: auto;
   max-height: 5vh;
+  opacity: 0.6;
 }
 
-.nav_bar {
+.menu {
   display: flex;
+}
+
+.menu__option {
+  line-height: 0.9;
+  padding: 5px;
+  font-size: 1em;
+}
+
+.menu__selected {
+  border-bottom: 0.1em solid #f9f871;
+}
+
+.btn {
+  text-align: center;
+  text-transform: uppercase;
+  padding: 0.75rem 1rem;
+  font-weight: 600;
+  font-size: 1.125rem;
+  margin: 2rem;
+  background-color: #7a00b4;
+  border-radius: 0.75rem;
+  transition: all 150ms ease;
+}
+
+.btn:hover {
+  background-color: #660093;
+  box-shadow: 0 0 0.25rem 0.1rem rgba(255, 255, 255, 0.15);
+  transition: all 150ms ease;
 }
 
 @media screen and (min-width: 2000px) {
