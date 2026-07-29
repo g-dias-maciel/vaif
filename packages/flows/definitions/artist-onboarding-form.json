@@ -1,0 +1,219 @@
+{
+  "name": "Artist Onboarding Form",
+  "nodes": [
+    {
+      "parameters": {
+        "formTitle": "Cadastro de Artista — VAIF",
+        "formDescription": "Preencha os dados do artista para iniciar o onboarding",
+        "formFields": {
+          "values": [
+            {
+              "label": "Nome",
+              "fieldType": "text",
+              "requiredField": true,
+              "fieldName": "nome"
+            },
+            {
+              "label": "Número WhatsApp",
+              "fieldType": "text",
+              "requiredField": true,
+              "fieldName": "whatsapp_number",
+              "placeholder": "5511999990001"
+            },
+            {
+              "label": "Especialidades (vírgula)",
+              "fieldType": "text",
+              "fieldName": "specialties"
+            },
+            {
+              "label": "Não Faz",
+              "fieldType": "text",
+              "fieldName": "nao_faco"
+            },
+            {
+              "label": "Piso (%)",
+              "fieldType": "number",
+              "fieldName": "floor_pct"
+            },
+            {
+              "label": "Tipo Sinal",
+              "fieldType": "text",
+              "fieldName": "deposit_type",
+              "placeholder": "percent ou fixed"
+            },
+            {
+              "label": "Valor Sinal",
+              "fieldType": "number",
+              "fieldName": "deposit_value"
+            },
+            {
+              "label": "Chave PIX",
+              "fieldType": "text",
+              "fieldName": "pix_key"
+            },
+            {
+              "label": "Instagram",
+              "fieldType": "text",
+              "fieldName": "instagram_handle",
+              "placeholder": "@artist"
+            }
+          ]
+        },
+        "options": {
+          "responseMode": "onReceived"
+        },
+        "path": "onboard"
+      },
+      "type": "n8n-nodes-base.formTrigger",
+      "typeVersion": 2.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "5bb336e0-7227-4c0a-b719-1fdde7d3994a",
+      "name": "Form Trigger",
+      "webhookId": "c8cc6cba-7888-4a25-a985-8f0c3ad98e73"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const nome = $input.first().json.nome || 'artista';\nconst slug = nome.toLowerCase()\n  .normalize('NFD').replace(/[\\u0300-\\u036f]/g, '') // remove accents\n  .replace(/[^a-z0-9]+/g, '-')\n  .replace(/^-+|-+$/g, '');\nconst token = Array.from({length: 32}, () => \n  'abcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 36)]\n).join('');\n\nreturn [{\n  json: {\n    ...$input.first().json,\n    wa_session_slug: slug + '-' + Date.now().toString(36),\n    onboarding_token: token,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "706eb18b-ff80-47f8-a40d-f7037be91afb",
+      "name": "Generate Slug+Token"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO public.artists (\n  nome, whatsapp_number, specialties, nao_faco, floor_pct,\n  deposit_type, deposit_value, pix_key, instagram_handle,\n  wa_session_slug, status, onboarding_token\n) VALUES (\n  $1, $2, $3, $4, $5,\n  $6, $7, $8, $9,\n  $10, 'stub', $11\n) ON CONFLICT (wa_session_slug) DO UPDATE SET onboarding_token = EXCLUDED.onboarding_token\nRETURNING id, nome, wa_session_slug, onboarding_token;",
+        "options": {
+          "queryReplacement": "={{\n  [\n    $json.nome,\n    $json.whatsapp_number,\n    ($json.specialties ? $json.specialties.split(',').map(s => s.trim()) : []),\n    ($json.nao_faco ? $json.nao_faco.split(',').map(s => s.trim()) : []),\n    ($json.floor_pct ? parseFloat($json.floor_pct) : null),\n    ($json.deposit_type || 'percent'),\n    ($json.deposit_value ? parseInt($json.deposit_value) : null),\n    ($json.pix_key || null),\n    ($json.instagram_handle || null),\n    $json.wa_session_slug,\n    $json.onboarding_token\n  ]\n}}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        0
+      ],
+      "id": "da8a8272-919e-4363-a59f-b2e80f2dc709",
+      "name": "INSERT Artist",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'http://localhost:3000/api/sessions' }}",
+        "authentication": "genericCredentialType",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "name",
+              "value": "={{ $json.wa_session_slug }}"
+            },
+            {
+              "name": "config",
+              "value": "={{ JSON.stringify({webhook: 'https://n8n.vaif.com.br/webhook/waha', debug: false}) }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        780,
+        0
+      ],
+      "id": "b4d06d41-bb8a-43f8-8aa1-9fe09168c4ee",
+      "name": "Create WAHA Session",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWithOptions": "json",
+        "responseBody": {
+          "values": {
+            "json": "={{\n  \"success\": true,\n  \"artist\": $json.nome,\n  \"onboarding_link\": \"https://vaif.com.br/onboard/\" + $json.onboarding_token,\n  \"message\": \"Artista cadastrado. Compartilhe este link com ele: https://vaif.com.br/onboard/\" + $json.onboarding_token,\n  \"token\": $json.onboarding_token,\n  \"wa_session\": $json.wa_session_slug\n}}"
+          }
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "0e6c1cc3-9b2d-4d51-8978-4164c0569f07",
+      "name": "Form Response"
+    }
+  ],
+  "connections": {
+    "Form Trigger": {
+      "main": [
+        [
+          {
+            "node": "Generate Slug+Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Generate Slug+Token": {
+      "main": [
+        [
+          {
+            "node": "INSERT Artist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "INSERT Artist": {
+      "main": [
+        [
+          {
+            "node": "Create WAHA Session",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create WAHA Session": {
+      "main": [
+        [
+          {
+            "node": "Form Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

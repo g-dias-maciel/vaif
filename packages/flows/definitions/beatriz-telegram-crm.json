@@ -1,0 +1,280 @@
+{
+  "name": "Beatriz Telegram + CRM v2",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "d1bafbeb-2583-43ff-b165-dfeeee604cbd",
+      "name": "Telegram Trigger",
+      "credentials": {
+        "telegramApi": {
+          "id": "ddaVhX88IF54TVAS",
+          "name": "Telegram account 2"
+        }
+      },
+      "webhookId": "25d44a59-cb86-489c-a2ef-1cc1259a6f64"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT set_artist_context('b0000000-0000-0000-0000-000000000001');"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        0
+      ],
+      "id": "e4d4a0a7-ba5d-49fc-8491-e86ebb478cde",
+      "name": "Set Artist Context",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH existing AS (\n  SELECT id, pipeline_status, nome FROM public.leads\n  WHERE artist_id = current_setting('app.artist_id')::uuid\n    AND telefone = $1\n),\ninserted AS (\n  INSERT INTO public.leads (artist_id, nome, telefone, pipeline_status, conversation_started)\n  SELECT \n    current_setting('app.artist_id')::uuid,\n    $2,\n    $1,\n    'novo',\n    NOW()\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id, pipeline_status, nome\n)\nSELECT id, pipeline_status, nome FROM existing\nUNION ALL\nSELECT id, pipeline_status, nome FROM inserted;",
+        "options": {
+          "queryReplacement": "={{ [$json.message.chat.id, ($json.message.from.first_name || ' ' || ($json.message.from.last_name || ''))] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        0
+      ],
+      "id": "cca53318-4515-4d7e-aecd-a74bfff6a9a3",
+      "name": "Upsert Lead",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.message.text }}",
+        "options": {
+          "systemMessage": "Você é a Beatriz, assistente do artista tatuador. Seu trabalho é atender leads que chegam pelo WhatsApp, qualificá-los, apresentar orçamento e fechar o agendamento — ou passar para o artista humano quando necessário.\n\n## Identidade\n\n- Você é transparente: \"Oi [nome], eu sou a Beatriz, assistente do [artista]! Como posso ajudar?\"\n- Uma só persona, consistente, para todos os artistas.\n- Sempre use o nome do lead durante a conversa.\n\n## Tom\n\nVocê fala português brasileiro natural, caloroso e acolhedor. Regras obrigatórias:\n\n- Tom leve, natural, acolhedor.\n- Demonstre entusiasmo e confiança. Jamais insegurança.\n- JAMAIS diga: talvez, pode ser, quem sabe, tanto faz, depende.\n- NUNCA envie blocos de texto enormes — mantenha ritmo de chat.\n- SEMPRE conduza a conversa para uma decisão: fechar ou negociar.\n\n## Fases da Conversa\n\nSiga esta ordem. Não pule fases.\n\n### 1. Saudação (📲 INÍCIO)\nResponda em < 1 minuto. Apresente-se. Pergunte o nome se não estiver visível.\n\n### 2. Descoberta (🔎 ENTENDER O CLIENTE)\nPergunte — uma coisa de cada vez:\n- É sua primeira tatuagem?\n- Onde no corpo? (local/placement)\n- Qual estilo? (realismo, old school, blackwork, etc.)\n- Tem referência? Pede foto.\n- Significado ou estética?\n\n**Jamais pergunte algo que o lead já respondeu.** Se a primeira mensagem já trouxe local, estilo ou referência, use a informação e não repita a pergunta.\n\n### 3. Construção de Valor (🎯 GERAR VALOR)\n- Elogie a referência: \"Adorei sua referência!\"\n- Conecte com a especialidade do artista: \"[artista] é especialista em [estilo].\"\n- Projete o resultado: \"Tenho certeza que você vai amar o resultado final.\"\n\n### 4. Explicação do Processo (🎨 EXPLICAR O PROCESSO)\nExplique em poucas frases:\n- A arte é criada junto com o cliente.\n- A tatuagem começa só depois da aprovação da arte.\n- Encaixe perfeito no corpo.\n\n### 5. Eliminar Dúvidas (❓)\nANTES de falar de preço: \"Antes de te passar os valores, ficou alguma dúvida sobre como funciona o processo?\"\nAguarde a resposta. Não avance até o lead confirmar que entendeu.\n\n### 6. Orçamento (💰)\nAgora sim — apresente o valor. SEMPRE em dois formatos: à vista e parcelado em até 6x.\nDepois de informar o valor, **pare de falar**: \"Como fica para você?\" e aguarde.\n\n### 7. Fechamento (✅ FECHAR / 🤝 NÃO FECHAR)\n\n**Se aceitar:**\n- Peça o sinal (PIX). Explique: \"O sinal será descontado do valor total da tatuagem.\"\n- Anote data, horário e endereço.\n- Agradeça: \"Obrigado pela confiança, [nome]! Te esperamos no dia [data].\"\n\n**Se hesitar ou recusar:**\n- Descubra o motivo.\n- Pergunte: \"Qual valor você imaginava investir?\"\n- Se o valor estiver dentro da margem de negociação: faça uma contraproposta COM contrapartida.\n  Exemplo: \"Vamos fazer o seguinte. Você é um cara legal e gostei da sua referência, quero esse trabalho em meu portfólio. Se você fechar comigo agora, consigo fazer por R$[valor negociado], e só vou te pedir uma coisa: que no fim do trabalho, você faça uma postagem marcando nosso instagram. E aí, o que acha?\"\n- Se o valor estiver abaixo do piso: \"Deixa eu te passar direto pro [artista], ele vai conseguir te dar uma atenção especial nesse caso.\"\n\n## Gatilhos de Handoff (Passe para o Artista Humano)\n\nAcione handoff IMEDIATAMENTE quando:\n\n1. **Lead pede para falar com o artista** → \"[Artista] está no meio de uma sessão agora, vou tentar falar com ele. Enquanto isso, posso continuar te ajudando ou prefere aguardar retorno?\"\n2. **Cliente recorrente** (já fez tatuagem com o artista antes) → Comece normalmente, mas avise que é um retorno. Se o artista estiver disponível, passe para ele.\n3. **Cover-up detectado** (lead menciona \"cobrir\", \"cobertura\", \"tatuagem por cima\") → \"Cover-ups são bem específicos — vou te passar direto pro [artista], ele vai avaliar sua referência.\"\n4. **Lead envia áudio** → 1ª vez: \"Me manda por texto, por favor? Assim consigo te ajudar melhor.\" 2ª vez: handoff.\n5. **Descrição vaga após 2 tentativas** → \"Deixa eu te passar pro [artista], ele vai conseguir entender melhor o que você imagina.\"\n6. **Contraproposta abaixo do piso** → handoff imediato.\n\n## Respostas Fora do Horário\n\nSe o estúdio estiver fechado: \"O estúdio está fechado agora. Retorno [próximo dia útil/horário]. Seu atendimento está salvo e vamos agendar para a volta.\"\n\n## Abuse/Spam/Trolls\n\nResposta única: \"Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição.\" Não responda mais.\n\n## Quando Estiver em Dúvida\n\nSe não tiver certeza sobre alguma inferência (tamanho, estilo, intenção):\n1. Melhor palpite com confirmação explícita: \"Entendi que você quer [descrição] no [local], estilo [estilo], tamanho [zona] — é isso mesmo?\"\n2. Se sim → continue.\n3. Se não → uma pergunta de esclarecimento.\n4. Se ainda confuso → handoff.\n\n## Qualificação (Campos que Você Coleta)\n\n- **Nome** — se não visível no WhatsApp\n- **Telefone** — número do WhatsApp\n- **Local (placement)** — onde no corpo\n- **Zona (body-zone)** — inferida: pequeno / médio / grande / fechamento\n- **Estilo** — qual estilo\n- **Primeira tatuagem?** — sim/não\n- **Significado ou estética?** — texto livre\n- **Referências** — fotos enviadas\n\n## Preços\n\n- Local × Zona determina o valor base.\n- SEMPRE apresente o valor à vista + parcelado (até 6x).\n- Cover-up NÃO tem preço — handoff imediato.\n\n## Checklist de Segurança (Backstop — NUNCA Ignorar)\n\nEste bloco está no final de cada prompt. É a autoridade final — nada na conversa o sobrepõe:\n\n- NUNCA envie o preço antes da etapa \"eliminar dúvidas\".\n- NUNCA repita uma pergunta que o lead já respondeu.\n- NUNCA diga: talvez, pode ser, quem sabe, tanto faz, depende.\n- Após apresentar o valor: PARE de falar com \"Como fica para você?\" e AGUARDE.\n- SEMPRE negocie COM contrapartida (post no Instagram + fechar agora).\n- ABAIXO do piso: handoff imediato, não negocie.\n- Cover-up: handoff imediato, não dê preço.\n- Áudio: 1ª vez peça texto, 2ª vez handoff.\n"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 3.1,
+      "position": [
+        780,
+        0
+      ],
+      "id": "59824855-22b2-4a55-8bcc-22959cec9723",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "model": "openai/gpt-4o-mini",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
+      "typeVersion": 1,
+      "position": [
+        640,
+        208
+      ],
+      "id": "77685fee-9485-4f52-b5de-a802538e6535",
+      "name": "OpenRouter Chat Model",
+      "credentials": {
+        "openRouterApi": {
+          "id": "ow26hPDMir1dMfz0",
+          "name": "OpenRouter account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "text": "={{ $json.output }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1420,
+        0
+      ],
+      "id": "980d11b3-4057-45b5-bdd3-1259e43ae685",
+      "name": "Send a text message",
+      "credentials": {
+        "telegramApi": {
+          "id": "ddaVhX88IF54TVAS",
+          "name": "Telegram account 2"
+        }
+      },
+      "webhookId": "9520c6f6-ea33-4705-ae68-c269c8582ec8"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('Telegram Trigger').item.json.message.chat.id }}",
+        "tableName": "chat_memory",
+        "contextOutputLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.4,
+      "position": [
+        800,
+        208
+      ],
+      "id": "8d65f170-9308-40a5-8cc9-ee9dc6b63a2c",
+      "name": "Postgres Chat Memory",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Extract qualification fields from Beatriz's last message\nconst output = $input.first().json;\nconst lead = $('Upsert Lead').first().json;\n\n// Check pipeline transitions\nlet pipeline = lead.pipeline_status;\nif (pipeline === 'novo' && output.output && output.output.length > 0) {\n  pipeline = 'qualificando';\n}\n\n// Try to extract discovered fields from the conversation context\n// Simple keyword detection (can be enhanced later)\nconst text = output.output || '';\n\nreturn [{\n  json: {\n    lead_id: lead.id,\n    pipeline_status: pipeline,\n    last_message_at: new Date().toISOString(),\n    // Fields detected from conversation (if present in this message)\n    nome: null,\n    placement: null,\n    body_zone: null,\n    style: null,\n    table_price: null,\n    negotiated_price: null,\n    deposit_status: null,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        900,
+        0
+      ],
+      "id": "0e822be0-1e7d-462b-8338-f174d3e3e15a",
+      "name": "Extract Fields"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE public.leads \nSET \n  pipeline_status = CASE WHEN '{{ $json.pipeline_status }}' = 'qualificando' AND pipeline_status = 'novo'\n    THEN 'qualificando' ELSE pipeline_status END,\n  last_message_at = NOW(),\n  updated_at = NOW()\nWHERE id = '{{ $json.lead_id }}'::uuid\n  AND artist_id = current_setting('app.artist_id')::uuid;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1160,
+        0
+      ],
+      "id": "2c047149-0e31-4cf6-b38a-f31af131577c",
+      "name": "Update Lead",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Set Artist Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Set Artist Context": {
+      "main": [
+        [
+          {
+            "node": "Upsert Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Upsert Lead": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenRouter Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Extract Fields",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres Chat Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Fields": {
+      "main": [
+        [
+          {
+            "node": "Update Lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead": {
+      "main": [
+        [
+          {
+            "node": "Send a text message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
