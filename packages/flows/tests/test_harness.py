@@ -68,12 +68,20 @@ def assert_true(cond, msg):
 
 # ─── Test fixtures ────────────────────────────────────────────────
 
-def _create_artist():
-    """Create harness test artist if not exists, return ID."""
-    rc, lines = psql("SELECT id FROM artists WHERE nome = 'Harness Artist'")
+def _create_artist_named(name, phone, session_slug):
+    """Create a test artist with given name/phone/slug. Returns ID."""
+    rc, lines = psql(f"SELECT id FROM artists WHERE nome = '{name}'")
     if lines:
         return lines[0]
+    rc, lines = psql(f"""
+        INSERT INTO artists (nome, whatsapp_number, wa_session_slug, status)
+        VALUES ('{name}', '{phone}', '{session_slug}', 'live')
+        RETURNING id""")
+    return lines[0] if lines else None
 
+
+def _create_artist():
+    """Create the primary harness test artist."""
     rc, lines = psql("""
         INSERT INTO artists (nome, whatsapp_number, specialties, nao_faco,
         floor_pct, deposit_type, deposit_value, pix_key, instagram_handle,
@@ -81,20 +89,13 @@ def _create_artist():
         VALUES ('Harness Artist', '5511999990000',
         '{realismo,blackwork}', '{pescoco}', 80, 'percent', 20, 'pix-test',
         '@harness_test', 'harness-session', 'live')
+        ON CONFLICT DO NOTHING
         RETURNING id""")
     return lines[0] if lines else None
 
 
 def _create_artist2():
-    """Create second harness artist."""
-    rc, lines = psql("SELECT id FROM artists WHERE nome = 'Harness Artist 2'")
-    if lines:
-        return lines[0]
-    rc, lines = psql("""
-        INSERT INTO artists (nome, whatsapp_number, wa_session_slug, status)
-        VALUES ('Harness Artist 2', '5511999990001', 'harness-session-2', 'live')
-        RETURNING id""")
-    return lines[0] if lines else None
+    return _create_artist_named('Harness Artist 2', '5511999990001', 'harness-session-2')
 
 
 def _seed_pricing(artist_id):

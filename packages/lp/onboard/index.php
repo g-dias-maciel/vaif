@@ -179,12 +179,12 @@ HTML;
 $result = call_n8n($validate_url, ['token' => $token]);
 
 if ($result === null || !($result['valid'] ?? false)) {
-    $msg = $result['error'] ?? 'Este link expirou ou já foi utilizado. Solicite um novo link de onboarding ao parceiro VAIF.';
+    $msg = htmlspecialchars($result['error'] ?? 'Este link expirou ou já foi utilizado. Solicite um novo link de onboarding ao parceiro VAIF.');
     $body = <<<HTML
     <div class="card">
         <div class="icon-large">&#x26A0;</div>
         <h1>Link inválido ou expirado</h1>
-        <h2>{$msg}</h2>
+        <h2>$msg</h2>
         <a href="/" class="btn">Voltar ao site</a>
     </div>
 HTML;
@@ -207,16 +207,11 @@ if ($qr_image !== '') {
     $qr_html = '<p style="color:#666;padding:60px 40px;">QR Code indisponível<br>Recarregue a página.</p>';
 }
 
-// JS config
+// JS config (encode for safe embedding in <script>)
 $js_token  = json_encode(['token' => $token]);
-$js_status = $status_url;
-$js_consume = $consume_url;
+$js_status = addcslashes($status_url, "'\\");
+$js_consume = addcslashes($consume_url, "'\\");
 $has_qr = $qr_image !== '' ? 'true' : 'false';
-
-$extra_head = <<<JSHEAD
-</head>
-<!-- Extra head closed above, inject JS before body end via heredoc -->
-JSHEAD;
 
 $body = <<<HTML
 <div class="card">

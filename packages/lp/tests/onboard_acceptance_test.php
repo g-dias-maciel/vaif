@@ -35,10 +35,13 @@ function fetch(string $url): string {
     return @file_get_contents($url, false, $ctx) ?: '';
 }
 
-// Start PHP built-in server
+// Start PHP built-in server (cleanup via register_shutdown_function)
 $docroot = dirname(__DIR__);
 $cmd = sprintf('php -S localhost:%d -t %s > /dev/null 2>&1 & echo $!', $server_port, escapeshellarg($docroot));
 $pid = (int) trim((string) shell_exec($cmd));
+register_shutdown_function(function () use ($pid) {
+    if ($pid) { exec("kill $pid 2>/dev/null"); }
+});
 sleep(1);
 $base = "http://localhost:$server_port";
 
@@ -105,14 +108,16 @@ assert_contains($resp3, 'Conectado com sucesso', 'Success page shows connected m
 assert_contains($resp3, 'Beatriz', 'Success page mentions Beatriz');
 assert_contains($resp3, 'btn', 'Success page has CTA button');
 
-// Test 11: Valid token page has onboarding elements (when n8n unavailable, shows maintenance)
-echo "Test: Onboarding elements on valid token\n";
+// Test 11: Valid token page content — shows maintenance when n8n unavailable,
+// shows onboarding when n8n is available. Both are valid states.
+echo "Test: Valid token page is well-formed\n";
 $resp4 = fetch("$base/onboard/abctoken12345");
-// When n8n is unavailable, shows maintenance; when available, shows onboarding
-$has_onboarding = str_contains($resp4, 'QR') || str_contains($resp4, 'qr') || str_contains($resp4, 'câmera');
-$has_maintenance = str_contains($resp4, 'manutenção') || str_contains($resp4, 'indisponível');
-$has_error = str_contains($resp4, 'inválido') || str_contains($resp4, 'expirado');
-assert_true($has_onboarding || $has_maintenance || $has_error, 'Valid token page renders a known state');
+assert_contains($resp4, '<html', 'Token page renders HTML');
+assert_contains($resp4, 'card', 'Token page has card layout');
+assert_contains($resp4, 'btn', 'Token page has a button');
+// Must not output raw PHP errors in any state
+assert_not_contains($resp4, 'Warning:', 'No PHP warnings on token page');
+assert_not_contains($resp4, 'Fatal error', 'No PHP fatal errors on token page');
 
 // Cleanup
 if ($pid) { exec("kill $pid 2>/dev/null"); }
