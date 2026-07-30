@@ -37,46 +37,38 @@ def request(method, path, data=None):
         error_body = e.read().decode()
         print(f"HTTP {e.code}: {error_body}", file=sys.stderr)
         sys.exit(1)
+def _clean_payload(wf):
+    """Strip auto-generated fields and build a clean API payload."""
+    for node in wf.get("nodes", []):
+        for field in ["id", "webhookId", "onError", "notes"]:
+            node.pop(field, None)
+
+    payload = {}
+    for key in ["name", "nodes", "connections", "settings"]:
+        if key in wf:
+            payload[key] = wf[key]
+    if "description" in wf:
+        payload["description"] = wf["description"]
+    return payload
+
 
 def create_workflow(def_path):
     with open(def_path) as f:
         wf = json.load(f)
 
-    required = ["name", "nodes", "connections", "settings"]
-    for k in required:
-        if k not in wf:
-            print(f"Missing required key: {k}", file=sys.stderr)
-            sys.exit(1)
-
-    payload = {
-        "name": wf["name"],
-        "nodes": wf["nodes"],
-        "connections": wf["connections"],
-        "settings": wf["settings"],
-    }
-    if "description" in wf:
-        payload["description"] = wf["description"]
-
+    payload = _clean_payload(wf)
     result = request("POST", "/workflows", payload)
     wf_id = result.get("id", "unknown")
     print(f"Created: {result.get('name')} (ID: {wf_id})")
     return wf_id
 
+
 def update_workflow(wf_id, def_path):
     with open(def_path) as f:
         wf = json.load(f)
 
-    # Get existing workflow to preserve state
-    existing = request("GET", f"/workflows/{wf_id}")
-
-    # Merge: definition overrides name/nodes/connections/settings/description
-    merged = existing.copy()
-    for key in ["name", "nodes", "connections", "settings", "description"]:
-        if key in wf:
-            merged[key] = wf[key]
-
-    # PUT requires the full workflow
-    result = request("PUT", f"/workflows/{wf_id}", merged)
+    payload = _clean_payload(wf)
+    result = request("PUT", f"/workflows/{wf_id}", payload)
     print(f"Updated: {result.get('name')} (ID: {wf_id})")
 
 def activate(wf_id):
