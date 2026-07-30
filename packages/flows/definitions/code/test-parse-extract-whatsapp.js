@@ -212,12 +212,79 @@ test('no price in non-price response', () => {
   assert(!r.price_updated, 'price_updated should be false');
 });
 
+// ── Deposit detection ──
+test('deposit: detects PIX request in Beatriz response', () => {
+  const r = runExtraction(
+    'Pode ser pix?',
+    'Vou te passar a chave PIX: bruno.tattoo@pix.com.br. O sinal é de R$ 180, que será descontado do valor total. Assim que o artista confirmar, agendamos!',
+    makeLead('orcamento_enviado')
+  );
+  assert(r.pipeline_status === 'aguardando_deposito', `got ${r.pipeline_status}`);
+  assert(r.event_type === 'deposit_requested', `got ${r.event_type}`);
+  assert(r.deposit_amount_cents === 18000, `got ${r.deposit_amount_cents}`);
+  assert(r.deposit_status_val === 'aguardando_confirmacao', `got ${r.deposit_status_val}`);
+});
+
+test('deposit: no false positive without pix/sinal context', () => {
+  const r = runExtraction(
+    'Tudo bem?',
+    'O valor fica R$ 600 à vista. Como fica para você?',
+    makeLead('orcamento_enviado')
+  );
+  assert(r.deposit_status_val === null, `got ${r.deposit_status_val}`);
+  assert(r.deposit_amount_cents === null, `got ${r.deposit_amount_cents}`);
+});
+
+// ── Booking detection ──
+test('booking: detects scheduling confirmation', () => {
+  const r = runExtraction(
+    'Perfeito!',
+    'Agendado! Dia 15/08 às 14h no estúdio. Obrigado pela confiança, Pedro! Te esperamos!',
+    makeLead('aguardando_deposito')
+  );
+  assert(r.pipeline_status === 'agendado', `got ${r.pipeline_status}`);
+  assert(r.event_type === 'slot_booked', `got ${r.event_type}`);
+});
+
+test('booking: no false positive in non-booking text', () => {
+  const r = runExtraction(
+    'Ok, obrigado',
+    'De nada! Qualquer dúvida é só chamar.',
+    makeLead('qualificando')
+  );
+  assert(r.pipeline_status === 'qualificando', `got ${r.pipeline_status}`);
+  assert(r.event_type === null, `got ${r.event_type}`);
+});
+
+// ── Pipeline: full flow ──
+test('pipeline: orcamento_enviado -> aguardando_deposito', () => {
+  const r = runExtraction(
+    'Quero fechar!',
+    'Ótimo! Vou te passar a chave PIX do Bruno: bruno.tattoo@pix.com.br. O sinal é de R$ 180. Manda o comprovante pra gente confirmar!',
+    makeLead('orcamento_enviado')
+  );
+  assert(r.pipeline_status === 'aguardando_deposito', `got ${r.pipeline_status}`);
+  assert(r.event_type === 'deposit_requested');
+});
+
+test('pipeline: aguardando_deposito -> agendado', () => {
+  const r = runExtraction(
+    'Já mandei o comprovante!',
+    'Confirmado! Agendado para 15/08 às 14h. Obrigado pela confiança, Pedro! Te esperamos!',
+    makeLead('aguardando_deposito')
+  );
+  assert(r.pipeline_status === 'agendado', `got ${r.pipeline_status}`);
+  assert(r.event_type === 'slot_booked');
+});
+
 // ── Field completeness ──
 test('all output fields present', () => {
   const r = runExtraction('Oi', 'Olá!', makeLead('novo'));
   const fields = ['lead_id', 'pipeline_status', 'event_type', 'placement_val',
     'body_zone_val', 'style_val', 'primeira_tatuagem_val', 'significado_val',
-    'table_price_cents', 'negotiated_price_cents', 'handoff_reason', 'agent_text'];
+    'table_price_cents', 'negotiated_price_cents', 'handoff_reason', 'agent_text',
+    'deposit_status_val', 'deposit_amount_cents', 'booked_date_val',
+    'session_duration_min_val', 'buffer_min_val'];
   for (const f of fields) {
     assert(f in r, `missing field: ${f}`);
   }
