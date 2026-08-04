@@ -39,6 +39,7 @@ function fetch(string $url): string {
 echo "\n=== Fetching pages ===\n";
 $index = fetch("{$BASE}/index.php");
 $calc  = fetch("{$BASE}/calculadora.php");
+$calc2 = fetch("{$BASE}/calculadora-v2.php");
 
 test('Index page loads', strlen($index) > 1000, 'Content length: ' . strlen($index));
 test('Calculadora page loads', strlen($calc) > 1000, 'Content length: ' . strlen($calc));
@@ -161,6 +162,21 @@ test('Calculadora has form step', str_contains($calc, 'step') || str_contains($c
     'No form steps found');
 test('Calculadora has lead form', str_contains($calc, 'lead-form') || str_contains($calc, 'qualifying') || str_contains($calc, 'form'),
     'Missing lead form on calculadora');
+
+// ── 7b. Calculadora v2 — external file loads ────────────
+echo "\n=== Calculadora v2 page ===\n";
+test('Calculadora v2 loads', strlen($calc2) > 1000, 'Content length: ' . strlen($calc2));
+test('Calculadora v2 loads style.css', str_contains($calc2, '<link rel="stylesheet" href="style.css">'));
+test('Calculadora v2 loads css/calculadora.css', str_contains($calc2, '<link rel="stylesheet" href="css/calculadora.css">'));
+test('Calculadora v2 loads js/main.js', str_contains($calc2, '<script src="js/main.js">'));
+test('Calculadora v2 loads js/calculator.js', str_contains($calc2, '<script src="js/calculator.js">'));
+test('Calculadora v2 loads js/calculadora-page.js', str_contains($calc2, '<script src="js/calculadora-page.js">'));
+test('Calculadora v2 has NO inline style block',
+    !str_contains($calc2, '<style>'),
+    'Inline <style> block found — should use external CSS');
+test('Calculadora v2 has calculator form', str_contains($calc2, 'id="calcForm"'));
+test('Calculadora v2 has lead form', str_contains($calc2, 'id="leadForm"'));
+test('Calculadora v2 uses marquee-set wrappers', str_contains($calc2, 'class="marquee-set"'));
 
 // ── 8. JS files load ──────────────────────────────────
 echo "\n=== JavaScript ===\n";

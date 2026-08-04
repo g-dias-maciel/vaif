@@ -1,0 +1,567 @@
+/* ─── Calculadora Page-Specific Styles ─── */
+
+/* General layout (section wrappers unique to calculadora) */
+.calculator-section {
+    padding: 60px 0 100px;
+    text-align: center;
+    background-color: #0d0d0d;
+}
+
+.section-header {
+    margin-bottom: 60px;
+}
+
+.section-title {
+    font-size: 2.5rem;
+    margin: 20px 0;
+    display: flex;
+    justify-content: center;
+    text-align: center;
+}
+
+/* ─── Social Proof: Track Record Grid ─── */
+.track-record {
+    padding: 30px 0;
+    margin: 30px 0 20px;
+}
+.track-record-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 25px;
+}
+
+.track-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+}
+.track-grid.track-grid-4 {
+    grid-template-columns: repeat(4, 1fr);
+}
+
+.track-item {
+    text-align: center;
+    padding: 35px 15px;
+    border: 1px solid var(--border-color);
+    background: var(--bg-card);
+}
+
+.track-number {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(2.5rem, 5vw, 3.5rem);
+    font-weight: 700;
+    color: var(--gold);
+    line-height: 1.1;
+    margin-bottom: 8px;
+}
+
+.track-label {
+    font-size: 10px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+}
+
+.conviction-block {
+    background: rgba(212, 176, 76, 0.03);
+    border-left: 3px solid var(--gold);
+    padding: 20px 24px;
+    margin: 30px auto 15px;
+    max-width: 550px;
+}
+
+/* ─── Carrossel de Depoimentos ─── */
+.testimonial-section {
+    padding: 80px 0;
+    overflow: hidden;
+}
+
+.carousel-viewport {
+    max-width: 780px;
+    margin: 40px auto 0;
+    position: relative;
+    perspective: 1200px;
+    overflow: visible;
+    padding: 20px 0;
+}
+
+.carousel-track {
+    position: relative;
+    min-height: 520px;
+}
+
+.carousel-slide {
+    position: absolute;
+    top: 0;
+    width: 340px;
+    text-align: center;
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                opacity 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94),
+                filter 0.9s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+}
+.carousel-slide-inactive {
+    filter: blur(4px) brightness(0.6);
+}
+.carousel-slide-inactive .carousel-instagram,
+.carousel-slide-inactive .carousel-instagram a,
+.carousel-slide-inactive .carousel-result span {
+    color: var(--text-muted) !important;
+}
+
+.carousel-photo {
+    width: 220px;
+    height: 220px;
+    object-fit: cover;
+    border: 2px solid var(--gold);
+    margin: 0 auto 14px;
+    display: block;
+}
+
+.carousel-instagram {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--gold);
+    letter-spacing: 1px;
+    margin-bottom: 12px;
+}
+
+.carousel-instagram a {
+    color: var(--gold);
+    text-decoration: none;
+    transition: opacity 0.3s;
+}
+
+.carousel-instagram a:hover {
+    opacity: 0.7;
+}
+
+.carousel-result {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 12px;
+}
+
+.carousel-result span {
+    color: var(--gold);
+}
+
+.carousel-quote {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.6;
+    max-width: 300px;
+    margin: 0 auto 20px;
+    font-style: italic;
+}
+
+.carousel-dots {
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+    margin-top: 25px;
+}
+
+.carousel-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--border-color);
+    border: none;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+
+.carousel-dot.active {
+    background: var(--gold);
+    box-shadow: 0 0 10px rgba(212, 176, 76, 0.4);
+}
+
+.carousel-arrows {
+    position: absolute;
+    top: 110px;
+    left: 0;
+    right: 0;
+    pointer-events: none;
+    z-index: 10;
+}
+
+.carousel-arrow {
+    position: absolute;
+    background: none;
+    border: 1px solid var(--border-color);
+    color: var(--text-muted);
+    width: 40px;
+    height: 40px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+    font-size: 16px;
+    pointer-events: auto;
+}
+.carousel-arrow.prev {
+    left: 0;
+}
+.carousel-arrow.next {
+    right: 0;
+}
+
+.carousel-arrow:hover {
+    border-color: var(--gold);
+    color: var(--gold);
+}
+
+/* ─── Post-Booking Confirmação ─── */
+.confirmation-page {
+    padding: 30px 0 20px;
+    text-align: center;
+}
+
+.confirmation-checkmark {
+    width: 64px;
+    height: 64px;
+    border: 2px solid var(--gold);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0 auto 30px;
+}
+
+.confirmation-checkmark svg {
+    stroke: var(--gold);
+}
+
+.confirmation-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2.5rem;
+    color: var(--text-main);
+    font-weight: 700;
+    margin-bottom: 16px;
+}
+
+.confirmation-subtitle {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    max-width: 520px;
+    margin: 0 auto 40px;
+}
+
+.confirmation-subtitle strong {
+    color: var(--text-main);
+    font-weight: 600;
+}
+
+.confirmation-subtitle .highlight-gold {
+    color: var(--gold);
+    font-weight: 600;
+}
+
+.homework-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+    border-top: 2px solid var(--gold);
+    padding: 35px 30px;
+    max-width: 560px;
+    margin: 0 auto 35px;
+}
+
+.homework-label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 20px;
+}
+
+.homework-video {
+    position: relative;
+    cursor: pointer;
+}
+
+.homework-video img {
+    width: 100%;
+    display: block;
+    border: 1px solid var(--border-color);
+}
+
+.homework-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    background: var(--gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.homework-video:hover .homework-play {
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.confirmation-footer {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 11px;
+    color: var(--text-muted);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    padding: 15px 22px;
+    border: 1px dashed rgba(212, 176, 76, 0.3);
+    display: inline-block;
+}
+
+.confirmation-footer svg {
+    vertical-align: middle;
+    margin-right: 6px;
+    stroke: var(--gold);
+}
+
+/* Call Outcomes */
+.call-outcomes {
+    background: rgba(212, 176, 76, 0.04);
+    border: 1px solid rgba(212, 176, 76, 0.12);
+    max-width: 560px;
+    margin: 0 auto 30px;
+    padding: 30px;
+    text-align: left;
+}
+.outcomes-label {
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    margin-bottom: 20px;
+    text-align: center;
+}
+.outcomes-list {
+    list-style: none;
+    padding: 0;
+}
+.outcomes-list li {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 14px;
+    color: var(--text-main);
+    line-height: 1.7;
+    padding: 8px 0 8px 28px;
+    position: relative;
+}
+.outcomes-list li::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 14px;
+    width: 5px;
+    height: 5px;
+    background: var(--gold);
+    transform: rotate(45deg);
+}
+
+/* Specialist Card */
+.specialist-card {
+    max-width: 560px;
+    margin: 0 auto 35px;
+    padding: 20px 24px;
+    background: var(--bg-card);
+    border: 1px solid var(--border-color);
+}
+.specialist-label {
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    margin-bottom: 15px;
+}
+.specialist-row {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.specialist-avatar {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 2px solid var(--gold);
+    background: #1a1a1a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--gold);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    flex-shrink: 0;
+}
+.specialist-info {
+    text-align: left;
+}
+.specialist-name {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 15px;
+    font-weight: 700;
+    color: var(--text-main);
+    margin-bottom: 4px;
+}
+.specialist-role {
+    font-size: 12px;
+    color: var(--text-muted);
+    line-height: 1.4;
+}
+
+/* Homework Commitment */
+.homework-commitment {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    color: var(--text-muted);
+    line-height: 1.7;
+    margin-top: 20px;
+    padding-top: 18px;
+    border-top: 1px solid var(--border-color);
+}
+.homework-commitment span {
+    color: var(--gold);
+    font-weight: 600;
+    font-style: italic;
+}
+.homework-whatsapp-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 14px 28px;
+    margin-top: 18px;
+    background: #25D366;
+    color: #000;
+    border: none;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 700;
+    text-decoration: none;
+    transition: all 0.3s ease;
+}
+.homework-whatsapp-btn:hover {
+    background: #22c35e;
+    transform: translateY(-2px);
+}
+
+/* ─── Analyzing Overlay ─── */
+.analyzing-content {
+    text-align: center;
+    padding: 50px 20px;
+}
+.analyzing-spinner {
+    width: 44px;
+    height: 44px;
+    border: 2px solid var(--border-color);
+    border-top-color: var(--gold);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+    margin: 0 auto;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+.analyzing-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.4rem;
+    color: var(--text-main);
+}
+.analyzing-detail {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+}
+.analyzing-detail strong {
+    color: var(--gold);
+}
+.analyzing-status {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.8rem;
+    color: var(--gold);
+    font-weight: 600;
+}
+
+/* ─── Overrides (properties that differ from style.css) ─── */
+
+#nativeCalendarBlock {
+    border-radius: 8px;
+    animation: fadeInUp 0.6s ease forwards;
+}
+
+.time-slot:disabled {
+    opacity: 1;
+    text-decoration: none;
+}
+
+.ebook-premium-box {
+    border-radius: 8px;
+    animation: fadeInUp 0.6s ease forwards;
+}
+
+.progress-wrapper {
+    padding-top: 80px;
+}
+
+.hero {
+    padding: 80px 24px;
+}
+
+.hero-content {
+    max-width: 650px;
+    margin-left: max(0px, calc((100vw - 1200px) / 2));
+}
+
+.hero-links {
+    flex-direction: column;
+    gap: 20px;
+    align-items: flex-start;
+}
+
+@keyframes fadeInUp {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ─── Responsive Media Queries ─── */
+
+@media (max-width: 768px) {
+    .calc-card { padding: 30px 20px; }
+    .hero-title { font-size: 2.5rem; }
+    .track-grid { grid-template-columns: 1fr; gap: 15px; }
+    .track-grid.track-grid-4 { grid-template-columns: repeat(2, 1fr); }
+    .carousel-viewport { max-width: 360px; }
+    .carousel-slide { width: 280px; }
+    .carousel-track { min-height: 480px; }
+    .carousel-photo { width: 160px; height: 160px; }
+    .carousel-quote { max-width: 260px; font-size: 11px; }
+    .carousel-arrow { width: 32px; height: 32px; font-size: 13px; }
+    .carousel-arrows { top: 85px; }
+    .marquee-logo { height: 26px; }
+    .marquee-track { gap: 40px; }
+    .confirmation-title { font-size: 2rem; }
+}
+
+@media (max-width: 600px) {
+    .calendar-grid { grid-template-columns: 1fr; }
+}
