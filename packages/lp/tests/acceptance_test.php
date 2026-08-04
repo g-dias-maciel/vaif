@@ -190,6 +190,65 @@ test('Nav links id', str_contains($index, 'id="nav-links"'));
 test('chat.js has ChatSimulator', str_contains($chatJs, 'ChatSimulator'));
 test('chat.js has QualifyingForm', str_contains($chatJs, 'QualifyingForm'));
 
+// ── 9. Artist landing pages (#24) ───────────────────────
+echo "\n=== Artist landing pages (#24) ===\n";
+
+$ARTIST_BASE = 'http://localhost:8001';
+
+function fetch_artist(string $path): array
+{
+    global $ARTIST_BASE;
+    $ch = curl_init("{$ARTIST_BASE}{$path}");
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $html = curl_exec($ch);
+    $code = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+    curl_close($ch);
+    return [$html, $code];
+}
+
+[$artistPage, $artistCode] = fetch_artist('/artists/joao-silva');
+[, $missingCode] = fetch_artist('/artists/nonexistent');
+[, $noSlugCode] = fetch_artist('/artists/');
+
+test('Artist page returns 200', $artistCode === 200, "Got HTTP {$artistCode}");
+test('Artist page contains display name', str_contains($artistPage, 'João Silva'),
+    'Missing display name in output');
+
+// Section IDs
+$sectionIds = ['hero', 'portfolio', 'about', 'booking', 'testimonials', 'instagram', 'faq', 'location'];
+foreach ($sectionIds as $sid) {
+    test("Section #{$sid} present", str_contains($artistPage, "id=\"{$sid}\""),
+        "Missing id=\"{$sid}\"");
+}
+
+// WhatsApp
+test('WhatsApp link contains correct number', str_contains($artistPage, 'wa.me/5511999999999'),
+    'WhatsApp number not found in page');
+test('WhatsApp link has correct message text', str_contains($artistPage, 'Ola,%20vim%20pelo%20seu%20site%20no%20vaif.com.br'),
+    'WhatsApp message text incorrect');
+
+// Matomo
+test('Matomo trackEvent present', str_contains($artistPage, "_paq.push(['trackEvent', 'Artista', 'CTA_WhatsApp'"),
+    'Matomo event tracking missing');
+test('Matomo trackEvent includes slug', str_contains($artistPage, "'joao-silva'"),
+    'Matomo event slug missing');
+
+// JSON-LD
+test('JSON-LD Person schema present', str_contains($artistPage, '"@type":"Person"'),
+    'JSON-LD Person missing');
+test('JSON-LD FAQPage schema present', str_contains($artistPage, '"@type":"FAQPage"'),
+    'JSON-LD FAQPage missing');
+test('JSON-LD LocalBusiness schema present', str_contains($artistPage, '"@type":"LocalBusiness"'),
+    'JSON-LD LocalBusiness missing');
+
+// NotFound pages
+test('Nonexistent artist returns 404', $missingCode === 404, "Got HTTP {$missingCode}");
+test('No slug returns 404', $noSlugCode === 404, "Got HTTP {$noSlugCode}");
+
 // ── Summary ────────────────────────────────────────────
 echo "\n" . str_repeat('═', 50) . "\n";
 echo "  Results: {$passed} passed, {$failed} failed\n";
