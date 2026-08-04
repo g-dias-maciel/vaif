@@ -50,7 +50,7 @@
         "operation": "executeQuery",
         "query": "WITH existing AS (\n  SELECT id, pipeline_status, nome, placement, body_zone, style, primeira_tatuagem, significado, table_price, negotiated_price\n  FROM public.leads\n  WHERE artist_id = current_setting('app.artist_id')::uuid\n    AND telefone = $1\n),\ninserted AS (\n  INSERT INTO public.leads (artist_id, nome, telefone, pipeline_status, conversation_started)\n  SELECT \n    current_setting('app.artist_id')::uuid,\n    $2,\n    $1,\n    'novo',\n    NOW()\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id, pipeline_status, nome, placement, body_zone, style, primeira_tatuagem, significado, table_price, negotiated_price\n)\nSELECT * FROM existing\nUNION ALL\nSELECT * FROM inserted;",
         "options": {
-          "queryReplacement": "={{ [$json.message.chat.id, ($json.message.from.first_name + ' ' + ($json.message.from.last_name || '')).trim()] }}"
+          "queryReplacement": "={{ $json.message.chat.id + ',' + ($json.message.from.first_name + ' ' + ($json.message.from.last_name || '')).trim() }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -147,7 +147,7 @@
         "operation": "executeQuery",
         "query": "UPDATE public.leads SET\n  pipeline_status = CASE\n    WHEN $2 = 'qualificando' AND pipeline_status = 'novo' THEN 'qualificando'::text\n    WHEN $2 = 'orcamento_enviado' AND pipeline_status IN ('novo','qualificando') THEN 'orcamento_enviado'::text\n    WHEN $2 = 'aguardando_artista' AND pipeline_status NOT IN ('fechado','perdido') THEN 'aguardando_artista'::text\n    ELSE pipeline_status\n  END,\n  placement = COALESCE(NULLIF($3, ''), placement),\n  body_zone = COALESCE(NULLIF($4, ''), body_zone),\n  style = COALESCE(NULLIF($5, ''), style),\n  primeira_tatuagem = CASE WHEN $6::text IS NULL THEN primeira_tatuagem ELSE $6::boolean END,\n  significado = COALESCE(NULLIF($7, ''), significado),\n  table_price = COALESCE($8::integer, table_price),\n  negotiated_price = COALESCE($9::integer, negotiated_price),\n  last_message_at = NOW(),\n  updated_at = NOW()\nWHERE id = $1::uuid\n  AND artist_id = current_setting('app.artist_id')::uuid\nRETURNING id, pipeline_status;",
         "options": {
-          "queryReplacement": "={{ [$json.lead_id, $json.pipeline_status, $json.placement_val, $json.body_zone_val, $json.style_val, String($json.primeira_tatuagem_val), $json.significado_val, $json.table_price_cents, $json.negotiated_price_cents] }}"
+          "queryReplacement": "={{ $json.lead_id + ',' + $json.pipeline_status + ',' + $json.placement_val + ',' + $json.body_zone_val + ',' + $json.style_val + ',' + String($json.primeira_tatuagem_val) + ',' + $json.significado_val + ',' + $json.table_price_cents + ',' + $json.negotiated_price_cents }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -169,9 +169,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO public.events (lead_id, artist_id, event_type, payload)\nSELECT $1::uuid, current_setting('app.artist_id')::uuid, $2, $3::jsonb\nWHERE $2 IS NOT NULL AND $2 != '';",
+        "query": "INSERT INTO public.events (lead_id, artist_id, event_type, payload)\nSELECT '{{ $json.lead_id }}'::uuid, current_setting('app.artist_id')::uuid, '{{ $json.event_type }}', $1::jsonb\nWHERE '{{ $json.event_type }}' IS NOT NULL AND '{{ $json.event_type }}' != '';",
         "options": {
-          "queryReplacement": "={{ [$json.lead_id, $json.event_type, JSON.stringify({ pipeline_status: $json.pipeline_status, price_updated: $json.price_updated, placement: $json.placement_val, body_zone: $json.body_zone_val, style: $json.style_val, handoff_reason: $json.handoff_reason }) ] }}"
+          "queryReplacement": "={{ JSON.stringify({ pipeline_status: $json.pipeline_status, price_updated: $json.price_updated, placement: $json.placement_val, body_zone: $json.body_zone_val, style: $json.style_val, handoff_reason: $json.handoff_reason }) }}"
         }
       },
       "type": "n8n-nodes-base.postgres",

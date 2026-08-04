@@ -1,8 +1,8 @@
 # Artist onboarding and tenancy
 
 Type: grilling
-Status: open
-Blocked by: 07
+Status: resolved
+Blocked by: none
 
 ## Question
 

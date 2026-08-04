@@ -1,0 +1,15 @@
+# Dependencies
+node_modules/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Environment
+.env
+.env.local
+
+# Agent tooling
+.agents/
+.claude/
+skills-lock.json

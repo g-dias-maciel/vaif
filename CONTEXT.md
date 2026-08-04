@@ -1,6 +1,6 @@
 # VAIF
 
-VAIF is a Brazilian marketing agency serving tattoo artists exclusively. This repo holds its agentic context: wayfinding maps, specs, and (per the monorepo decision) its workflows and products.
+VAIF is a Brazilian marketing agency serving tattoo artists exclusively. This monorepo holds all its products (CRM, SDR agent, landing page, infrastructure) and planning.
 
 ## Language
 
