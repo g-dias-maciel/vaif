@@ -197,55 +197,40 @@ foreach ($nav_sections as $nav) {
 // JSON-LD
 // ================================================================
 
-$jsonld_person = [
-    '@context' => 'https://schema.org',
-    '@type'    => 'Person',
-    'name'     => $display_name,
+require_once __DIR__ . '/../components/SeoHelpers.php';
+
+$person_seo = [
+    'name' => $display_name,
+    'image' => $og_image,
 ];
 if ($instagram_url) {
-    $jsonld_person['sameAs'] = [$instagram_url];
+    $person_seo['sameAs'] = [$instagram_url];
 }
 
-$jsonld_blocks = [json_encode($jsonld_person, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE)];
+$jsonld_html = generatePersonJsonLd($person_seo);
 
 if ($show_location) {
-    $jsonld_biz = [
-        '@context' => 'https://schema.org',
-        '@type'    => 'LocalBusiness',
-        'name'     => $artist['location']['studio_name'] ?? "{$display_name} Tattoo",
-        'address'  => [
-            '@type'           => 'PostalAddress',
-            'streetAddress'   => $artist['location']['street'] ?? '',
-            'addressLocality' => $city,
-            'addressRegion'   => $artist['location']['state'] ?? '',
-            'postalCode'      => $artist['location']['zip'] ?? '',
+    $biz_seo = [
+        'name' => $artist['location']['studio_name'] ?? "{$display_name} Tattoo",
+        'url' => 'https://vaif.com.br/artists/' . $slug,
+        'image' => $og_image,
+        'address' => [
+            'street' => $artist['location']['street'] ?? '',
+            'city' => $city,
+            'state' => $artist['location']['state'] ?? '',
+            'zip' => $artist['location']['zip'] ?? '',
         ],
     ];
-    $jsonld_blocks[] = json_encode($jsonld_biz, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+    $jsonld_html .= "\n" . generateLocalBusinessJsonLd($biz_seo);
 }
 
-$faq_schema_items = [];
-foreach ($merged_faqs as $fq) {
-    $faq_schema_items[] = [
-        '@type'          => 'Question',
-        'name'           => $fq['question'],
-        'acceptedAnswer' => [
-            '@type' => 'Answer',
-            'text'  => $fq['answer'],
-        ],
-    ];
-}
-$jsonld_faq = [
-    '@context'   => 'https://schema.org',
-    '@type'      => 'FAQPage',
-    'mainEntity' => $faq_schema_items,
-];
-$jsonld_blocks[] = json_encode($jsonld_faq, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
+$jsonld_html .= "\n" . generateFaqPageJsonLd($merged_faqs);
 
-$jsonld_html = '';
-foreach ($jsonld_blocks as $block) {
-    $jsonld_html .= '<script type="application/ld+json">' . $block . '</script>' . "\n";
-}
+$jsonld_html .= "\n" . generateBreadcrumbListJsonLd([
+    ['name' => 'Home', 'url' => 'https://vaif.com.br/'],
+    ['name' => 'Artistas', 'url' => 'https://vaif.com.br/artists/'],
+    ['name' => $display_name, 'url' => 'https://vaif.com.br/artists/' . $slug],
+]);
 
 // ================================================================
 // About: speciality tags from style field
@@ -646,6 +631,7 @@ echo <<<PAGE
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{$page_title_h}</title>
     <meta name="description" content="{$meta_description_h}">
+    <link rel="canonical" href="https://vaif.com.br/artists/{$h_slug}">
     <meta property="og:title" content="{$h_hero_headline} | VAIF">
     <meta property="og:description" content="{$meta_description_h}">
     <meta property="og:image" content="{$og_image_h}">

@@ -5,6 +5,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>VAIF — Agência de Escala para Estúdios de Tatuagem</title>
+    <meta name="description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
+    <link rel="canonical" href="https://vaif.com.br/">
+    <meta property="og:title" content="VAIF — Agência de Escala para Estúdios de Tatuagem">
+    <meta property="og:description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
+    <meta property="og:image" content="https://vaif.com.br/img/vaif_logo.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://vaif.com.br/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="VAIF — Agência de Escala para Estúdios de Tatuagem">
+    <meta name="twitter:description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
+    <meta name="twitter:image" content="https://vaif.com.br/img/vaif_logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -43,6 +54,7 @@
     <link rel="icon" href="/img/favicon/android-chrome-192x192.png" sizes="192x192" type="image/png">
     <link rel="icon" href="/img/favicon/android-chrome-512x512.png" sizes="512x512" type="image/png">
     <link rel="manifest" href="/img/favicon/site.webmanifest">
+    <?php include 'components/SeoHelpers.php'; echo generateOrganizationJsonLd(); ?>
 </head>
 <body>  
 

@@ -244,10 +244,70 @@ test('JSON-LD FAQPage schema present', str_contains($artistPage, '"@type":"FAQPa
     'JSON-LD FAQPage missing');
 test('JSON-LD LocalBusiness schema present', str_contains($artistPage, '"@type":"LocalBusiness"'),
     'JSON-LD LocalBusiness missing');
+test('JSON-LD BreadcrumbList schema present', str_contains($artistPage, '"@type":"BreadcrumbList"'),
+    'JSON-LD BreadcrumbList missing');
+test('Artist page has canonical URL', str_contains($artistPage, '<link rel="canonical" href="https://vaif.com.br/artists/joao-silva">'),
+    'Missing canonical URL');
 
 // NotFound pages
 test('Nonexistent artist returns 404', $missingCode === 404, "Got HTTP {$missingCode}");
 test('No slug returns 404', $noSlugCode === 404, "Got HTTP {$noSlugCode}");
+
+// ── 10. SEO: structured data, sitemap, robots.txt (#26) ──
+echo "\n=== SEO (#26) ===\n";
+
+$robots = fetch("{$BASE}/robots.txt");
+test('robots.txt returns 200', strlen($robots) > 0);
+test('robots.txt allows OAI-SearchBot', str_contains($robots, 'OAI-SearchBot'));
+test('robots.txt disallows GPTBot', str_contains($robots, 'GPTBot'));
+test('robots.txt disallows Google-Extended', str_contains($robots, 'Google-Extended'));
+test('robots.txt references sitemap', str_contains($robots, 'Sitemap: https://vaif.com.br/sitemap.xml'));
+
+// Test sitemap
+function fetch_headers(string $url): array
+{
+    $ch = curl_init($url);
+    curl_setopt_array($ch, [
+        CURLOPT_RETURNTRANSFER => true,
+        CURLOPT_HEADER => true,
+        CURLOPT_FOLLOWLOCATION => true,
+        CURLOPT_TIMEOUT => 10,
+    ]);
+    $response = curl_exec($ch);
+    $headerSize = curl_getinfo($ch, CURLINFO_HEADER_SIZE);
+    curl_close($ch);
+    return [substr($response, 0, $headerSize), substr($response, $headerSize)];
+}
+
+[$sitemapHeaders, $sitemapBody] = fetch_headers("{$BASE}/sitemap.php");
+test('sitemap.php returns XML content-type',
+    str_contains($sitemapHeaders, 'xml') || str_starts_with($sitemapBody, '<?xml'),
+    'Missing XML content type or declaration');
+test('sitemap.xml contains urlset', str_contains($sitemapBody, '<urlset'));
+test('sitemap.xml contains url entries', str_contains($sitemapBody, '<url>'));
+test('sitemap.xml contains loc entries', str_contains($sitemapBody, '<loc>'));
+
+// Homepage SEO
+test('index.php has Organization JSON-LD', str_contains($index, '"@type":"Organization"'),
+    'Missing Organization structured data');
+test('index.php has canonical URL', str_contains($index, '<link rel="canonical" href="https://vaif.com.br/">'),
+    'Missing canonical URL');
+test('index.php has og:title', str_contains($index, '<meta property="og:title"'),
+    'Missing og:title');
+test('index.php has og:description', str_contains($index, '<meta property="og:description"'),
+    'Missing og:description');
+test('index.php has og:image', str_contains($index, '<meta property="og:image"'),
+    'Missing og:image');
+test('index.php has twitter:card', str_contains($index, '<meta name="twitter:card"'),
+    'Missing twitter:card');
+
+// Calculadora SEO
+test('calculadora.php has canonical URL', str_contains($calc, '<link rel="canonical" href="https://vaif.com.br/calculadora/">'),
+    'Missing canonical URL on calculadora');
+test('calculadora.php has og:title', str_contains($calc, '<meta property="og:title"'),
+    'Missing og:title on calculadora');
+test('calculadora.php has twitter:card', str_contains($calc, '<meta name="twitter:card"'),
+    'Missing twitter:card on calculadora');
 
 // ── Summary ────────────────────────────────────────────
 echo "\n" . str_repeat('═', 50) . "\n";

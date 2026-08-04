@@ -11,6 +11,7 @@ require_once __DIR__ . '/../lib/blog/parse-frontmatter.php';
 require_once __DIR__ . '/../lib/blog/render-markdown.php';
 require_once __DIR__ . '/../lib/blog/slugify.php';
 require_once __DIR__ . '/../lib/blog/load-posts.php';
+require_once __DIR__ . '/../components/SeoHelpers.php';
 
 $posts = load_posts(__DIR__ . '/../content/blog');
 
@@ -153,15 +154,17 @@ CARD;
 HTML;
 
     $extra_head = <<<OG
+    <link rel="canonical" href="https://vaif.com.br/blog">
     <meta property="og:title" content="Blog — VAIF">
     <meta property="og:description" content="Insights sobre automação, marketing e crescimento para estúdios de tatuagem.">
+    <meta property="og:image" content="https://vaif.com.br/img/vaif_logo.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vaif.com.br/blog">
     <meta name="twitter:card" content="summary">
     <meta name="twitter:title" content="Blog — VAIF">
     <meta name="twitter:description" content="Insights sobre automação, marketing e crescimento para estúdios de tatuagem.">
+    <meta name="twitter:image" content="https://vaif.com.br/img/vaif_logo.png">
 OG;
-
     echo render_page('Blog — VAIF', $body, $extra_head);
     exit;
 }
@@ -213,9 +216,6 @@ if (preg_match('#^/blog/([a-z0-9\-]+)$#', $path, $m)) {
     <meta name=\"twitter:image\" content=\"{$imgUrl}\">";
     }
 
-    $jsonLdDate = date('c', strtotime($post['date']));
-    $jsonAuthor = $author !== '' ? '"author": {"@type": "Person", "name": "' . htmlspecialchars($author, ENT_QUOTES) . '"},' : '';
-
     $body = <<<HTML
     <main class="blog-post">
         {$metaImg}
@@ -235,6 +235,7 @@ if (preg_match('#^/blog/([a-z0-9\-]+)$#', $path, $m)) {
 HTML;
 
     $extra_head = <<<OG
+    <link rel="canonical" href="https://vaif.com.br/blog/{$siteSlug}">
     <meta property="og:title" content="{$title} — VAIF Blog">
     <meta property="og:description" content="{$description}">
     <meta property="og:type" content="article">
@@ -243,19 +244,27 @@ HTML;
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="{$title} — VAIF Blog">
     <meta name="twitter:description" content="{$description}">
-    <script type="application/ld+json">
-    {
-        "@context": "https://schema.org",
-        "@type": "BlogPosting",
-        "headline": "{$title}",
-        "description": "{$description}",
-        "datePublished": "{$jsonLdDate}",
-        "dateModified": "{$jsonLdDate}",
-        {$jsonAuthor}
-        "url": "https://vaif.com.br/blog/{$siteSlug}"
-    }
-    </script>
 OG;
+
+    $seoPost = [
+        'title' => $post['title'],
+        'description' => $post['description'],
+        'author' => $post['author'],
+        'datePublished' => date('c', strtotime($post['date'])),
+        'dateModified' => date('c', strtotime($post['date'])),
+        'url' => 'https://vaif.com.br/blog/' . $post['slug'],
+        'mainEntityOfPage' => 'https://vaif.com.br/blog/' . $post['slug'],
+    ];
+    if ($post['featured_image'] !== '') {
+        $seoPost['image'] = $post['featured_image'];
+    }
+
+    $extra_head .= "\n" . generateBlogPostingJsonLd($seoPost);
+    $extra_head .= "\n" . generateBreadcrumbListJsonLd([
+        ['name' => 'Home', 'url' => 'https://vaif.com.br/'],
+        ['name' => 'Blog', 'url' => 'https://vaif.com.br/blog'],
+        ['name' => $post['title'], 'url' => 'https://vaif.com.br/blog/' . $post['slug']],
+    ]);
 
     echo render_page("{$title} — VAIF Blog", $body, $extra_head);
     exit;
