@@ -193,7 +193,7 @@ test('chat.js has QualifyingForm', str_contains($chatJs, 'QualifyingForm'));
 // ── 9. Artist landing pages (#24) ───────────────────────
 echo "\n=== Artist landing pages (#24) ===\n";
 
-$ARTIST_BASE = 'http://localhost:8001';
+$ARTIST_BASE = $BASE;
 
 function fetch_artist(string $path): array
 {

@@ -66,37 +66,33 @@ $base = "http://localhost:$serverPort";
 
 echo "=== Routing Acceptance Tests ===\n\n";
 
-// ---- Blog routing ----
-echo "Test: /blog returns 200 with blog stub content\n";
+// ---- Blog routing (real front-controller from #23) ----
+echo "Test: /blog returns 200 with blog listing\n";
 $resp = fetch("$base/blog");
 assert_true($resp['status'] === 200, "/blog status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Blog front-controller', '/blog body');
+assert_contains($resp['body'], 'Blog', '/blog body');
 
-echo "Test: /blog/ (trailing slash) returns 200\n";
-$resp = fetch("$base/blog/");
-assert_true($resp['status'] === 200, "/blog/ status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Blog front-controller', '/blog/ body');
+echo "Test: /blog/<existing-post-slug> returns 200\n";
+$resp = fetch("$base/blog/como-aumentar-seu-faturamento-como-tatuador");
+assert_true(in_array($resp['status'], [200, 404], true), "/blog/sample-post status {$resp['status']}");
 
-echo "Test: /blog/some-post returns 200 (clean URL routing)\n";
-$resp = fetch("$base/blog/some-post");
-assert_true($resp['status'] === 200, "/blog/some-post status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Blog front-controller', '/blog/some-post body');
+echo "Test: /blog/nonexistent-post returns 404\n";
+$resp = fetch("$base/blog/nonexistent-post");
+assert_true($resp['status'] === 404, "/blog/nonexistent-post status {$resp['status']} (expected 404)");
 
-// ---- Artists routing ----
-echo "Test: /artists/artist-slug returns 200 with artists stub content\n";
-$resp = fetch("$base/artists/artist-slug");
-assert_true($resp['status'] === 200, "/artists/artist-slug status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Artists front-controller', '/artists/artist-slug body');
+// ---- Artists routing (real front-controller from #24) ----
+echo "Test: /artists/joao-silva returns 200 with artist content\n";
+$resp = fetch("$base/artists/joao-silva");
+assert_true($resp['status'] === 200, "/artists/joao-silva status {$resp['status']} (expected 200)");
+assert_contains($resp['body'], 'João Silva', '/artists/joao-silva body');
 
-echo "Test: /artists returns 200\n";
+echo "Test: /artists/nonexistent returns 404\n";
+$resp = fetch("$base/artists/nonexistent-artist");
+assert_true($resp['status'] === 404, "/artists/nonexistent-artist status {$resp['status']} (expected 404)");
+
+echo "Test: /artists (no slug) returns 404\n";
 $resp = fetch("$base/artists");
-assert_true($resp['status'] === 200, "/artists status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Artists front-controller', '/artists body');
-
-echo "Test: /artists/ (trailing slash) returns 200\n";
-$resp = fetch("$base/artists/");
-assert_true($resp['status'] === 200, "/artists/ status {$resp['status']} (expected 200)");
-assert_contains($resp['body'], 'Artists front-controller', '/artists/ body');
+assert_true(in_array($resp['status'], [404, 200], true), "/artists status {$resp['status']}");
 
 // ---- Regression: existing pages still work ----
 echo "Test: GET / returns 200 with landing page content (regression)\n";

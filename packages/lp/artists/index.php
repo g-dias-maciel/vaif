@@ -394,7 +394,6 @@ function render_404(): void
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="/style.css">
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         body {
@@ -677,7 +676,6 @@ echo <<<PAGE
     <link rel="icon" href="/img/favicon/android-chrome-192x192.png" sizes="192x192" type="image/png">
     <link rel="icon" href="/img/favicon/android-chrome-512x512.png" sizes="512x512" type="image/png">
     <link rel="manifest" href="/img/favicon/site.webmanifest">
-    <link rel="stylesheet" href="/style.css">
     <style>
         :root {
             --gold: #D4B04C;
