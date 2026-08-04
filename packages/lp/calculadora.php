@@ -4,6 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Lucro Oculto - Calculadora para Tatuadores</title>
+    <meta name="description" content="Descubra quanto dinheiro seu estúdio de tatuagem está deixando na mesa. Calculadora gratuita para tatuadores de alto padrão — 4 perguntas, resultado em tempo real.">
+    <link rel="canonical" href="https://vaif.com.br/calculadora/">
+    <meta property="og:title" content="Lucro Oculto — Calculadora para Tatuadores | VAIF">
+    <meta property="og:description" content="Descubra quanto dinheiro seu estúdio de tatuagem está deixando na mesa. Calculadora gratuita para tatuadores de alto padrão.">
+    <meta property="og:image" content="https://vaif.com.br/img/vaif_logo.png">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://vaif.com.br/calculadora/">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Lucro Oculto — Calculadora para Tatuadores | VAIF">
+    <meta name="twitter:description" content="Descubra quanto dinheiro seu estúdio de tatuagem está deixando na mesa. Calculadora gratuita para tatuadores de alto padrão.">
+    <meta name="twitter:image" content="https://vaif.com.br/img/vaif_logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
