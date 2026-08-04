@@ -85,6 +85,30 @@ function test(label, ok, detail = '') {
   const calcTitle = await calcPage.title();
   test('Calculadora page loads', calcTitle.length > 0, `title="${calcTitle}"`);
 
+  // ── Calculadora v2 page ───────────────────────────────
+  console.log('\n=== Calculadora v2 page ===');
+  const calc2Page = await ctx.newPage();
+  calc2Page.on('console', msg => { if (msg.type() === 'error') console.log('  ⚠ Browser console:', msg.text()); });
+  await calc2Page.goto(BASE + '/calculadora-v2.php', { waitUntil: 'networkidle' });
+  const calc2Title = await calc2Page.title();
+  test('Calculadora v2 page title contains Lucro Oculto', calc2Title.includes('Lucro Oculto'), `title="${calc2Title}"`);
+
+  const calc2Scripts = await calc2Page.locator('script[src]');
+  const scriptCount = await calc2Scripts.count();
+  test('Calculadora v2 loads external scripts', scriptCount >= 3, `found ${scriptCount} external scripts`);
+
+  const calc2Styles = await calc2Page.locator('link[rel="stylesheet"]');
+  const styleCount = await calc2Styles.count();
+  test('Calculadora v2 loads external stylesheets', styleCount >= 2, `found ${styleCount} stylesheets`);
+
+  const calcForm2 = calc2Page.locator('#calcForm');
+  test('Calculadora v2 has calculator form', await calcForm2.count() > 0);
+
+  const leadForm2 = calc2Page.locator('#leadForm');
+  test('Calculadora v2 has lead form', await leadForm2.count() > 0);
+
+  test('Calculadora v2 has marquee-set wrapper', (await calc2Page.content()).includes('marquee-set'));
+
   // ── Summary ──────────────────────────────────────────
   console.log(`\n${'═'.repeat(50)}`);
   console.log(`  Results: ${passed} passed, ${failed} failed`);
