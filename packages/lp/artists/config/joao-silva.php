@@ -7,7 +7,7 @@ return [
     'display_name'     => 'João Silva',
     'instagram_handle' => 'joaosilvatattoo',
     'style'            => 'Realismo Preto & Cinza, Retratos, Animais, Religioso, Coberturas, Fine Line',
-    'profile_photo'    => 'https://placehold.co/1200x1600/1a1a1a/D4B04C?text=João+Silva&font=montserrat',
+    'profile_photo'    => 'https://images.unsplash.com/photo-1598371839696-5c5bb00bdc28?w=1200&q=85',
     'whatsapp_number'  => '5511999999999',
 
     'hero_headline'    => 'João Silva — Tatuador Realismo',
