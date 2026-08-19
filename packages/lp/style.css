@@ -101,6 +101,51 @@ footer {
     cursor: pointer;
 }
 
+.marquee-badge {
+    display: inline-flex;
+    align-items: center;
+    height: 40px;
+    padding: 0 20px;
+    flex-shrink: 0;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1.5px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-decoration: none;
+    border: 1px solid var(--border-color);
+    transition: all 0.4s ease;
+    white-space: nowrap;
+}
+
+.marquee-badge:hover {
+    color: var(--gold);
+    border-color: var(--gold);
+    box-shadow: 0 0 12px rgba(212, 176, 76, 0.25);
+}
+
+@media (min-width: 1600px) {
+    .marquee-wrap {
+        padding: 0 2rem;
+    }
+
+    .marquee-badge {
+        height: 52px;
+        padding: 0 28px;
+        font-size: 15px;
+        letter-spacing: 2px;
+    }
+
+    .marquee-track {
+        gap: 80px;
+    }
+
+    .marquee-set {
+        gap: 80px;
+    }
+}
+
 .marquee-track a {
     flex-shrink: 0;
     line-height: 0;
@@ -863,6 +908,76 @@ strong {
 }
 .diamond-divider .diamond {
     flex-shrink: 0;
+}
+
+.form-expectation-steps {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    margin: var(--space-sm) 0 var(--space-md);
+    padding: var(--space-sm);
+    background: rgba(212, 176, 76, 0.05);
+    border: 1px solid var(--border-color);
+}
+
+.exp-step {
+    flex: 1;
+    text-align: center;
+}
+
+.exp-step-num {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border: 1px solid var(--gold);
+    color: var(--gold);
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    border-radius: 50%;
+    margin-bottom: 6px;
+}
+
+.exp-step-text {
+    display: block;
+    font-size: 10px;
+    color: var(--text-muted);
+    line-height: 1.4;
+    letter-spacing: 0.5px;
+}
+
+.exp-step-text strong {
+    color: var(--gold);
+    font-weight: 600;
+}
+
+.exp-step-arrow {
+    color: var(--gold);
+    font-size: 12px;
+    padding-top: 2px;
+    opacity: 0.4;
+    flex-shrink: 0;
+}
+
+.submit-reassurance {
+    text-align: center;
+    font-size: 10px;
+    color: var(--text-muted);
+    opacity: 0.8;
+    margin-top: 12px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.submit-reassurance .privacy-link {
+    color: var(--gold);
+    text-decoration: underline;
+}
+
+.submit-reassurance .privacy-link:hover {
+    color: #E5C35E;
 }
 
 .section-block {

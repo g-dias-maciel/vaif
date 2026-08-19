@@ -72,6 +72,7 @@ $hero_headline = $artist['hero_headline'] ?? "{$display_name} — Tatuador {$pri
 $hero_subheadline = $artist['hero_subheadline'] ?? "{$display_name}, especialista em {$primary_style} em {$artist['location']['city']}. Agende sua sessão pelo WhatsApp.";
 
 $cta_text = $artist['cta_text'] ?? 'Agende sua sessão pelo WhatsApp';
+$anos_de_experiencia = $artist['anos_de_experiencia'] ?? '8';
 
 $city = $artist['location']['city'] ?? '';
 $title_suffix = $city ? " em {$city}" : '';
@@ -94,7 +95,7 @@ $show_hero = true;
 $show_portfolio = !empty($artist['portfolio']);
 $show_about = !empty($artist['bio']);
 $show_testimonials = !empty($artist['testimonials']);
-$show_instagram = !empty($artist['instagram_feed']);
+$show_instagram = !empty($artist['instagram_feed']) || !empty($artist['instagram_posts']);
 $show_faq = true;
 $show_location = !empty($artist['location']);
 $show_booking = true;
@@ -305,16 +306,40 @@ HTML;
 }
 
 // ================================================================
-// Instagram feed placeholder items
+// Instagram feed items (official oEmbed embeds)
 // ================================================================
 $instagram_grid_html = '';
-for ($i = 1; $i <= 8; $i++) {
-    $instagram_grid_html .= <<<HTML
+$instagram_embed_script = '';
+
+require_once __DIR__ . '/../lib/instagram/embed-url.php';
+
+$instagram_posts = $artist['instagram_posts'] ?? [];
+
+if (!empty($instagram_posts)) {
+    foreach ($instagram_posts as $post) {
+        $post_url = is_array($post) ? ($post['url'] ?? '') : $post;
+        if ($post_url === '') {
+            continue;
+        }
+        $embed_url = instagram_embed_url($post_url);
+        $post_url_h = h($embed_url);
+        $is_reel = str_contains($embed_url, '/reel/');
+        $extra_class = $is_reel ? ' instagram-embed--reel' : '';
+        $instagram_grid_html .= <<<HTML
+            <blockquote class="instagram-media{$extra_class}" data-instgrm-permalink="{$post_url_h}" data-instgrm-captioned="false"></blockquote>
+
+HTML;
+    }
+    $instagram_embed_script = '<script async src="https://www.instagram.com/embed.js"></script>';
+} elseif ($show_instagram) {
+    for ($i = 1; $i <= 8; $i++) {
+        $instagram_grid_html .= <<<HTML
             <div class="instagram-item">
                 <img src="https://placehold.co/300x300/1a1a1a/D4B04C?text=Post+{$i}&font=montserrat" alt="Instagram post {$i}" loading="lazy">
             </div>
 
 HTML;
+    }
 }
 
 // ================================================================
@@ -467,6 +492,19 @@ HTML;
 $hero_img_url = image_url($artist['profile_photo'], $slug);
 $about_img_url = image_url($artist['profile_photo'], $slug);
 
+$hero_bg_html = '';
+if (!empty($artist['hero_video'])) {
+    $hero_video_url_h = h($artist['hero_video']);
+    $hero_img_url_h = h($hero_img_url);
+    $hero_bg_html = <<<HTML
+        <video autoplay muted loop playsinline poster="{$hero_img_url_h}" aria-hidden="true" tabindex="-1">
+            <source src="{$hero_video_url_h}" type="video/mp4">
+        </video>
+HTML;
+} else {
+    $hero_bg_html = "<img src=\"{$hero_img_url}\" alt=\"\" aria-hidden=\"true\" loading=\"eager\">";
+}
+
 // ================================================================
 // WhatsApp SVG icon (reused)
 // ================================================================
@@ -504,7 +542,7 @@ if ($show_about) {
 {$specialty_tags_html}                </div>
                 <div class="about-stats">
                     <div class="about-stat">
-                        <strong>8+</strong>
+                        <strong>{$anos_de_experiencia}+</strong>
                         <span>Anos de Experiência</span>
                     </div>
                     <div class="about-stat">
@@ -512,7 +550,7 @@ if ($show_about) {
                         <span>Tatuagens Realizadas</span>
                     </div>
                     <div class="about-stat">
-                        <strong>4.9</strong>
+                        <strong>5.0</strong>
                         <span>Avaliação Média</span>
                     </div>
                 </div>
@@ -907,6 +945,13 @@ echo <<<PAGE
             object-position: center 15%;
             filter: brightness(0.55) contrast(1.05) saturate(0.45);
         }
+        .hero-bg video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            object-position: center 15%;
+            filter: brightness(0.55) contrast(1.05) saturate(0.45);
+        }
         .hero-bg::after {
             content: '';
             position: absolute;
@@ -1223,7 +1268,7 @@ echo <<<PAGE
         /* ─── SECTION 6: INSTAGRAM ─── */
         .instagram-grid {
             display: grid;
-            grid-template-columns: repeat(4, 1fr);
+            grid-template-columns: repeat(3, 1fr);
             gap: var(--space-xs);
             max-width: 1200px;
             margin: 0 auto;
@@ -1265,6 +1310,35 @@ echo <<<PAGE
             font-size: 12px;
             color: var(--text-muted);
             margin-top: 4px;
+        }
+        .instagram-grid > div,
+        .instagram-grid > blockquote,
+        .instagram-grid iframe {
+            width: 100% !important;
+            min-width: 0 !important;
+            max-width: 100% !important;
+        }
+        .instagram-grid > div {
+            margin-left: 0 !important;
+            margin-right: 0 !important;
+        }
+        .instagram-grid .instagram-embed--reel,
+        .instagram-grid > div:has(> .instagram-embed--reel) {
+            justify-self: center;
+            width: 326px !important;
+            max-width: 326px !important;
+        }
+        .instagram-grid .instagram-embed--reel iframe,
+        .instagram-grid > div:has(> .instagram-embed--reel) iframe {
+            width: 326px !important;
+            min-width: 326px !important;
+            max-width: 326px !important;
+        }
+        @media (max-width: 768px) {
+            .instagram-grid .instagram-embed--reel,
+            .instagram-grid > div:has(> .instagram-embed--reel) {
+                grid-column: 1 / -1;
+            }
         }
 
         /* ─── SECTION 7: FAQ ─── */
@@ -1384,7 +1458,7 @@ echo <<<PAGE
             width: 100%;
             height: 100%;
             border: 0;
-            filter: grayscale(85%) contrast(0.9) brightness(0.7);
+            filter: grayscale(45%) contrast(0.9) brightness(1);
         }
 
         /* ─── DIVAIDER TATTOO MOTIF ─── */
@@ -1558,7 +1632,8 @@ echo <<<PAGE
 
             .artist-section { padding: 3.5rem 1.25rem; }
 
-            .hero-bg img { object-position: center 10%; }
+            .hero-bg img,
+            .hero-bg video { object-position: center 10%; }
             .hero-title { font-size: 2.2rem; }
             .hero-ctas { flex-direction: column; align-items: center; }
             .hero-ctas .btn-primary { width: 100%; text-align: center; }
@@ -1569,7 +1644,6 @@ echo <<<PAGE
             .about-stats { justify-content: center; gap: var(--space-md); }
             .about-stat strong { font-size: 1.4rem; }
             .testimonials-grid { grid-template-columns: 1fr; }
-            .instagram-grid { grid-template-columns: repeat(3, 1fr); }
             .location-grid { grid-template-columns: 1fr; }
             .booking-box { padding: 30px 20px; }
             .specialty-tag { padding: 8px 16px; font-size: 12px; }
@@ -1580,7 +1654,7 @@ echo <<<PAGE
 
         @media (max-width: 480px) {
             .portfolio-grid { grid-template-columns: 1fr 1fr; gap: 6px; }
-            .instagram-grid { grid-template-columns: repeat(3, 1fr); gap: 6px; }
+            .instagram-grid { gap: 6px; }
             .faq-question { font-size: 0.9rem; }
         }
     </style>
@@ -1608,10 +1682,10 @@ echo <<<PAGE
     <!-- ═══ SECTION 1: HERO ═══ -->
     <section id="hero" class="artist-section">
         <div class="hero-bg">
-            <img src="{$hero_img_url}" alt="" aria-hidden="true" loading="eager">
+            {$hero_bg_html}
         </div>
         <div class="hero-content-wrapper">
-            <span class="hero-eyebrow">Tatuador Especialista em {$h_primary_style}</span>
+            <span class="hero-eyebrow">{$h_hero_headline}</span>
             <h1 class="hero-title">{$hero_name_html}</h1>
             <p class="hero-subtitle">
                 {$h_hero_subheadline}
@@ -1773,6 +1847,7 @@ echo <<<PAGE
             });
         })();
     </script>
+{$instagram_embed_script}
 </body>
 </html>
 PAGE;

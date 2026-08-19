@@ -2,7 +2,7 @@
     <div class="hero-grid">
         <div class="hero-content fade-in-up">
             <h1 class="hero-title">
-                <span class="hero-eyebrow">CANSADO DE AGÊNCIAS QUE NAO TRAZEM RESULTADOS?</span>
+                <span class="hero-eyebrow">CANSADO DE AGÊNCIAS QUE NÃO TRAZEM RESULTADOS?</span>
                 Nós instalamos um sistema que bota <span>dinheiro no seu bolso</span>.
             </h1>
             <p class="hero-subtitle fade-in-up delay-1">

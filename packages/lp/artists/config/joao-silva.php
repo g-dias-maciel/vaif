@@ -8,6 +8,7 @@ return [
     'instagram_handle' => 'joaosilvatattoo',
     'style'            => 'Realismo Preto & Cinza, Retratos, Animais, Religioso, Coberturas, Fine Line',
     'profile_photo'    => 'https://images.unsplash.com/photo-1598371839696-5c5bb00bdc28?w=1200&q=85',
+    'hero_video'       => 'https://example.com/videos/joao-silva-hero.mp4',
     'whatsapp_number'  => '5511999999999',
 
     'hero_headline'    => 'João Silva — Tatuador Realismo',
@@ -48,6 +49,14 @@ return [
     ],
 
     'instagram_feed' => true,
+
+    'instagram_posts' => [
+        'https://www.instagram.com/joaosilvatattoo/p/C4bXk9RmAqP/',
+        'https://www.instagram.com/p/C4dH2jLpBwZ/',
+        'https://www.instagram.com/joaosilvatattoo/reel/C4fN8tRcDmQ/',
+        'https://www.instagram.com/p/C4hS3vKfGnX/',
+        'https://www.instagram.com/reel/C4jY5wLmHsT/',
+    ],
 
     'faq' => [
         [

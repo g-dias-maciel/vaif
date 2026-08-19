@@ -1,0 +1,6 @@
+{
+  "files": ["packages/lp/index.php", "packages/lp/calculadora.php"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "cspChecked": true
+}

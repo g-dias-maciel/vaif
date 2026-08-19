@@ -4,16 +4,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>VAIF — Agência de Escala para Estúdios de Tatuagem</title>
+    <title>VAIF | Agência de Escala para Estúdios de Tatuagem</title>
     <meta name="description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
     <link rel="canonical" href="https://vaif.com.br/">
-    <meta property="og:title" content="VAIF — Agência de Escala para Estúdios de Tatuagem">
+    <meta property="og:title" content="VAIF | Agência de Escala para Estúdios de Tatuagem">
     <meta property="og:description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
     <meta property="og:image" content="https://vaif.com.br/img/vaif_logo.png">
     <meta property="og:type" content="website">
     <meta property="og:url" content="https://vaif.com.br/">
     <meta name="twitter:card" content="summary_large_image">
-    <meta name="twitter:title" content="VAIF — Agência de Escala para Estúdios de Tatuagem">
+    <meta name="twitter:title" content="VAIF | Agência de Escala para Estúdios de Tatuagem">
     <meta name="twitter:description" content="Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem. Aumente seu faturamento com anúncios, atendente virtual e CRM integrado.">
     <meta name="twitter:image" content="https://vaif.com.br/img/vaif_logo.png">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -79,7 +79,7 @@
                     <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 </div>
                 <h3>Funil de Alto Padrão</h3>
-                <p>Um sistema que atrai, qualifica e fecha clientes com orçamento acima de R$ 3.000 por sessão — sem você precisar negociar descontos no Direct.</p>
+                <p>Um sistema que atrai, qualifica e fecha clientes com orçamento acima de R$ 3.000 por sessão, sem você precisar negociar descontos no Direct.</p>
                 <div class="value-stat">
                     <strong>2,4x</strong>
                     <span>Ticket Médio dos nossos clientes</span>
@@ -103,7 +103,7 @@
                     <svg viewBox="0 0 24 24"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
                 </div>
                 <h3>Escala Sem Ansiedade</h3>
-                <p>Um time de mídia paga, copywriting e CRM integrado — tudo operando enquanto você faz o que sabe de melhor: tatuar obras-primas.</p>
+                <p>Um time de mídia paga, copywriting e CRM integrado, tudo operando enquanto você faz o que sabe de melhor: tatuar obras-primas.</p>
                 <div class="value-stat">
                     <strong>R$ 18k</strong>
                     <span>Aumento médio de faturamento mensal</span>
@@ -119,21 +119,21 @@
             <div class="marquee-wrap">
                 <div class="marquee-track">
                     <div class="marquee-set">
-                        <a href="https://www.instagram.com/jhonatanmasters" target="_blank" rel="noopener noreferrer" title="Ver estúdio Jhonatan Masters"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=JHONATAN+MASTERS&font=montserrat" alt="Jhonatan Masters"></a>
-                        <a href="https://www.instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Rodrigo Silva"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=RODRIGO+SILVA&font=montserrat" alt="Rodrigo Silva"></a>
-                        <a href="https://www.instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Sergio Moraes"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=SERGIO+MORAES&font=montserrat" alt="Sergio Moraes"></a>
-                        <a href="https://www.instagram.com/Kleberocker" target="_blank" rel="noopener noreferrer" title="Ver estúdio Kleber Rocker"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=KLEBER+ROCKER&font=montserrat" alt="Kleber Rocker"></a>
-                        <a href="https://www.instagram.com/Maikbuenotattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Bueno Tattoo"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=BUENO+TATTOO&font=montserrat" alt="Bueno Tattoo"></a>
-                        <a href="https://www.instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer" title="Ver estúdio Dinho Tattoo"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=DINHO+TATTOO&font=montserrat" alt="Dinho Tattoo"></a>
-                    </div>
+                        <a href="https://www.instagram.com/jhonatanmasters" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Jhonatan Masters">Jhonatan Masters</a>
+                        <a href="https://www.instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Rodrigo Silva">Rodrigo Silva</a>
+                        <a href="https://www.instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Sergio Moraes">Sergio Moraes</a>
+                        <a href="https://www.instagram.com/Kleberocker" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Kleber Rocker">Kleber Rocker</a>
+                        <a href="https://www.instagram.com/Maikbuenotattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Bueno Tattoo">Bueno Tattoo</a>
+                        <a href="https://www.instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Dinho Tattoo">Dinho Tattoo</a>
+</div>
                     <div class="marquee-set">
-                        <a href="https://www.instagram.com/jhonatanmasters" target="_blank" rel="noopener noreferrer" title="Ver estúdio Jhonatan Masters"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=JHONATAN+MASTERS&font=montserrat" alt="Jhonatan Masters"></a>
-                        <a href="https://www.instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Rodrigo Silva"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=RODRIGO+SILVA&font=montserrat" alt="Rodrigo Silva"></a>
-                        <a href="https://www.instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Sergio Moraes"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=SERGIO+MORAES&font=montserrat" alt="Sergio Moraes"></a>
-                        <a href="https://www.instagram.com/Kleberocker" target="_blank" rel="noopener noreferrer" title="Ver estúdio Kleber Rocker"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=KLEBER+ROCKER&font=montserrat" alt="Kleber Rocker"></a>
-                        <a href="https://www.instagram.com/Maikbuenotattoo" target="_blank" rel="noopener noreferrer" title="Ver estúdio Bueno Tattoo"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=BUENO+TATTOO&font=montserrat" alt="Bueno Tattoo"></a>
-                        <a href="https://www.instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer" title="Ver estúdio Dinho Tattoo"><img class="marquee-logo" src="https://placehold.co/160x32/999/222?text=DINHO+TATTOO&font=montserrat" alt="Dinho Tattoo"></a>
-                    </div>
+                        <a href="https://www.instagram.com/jhonatanmasters" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Jhonatan Masters">Jhonatan Masters</a>
+                        <a href="https://www.instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Rodrigo Silva">Rodrigo Silva</a>
+                        <a href="https://www.instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Sergio Moraes">Sergio Moraes</a>
+                        <a href="https://www.instagram.com/Kleberocker" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Kleber Rocker">Kleber Rocker</a>
+                        <a href="https://www.instagram.com/Maikbuenotattoo" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Bueno Tattoo">Bueno Tattoo</a>
+                        <a href="https://www.instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer" class="marquee-badge" aria-label="Ver estúdio Dinho Tattoo">Dinho Tattoo</a>
+</div>
                 </div>
             </div>
         </section>
@@ -149,7 +149,7 @@
                 <div class="chat-benefits">
                     <div class="chat-benefit-item">
                         <svg viewBox="0 0 24 24" stroke="var(--accent-green)"><polyline points="20 6 9 17 4 12"/></svg>
-                        <span>Responde no mesmo instante — nunca perca um lead por demora</span>
+                        <span>Responde no mesmo instante, nunca perca um lead por demora</span>
                     </div>
                     <div class="chat-benefit-item">
                         <svg viewBox="0 0 24 24" stroke="var(--accent-green)"><polyline points="20 6 9 17 4 12"/></svg>
@@ -290,7 +290,7 @@
             <div class="service-card fade-in-up delay-1">
                 <div class="service-number">01</div>
                 <h3>Anúncios Segmentados para o Seu Estilo</h3>
-                <p><strong>Campanhas de Meta Ads e Google Ads</strong> segmentadas por bairro, renda e estilo artístico — chega de gastar dinheiro com clique de curioso. <strong>Gasto médio por lead qualificado:</strong> <strong style="color:var(--gold);">R$ 12</strong>.</p>
+                <p><strong>Campanhas de Meta Ads e Google Ads</strong> segmentadas por bairro, renda e estilo artístico, chega de gastar dinheiro com clique de curioso. <strong>Gasto médio por lead qualificado:</strong> <strong style="color:var(--gold);">R$ 12</strong>.</p>
                 <a href="#aplicar" class="service-cta">Saber Mais →</a>
             </div>
 
@@ -304,7 +304,7 @@
             <div class="service-card fade-in-up delay-2">
                 <div class="service-number">03</div>
                 <h3>Roteiros Que Vendem Tatuagem</h3>
-                <p><strong>Scripts que convencem no WhatsApp</strong> sem parecer vendedor, portfólio que fecha cliente pelo valor e <strong>páginas que filtram curiosos</strong> — só entra quem tem orçamento premium.</p>
+                <p><strong>Scripts que convencem no WhatsApp</strong> sem parecer vendedor, portfólio que fecha cliente pelo valor e <strong>páginas que filtram curiosos</strong>, só entra quem tem orçamento premium.</p>
                 <a href="#aplicar" class="service-cta">Saber Mais →</a>
             </div>
 
@@ -353,7 +353,7 @@
             <div class="form-copy fade-in-up">
                 <span class="section-tag">Pronto Para Escalar?</span>
                 <h2 class="section-heading">Receba um <span>diagnóstico gratuito</span> do seu estúdio</h2>
-                <p class="section-sub">Nosso time analisa seu faturamento, ticket médio e presença digital. Em menos de 24h você tem um plano de ação personalizado — sem compromisso.</p>
+                <p class="section-sub">Nosso time analisa seu faturamento, ticket médio e presença digital. Em menos de 24h você tem um plano de ação personalizado, sem compromisso.</p>
 
                 <div class="form-trust-badges">
                     <div class="form-trust-badge">
@@ -366,7 +366,7 @@
                     </div>
                     <div class="form-trust-badge">
                         <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                        <span>Seus dados estão protegidos — nunca compartilhados</span>
+                        <span>Seus dados estão protegidos, nunca compartilhados</span>
                     </div>
                     <div class="form-trust-badge">
                         <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
@@ -380,24 +380,26 @@
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">Nome Completo</label>
-                            <input type="text" class="form-input no-prefix" name="f-name" placeholder="Seu nome completo" required>
+                            <input type="text" class="form-input no-prefix" name="f-name" placeholder="Seu nome completo" autocomplete="name" required>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Nome do Estúdio</label>
-                            <input type="text" class="form-input no-prefix" name="f-studio" placeholder="Nome do seu estúdio" required>
+                            <input type="text" class="form-input no-prefix" name="f-studio" placeholder="Nome do seu estúdio" autocomplete="organization" required>
                         </div>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
                             <label class="form-label">WhatsApp</label>
-                            <input type="tel" class="form-input no-prefix" name="f-whatsapp" placeholder="(11) 99999-9999" required>
+                            <input type="tel" class="form-input no-prefix" name="f-whatsapp" placeholder="(11) 99999-9999" autocomplete="tel" required>
+                            <span class="input-hint">Digite seu WhatsApp com DDD para receber o diagnóstico</span>
                         </div>
                         <div class="form-group">
                             <label class="form-label">Instagram</label>
                             <div class="input-wrapper">
                                 <span class="input-prefix" style="color: var(--gold);">@</span>
-                                <input type="text" class="form-input" name="f-instagram" placeholder="seu.perfil" required>
+                                <input type="text" class="form-input" name="f-instagram" placeholder="seu.perfil" autocomplete="off" required>
                             </div>
+                            <span class="input-hint">Apenas o nome do seu perfil, sem o @</span>
                         </div>
                     </div>
                     <div class="form-group">
@@ -406,7 +408,7 @@
                             <span class="input-prefix">R$</span>
                             <input type="text" inputmode="numeric" class="form-input" name="f-revenue" placeholder="Ex: 15.000" required>
                         </div>
-                        <span class="input-hint">Quanto seu estúdio fatura em média por mês</span>
+                        <span class="input-hint">Apenas números, sem vírgulas. Ex: 15000 (não use "15 mil" nem "15.000")</span>
                     </div>
 
                     <div class="diamond-divider">
@@ -415,8 +417,25 @@
                         <span class="line"></span>
                     </div>
 
-                    <button type="submit" class="btn-primary" id="qualify-submit-btn">Agendar Minha Análise de Lucro &rarr;</button>
-                    <p style="text-align: center; font-size: 10px; color: var(--text-muted); opacity: 0.6; margin-top: 12px; letter-spacing: 1px; text-transform: uppercase;">Sem spam • Dados protegidos • Resposta rápida</p>
+                    <div class="form-expectation-steps">
+                        <div class="exp-step">
+                            <span class="exp-step-num">1</span>
+                            <span class="exp-step-text">Analisamos seu perfil <strong>em até 15 min</strong></span>
+                        </div>
+                        <div class="exp-step-arrow">→</div>
+                        <div class="exp-step">
+                            <span class="exp-step-num">2</span>
+                            <span class="exp-step-text">Envio do <strong>diagnóstico personalizado</strong> via WhatsApp</span>
+                        </div>
+                        <div class="exp-step-arrow">→</div>
+                        <div class="exp-step">
+                            <span class="exp-step-num">3</span>
+                            <span class="exp-step-text">Call estratégica <strong>somente se fizer sentido</strong></span>
+                        </div>
+                    </div>
+
+                    <button type="submit" class="btn-primary" id="qualify-submit-btn">Receber Meu Diagnóstico Gratuito →</button>
+                    <p class="submit-reassurance">Sem spam • Dados protegidos • Resposta rápida • <a href="#" class="privacy-link" target="_blank" rel="noopener">Política de Privacidade</a></p>
                 </form>
                 <div id="form-success-message" class="form-success" style="display:none;"></div>
             </div>

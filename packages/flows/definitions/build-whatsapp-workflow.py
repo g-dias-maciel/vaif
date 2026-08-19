@@ -21,11 +21,20 @@ FLOWS_ROOT = os.path.dirname(BASE)  # packages/flows/
 SYSTEM_PROMPT = open(os.path.join(FLOWS_ROOT, "prompts/beatriz-system.md")).read()
 PARSE_EXTRACT_CODE = open(os.path.join(BASE, "code/parse-extract-whatsapp.js")).read()
 
-# ── Agent text with injected context: lead_id, artista, pipeline ──
+# ── Agent text with injected context: lead_id, artista, pipeline, qualification, data_hoje ──
 AGENT_TEXT_EXPR = (
-    "={{ '[Contexto: lead_id=' + $('Upsert Lead').first().json.id "
-    "+ ', artista=' + ($('Resolve Artist').first().json.nome || 'artista') "
-    "+ ', pipeline=' + $('Upsert Lead').first().json.pipeline_status + '] '"
+    "={{ '[Contexto: pipeline=' + $('Upsert Lead').first().json.pipeline_status "
+    "+ ' nome=' + ($('Upsert Lead').first().json.nome || 'desconhecido') "
+    "+ ' deposit=' + ($('Upsert Lead').first().json.deposit_status || 'nao_solicitado') "
+    "+ ' lead_id=' + $('Upsert Lead').first().json.id "
+    "+ ' placement=' + ($('Upsert Lead').first().json.placement || '?') "
+    "+ ' zona=' + ($('Upsert Lead').first().json.body_zone || '?') "
+    "+ ' estilo=' + ($('Upsert Lead').first().json.style || '?') "
+    "+ ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) "
+    "+ ' significado=' + ($('Upsert Lead').first().json.significado || '?') "
+    "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
+    "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
+    "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) + '] '"
     "+ ($('WAHA Webhook').first().json.payload?.body || '') }}"
 )
 
@@ -192,7 +201,7 @@ SELECT * FROM inserted;""",
                 "sessionIdType": "customKey",
                 "sessionKey": "={{ $('Upsert Lead').first().json.id }}",
                 "tableName": "chat_memory",
-                "contextOutputLength": 10,
+                "contextWindowLength": 20,
             },
             "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
             "typeVersion": 1.4,
@@ -223,10 +232,10 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT placement, body_zone, table_price, session_duration_min, buffer_min FROM lookup_price($fromAI(placement, 'Placement da tatuagem, ex: braco, costas, perna'), $fromAI(body_zone, 'Zona corporal, ex: pequeno, medio, grande, fechamento'), current_setting('app.artist_id')::uuid)",
+                "query": "SELECT placement, body_zone, table_price, session_duration_min, buffer_min FROM lookup_price('{{ $fromAI('placement', 'Placement da tatuagem, ex: braco, costas, perna') }}', '{{ $fromAI('body_zone', 'Zona corporal, ex: pequeno, medio, grande, fechamento') }}', current_setting('app.artist_id')::uuid)",
                 "options": {},
             },
-            "type": "n8n-nodes-base.postgres",
+            "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
             "position": [1560, -60],
             "id": "p1a2b3c4-5d6e-7f8a-9b0c-1d2e3f4a5b6c",
@@ -237,10 +246,10 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM write_quote($fromAI(lead_id, 'UUID do lead — está no contexto da mensagem no formato [Contexto: lead_id=UUID]'), $fromAI(table_price, 'Preço de tabela em centavos de real'), $fromAI(negotiated_price, 'Preço negociado em centavos de real. Se não houve desconto, use o mesmo valor de table_price'))",
+                "query": "SELECT * FROM write_quote('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem no formato [Contexto: lead_id=UUID]') }}'::uuid, {{ $fromAI('table_price', 'Preço de tabela em centavos de real', 'number') }}, {{ $fromAI('negotiated_price', 'Preço negociado em centavos de real. Se não houve desconto, use o mesmo valor de table_price', 'number') }})",
                 "options": {},
             },
-            "type": "n8n-nodes-base.postgres",
+            "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
             "position": [1560, 60],
             "id": "p2a3b4c5-6d7e-8a9b-0c1d-2e3f4a5b6c7d",
@@ -251,10 +260,10 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM request_deposit($fromAI(lead_id, 'UUID do lead — está no contexto da mensagem'), $fromAI(amount, 'Valor do sinal em centavos de real (ex: R$180 = 18000)'))",
+                "query": "SELECT * FROM request_deposit('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, {{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }})",
                 "options": {},
             },
-            "type": "n8n-nodes-base.postgres",
+            "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
             "position": [1560, 180],
             "id": "p3a4b5c6-7d8e-9a0b-1c2d-3e4f5a6b7c8d",
@@ -265,10 +274,10 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT id, start_at, end_at, type FROM check_availability(current_setting('app.artist_id')::uuid, $fromAI(from_date, 'Data inicial no formato ISO 8601, ex: 2026-08-01T00:00:00-03:00')::timestamptz, $fromAI(to_date, 'Data final no formato ISO 8601, ex: 2026-08-30T23:59:59-03:00')::timestamptz, $fromAI(duration_min, 'Duração mínima em minutos'))",
+                "query": "SELECT id, start_at, end_at, type FROM check_availability(current_setting('app.artist_id')::uuid, date_trunc('day', now())::timestamptz, now() + interval '60 days', {{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}) ORDER BY start_at LIMIT 10",
                 "options": {},
             },
-            "type": "n8n-nodes-base.postgres",
+            "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
             "position": [1560, 300],
             "id": "p4a5b6c7-8d9e-0a1b-2c3d-4e5f6a7b8c9d",
@@ -279,10 +288,10 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM book_slot($fromAI(lead_id, 'UUID do lead — está no contexto da mensagem'), $fromAI(start_at, 'Data/horário de início no formato ISO 8601, ex: 2026-08-15T14:00:00-03:00')::timestamptz, $fromAI(duration_min, 'Duração da sessão em minutos (do lookup_price)'), $fromAI(buffer_min, 'Buffer em minutos (do lookup_price, padrão 30)'))",
+                "query": "SELECT * FROM book_slot('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, {{ $fromAI('duration_min', 'Duração da sessão em minutos (do lookup_price)', 'number') }}, {{ $fromAI('buffer_min', 'Buffer em minutos (do lookup_price, padrão 30)', 'number') }})",
                 "options": {},
             },
-            "type": "n8n-nodes-base.postgres",
+            "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
             "position": [1560, 420],
             "id": "p5a6b7c8-9d0e-1a2b-3c4d-5e6f7a8b9c0d",
@@ -364,7 +373,57 @@ WHERE $2 IS NOT NULL AND $2 != '';""",
             "credentials": {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}},
             "onError": "continueRegularOutput",
         },
-        # 19. Send WAHA Message
+        # 19. Build Notion Sync Payload (Code)
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": """const lead = $('Upsert Lead').first().json;
+const parsed = $('Parse & Extract Fields').first().json;
+const artist = $('Resolve Artist').first().json;
+
+return [{
+  json: {
+    lead_id: lead.id,
+    artist_id: artist.id,
+    nome: lead.nome,
+    telefone: lead.telefone,
+    pipeline_status: parsed.pipeline_status,
+    placement: parsed.placement_val,
+    body_zone: parsed.body_zone_val,
+    style: parsed.style_val,
+    table_price: parsed.table_price_cents,
+    negotiated_price: parsed.negotiated_price_cents,
+    deposit_status: parsed.deposit_status_val,
+    deposit_amount: parsed.deposit_amount_cents,
+    booked_date: parsed.booked_date_val,
+    session_duration_min: parsed.session_duration_min_val,
+    handoff_reason: parsed.handoff_reason,
+  }
+}];""",
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2600, -200],
+            "id": "n4s5y6n7-8c9a-0b1c-2d3e-4f5a6b7c8d9e",
+            "name": "Build Notion Sync Payload",
+        },
+        # 20. Enqueue Notion Sync (outbox — fast local insert, guaranteed delivery)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT enqueue_notion_sync($1::uuid, $2::uuid, $3::jsonb);",
+                "options": {
+                    "queryReplacement": "={{ [$json.lead_id, $json.artist_id, JSON.stringify($json)] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres", "typeVersion": 2.6,
+            "position": [2860, -200],
+            "id": "o4t5i6o7-8n9a-0b1c-2d3e-4f5a6b7c8d9e",
+            "name": "Enqueue Notion Sync",
+            "credentials": {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}},
+            "onError": "continueRegularOutput",
+        },
+        # 21. Send WAHA Message
         {
             "parameters": {
                 "method": "POST",
@@ -393,11 +452,11 @@ WHERE $2 IS NOT NULL AND $2 != '';""",
             },
             "type": "n8n-nodes-base.httpRequest",
             "typeVersion": 4.2,
-            "position": [2600, -200],
+            "position": [3120, -200],
             "id": "b4c5d6e7-8f9a-0b1c-2d3e-4f5a6b7c8d9e",
             "name": "Send WAHA Message",
         },
-        # 20. Webhook Response (200 OK — true branch)
+        # 22. Webhook Response (200 OK — true branch)
         {
             "parameters": {
                 "respondWith": "json",
@@ -405,7 +464,7 @@ WHERE $2 IS NOT NULL AND $2 != '';""",
             },
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1.2,
-            "position": [2860, -200],
+            "position": [3380, -200],
             "id": "c5d6e7f8-9a0b-1c2d-3e4f-5a6b7c8d9e0f",
             "name": "Webhook Response",
         },
@@ -463,6 +522,12 @@ WHERE $2 IS NOT NULL AND $2 != '';""",
             "main": [[{"node": "Log Event", "type": "main", "index": 0}]]
         },
         "Log Event": {
+            "main": [[{"node": "Build Notion Sync Payload", "type": "main", "index": 0}]]
+        },
+        "Build Notion Sync Payload": {
+            "main": [[{"node": "Enqueue Notion Sync", "type": "main", "index": 0}]]
+        },
+        "Enqueue Notion Sync": {
             "main": [[{"node": "Send WAHA Message", "type": "main", "index": 0}]]
         },
         "Send WAHA Message": {

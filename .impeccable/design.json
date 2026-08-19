@@ -1,0 +1,261 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-04T20:00:00Z",
+  "title": "Design System: VAIF Agency Landing Page",
+  "extensions": {
+    "colorMeta": {
+      "primary": {
+        "role": "primary",
+        "displayName": "Old-World Bullion",
+        "canonical": "#D4B04C",
+        "tonalRamp": [
+          "#3a2e0e", "#54441a", "#705d26", "#8c7733",
+          "#a89340", "#c4b04d", "#dcc866", "#f4e080"
+        ]
+      },
+      "bg-dark": {
+        "role": "neutral",
+        "displayName": "Void Black",
+        "canonical": "#0A0A0A",
+        "tonalRamp": [
+          "#050505", "#0a0a0a", "#141414", "#1e1e1e",
+          "#2a2a2a", "#383838", "#484848", "#5a5a5a"
+        ]
+      },
+      "bg-card": {
+        "role": "neutral",
+        "displayName": "Carbon Black",
+        "canonical": "#121212",
+        "tonalRamp": [
+          "#080808", "#121212", "#1c1c1c", "#282828",
+          "#363636", "#464646", "#585858", "#6c6c6c"
+        ]
+      },
+      "text-main": {
+        "role": "neutral",
+        "displayName": "Ink Off-White",
+        "canonical": "rgb(242, 237, 228)",
+        "tonalRamp": [
+          "#a8a49e", "#bab6b0", "#ccc9c3", "#dedbd7",
+          "#ebe9e6", "#f2ede4", "#f7f3eb", "#fcf9f3"
+        ]
+      },
+      "text-muted": {
+        "role": "neutral",
+        "displayName": "Muted Stone",
+        "canonical": "#CCCCCC",
+        "tonalRamp": [
+          "#808080", "#949494", "#a8a8a8", "#bdbdbd",
+          "#cccccc", "#dbdbdb", "#e8e8e8", "#f5f5f5"
+        ]
+      },
+      "border-color": {
+        "role": "neutral",
+        "displayName": "Divider Steel",
+        "canonical": "#222222",
+        "tonalRamp": [
+          "#111111", "#1a1a1a", "#222222", "#2d2d2d",
+          "#383838", "#454545", "#535353", "#636363"
+        ]
+      },
+      "accent-red": {
+        "role": "semantic",
+        "displayName": "Wound Red",
+        "canonical": "#D44C4C",
+        "tonalRamp": [
+          "#3d1010", "#5a1818", "#7a2020", "#9c2a2a",
+          "#bf3636", "#d44c4c", "#df6e6e", "#ec9494"
+        ]
+      },
+      "accent-green": {
+        "role": "semantic",
+        "displayName": "Healed Green",
+        "canonical": "#4CD4A0",
+        "tonalRamp": [
+          "#0f3a2a", "#18543e", "#217053", "#2c906a",
+          "#38b282", "#4cd4a0", "#70dfb5", "#98eccc"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Section Display",
+        "purpose": "Section headings and hero title. Cormorant Garamond for editorial authority."
+      },
+      "title": {
+        "displayName": "Card Title",
+        "purpose": "Value card and service card headings. Smaller serif for contained authority."
+      },
+      "body": {
+        "displayName": "Body Text",
+        "purpose": "All paragraph, description, and benefit-list text. Montserrat at 1.1rem minimum for legibility."
+      },
+      "label": {
+        "displayName": "Utility Label",
+        "purpose": "Form labels, section tags, nav links, stat footers. Tiny but weighty uppercase Montserrat."
+      }
+    },
+    "shadows": [
+      {
+        "name": "button-lift",
+        "value": "0 6px 25px rgba(212, 176, 76, 0.3)",
+        "purpose": "Primary CTA hover state — gold-tinted lift."
+      },
+      {
+        "name": "button-outline-lift",
+        "value": "0 4px 20px rgba(212, 176, 76, 0.15)",
+        "purpose": "Secondary/ghost button hover — subtler gold glow."
+      },
+      {
+        "name": "phone-ambient",
+        "value": "0 30px 80px rgba(0,0,0,0.7), 0 8px 30px rgba(0,0,0,0.5)",
+        "purpose": "Hero phone mockup — heavy anchoring shadow."
+      },
+      {
+        "name": "dashboard-ambient",
+        "value": "0 20px 60px rgba(0,0,0,0.5)",
+        "purpose": "Permanent ambient depth for dashboard/teaser widgets."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default transition easing for hover and focus states."
+      },
+      {
+        "name": "ease-entry",
+        "value": "cubic-bezier(0.165, 0.84, 0.44, 1)",
+        "purpose": "Fade-in-up scroll reveal — decelerating, elegant entrance."
+      },
+      {
+        "name": "duration-short",
+        "value": "0.3s",
+        "purpose": "Hover transitions, border color shifts."
+      },
+      {
+        "name": "duration-medium",
+        "value": "0.4s",
+        "purpose": "Card lift, section transitions."
+      },
+      {
+        "name": "duration-entry",
+        "value": "0.8s",
+        "purpose": "Fade-in-up scroll animation duration."
+      }
+    ],
+    "breakpoints": [
+      { "name": "tablet", "value": "900px" },
+      { "name": "mobile", "value": "768px" },
+      { "name": "mobile-sm", "value": "600px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Solid gold CTA. Full-width in forms, auto-width in hero. The page's only filled button.",
+      "html": "<button class=\"ds-btn-primary\">AGENDAR MINHA ANÁLISE →</button>",
+      "css": ".ds-btn-primary { display: inline-flex; align-items: center; justify-content: center; padding: 16px 32px; background-color: #D4B04C; color: #000; border: none; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; text-decoration: none; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-primary:hover { background-color: #E5C35E; transform: translateY(-2px); box-shadow: 0 6px 25px rgba(212, 176, 76, 0.3); }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Ghost outline CTA. Used alongside primary or as standalone secondary action.",
+      "html": "<button class=\"ds-btn-secondary\">SABER MAIS →</button>",
+      "css": ".ds-btn-secondary { display: inline-flex; align-items: center; justify-content: center; padding: 16px 32px; background: transparent; border: 2px solid #D4B04C; color: #D4B04C; font-family: 'Montserrat', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 2px; text-transform: uppercase; cursor: pointer; text-decoration: none; border-radius: 4px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); } .ds-btn-secondary:hover { transform: translateY(-2px); box-shadow: 0 4px 20px rgba(212, 176, 76, 0.15); }"
+    },
+    {
+      "name": "Nav Highlight Button",
+      "kind": "button",
+      "refersTo": "nav-btn-highlight",
+      "description": "Compact nav CTA. Outline at rest, inverts to filled gold on hover.",
+      "html": "<a class=\"ds-nav-btn\">AGENDAR CONVERSA</a>",
+      "css": ".ds-nav-btn { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; background: transparent; border: 1px solid #D4B04C; color: #D4B04C; font-family: 'Montserrat', sans-serif; font-size: 11px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; text-decoration: none; border-radius: 4px; transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1); } .ds-nav-btn:hover { background: #D4B04C; color: #000; transform: translateY(-2px); box-shadow: 0 4px 20px rgba(212, 176, 76, 0.25); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "Dark form field with gold focus ring. Accommodates inline prefix (R$, @).",
+      "html": "<div class=\"ds-input-group\"><span class=\"ds-input-prefix\">R$</span><input class=\"ds-input\" type=\"text\" placeholder=\"Ex: 15.000\"></div>",
+      "css": ".ds-input-group { position: relative; display: flex; align-items: center; } .ds-input-prefix { position: absolute; left: 20px; color: #D4B04C; font-size: 14px; font-weight: 600; z-index: 1; } .ds-input { width: 100%; padding: 16px 20px 16px 50px; background-color: #1A1A1A; border: 1px solid #333; color: rgb(242, 237, 228); font-family: 'Montserrat', sans-serif; font-size: 15px; border-radius: 4px; transition: border-color 0.3s ease, box-shadow 0.3s ease; } .ds-input::placeholder { color: #555; } .ds-input:focus { outline: none; border-color: #D4B04C; box-shadow: 0 0 0 1px #D4B04C; } .ds-input--no-prefix { padding-left: 20px; } .ds-input--invalid { border-color: #D44C4C !important; }"
+    },
+    {
+      "name": "Value Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Three-column value proposition card with icon, title, description, and stat callout.",
+      "html": "<div class=\"ds-value-card\"><div class=\"ds-value-icon\"><svg viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#D4B04C\" stroke-width=\"1.5\"><path d=\"M12 2L2 7l10 5 10-5-10-5z\"/><path d=\"M2 17l10 5 10-5\"/><path d=\"M2 12l10 5 10-5\"/></svg></div><h3>Funil de Alto Padrão</h3><p>Um sistema que atrai, qualifica e fecha clientes com orçamento acima de R$ 3.000.</p><div class=\"ds-value-stat\"><strong>2,4x</strong><span>Ticket Médio</span></div></div>",
+      "css": ".ds-value-card { background: #121212; border: 1px solid #222222; padding: 60px 40px; text-align: center; transition: all 0.4s ease; position: relative; overflow: hidden; } .ds-value-card::before { content: ''; position: absolute; top: 0; left: 0; right: 0; height: 2px; background: linear-gradient(90deg, transparent, #D4B04C, transparent); opacity: 0; transition: opacity 0.4s ease; } .ds-value-card:hover { border-color: rgba(212, 176, 76, 0.3); transform: translateY(-4px); } .ds-value-card:hover::before { opacity: 1; } .ds-value-icon { width: 56px; height: 56px; margin: 0 auto 24px; border: 1px solid rgba(212, 176, 76, 0.25); display: flex; align-items: center; justify-content: center; border-radius: 50%; } .ds-value-card h3 { font-family: 'Cormorant Garamond', serif; font-size: 1.4rem; margin-bottom: 16px; color: rgb(242, 237, 228); } .ds-value-card p { font-size: 15px; color: #CCCCCC; line-height: 1.7; } .ds-value-stat { margin-top: 24px; padding-top: 24px; border-top: 1px solid #222222; } .ds-value-stat strong { color: #D4B04C; font-family: 'Cormorant Garamond', serif; font-size: 1.8rem; font-weight: 700; } .ds-value-stat span { display: block; font-size: 10px; color: #CCCCCC; letter-spacing: 1px; text-transform: uppercase; margin-top: 4px; }"
+    },
+    {
+      "name": "Section Tag",
+      "kind": "custom",
+      "refersTo": "section-tag",
+      "description": "Golden eyebrow label that precedes every section heading.",
+      "html": "<span class=\"ds-section-tag\">Os Três Pilares VAIF</span>",
+      "css": ".ds-section-tag { display: inline-block; font-size: 10px; font-weight: 700; letter-spacing: 3px; text-transform: uppercase; color: #D4B04C; margin-bottom: 16px; font-family: 'Montserrat', sans-serif; }"
+    },
+    {
+      "name": "Diamond Divider",
+      "kind": "custom",
+      "refersTo": "diamond-divider",
+      "description": "Horizontal separator with rotating diamond — the system's signature mark.",
+      "html": "<div class=\"ds-diamond-divider\"><span class=\"ds-diamond-line\"></span><span class=\"ds-diamond\"></span><span class=\"ds-diamond-line\"></span></div>",
+      "css": ".ds-diamond-divider { display: flex; align-items: center; justify-content: center; gap: 12px; margin: 24px 0; } .ds-diamond-line { width: 40px; height: 1px; background: #222222; } .ds-diamond { width: 6px; height: 6px; background: #D4B04C; transform: rotate(45deg); flex-shrink: 0; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Golden Needle",
+    "overview": "The Golden Needle is a precision instrument — deliberate, sharp, and irreplaceable. Like the tattoo machine it evokes, every element in this system earns its place. The design speaks to artists who already understand craft: nothing is decorative, everything is engineered. The gold (#D4B04C) is old-world bullion — muted, aged, earned — not jewelry-store glitter. It signals wealth that was built, not bought.\n\nThe atmosphere is refined, urgent, and aspirational. The page wastes no time on pleasantries; it confronts the artist with their hidden loss, then offers a precise instrument to recover it. The dark canvas (#0A0A0A) recedes, letting the gold do the talking. White space is generous; density is low; every section earns its scroll depth. Anti-references: no startup SaaS gradients, no neon aggression, no rounded blob illustrations, no emoji cheer.",
+    "keyCharacteristics": [
+      "Gold-on-black palette with old-world bullion character — muted, earned, never garish",
+      "Cormorant Garamond for display authority paired with Montserrat for utilitarian precision",
+      "Low-density layout with 6rem section breathing room",
+      "Fade-in-up scroll animations with staggered delays — reveals feel earned, not auto-played",
+      "Diamond motif (◆) as the recurring brand mark — the needle's tip in geometric form",
+      "Card surfaces lift on hover with subtle shadow — layered, not flat"
+    ],
+    "rules": [
+      {
+        "name": "The Bullion Rule",
+        "body": "Gold is used on ≤10% of any given screen. Its power comes from restraint. A page where everything is gold is a page where nothing is.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Accent Rule",
+        "body": "Red and green are functional, not decorative. They appear only in error and success states respectively; they are never used to \"add color\" to a section.",
+        "section": "colors"
+      },
+      {
+        "name": "The Two-Font Rule",
+        "body": "Never introduce a third font family. Cormorant and Montserrat cover every role. Icons are inline SVG — no icon fonts.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest. Shadows appear only on hover, on permanently elevated dashboard elements, or as ambient anchoring on the phone mockup. A card without an interactive surface gets no shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use gold sparingly — on exactly one CTA per viewport fold, on the diamond divider, and as the italic highlight in section headings. Gold is the precious metal; treat it like one.",
+      "Do maintain 6rem section padding on desktop and 4rem on mobile. Generous whitespace is the luxury signal.",
+      "Do pair Cormorant headings with Montserrat body in every text block. The pairing is the system's voice — breaking it reads as off-brand.",
+      "Do use fade-in-up animations with staggered delays (delay-1: 0.2s, delay-2: 0.4s, delay-3: 0.6s) on section entrance. The reveal must feel earned.",
+      "Do keep cards sharp-edged (no radius). Rounded corners are reserved for contained widget shells where 8px-16px radius signals a frame-within-frame relationship.",
+      "Do lift interactive surfaces on hover with translateY(-2px to -4px) and a gold-tinted box-shadow. Depth is earned by interaction."
+    ],
+    "donts": [
+      "Don't introduce a third font family. Cormorant Garamond and Montserrat cover every typographic role.",
+      "Don't use red or green for decoration. --accent-red and --accent-green are functional signals — error and success only.",
+      "Don't add a border-radius to primary buttons, cards, or the qualifying form. Square shoulders are the system's posture.",
+      "Don't use drop shadows on static cards. Shadows are a hover response or a permanent ambient anchor for elevated widgets — never a default.",
+      "Don't use emoji, rounded blob illustrations, neon colors, or glitch animations. This is an atelier, not a nightclub or a SaaS dashboard.",
+      "Don't reduce body text below 1.1rem. The audience reads on phones between tattoo sessions — prioritize legibility over fitting more copy."
+    ]
+  }
+}

@@ -231,6 +231,18 @@ test('WhatsApp link contains correct number', str_contains($artistPage, 'wa.me/5
 test('WhatsApp link has correct message text', str_contains($artistPage, 'Ola,%20vim%20pelo%20seu%20site%20no%20vaif.com.br'),
     'WhatsApp message text incorrect');
 
+// Hero background video
+test('Artist page renders hero video element', str_contains($artistPage, '<video'),
+    'Missing hero <video> element');
+test('Hero video autoplays muted and loops', str_contains($artistPage, 'autoplay') && str_contains($artistPage, 'muted') && str_contains($artistPage, 'loop'),
+    'Hero video missing autoplay/muted/loop');
+test('Hero video uses playsinline for iOS', str_contains($artistPage, 'playsinline'),
+    'Missing playsinline attribute');
+test('Hero video has poster fallback', str_contains($artistPage, 'poster="'),
+    'Missing poster fallback');
+test('Hero video uses configured source', str_contains($artistPage, 'joao-silva-hero.mp4'),
+    'Configured video source not rendered');
+
 // Matomo
 test('Matomo trackEvent present', str_contains($artistPage, "_paq.push(['trackEvent', 'Artista', 'CTA_WhatsApp'"),
     'Matomo event tracking missing');
@@ -248,6 +260,28 @@ test('JSON-LD BreadcrumbList schema present', str_contains($artistPage, '"@type"
     'JSON-LD BreadcrumbList missing');
 test('Artist page has canonical URL', str_contains($artistPage, '<link rel="canonical" href="https://vaif.com.br/artists/joao-silva">'),
     'Missing canonical URL');
+
+// Instagram post embeds
+test('Artist page renders Instagram embed blockquote', str_contains($artistPage, 'data-instgrm-permalink'),
+    'Missing data-instgrm-permalink');
+test('Artist page embeds all configured posts',
+    substr_count($artistPage, 'data-instgrm-permalink') >= 4,
+    'Expected at least 4 post embeds');
+test('Artist page loads Instagram embed.js', str_contains($artistPage, 'instagram.com/embed.js'),
+    'Missing embed.js loader');
+test('Artist page does not render placeholder posts when real posts configured',
+    !str_contains($artistPage, 'placehold.co/300x300'),
+    'Placeholder posts still rendered');
+test('Artist page mixes photo and reel embeds',
+    str_contains($artistPage, 'data-instgrm-permalink="https://www.instagram.com/reel/'),
+    'Missing reel permalink in grid');
+test('Artist page renders reels with spanning class', str_contains($artistPage, 'instagram-embed--reel'),
+    'Missing instagram-embed--reel class');
+test('Profile-scoped permalinks are normalized to canonical embed URLs',
+    !str_contains($artistPage, 'data-instgrm-permalink="https://www.instagram.com/joaosilvatattoo/'),
+    'Profile-scoped URL not normalized in permalink');
+test('Normalized reel permalink rendered', str_contains($artistPage, 'data-instgrm-permalink="https://www.instagram.com/reel/C4fN8tRcDmQ/"'),
+    'Canonical reel permalink missing after normalization');
 
 // NotFound pages
 test('Nonexistent artist returns 404', $missingCode === 404, "Got HTTP {$missingCode}");

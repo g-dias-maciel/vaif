@@ -1,0 +1,426 @@
+{
+  "name": "Notion Sync",
+  "description": "Mirrors Beatriz's pipeline state changes to the artist's Notion workspace — creates/updates Clientes pages and creates linked Projects when a tattoo is scheduled.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "notion-sync",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ns-webhook-0000-0000-0000-000000000001",
+      "name": "Notion Sync Webhook",
+      "webhookId": "ns-webhook-0000-0000-0000-000000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT notion_token, notion_clientes_database_id, notion_projects_database_id, nome AS artist_name FROM artists WHERE id = $1::uuid",
+        "options": {
+          "queryReplacement": "={{ [$json.artist_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        0
+      ],
+      "id": "ns-pg-config-0000-0000-0000-000000000001",
+      "name": "Load Artist Notion Config",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.notion_token }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "id": "ns-if-config-0000-0000-0000-000000000001",
+      "name": "Has Notion Config?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const webhook = $('Notion Sync Webhook').first().json;\nconst config = $('Load Artist Notion Config').first().json;\n\nreturn [{\n  json: {\n    lead_id: webhook.lead_id,\n    artist_id: webhook.artist_id,\n    nome: webhook.nome,\n    telefone: webhook.telefone,\n    email: webhook.email || null,\n    pipeline_status: webhook.pipeline_status,\n    placement: webhook.placement || null,\n    body_zone: webhook.body_zone || null,\n    style: webhook.style || null,\n    table_price: webhook.table_price || null,\n    negotiated_price: webhook.negotiated_price || null,\n    deposit_status: webhook.deposit_status || null,\n    deposit_amount: webhook.deposit_amount || null,\n    booked_date: webhook.booked_date || null,\n    session_duration_min: webhook.session_duration_min || null,\n    handoff_reason: webhook.handoff_reason || null,\n    tatuador_nome: config.artist_name || null,\n    notion_token: config.notion_token,\n    notion_clientes_database_id: config.notion_clientes_database_id,\n    notion_projects_database_id: config.notion_projects_database_id,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        -100
+      ],
+      "id": "ns-code-merge-0000-0000-0000-000000000001",
+      "name": "Merge Webhook + Config"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "// Notion Sync — payload builder for the Beatriz → Notion pipeline\n// Runs in n8n Code node. Receives lead data + artist Notion config from Postgres.\n//\n// Builds: 1) search filter for clientes DB  2) page properties for create/update\n//          3) project creation payload (if agendado)\n\nconst lead = $input.first().json;\n\nconst situacaoMap = {\n  'novo':               'Contato Iniciado',\n  'qualificando':       'Contato Iniciado',\n  'orcamento_enviado':  'Resposta pendente',\n  'aguardando_deposito': 'Esperando Sinal',\n  'agendado':           'Tatuagem agendada',\n  'fechado':            'Cliente Adquirido',\n  'perdido':            'Cliente Perdido',\n  'aguardando_artista': 'Resposta pendente',\n};\n\nconst situacao = situacaoMap[lead.pipeline_status] || 'Contato Iniciado';\nconst telefone = (lead.telefone || '').replace(/\\D/g, '');\nconst nome = lead.nome || 'Lead sem nome';\n\n// ── Notion search filter (find existing lead by telefone) ──\nconst searchBody = {\n  filter: {\n    property: 'Telefone',\n    phone_number: { equals: telefone }\n  },\n  page_size: 1,\n};\n\n// ── Clientes page properties (for create or update) ──\nconst pageProperties = {\n  'Nome': {\n    title: [{ text: { content: nome } }]\n  },\n  'Telefone': {\n    phone_number: telefone\n  },\n  'Situação': {\n    select: { name: situacao }\n  },\n};\n\n// Email is optional — only include if mapped in future\n// const email = lead.email;\n// if (email) pageProperties['Email'] = { email: email };\n\n// ── Booking data (for project creation) ──\nlet projectPayload = null;\nif (lead.pipeline_status === 'agendado' || lead.booked_date) {\n  const valorReais = lead.table_price\n    ? Math.round(lead.table_price / 100)\n    : null;\n\n  const agendamento = lead.booked_date || null;\n\n  const projectProperties = {\n    'Cliente': {\n      relation: [{ id: '__CLIENTE_PAGE_ID__' }]\n    },\n    'Status': {\n      select: { name: 'Aguardando Sinal' }\n    },\n    'Agendamento': agendamento ? { date: { start: agendamento } } : undefined,\n  };\n\n  if (valorReais) {\n    projectProperties['Valor'] = { number: valorReais };\n  }\n\n  if (lead.tatuador_nome) {\n    projectProperties['Tatuador'] = { rich_text: [{ text: { content: lead.tatuador_nome } }] };\n  }\n\n  projectPayload = {\n    parent: {\n      type: 'data_source_id',\n      data_source_id: lead.notion_projects_database_id,\n    },\n    properties: projectProperties,\n  };\n}\n\n// ── Notion config ──\nconst notionToken = lead.notion_token;\nconst clientesDbId = lead.notion_clientes_database_id;\n\nreturn [{\n  json: {\n    notion_token: notionToken,\n    clientes_db_id: clientesDbId,\n    project_payload: projectPayload,\n    search_body: searchBody,\n    page_properties: pageProperties,\n    pipeline_status: lead.pipeline_status,\n    telefone: telefone,\n    nome: nome,\n    lead_id: lead.lead_id,\n    artist_id: lead.artist_id,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1040,
+        -100
+      ],
+      "id": "ns-code-build-0000-0000-0000-000000000001",
+      "name": "Build Notion Payloads"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ 'https://api.notion.com/v1/data_sources/' + $json.clientes_db_id + '/query' }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.notion_token }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2026-03-11"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.search_body) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        -100
+      ],
+      "id": "ns-http-search-0000-0000-0000-000000000001",
+      "name": "Search Clientes",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first().json;\nconst searchResp = $('Search Clientes').first().json;\nconst notionToken = input.notion_token;\nconst clientesDbId = input.clientes_db_id;\n\nconst results = searchResp.results || [];\nconst found = results.length > 0;\nconst pageId = found ? results[0].id : null;\n\nlet method, url, body;\n\nif (found) {\n  method = 'PATCH';\n  url = 'https://api.notion.com/v1' + '/pages/' + pageId;\n  body = { properties: input.page_properties };\n} else {\n  method = 'POST';\n  url = 'https://api.notion.com/v1' + '/pages';\n  body = {\n    parent: { type: 'data_source_id', data_source_id: clientesDbId },\n    properties: input.page_properties,\n  };\n}\n\nreturn [{\n  json: {\n    notion_token: notionToken,\n    method: method,\n    url: url,\n    body: body,\n    found: found,\n    page_id: pageId,\n    project_payload: input.project_payload,\n    pipeline_status: input.pipeline_status,\n    lead_id: input.lead_id,\n    artist_id: input.artist_id,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        -100
+      ],
+      "id": "ns-code-final-0000-0000-0000-000000000001",
+      "name": "Finalize Page Payload"
+    },
+    {
+      "parameters": {
+        "url": "={{ $json.url }}",
+        "method": "={{ $json.method }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.notion_token }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2026-03-11"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        -100
+      ],
+      "id": "ns-http-upsert-0000-0000-0000-000000000001",
+      "name": "Create or Update Clientes",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const input = $input.first().json;\nconst upsertResp = $('Create or Update Clientes').first().json;\nconst projectPayload = input.project_payload;\n\nif (!projectPayload) return [{ json: { should_create_project: false } }];\n\nconst pageId = upsertResp.id || input.page_id;\nif (!pageId) return [{ json: { should_create_project: false } }];\n\nconst body = JSON.parse(JSON.stringify(projectPayload));\nbody.properties.Cliente.relation = [{ id: pageId }];\n\nreturn [{\n  json: {\n    should_create_project: true,\n    url: 'https://api.notion.com/v1' + '/pages',\n    body: body,\n    notion_token: input.notion_token,\n    lead_id: input.lead_id,\n  }\n}];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        -100
+      ],
+      "id": "ns-code-project-0000-0000-0000-000000000001",
+      "name": "Prepare Project"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ns-if-proj-cond-000000000001",
+              "leftValue": "={{ $json.should_create_project }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        2340,
+        -100
+      ],
+      "id": "ns-if-project-0000-0000-0000-000000000001",
+      "name": "Create Project?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "={{ 'Bearer ' + $json.notion_token }}"
+            },
+            {
+              "name": "Notion-Version",
+              "value": "2026-03-11"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2600,
+        -300
+      ],
+      "id": "ns-http-project-0000-0000-0000-000000000001",
+      "name": "Create Project",
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ status: 'ok' }) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        3120,
+        -100
+      ],
+      "id": "ns-response-0000-0000-0000-000000000001",
+      "name": "Webhook Response"
+    }
+  ],
+  "connections": {
+    "Notion Sync Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Artist Notion Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Artist Notion Config": {
+      "main": [
+        [
+          {
+            "node": "Has Notion Config?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Notion Config?": {
+      "main": [
+        [
+          {
+            "node": "Merge Webhook + Config",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Merge Webhook + Config": {
+      "main": [
+        [
+          {
+            "node": "Build Notion Payloads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Notion Payloads": {
+      "main": [
+        [
+          {
+            "node": "Search Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search Clientes": {
+      "main": [
+        [
+          {
+            "node": "Finalize Page Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Finalize Page Payload": {
+      "main": [
+        [
+          {
+            "node": "Create or Update Clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create or Update Clientes": {
+      "main": [
+        [
+          {
+            "node": "Prepare Project",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Project": {
+      "main": [
+        [
+          {
+            "node": "Create Project?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Project?": {
+      "main": [
+        [
+          {
+            "node": "Create Project",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Project": {
+      "main": [
+        [
+          {
+            "node": "Webhook Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
