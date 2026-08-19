@@ -1,0 +1,24 @@
+# Keep the image lean — don't ship local/dev/test tooling
+.git
+.gitignore
+.github
+
+node_modules
+
+# Tests & CI
+tests
+*.test.php
+e2e.mjs
+
+# Agent tooling / local only
+.agents
+.claude
+.idea
+.vscode
+*.swp
+*.swo
+
+# Environment secrets
+.env
+.env.*
+!deploy/*.conf
