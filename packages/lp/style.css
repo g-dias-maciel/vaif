@@ -1012,6 +1012,15 @@ strong {
 /* ─── VALUE PROPOSITION ─── */
 #value-prop-section {
     background: linear-gradient(180deg, var(--bg-dark) 0%, #0d0d0d 100%);
+    position: relative;
+}
+
+#value-prop-section::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, var(--gold-dark), transparent);
 }
 
 .value-grid {
