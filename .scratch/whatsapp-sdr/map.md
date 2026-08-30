@@ -1,7 +1,7 @@
 # WhatsApp SDR closer
 
 Type: wayfinder map
-Status: build phase — PRD at [issues/12-sdr-closer-prd.md](issues/12-sdr-closer-prd.md), 9 implementation tickets on GitHub ([#1](https://github.com/g-dias-maciel/vaif/issues/1)–[#9](https://github.com/g-dias-maciel/vaif/issues/9))
+Status: build phase — PRD at [issues/12-sdr-closer-prd.md](issues/12-sdr-closer-prd.md), 13 implementation tickets on GitHub ([#1](https://github.com/g-dias-maciel/vaif/issues/1)–[#9](https://github.com/g-dias-maciel/vaif/issues/9), [#27](https://github.com/g-dias-maciel/vaif/issues/27)–[#30](https://github.com/g-dias-maciel/vaif/issues/30))
 
 ## Implementation tickets (GitHub)
 
@@ -16,6 +16,10 @@ Status: build phase — PRD at [issues/12-sdr-closer-prd.md](issues/12-sdr-close
 | Notion sync | [#7](https://github.com/g-dias-maciel/vaif/issues/7) | #3 |
 | Self-serve portal | [#8](https://github.com/g-dias-maciel/vaif/issues/8) | #6 |
 | Testing harness | [#9](https://github.com/g-dias-maciel/vaif/issues/9) | #4, #5 |
+| Availability from working hours (60-min slots) | [#27](https://github.com/g-dias-maciel/vaif/issues/27) | None |
+| Booking conflict guard + block/unblock | [#28](https://github.com/g-dias-maciel/vaif/issues/28) | #27 |
+| n8n webhook for availability + blocking | [#29](https://github.com/g-dias-maciel/vaif/issues/29) | #27, #28 |
+| Artist agenda admin page | [#30](https://github.com/g-dias-maciel/vaif/issues/30) | #27, #29 |
 
 ## Destination
 

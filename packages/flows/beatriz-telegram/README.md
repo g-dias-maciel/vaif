@@ -46,8 +46,12 @@ novo → qualificando → orcamento_enviado → aguardando_deposito
 
 ## Deploy
 
+The deployed n8n workflow is the canonical source — `beatriz-telegram.json` is
+an export of it. Edit in n8n, then re-export via deploy.py's list/GET (or
+validate + normalize the checked-in file):
+
 ```bash
-# Build the JSON definition from source
+# Validate + normalize the canonical JSON (connections, AI refs, jsCode)
 python3 packages/flows/definitions/build-workflow.py
 
 # Create or update the workflow

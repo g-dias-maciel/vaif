@@ -28,13 +28,12 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const update = $input.first().json;\nconst isCallback = !!(update && update.callback_query);\nreturn [{ json: { isCallback } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        65,
+        80,
         0
       ],
       "id": "detect-update-type-v2-0000-000000000001",
@@ -67,7 +66,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        130,
+        144,
         0
       ],
       "id": "cb-if-v2-0000-0000-0000-000000000001",
@@ -75,14 +74,13 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const msg = $('Telegram Trigger').first().json.message || {};\nconst chatId = String(msg.chat ? msg.chat.id : '');\nconst text = msg.text || (msg.photo ? '[FOTO RECEBIDA]' : (msg.voice ? '[ÁUDIO RECEBIDO]' : '[MÍDIA RECEBIDA]'));\nreturn [{ json: { chat_id: chatId, msg_text: text, msg_ts: Date.now() } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        390,
-        200
+        400,
+        208
       ],
       "id": "debounce-start-v2-0000-000000000001",
       "name": "Debounce Start"
@@ -98,8 +96,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
-        200
+        528,
+        208
       ],
       "id": "debounce-accumulate-v2-0000-000000000001",
       "name": "Debounce Accumulate",
@@ -108,23 +106,19 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
-      "parameters": {
-        "resume": "timeInterval",
-        "amount": 3,
-        "unit": "seconds"
-      },
+      "parameters": {},
       "type": "n8n-nodes-base.wait",
       "typeVersion": 1.2,
       "position": [
-        650,
-        200
+        656,
+        208
       ],
       "id": "debounce-wait-v2-0000-000000000001",
-      "name": "Wait"
+      "name": "Wait",
+      "webhookId": "69e4da59-ed29-4a52-9314-1bcaed722594"
     },
     {
       "parameters": {
@@ -137,8 +131,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        200
+        784,
+        208
       ],
       "id": "debounce-getstate-v2-0000-000000000001",
       "name": "Get Buffer State",
@@ -147,19 +141,17 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const state = $('Get Buffer State').first().json;\nconst msgTs = $('Debounce Start').first().json.msg_ts;\nconst chatId = $('Debounce Start').first().json.chat_id;\nconst lastTs = state && state.last_msg_at ? new Date(state.last_msg_at).getTime() : msgTs;\nconst isLast = lastTs <= msgTs;\nconst combined = (state && state.pending ? state.pending : '').trim();\nreturn [{ json: { is_last: isLast, combined_text: combined, chat_id: chatId } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        910,
-        200
+        912,
+        208
       ],
       "id": "debounce-resolve-v2-0000-000000000001",
       "name": "Debounce Resolve"
@@ -192,7 +184,7 @@
       "typeVersion": 2,
       "position": [
         1040,
-        200
+        208
       ],
       "id": "if-last-v2-0000-0000-000000000001",
       "name": "IF Last?"
@@ -208,8 +200,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1170,
-        200
+        1184,
+        208
       ],
       "id": "debounce-clear-v2-0000-000000000001",
       "name": "Clear Buffer",
@@ -218,19 +210,17 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "const cq = $('Telegram Trigger').first().json.callback_query;\nconst data = (cq.data || '').split(':');\nconst type = data[0];\nconst action = data[1] || null;\nconst leadId = data[2] || null;\nconst messageId = cq.message ? cq.message.message_id : null;\nconst chatId = cq.message ? cq.message.chat.id : null;\nconst callbackId = cq.id;\n\nlet query = null;\nlet answerText = '';\nlet editText = '';\n\nif (type === 'handoff') {\n  if (action === 'confirm') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'fechado\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u2705 Handoff aceito! Lead movido para fechado.';\n    editText = '<b>\\u2705 Handoff aceito</b>';\n  } else if (action === 'cancel') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'perdido\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u274C Handoff recusado. Lead movido para perdido.';\n    editText = '<b>\\u274C Handoff recusado</b>';\n  }\n} else if (type === 'deposit') {\n  if (action === 'confirm') {\n    query = 'UPDATE public.leads SET deposit_status = \\'confirmado\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u2705 Sinal confirmado! Prossiga com o agendamento.';\n    editText = '<b>\\u2705 Sinal Recebido \\u2014 Pronto para agendamento</b>';\n  } else if (action === 'cancel') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'perdido\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u274C Sinal n\\u00E3o recebido. Lead movido para perdido.';\n    editText = '<b>\\u274C Sinal N\\u00E3o Recebido</b>';\n  }\n}\n\nreturn [{ json: {\n  type,\n  action,\n  lead_id: leadId,\n  answer_text: answerText,\n  edit_text: editText,\n  callback_id: callbackId,\n  message_id: messageId,\n  chat_id: chatId,\n  query,\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        390,
-        -200
+        400,
+        -208
       ],
       "id": "cb-parse-0000-0000-0000-000000000001",
       "name": "Parse Callback"
@@ -238,13 +228,14 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ $json.query }}"
+        "query": "{{ $json.query }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        650,
-        -200
+        656,
+        -208
       ],
       "id": "cb-update-0000-0000-0000-000000000001",
       "name": "Update Lead (Callback)",
@@ -253,25 +244,23 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
         "resource": "callback",
-        "operation": "answerQuery",
         "queryId": "={{ $('Parse Callback').first().json.callback_id }}",
-        "text": "={{ $('Parse Callback').first().json.answer_text }}",
         "additionalFields": {}
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        910,
-        -200
+        912,
+        -208
       ],
       "id": "cb-answer-0000-0000-0000-000000000001",
       "name": "Answer Callback",
+      "webhookId": "526cede8-279c-49b2-9689-a801ed053fa9",
       "credentials": {
         "telegramApi": {
           "id": "ddaVhX88IF54TVAS",
@@ -281,9 +270,7 @@
     },
     {
       "parameters": {
-        "resource": "message",
         "operation": "editMessageText",
-        "messageType": "message",
         "chatId": "={{ $('Parse Callback').first().json.chat_id }}",
         "messageId": "={{ $('Parse Callback').first().json.message_id }}",
         "text": "={{ $('Parse Callback').first().json.edit_text }}",
@@ -294,11 +281,12 @@
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        1170,
-        -200
+        1184,
+        -208
       ],
       "id": "cb-edit-0000-0000-0000-000000000001",
       "name": "Edit Handoff Message",
+      "webhookId": "668b3d7f-0123-43fa-b118-d2a7e4026a52",
       "credentials": {
         "telegramApi": {
           "id": "ddaVhX88IF54TVAS",
@@ -309,7 +297,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH existing AS (\n  SELECT id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, table_price, negotiated_price\n  FROM public.leads\n  WHERE artist_id = 'b0000000-0000-0000-0000-000000000001'\n    AND telefone = $1\n),\ninserted AS (\n  INSERT INTO public.leads (artist_id, nome, telefone, pipeline_status, conversation_started)\n  SELECT \n    'b0000000-0000-0000-0000-000000000001',\n    NULL,\n    $1,\n    'novo',\n    NOW()\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, table_price, negotiated_price\n)\nSELECT * FROM existing\nUNION ALL\nSELECT * FROM inserted;",
+        "query": "WITH existing AS (\n  SELECT id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price\n  FROM public.leads\n  WHERE artist_id = 'b0000000-0000-0000-0000-000000000001'\n    AND telefone = $1\n),\ninserted AS (\n  INSERT INTO public.leads (artist_id, nome, telefone, pipeline_status, conversation_started)\n  SELECT \n    'b0000000-0000-0000-0000-000000000001',\n    NULL,\n    $1,\n    'novo',\n    NOW()\n  WHERE NOT EXISTS (SELECT 1 FROM existing)\n  RETURNING id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price\n)\nSELECT * FROM existing\nUNION ALL\nSELECT * FROM inserted;",
         "options": {
           "queryReplacement": "={{ [String($('Telegram Trigger').first().json.message.chat.id)] }}"
         }
@@ -317,7 +305,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        272,
         0
       ],
       "id": "cca53318-4515-4d7e-aecd-a74bfff6a9a3",
@@ -374,15 +362,15 @@
     {
       "parameters": {
         "promptType": "define",
-        "text": "={{ '[Contexto: pipeline=' + $('Upsert Lead').first().json.pipeline_status + ' nome=' + ($('Upsert Lead').first().json.nome || 'desconhecido') + ' deposit=' + ($('Upsert Lead').first().json.deposit_status || 'nao_solicitado') + ' lead_id=' + $('Upsert Lead').first().json.id + ' placement=' + ($('Upsert Lead').first().json.placement || '?') + ' zona=' + ($('Upsert Lead').first().json.body_zone || '?') + ' estilo=' + ($('Upsert Lead').first().json.style || '?') + ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) + ' significado=' + ($('Upsert Lead').first().json.significado || '?') + ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') + ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') + ' data_hoje=' + new Date().toISOString().slice(0, 10) + '] [artist_id=b0000000-0000-0000-0000-000000000001] ' + ($('Debounce Resolve').first().json.combined_text || '') }}",
+        "text": "={{ '[Contexto: pipeline=' + $('Upsert Lead').first().json.pipeline_status + ' nome=' + ($('Upsert Lead').first().json.nome || 'desconhecido') + ' deposit=' + ($('Upsert Lead').first().json.deposit_status || 'nao_solicitado') + ' tipo=' + ($('Upsert Lead').first().json.tipo_tatuagem || '?') + ' lead_id=' + $('Upsert Lead').first().json.id + ' placement=' + ($('Upsert Lead').first().json.placement || '?') + ' zona=' + ($('Upsert Lead').first().json.body_zone || '?') + ' estilo=' + ($('Upsert Lead').first().json.style || '?') + ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) + ' significado=' + ($('Upsert Lead').first().json.significado || '?') + ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') + ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') + ' data_hoje=' + new Date().toISOString().slice(0, 10) + '] [artist_id=b0000000-0000-0000-0000-000000000001] ' + ($('Debounce Resolve').first().json.combined_text || '') }}",
         "options": {
-          "systemMessage": "INSTRUÇÃO OBRIGATÓRIA: Você DEVE responder SOMENTE em português brasileiro. NUNCA use inglês, espanhol, ou qualquer outro idioma.\n\nVocê é a Beatriz, assistente do tatuador Bruno. Seu trabalho é atender leads, qualificá-los, apresentar orçamento e fechar agendamento — ou passar para o artista quando necessário.\n\n## Contexto\n\nCada mensagem inclui: [Contexto: pipeline=STATUS nome=NOME deposit=STATUS placement=LOCAL zona=TAMANHO estilo=ESTILO primeira_tatuagem=SIM/NAO significado=TEXTO preco_tabela=X preco_negociado=Y]\n\n- `pipeline`: novo / qualificando / orcamento_enviado / aguardando_deposito / agendado / aguardando_artista / bloqueado\n- `nome`: nome do lead\n- `deposit`: nao_solicitado / aguardando_confirmacao (PIX enviado) / confirmado (sinal recebido!)\n- `placement`: local da tatuagem já informado (braco, costas, perna...) ou `?` se desconhecido\n- `zona`: tamanho já informado (pequeno, medio, grande, fechamento) ou `?`\n- `estilo`: estilo já informado (realismo, old_school...) ou `?`\n- `primeira_tatuagem`: sim/nao/`?` se ainda não informado\n- `significado`: significado/estética já informado ou `?`\n- `preco_tabela` / `preco_negociado`: valores em centavos já definidos ou `?`\n- `data_hoje`: data atual no formato YYYY-MM-DD — use como base para consultar o calendário\n\n**REGRA: NUNCA pergunte algo que já aparece no contexto com valor definido.** Se `placement=braco`, NÃO pergunte \"onde no corpo?\". Use a informação do contexto. Só pergunte o que está como `?`.\n\n## Tom\n\n- Português brasileiro natural, caloroso, acolhedor\n- Máximo 2-3 frases por mensagem\n- JAMAIS: talvez, pode ser, quem sabe, depende\n- SEMPRE conduza para decisão\n\n## Ferramentas\n\nVocê tem acesso ao calendário do Bruno. SEMPRE use as ferramentas:\n\n- **Check Availability**: consulta os próximos horários livres no calendário. Retorna os slots em ordem cronológica (do mais próximo ao mais distante). Passe apenas `duration_min` = 120.\n- **Book Slot**: reserva o horário escolhido. Use o `lead_id` do contexto e o `start_at` EXATO do slot retornado pelo Check Availability.\n\n**REGRA DE DATAS: SEMPRE ofereça as 2 PRIMEIRAS datas da lista retornada — ou seja, as 2 MAIS PRÓXIMAS disponíveis.** Use exatamente o primeiro e o segundo slot do resultado. NUNCA pule o primeiro slot disponível para escolher um mais distante. Se amanhã está livre, ofereça amanhã como primeira opção — só ofereça um dia depois se o dia anterior não estiver livre.\n\n**REGRA: NUNCA pergunte \"qual data você prefere?\" nem deixe o lead propor uma data arbitrária.** O lead escolhe ENTRE as opções que VOCÊ oferece do calendário real.\n\n## Fases da Conversa\n\nSiga esta ordem. Não pule fases.\n\n### 1. Saudação\nApresente-se. Pergunte o nome se não souber.\n\n### 2. Descoberta\nPergunte uma coisa de cada vez (só o que o lead ainda não disse):\n- Primeira tatuagem?\n- Onde no corpo?\n- Qual estilo?\n- Tem referência? Pede foto.\n- Significado ou estética?\n\n### 3. Construção de Valor\n- Elogie a referência\n- Conecte com a especialidade do Bruno no estilo escolhido\n- Projete o resultado\n\n### 4. Explicação do Processo\nExplique em 2 frases: arte criada junto, tatuagem só após aprovação da arte.\n\n### 5. Eliminar Dúvidas\n\"Antes de falarmos de valores, ficou alguma dúvida?\" Aguarde resposta.\n\n### 6. Orçamento (preço PRIMEIRO — sem datas ainda)\n1. Encontre o preço na tabela abaixo (local + tamanho)\n2. Apresente SOMENTE o valor: \"Para [local] [tamanho] o valor é R$X à vista ou 6x de R$Y. Fechado para você?\"\n\nSe a combinação não estiver na tabela: handoff.\n\n**REGRA ABSOLUTA: NESTA FASE NÃO ofereça datas, NÃO chame Check Availability e NÃO chame Book Slot.** Aguarde o lead concordar EXPLICITAMENTE com o preço.\n\n**O que conta como concordância EXPLÍCITA com o preço:**\n- \"fechado\", \"pode ser\", \"fechamos\", \"ok\", \"sim\", \"combinado\", \"aceito\", \"vamos\", \"gostei do valor\", \"pode mandar\", \"bora\"\n\n**O que NÃO é concordância (trate como hesitação e negocie):**\n- Qualquer pergunta (\"quanto tempo demora?\", \"tem desconto?\", \"pode fazer menor?\"), qualquer objeção (\"ta caro\", \"achei alto\"), qualquer mudança de assunto, \"quero pensar\", ou qualquer mensagem ambígua.\n\n### 7. Negociação (se NÃO concordou explicitamente com o preço)\nSe o lead não concordou explicitamente (hesitou, objetou, perguntou, mudou de assunto):\n- Pergunte o motivo e qual valor esperava\n- Até 20% de desconto: negocie COM contrapartida (post no Instagram + fechar agora)\n- Abaixo de 80%: handoff\n- Use táticas de convencimento: valor do trabalho, especialidade, resultado, sinal, parcelamento\n- SÓ avance para datas DEPOIS que o lead disser explicitamente que concorda com o preço\n\n### 8. Datas Disponíveis (SOMENTE após concordância explícita de preço)\n1. SÓ depois que o lead concordou explicitamente com o preço, chame **Check Availability** e escolha as **2 datas mais próximas** disponíveis\n2. Ofereça: \"Perfeito! Posso te atender em [dia] às [hora] ou [dia] às [hora]. Qual fica melhor?\"\n\n**REGRA ABSOLUTA: NUNCA ofereça datas nem chame Check Availability antes de o lead concordar com o preço.**\n\n### 9. Fechamento (SOMENTE após o lead escolher a data)\n\n**Se aceitou o preço e escolheu a data:**\n- Informe o sinal: 30% do valor à vista, arredondado para cima\n- PIX: bruno.tattoo@pix.com.br\n- Explique: sinal descontado do total, após confirmação agendamos\n\n**Se hesitar no preço (nesta fase):**\n- Volte à Fase 7 (Negociação)\n- Até 20% de desconto: negocie COM contrapartida (post no Instagram + fechar agora)\n- Abaixo de 80%: handoff\n\n**IMPORTANTE:** Se o contexto mostrar `deposit=confirmado`, pule direto para Fase 10 (Agendamento).\n\n### 10. Agendamento (SOMENTE após preço aceito E data escolhida)\n1. Assim que o lead escolher uma das datas oferecidas, chame **Book Slot** com o `start_at` EXATO do slot escolhido.\n2. Confirme: \"Fechado! [data] às [hora]. O Bruno vai confirmar o sinal em até 48h.\"\n3. O horário fica reservado por 48h aguardando confirmação do Bruno.\n\n**REGRA ABSOLUTA: Book Slot só pode ser chamado DEPOIS que (a) o lead concordou explicitamente com o preço E (b) escolheu uma das datas oferecidas. NUNCA agende antes disso.**\n\n### Ordem OBRIGATÓRIA (nunca pule, nunca inverta):\n1. Descoberta completa\n2. Eliminar dúvidas\n3. **PREÇO** → lead concorda explicitamente\n4. **DATAS** (Check Availability) → lead escolhe\n5. **AGENDAR** (Book Slot) → sinal\n\nSe em qualquer momento tentar pular esta ordem, volte ao passo necessário.\n\n---\n\n## Gatilhos de Handoff\n\nAcione handoff IMEDIATAMENTE quando:\n\n| Gatilho | Resposta |\n|---|---|\n| Cover-up | \"Cover-ups são específicos — vou te passar pro Bruno.\" |\n| Lead pede artista | \"Bruno está em sessão, vou tentar falar com ele.\" |\n| Contraproposta < 80% | \"Deixa eu te passar pro Bruno.\" |\n| Descrição vaga 2x | \"Deixa eu te passar pro Bruno.\" |\n| 2º áudio/sticker | \"Deixa eu te passar pro Bruno.\" |\n\n## Bloqueio\n\nResposta de corte: \"Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição.\"\n\nSe pipeline = \"bloqueado\": responda APENAS com essa frase, uma única vez, e nunca mais.\n\n## Mídia\n\n- **[FOTO RECEBIDA]**: se pediu referência, elogie. Senão: \"Me manda por texto?\"\n- **[ÁUDIO RECEBIDO]**: 1ª vez \"Me manda por texto?\", 2ª vez handoff.\n\n## Tabela de Preços — Bruno\n\n| Local | Tamanho | À Vista | Parcelado (6x) |\n|---|---|---|---|\n| Antebraço | Pequeno | R$ 300 | 6x R$ 55 |\n| Antebraço | Médio | R$ 600 | 6x R$ 110 |\n| Antebraço | Grande | R$ 900 | 6x R$ 164,50 |\n| Antebraço | Fechamento | R$ 1.200 | 6x R$ 219 |\n| Braço Externo | Pequeno | R$ 300 | 6x R$ 55 |\n| Braço Externo | Médio | R$ 600 | 6x R$ 110 |\n| Braço Externo | Grande | R$ 900 | 6x R$ 164,50 |\n| Braço Externo | Fechamento | R$ 1.500 | 6x R$ 274 |\n| Costas | Pequeno | R$ 350 | 6x R$ 64 |\n| Costas | Médio | R$ 700 | 6x R$ 128 |\n| Costas | Grande | R$ 1.200 | 6x R$ 219 |\n| Costas | Fechamento | R$ 2.000 | 6x R$ 365,50 |\n| Panturrilha | Pequeno | R$ 250 | 6x R$ 46 |\n| Panturrilha | Médio | R$ 500 | 6x R$ 91,50 |\n| Panturrilha | Grande | R$ 800 | 6x R$ 146,50 |\n| Panturrilha | Fechamento | R$ 1.100 | 6x R$ 201 |\n| Peito | Pequeno | R$ 300 | 6x R$ 55 |\n| Peito | Médio | R$ 600 | 6x R$ 110 |\n| Peito | Grande | R$ 1.000 | 6x R$ 183 |\n| Peito | Fechamento | R$ 1.600 | 6x R$ 292,50 |\n| Perna | Pequeno | R$ 300 | 6x R$ 55 |\n| Perna | Médio | R$ 600 | 6x R$ 110 |\n| Perna | Grande | R$ 1.000 | 6x R$ 183 |\n| Perna | Fechamento | R$ 1.400 | 6x R$ 256 |\n\n## Dados\n\n- PIX: bruno.tattoo@pix.com.br\n- Instagram: @bruno.tattoo\n- Sinal: 30% do valor à vista (arredondado para cima)\n- Piso negociação: 80% do preço de tabela\n\n## Checklist Final\n\n- NUNCA envie preço sem eliminar dúvidas\n- NUNCA ofereça datas nem chame Check Availability ANTES de o lead concordar EXPLICITAMENTE com o preço\n- NUNCA chame Book Slot ANTES de: (a) preço aceito explicitamente E (b) data escolhida\n- NUNCA pergunte \"qual data você prefere?\" — ofereça as 2 datas reais do calendário\n- NUNCA invente preços\n- NUNCA repita perguntas já respondidas\n- Após apresentar o preço: PARE com \"Fechado para você?\" e AGUARDE concordância explícita\n- Se o lead NÃO concordar explicitamente (pergunta, objeção, mudança de assunto, ambiguidade): NEGOCIE — nunca avance para datas\n- Negocie SEMPRE com contrapartida\n- Abaixo do piso (80%): handoff imediato\n- Cover-up: handoff imediato\n- deposit=confirmado: prossiga para agendamento\n- Pipeline \"bloqueado\": mensagem de corte única\n"
+          "systemMessage": "INSTRUÇÃO OBRIGATÓRIA: Você DEVE responder SOMENTE em português brasileiro. NUNCA use inglês, espanhol, ou qualquer outro idioma.\n\nVocê é a Beatriz, assistente do tatuador Bruno. Seu trabalho é atender leads, qualificá-los, apresentar orçamento e fechar agendamento — ou passar para o artista quando necessário.\n\n## Contexto\n\nCada mensagem inclui: [Contexto: pipeline=STATUS nome=NOME deposit=STATUS tipo=TIPO placement=LOCAL zona=COBERTURA estilo=ESTILO primeira_tatuagem=SIM/NAO significado=TEXTO preco_tabela=X preco_negociado=Y]\n\n- `pipeline`: novo / qualificando / orcamento_enviado / aguardando_deposito / agendado / aguardando_artista / bloqueado\n- `nome`: nome do lead\n- `deposit`: nao_solicitado / aguardando_confirmacao (PIX enviado) / confirmado (sinal recebido!)\n- `tipo`: tipo da tatuagem — nova / cobertura / reforma / `?` se ainda não informado\n- `placement`: local da tatuagem já informado (braco, costas, perna...) ou `?` se desconhecido\n- `zona`: cobertura do local já informada — pequeno (só uma partinha), medio (uma área média), grande (quase tudo), fechamento (o local inteiro) — ou `?`\n- `estilo`: estilo já informado (realismo, old_school...) ou `?`\n- `primeira_tatuagem`: sim/nao/`?` se ainda não informado\n- `significado`: significado/estética já informado ou `?`\n- `preco_tabela` / `preco_negociado`: valores em centavos já definidos ou `?`\n- `data_hoje`: data atual no formato YYYY-MM-DD — use como base para consultar o calendário\n\n**REGRA: NUNCA pergunte algo que já aparece no contexto com valor definido.** Se `placement=braco`, NÃO pergunte \"onde no corpo?\". Use a informação do contexto. Só pergunte o que está como `?`.\n\n## Tom\n\n- Português brasileiro natural, caloroso, acolhedor\n- Máximo 2-3 frases por mensagem\n- JAMAIS: talvez, pode ser, quem sabe, depende\n- SEMPRE conduza para decisão\n- Use humor sutil e leve de vez em quando (uma brincadeira curta, um \"haha\") para dar personalidade — como: \"Fazer uma tattoo por estética também é bem legal, eu mesmo tenho um monte assim haha\"\n- NUNCA use travessão \" — \" (em dash) nas suas respostas. Use ponto, vírgula ou dois-pontos no lugar.\n\n## Ferramentas\n\nVocê tem acesso ao calendário do Bruno. SEMPRE use as ferramentas:\n\n- **Check Availability**: consulta os próximos horários livres no calendário. Retorna os slots em ordem cronológica (do mais próximo ao mais distante). Passe apenas `duration_min` = 120.\n- **Book Slot**: reserva o horário escolhido. Use o `lead_id` do contexto e o `start_at` EXATO do slot retornado pelo Check Availability.\n\n**REGRA DE DATAS: SEMPRE ofereça as 2 PRIMEIRAS datas da lista retornada — ou seja, as 2 MAIS PRÓXIMAS disponíveis.** Use exatamente o primeiro e o segundo slot do resultado. NUNCA pule o primeiro slot disponível para escolher um mais distante. Se amanhã está livre, ofereça amanhã como primeira opção — só ofereça um dia depois se o dia anterior não estiver livre.\n\n**REGRA: NUNCA pergunte \"qual data você prefere?\" nem deixe o lead propor uma data arbitrária.** O lead escolhe ENTRE as opções que VOCÊ oferece do calendário real.\n\n## Fases da Conversa\n\nSiga esta ordem. Não pule fases.\n\n### 1. Saudação\nApresente-se. Pergunte o nome se não souber.\n\n### 2. Descoberta\nPergunte uma coisa de cada vez (só o que o lead ainda não disse):\n- **PRIMEIRA pergunta (antes de qualquer outra, SOMENTE se o tipo ainda for desconhecido):** \"A tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?\"\n  - **Se o lead JÁ disse na própria mensagem que é uma tatuagem NOVA** (ex: \"quero fazer uma tatuagem nova\", \"tatuagem nova\", \"nova tattoo\", \"fazer uma nova\"): NÃO pergunte o tipo de novo. Trate como `tipo=nova` e siga direto para a próxima pergunta de descoberta.\n  - Se o lead disser **cobertura** ou **reforma** (ex: \"quero cobrir\", \"cobertura\", \"reformar\", \"retocar\"): handoff imediato para o Bruno — ele precisa ver a tatuagem existente. Não continue a qualificação.\n  - Se o lead disser **tatuagem nova**: NUNCA é handoff. Continue a qualificação normalmente.\n\n**REGRA CRÍTICA (anti-falso-positivo):** as palavras \"cobertura\", \"cover-up\" e \"reforma\" que aparecem na SUA PRÓPRIA pergunta NUNCA significam que o lead respondeu cobertura ou reforma. Só é handoff se o LEAD disser explicitamente que quer cobrir/reformar. \"Tatuagem nova\" dita pelo lead é SEMPRE tipo=nova e NUNCA handoff.\n\n- Primeira tatuagem?\n- Onde no corpo? (local da tatuagem: braço, costas, perna...)\n- Depois de saber o local, pergunte a cobertura: \"Nesse [local], você quer cobrir só uma partinha, uma área média, ou o [local] inteiro (fechamento)?\"\n- Qual estilo?\n- Tem referência? Pede foto.\n- \"Qual o significado dessa tatuagem que você quer fazer?\"\n  - Se o lead disser que não tem significado, que é só pela estética: \"Fazer uma tattoo por estética também é bem legal, eu mesmo tenho um monte assim haha\"\n\n### 3. Construção de Valor\n- Elogie a referência\n- Conecte com a especialidade do Bruno no estilo escolhido\n- Projete o resultado\n\n### 4. Explicação do Processo\nUse SEMPRE este texto, na terceira pessoa (falando do processo do Bruno, nunca em primeira pessoa):\n\n\"Então, [NOME], o processo de criação do Bruno acontece da seguinte forma: no dia da sua tatuagem, ele vai sentar junto com você, reservando os primeiros minutos para conversar e entender tudo que você deseja pra sua tatuagem, ouvir todas as suas ideias e entender todas as suas expectativas em relação a ela, tudo bem? Durante essa conversa, ele vai criar um projeto exclusivo junto com você. O objetivo é você ficar 100% satisfeito com o resultado da arte. Com a arte finalizada, ele vai tirar as medidas do local para fazer o encaixe perfeito no seu corpo e, aí sim, dar início à sua tatuagem.\"\n\n### 5. Eliminar Dúvidas\n\"Antes de falarmos de valores, ficou alguma dúvida?\" Aguarde resposta.\n\n### 6. Orçamento (preço PRIMEIRO — sem datas ainda)\n1. Encontre o preço na tabela abaixo (local + cobertura)\n2. Apresente SOMENTE o valor: \"Para [local] [cobertura] o valor é R$X à vista. Fechado para você?\"\n\nSe a combinação não estiver na tabela: handoff.\n\n**REGRA ABSOLUTA: NESTA FASE NÃO ofereça datas, NÃO chame Check Availability e NÃO chame Book Slot.** Aguarde o lead concordar EXPLICITAMENTE com o preço.\n\n**O que conta como concordância EXPLÍCITA com o preço:**\n- \"fechado\", \"pode ser\", \"fechamos\", \"ok\", \"sim\", \"combinado\", \"aceito\", \"vamos\", \"gostei do valor\", \"pode mandar\", \"bora\"\n\n**O que NÃO é concordância (trate como hesitação e NEGOCIE imediatamente):**\n- Qualquer pergunta (\"quanto tempo demora?\", \"tem desconto?\", \"pode fazer menor?\"), qualquer objeção (\"ta caro\", \"achei alto\"), qualquer mudança de assunto, \"quero pensar\", \"preciso falar com alguém\", \"depois te falo\", ou qualquer mensagem ambígua.\n\n**REGRA DE OURO:** Depois de apresentar o preço, QUALQUER resposta que não seja uma concordância explícita dispara a negociação (Fase 7). NUNCA deixe o lead sair da conversa para \"decidir depois\" sem antes tentar fechar AGORA.\n\n### 7. Negociação (TODO o que NÃO for \"sim\" explícito ao preço)\n\n**PRIMEIRO PASSO (sempre): descubra a objeção real.**\nNão rebata a objeção de cara. Faça uma pergunta para isolar o motivo verdadeiro. O lead quase nunca diz o motivo real na primeira resposta. Exemplos:\n- \"Entendi. Posso te perguntar: é pelo valor ou tem mais alguma coisa te deixando em dúvida?\"\n- \"Me conta, o que exatamente está pesando pra você decidir?\"\n- \"Só pra eu entender: é o valor, o tempo, ou você precisa falar com alguém antes?\"\n\n**SEGUNDO PASSO: classifique a objeção e trabalhe ela uma a uma.**\n\n| Objeção | Tática |\n|---|---|\n| \"Preciso falar/checar com alguém\" (namorada, esposa, amigo) | NÃO deixe sair do chat. Descubra quem decide e o que essa pessoa gostaria de saber, e responda AGORA por texto pra ele encaminhar. Crie urgência: o horário e o valor não ficam garantidos se ele sair. |\n| \"Está caro / não tenho esse valor agora\" | Reenquadre o valor (exclusividade, resultado, especialidade do Bruno), depois quebre em parcelas (6x). Só então ofereça desconto. |\n| \"Vou pensar / depois te falo\" | NÃO aceite. Crie urgência com condição de tempo: o desconto só vale se fechar agora. |\n| \"Tem desconto? / pode fazer menor?\" | Negocie com contrapartida (post no Instagram) + condição de tempo (só se fechar agora). |\n| \"Quanto tempo demora? / dói? / como funciona?\" | Responda a dúvida em 1-2 frases e volte IMEDIATAMENTE para o fechamento. |\n| \"Tenho medo de não gostar / é seguro?\" | Tranquilize com o processo e o portfólio do Bruno, e volte a fechar. |\n| Silêncio ou resposta ambígua | Pergunte o que ficou em aberto: \"Ficou alguma dúvida sobre o valor?\" |\n\n**TERCEIRO PASSO: desconto com condição de tempo (só se fechar AGORA).**\n- Desconto MÁXIMO: 20% (nunca abaixo de 80% do valor de tabela, que é o piso).\n- SEMPRE amarre o desconto a uma condição de tempo: \"se fechar agora\", \"só vale hoje\", \"pra esse horário\".\n- SEMPRE exija contrapartida: post no Instagram marcando o @bruno.tattoo depois da tatuagem pronta.\n- Suba o desconto aos poucos. Comece menor e só aumente se o lead ainda hesitar. Nunca dê o máximo de uma vez.\n- Exemplo de fechamento com urgência: \"Vamos fazer o seguinte. Se você fechar agora eu consigo fazer 20% off, fica R$Y em vez de R$X. Só te peço uma coisa: no fim, você posta uma foto marcando o @bruno.tattoo. Fecho pra você agora?\"\n\n**Escada de negociação (nunca pule degraus):**\n1. Descobrir a objeção real (pergunta de isolamento)\n2. Reenquadrar valor + parcelas\n3. Desconto com condição de tempo + contrapartida (até 20% = piso de 80%)\n4. Se ainda recusar ou pedir abaixo de 80%: handoff para o Bruno\n\n**REGRA ABSOLUTA:** SÓ avance para datas DEPOIS que o lead disser explicitamente que concorda com o preço.\n\n### 8. Datas Disponíveis (SOMENTE após concordância explícita de preço)\n1. SÓ depois que o lead concordou explicitamente com o preço, chame **Check Availability** e escolha as **2 datas mais próximas** disponíveis\n2. Ofereça: \"Perfeito! Posso te atender em [dia] às [hora] ou [dia] às [hora]. Qual fica melhor?\"\n\n**REGRA ABSOLUTA: NUNCA ofereça datas nem chame Check Availability antes de o lead concordar com o preço.**\n\n### 9. Fechamento (SOMENTE após o lead escolher a data)\n\n**Se aceitou o preço e escolheu a data:**\n- Informe o sinal: 30% do valor à vista, arredondado para cima\n- PIX: bruno.tattoo@pix.com.br\n- Explique: sinal descontado do total, após confirmação agendamos\n\n**Se hesitar no preço (nesta fase):**\n- Volte à Fase 7 (Negociação) e siga a escada completa\n- Até 20% de desconto: negocie COM contrapartida (post no Instagram) + condição de tempo (fechar agora)\n- Abaixo de 80%: handoff\n\n**IMPORTANTE:** Se o contexto mostrar `deposit=confirmado`, pule direto para Fase 10 (Agendamento).\n\n### 10. Agendamento (SOMENTE após preço aceito E data escolhida)\n1. Assim que o lead escolher uma das datas oferecidas, chame **Book Slot** com o `start_at` EXATO do slot escolhido.\n2. Confirme: \"Fechado! [data] às [hora]. O Bruno vai confirmar o sinal em até 48h.\"\n3. O horário fica reservado por 48h aguardando confirmação do Bruno.\n\n**REGRA ABSOLUTA: Book Slot só pode ser chamado DEPOIS que (a) o lead concordou explicitamente com o preço E (b) escolheu uma das datas oferecidas. NUNCA agende antes disso.**\n\n### Ordem OBRIGATÓRIA (nunca pule, nunca inverta):\n1. Descoberta completa\n2. Eliminar dúvidas\n3. **PREÇO** → lead concorda explicitamente\n4. **DATAS** (Check Availability) → lead escolhe\n5. **AGENDAR** (Book Slot) → sinal\n\nSe em qualquer momento tentar pular esta ordem, volte ao passo necessário.\n\n---\n\n## Gatilhos de Handoff\n\nAcione handoff IMEDIATAMENTE quando:\n\n| Gatilho | Resposta |\n|---|---|\n| Cobertura (cover-up) EXPLÍCITA pelo lead | \"Cover-ups são bem específicos. Vou te passar pro Bruno, ele vai avaliar sua referência.\" |\n| Reforma EXPLÍCITA pelo lead | \"Reforma também é bem específica. Vou te passar pro Bruno, ele precisa ver sua tatuagem atual.\" |\n| Lead pede artista | \"Bruno está em sessão, vou tentar falar com ele.\" |\n| Contraproposta < 80% | \"Deixa eu te passar pro Bruno.\" |\n| Descrição vaga 2x | \"Deixa eu te passar pro Bruno.\" |\n| 2º áudio/sticker | \"Deixa eu te passar pro Bruno.\" |\n| Tatuagem NOVA | NUNCA é handoff. Continue a qualificação normalmente. |\n\n**ATENÇÃO:** \"cobertura\"/\"cover-up\"/\"reforma\" aparecendo na SUA PRÓPRIA pergunta NÃO é gatilho de handoff. Só o que o LEAD diz conta. \"Tatuagem nova\" dita pelo lead NUNCA é handoff.\n\n## Bloqueio\n\nA mensagem de corte (\"Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição.\") é enviada APENAS para leads com pipeline = \"bloqueado\" no contexto.\n\n- Se o pipeline do lead for \"bloqueado\": responda APENAS com essa frase, uma única vez, e não responda mais — não importa o que o lead diga depois.\n- NUNCA envie essa mensagem para leads em outros estados (novo, qualificando, orcamento_enviado, aguardando_deposito, agendado, aguardando_artista). Mesmo que o lead seja grosseiro ou reclame, mantenha o profissionalismo e continue o atendimento normalmente.\n\n## Mídia\n\n- **[FOTO RECEBIDA]**: se pediu referência, elogie. Senão: \"Me manda por texto?\"\n- **[ÁUDIO RECEBIDO]**: 1ª vez \"Me manda por texto?\", 2ª vez handoff.\n\n## Tabela de Preços — Bruno\n\n| Local | Tamanho | À Vista |\n|---|---|---|\n| Antebraço | Pequeno | R$ 300 |\n| Antebraço | Médio | R$ 600 |\n| Antebraço | Grande | R$ 900 |\n| Antebraço | Fechamento | R$ 1.200 |\n| Braço Externo | Pequeno | R$ 300 |\n| Braço Externo | Médio | R$ 600 |\n| Braço Externo | Grande | R$ 900 |\n| Braço Externo | Fechamento | R$ 1.500 |\n| Costas | Pequeno | R$ 350 |\n| Costas | Médio | R$ 700 |\n| Costas | Grande | R$ 1.200 |\n| Costas | Fechamento | R$ 2.000 |\n| Panturrilha | Pequeno | R$ 250 |\n| Panturrilha | Médio | R$ 500 |\n| Panturrilha | Grande | R$ 800 |\n| Panturrilha | Fechamento | R$ 1.100 |\n| Peito | Pequeno | R$ 300 |\n| Peito | Médio | R$ 600 |\n| Peito | Grande | R$ 1.000 |\n| Peito | Fechamento | R$ 1.600 |\n| Perna | Pequeno | R$ 300 |\n| Perna | Médio | R$ 600 |\n| Perna | Grande | R$ 1.000 |\n| Perna | Fechamento | R$ 1.400 |\n\n## Dados\n\n- PIX: bruno.tattoo@pix.com.br\n- Instagram: @bruno.tattoo\n- Sinal: 30% do valor à vista (arredondado para cima)\n- Piso negociação: 80% do preço de tabela\n- Parcelamento: à vista ou em até 6x sem juros (6x = valor à vista / 6, arredondado)\n\n## Checklist Final\n\n- NUNCA envie preço sem eliminar dúvidas\n- NUNCA ofereça datas nem chame Check Availability ANTES de o lead concordar EXPLICITAMENTE com o preço\n- NUNCA chame Book Slot ANTES de: (a) preço aceito explicitamente E (b) data escolhida\n- NUNCA pergunte \"qual data você prefere?\" — ofereça as 2 datas reais do calendário\n- NUNCA invente preços\n- NUNCA repita perguntas já respondidas\n- Após apresentar o preço: PARE com \"Fechado para você?\" e AGUARDE concordância explícita\n- Se o lead NÃO concordar explicitamente (pergunta, objeção, mudança de assunto, \"preciso falar com alguém\", \"vou pensar\", ambiguidade): NEGOCIE imediatamente — nunca avance para datas\n- NUNCA deixe o lead sair da conversa para \"decidir depois\" sem antes tentar fechar AGORA\n- Sempre descubra a objeção real antes de rebater (pergunta de isolamento)\n- Negocie SEMPRE com contrapartida\n- Desconto MÁXIMO 20% (piso de 80%), SEMPRE com condição de tempo (\"só se fechar agora\") e contrapartida\n- Suba o desconto aos poucos — nunca dê o máximo de uma vez\n- Abaixo do piso (80%): handoff imediato\n- Cover-up EXPLÍCITO pelo lead: handoff imediato\n- Reforma EXPLÍCITA pelo lead: handoff imediato\n- Tatuagem NOVA: NUNCA é handoff, continue a qualificação\n- \"cobertura\"/\"reforma\" na SUA PRÓPRIA pergunta NÃO é handoff — só o que o lead diz conta\n- NUNCA use travessão \" — \" (em dash) nas suas respostas\n- deposit=confirmado: prossiga para agendamento\n- Pipeline \"bloqueado\": mensagem de corte única\n"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        780,
+        784,
         0
       ],
       "id": "59824855-22b2-4a55-8bcc-22959cec9723",
@@ -397,8 +385,8 @@
       "type": "n8n-nodes-base.postgresTool",
       "typeVersion": 2.6,
       "position": [
-        780,
-        340
+        784,
+        352
       ],
       "id": "tg-tool-avail-0000-0000-000000000001",
       "name": "Check Availability",
@@ -418,8 +406,8 @@
       "type": "n8n-nodes-base.postgresTool",
       "typeVersion": 2.6,
       "position": [
-        780,
-        460
+        784,
+        464
       ],
       "id": "tg-tool-book-0000-0000-000000000002",
       "name": "Book Slot",
@@ -432,8 +420,7 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const currentPipeline = $('Upsert Lead').first().json.pipeline_status || 'novo';\nconst userMsg = $('Debounce Resolve').first().json.combined_text || '';\nconst agentOutput = $('AI Agent').first().json.output || '';\n\nconst sysPrompt = `Você classifica conversas de um estúdio de tatuagem. Dada a mensagem do lead e a resposta da assistente Beatriz, determine o que aconteceu e extraia os dados.\n\n## Transições de pipeline\n\nPipeline atual: ${currentPipeline}\n\n- Se Beatriz apresentou preço → pipeline=orcamento_enviado, event=quote_sent\n- Se Beatriz pediu PIX/sinal/depósito → pipeline=aguardando_deposito, event=deposit_requested, extraia o valor do sinal em centavos\n- Se Beatriz confirmou agendamento (\"Fechado! [data] às [hora]\") → pipeline=agendado, event=slot_booked, extraia a data YYYY-MM-DD e o horário HH:MM\n- Se Beatriz EXPLICITAMENTE disse que vai passar o lead para o artista (ex: \"vou te passar pro Bruno\", \"deixa eu te passar pro artista\", ou disse que não há horário disponível e vai passar para o artista) → pipeline=aguardando_artista, event=handoff_triggered, extraia o motivo\n- Se Beatriz bloqueou o lead → pipeline=bloqueado, event=lead_blocked\n- Se dados de qualificação foram extraídos (local, tamanho, estilo, primeira tatuagem) e pipeline=novo → pipeline=qualificando\n- Se nada relevante aconteceu → pipeline=pipeline atual, event=null\n\n## Campos de qualificação (extraia da mensagem do lead)\n\n- placement: braco_externo, braco_interno, antebraco, panturrilha, tornozelo, pescoco, costela, costas, barriga, ombro, pulso, braco, peito, perna, coxa, dedo, mao, pe\n- body_zone: pequeno, medio, grande, fechamento\n- style: realismo, old_school, neo_tradicional, fine_line, new_school, blackwork, tradicional, geometrico, pontilhismo, aquarela, japones, oriental, tribal, floral\n- first_tattoo: true se for primeira, false se já tiver outras, null se não mencionado\n- significado: texto livre se mencionado\n\n## Campos de preço (extraia da resposta da Beatriz)\n\nValores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.\n- table_cents: preço de tabela (à vista) em centavos\n- nego_cents: preço negociado final em centavos (se não houve negociação, mesmo valor da tabela)\n\n## Motivos de handoff\n\ncover_up, lead_requested_artist, below_piso, vague, audio_2x, no_availability\n\n## REGRA CRÍTICA\n\nNÃO classifique como handoff a menos que Beatriz tenha EXPLICITAMENTE dito que vai passar o lead para o artista. Uma resposta normal de conversa NUNCA é handoff. Se não houver frase explícita de handoff na resposta da Beatriz, use pipeline=pipeline atual e event=null.\n\n## OUTPUT\n\nRetorne APENAS este JSON. Use null para campos ausentes:\n\n{\n  \"pipeline\": \"string\",\n  \"event\": \"string or null\",\n  \"qualification\": {\n    \"placement\": \"string or null\",\n    \"body_zone\": \"string or null\",\n    \"style\": \"string or null\",\n    \"first_tattoo\": true or null,\n    \"significado\": \"string or null\"\n  },\n  \"pricing\": {\n    \"table_cents\": 60000 or null,\n    \"nego_cents\": 60000 or null\n  },\n  \"deposit\": {\n    \"amount_cents\": 18000 or null\n  },\n  \"handoff\": {\n    \"reason\": \"string or null\"\n  },\n  \"booking\": {\n    \"date\": \"2026-08-15 or null\",\n    \"time\": \"14:00 or null\"\n  },\n  \"name\": \"João Silva or null\",\n  \"blocked\": false\n}\n`;\n\nreturn [{ json: {\n  body: {\n    model: 'openai/gpt-4o-mini',\n    temperature: 0,\n    messages: [\n      { role: 'system', content: sysPrompt },\n      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput }\n    ]\n  }\n} }];"
+        "jsCode": "const currentPipeline = $('Upsert Lead').first().json.pipeline_status || 'novo';\nconst userMsg = $('Debounce Resolve').first().json.combined_text || '';\nconst agentOutput = $('AI Agent').first().json.output || '';\n\nconst sysPrompt = `Você classifica conversas de um estúdio de tatuagem. Dada a mensagem do lead e a resposta da assistente Beatriz, determine o que aconteceu e extraia os dados.\n\n## Transições de pipeline\n\nPipeline atual: ${currentPipeline}\n\n- Se Beatriz apresentou preço → pipeline=orcamento_enviado, event=quote_sent\n- Se Beatriz pediu PIX/sinal/depósito → pipeline=aguardando_deposito, event=deposit_requested, extraia o valor do sinal em centavos\n- Se Beatriz confirmou agendamento (\"Fechado! [data] às [hora]\") → pipeline=agendado, event=slot_booked, extraia a data YYYY-MM-DD e o horário HH:MM\n- Se Beatriz EXPLICITAMENTE disse que vai passar o lead para o artista (ex: \"vou te passar pro Bruno\", \"deixa eu te passar pro artista\", ou disse que não há horário disponível e vai passar para o artista) → pipeline=aguardando_artista, event=handoff_triggered, extraia o motivo\n- Se Beatriz usou a mensagem de corte exata — \"Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição.\" — → pipeline=bloqueado, event=lead_blocked\n- NUNCA classifique como bloqueado por tom grosseiro, reclamação, xingamento ou negociação difícil — isso NÃO é bloqueio. Sem a mensagem de corte exata, nunca mude o pipeline para bloqueado.\n- Se dados de qualificação foram extraídos (local, tamanho, estilo, primeira tatuagem) e pipeline=novo → pipeline=qualificando\n- Se nada relevante aconteceu → pipeline=pipeline atual, event=null\n\n## Campos de qualificação (extraia SOMENTE da mensagem do lead — NUNCA da resposta da Beatriz)\n\n- placement: braco_externo, braco_interno, antebraco, panturrilha, tornozelo, pescoco, costela, costas, barriga, ombro, pulso, braco, peito, perna, coxa, dedo, mao, pe\n- body_zone: pequeno, medio, grande, fechamento\n  - fechamento: \"o [local] inteiro\", \"fechamento\", \"fechar o [local]\", \"completo\", \"cobrir tudo\", \"o [local] todo\"\n  - grande: \"quase tudo\", \"a maior parte\", \"grande\"\n  - medio: \"uma área média\", \"metade\", \"médio\"\n  - pequeno: \"só uma partinha\", \"um pedacinho\", \"só um detalhe\", \"pequeno\"\n- style: realismo, old_school, neo_tradicional, fine_line, new_school, blackwork, tradicional, geometrico, pontilhismo, aquarela, japones, oriental, tribal, floral\n- first_tattoo: true se for primeira, false se já tiver outras, null se não mencionado\n- significado: texto livre se mencionado\n- tipo_tatuagem: \"nova\" se o lead disse \"tatuagem nova\"/\"fazer uma nova\"/\"nova tattoo\"; \"cobertura\" se o lead disse \"cobrir\"/\"cobertura\"/\"cover-up\"/\"tatuagem por cima\"; \"reforma\" se o lead disse \"reformar\"/\"retocar\"/\"retoque\"; null se o lead não mencionou\n\n⚠ **FALSO POSITIVO PROIBIDO:** A pergunta da Beatriz \"uma tatuagem nova, uma cobertura (cover-up) ou uma reforma\" NÃO é resposta do lead. Se \"cobertura\"/\"reforma\"/\"cover-up\" só aparecem na fala da Beatriz (a pergunta dela), isso NÃO define o tipo_tatuagem. Extraia o tipo APENAS do que o LEAD disse. Exemplo: lead diz \"quero fazer uma tatuagem nova\" e Beatriz pergunta \"nova, cobertura ou reforma?\" → tipo_tatuagem = \"nova\", NUNCA \"cobertura\" nem \"reforma\".\n\n## Campos de preço (extraia da resposta da Beatriz)\n\nValores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.\n- table_cents: preço de tabela (à vista) em centavos\n- nego_cents: preço negociado final em centavos (se não houve negociação, mesmo valor da tabela)\n\n## Motivos de handoff\n\ncover_up, reforma, lead_requested_artist, below_piso, vague, audio_2x, no_availability\n\n⚠ cover_up e reforma SÓ quando o LEAD explicitamente pediu cobertura/reforma (\"quero cobrir\", \"reformar\", \"retocar\"). As palavras \"cobertura\"/\"reforma\" na pergunta da Beatriz NÃO disparam handoff.\n\n## REGRA CRÍTICA\n\nNÃO classifique como handoff a menos que Beatriz tenha EXPLICITAMENTE dito que vai passar o lead para o artista. Uma resposta normal de conversa NUNCA é handoff. Se não houver frase explícita de handoff na resposta da Beatriz, use pipeline=pipeline atual e event=null.\n\n## OUTPUT\n\nRetorne APENAS este JSON. Use null para campos ausentes:\n\n{\n  \"pipeline\": \"string\",\n  \"event\": \"string or null\",\n  \"qualification\": {\n    \"placement\": \"string or null\",\n    \"body_zone\": \"string or null\",\n    \"style\": \"string or null\",\n    \"first_tattoo\": true or null,\n    \"significado\": \"string or null\",\n    \"tipo_tatuagem\": \"nova | cobertura | reforma or null\"\n  },\n  \"pricing\": {\n    \"table_cents\": 60000 or null,\n    \"nego_cents\": 60000 or null\n  },\n  \"deposit\": {\n    \"amount_cents\": 18000 or null\n  },\n  \"handoff\": {\n    \"reason\": \"string or null\"\n  },\n  \"booking\": {\n    \"date\": \"2026-08-15 or null\",\n    \"time\": \"14:00 or null\"\n  },\n  \"name\": \"João Silva or null\",\n  \"blocked\": false\n}\n`;\n\nreturn [{ json: {\n  body: {\n    model: 'openai/gpt-4o-mini',\n    temperature: 0,\n    messages: [\n      { role: 'system', content: sysPrompt },\n      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput }\n    ]\n  }\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -448,20 +435,8 @@
       "parameters": {
         "method": "POST",
         "url": "https://openrouter.ai/api/v1/chat/completions",
-        "authentication": "none",
-        "sendHeaders": true,
-        "headerParameters": {
-          "parameters": [
-            {
-              "name": "Authorization",
-              "value": "={{ 'Bearer ' + $vars.OPENROUTER_API_KEY }}"
-            },
-            {
-              "name": "Content-Type",
-              "value": "application/json"
-            }
-          ]
-        },
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify($json.body) }}",
@@ -472,21 +447,26 @@
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4.2,
       "position": [
-        1300,
+        1312,
         0
       ],
       "id": "cf-http-classify-0000-0000-0000-000000001",
-      "name": "Classify Conversation"
+      "name": "Classify Conversation",
+      "credentials": {
+        "openRouterApi": {
+          "id": "ow26hPDMir1dMfz0",
+          "name": "OpenRouter account"
+        }
+      }
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const resp = $input.first().json;\nconst content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\nlet parsed;\ntry { parsed = JSON.parse(content); } catch(e) { parsed = {}; }\n\nconst q = parsed.qualification || {};\nconst p = parsed.pricing || {};\nconst d = parsed.deposit || {};\nconst h = parsed.handoff || {};\nconst b = parsed.booking || {};\nconst lead = $('Upsert Lead').first().json;\n\n// ── Transition guard — prevent invalid/repeated transitions ──\nconst current = lead.pipeline_status || 'novo';\nconst proposed = parsed.pipeline || current;\n\n// Terminal states never change\nconst terminal = ['fechado', 'perdido', 'bloqueado'];\nconst validFrom = {\n  'novo': ['novo', 'qualificando', 'orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'qualificando': ['qualificando', 'orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'orcamento_enviado': ['orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'aguardando_deposito': ['aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'agendado': ['agendado'],\n  'aguardando_artista': ['aguardando_artista'],\n  'fechado': ['fechado'],\n  'perdido': ['perdido'],\n  'bloqueado': ['bloqueado'],\n};\n\nlet finalPipeline = current;\nlet finalEvent = parsed.event || null;\n\nif (terminal.includes(current)) {\n  // Terminal — no changes, no events\n  finalPipeline = current;\n  finalEvent = null;\n} else if (validFrom[current] && validFrom[current].includes(proposed)) {\n  finalPipeline = proposed;\n  // If no actual transition, suppress event (prevents repeated notifications)\n  if (proposed === current) finalEvent = null;\n} else {\n  // Invalid transition — keep current, suppress event\n  finalPipeline = current;\n  finalEvent = null;\n}\n\nreturn [{ json: {\n  lead_id: lead.id,\n  pipeline_status: finalPipeline,\n  event_type: finalEvent,\n  price_updated: !!(p.table_cents),\n\n  placement_val: q.placement || null,\n  body_zone_val: q.body_zone || null,\n  style_val: q.style || null,\n  primeira_tatuagem_val: q.first_tattoo || null,\n  significado_val: q.significado || null,\n\n  table_price_cents: p.table_cents || null,\n  negotiated_price_cents: p.nego_cents || null,\n\n  deposit_status_val: d.amount_cents ? 'aguardando_confirmacao' : null,\n  deposit_amount_cents: d.amount_cents || null,\n  booked_date_val: b.date ? (b.date + 'T' + (b.time || '12:00') + ':00') : null,\n  session_duration_min_val: null,\n  buffer_min_val: null,\n\n  handoff_reason: h.reason || null,\n\n  nome_val: parsed.name || null,\n} }];"
+        "jsCode": "const resp = $input.first().json;\nconst content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\nlet parsed;\ntry { parsed = JSON.parse(content); } catch(e) { parsed = {}; }\n\nconst q = parsed.qualification || {};\nconst p = parsed.pricing || {};\nconst d = parsed.deposit || {};\nconst h = parsed.handoff || {};\nconst b = parsed.booking || {};\nconst lead = $('Upsert Lead').first().json;\nconst agentOutput = $('AI Agent').first().json.output || '';\n\n// ── Deterministic tipo_tatuagem guard ──\n// The LLM classifier can misread Beatriz's own question \"uma tatuagem nova,\n// uma cobertura (cover-up) ou uma reforma\" as the lead's answer. Extract tipo\n// deterministically from the LEAD's raw message so \"nova\" is never mislabeled.\nconst rawLead = ($('Debounce Resolve').first().json.combined_text || '').toLowerCase();\nfunction detectTipo(text) {\n  if (/cobertura|cobrir|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(text)) return 'cobertura';\n  if (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(text)) return 'reforma';\n  if (/tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(text)) return 'nova';\n  return null;\n}\nconst tipoDeterministic = detectTipo(rawLead);\n\n// ── Transition guard — prevent invalid/repeated transitions ──\nconst current = lead.pipeline_status || 'novo';\nlet proposed = parsed.pipeline || current;\n\n// Bloqueio: só pode virar 'bloqueado' se Beatriz REALMENTE usou a mensagem de corte\n// e o lead não está em estado que nunca bloqueia (agendado/fechado/perdido).\n// Nunca inferir bloqueio de um tom grosseiro ou de classificação ambígua.\nconst saidCutoff = /não posso continuar essa conversa/.test(agentOutput.toLowerCase());\nconst neverBlock = ['agendado', 'fechado', 'perdido'];\nif (proposed === 'bloqueado' && (!saidCutoff || neverBlock.includes(current))) {\n  proposed = current;\n  parsed.event = null;\n}\n\n// Terminal states never change\nconst terminal = ['fechado', 'perdido', 'bloqueado'];\nconst validFrom = {\n  'novo': ['novo', 'qualificando', 'orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'qualificando': ['qualificando', 'orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'orcamento_enviado': ['orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'aguardando_deposito': ['aguardando_deposito', 'agendado', 'aguardando_artista', 'bloqueado'],\n  'agendado': ['agendado'],\n  'aguardando_artista': ['aguardando_artista'],\n  'fechado': ['fechado'],\n  'perdido': ['perdido'],\n  'bloqueado': ['bloqueado'],\n};\n\nlet finalPipeline = current;\nlet finalEvent = parsed.event || null;\n\nif (terminal.includes(current)) {\n  // Terminal — no changes, no events\n  finalPipeline = current;\n  finalEvent = null;\n} else if (validFrom[current] && validFrom[current].includes(proposed)) {\n  finalPipeline = proposed;\n  // If no actual transition, suppress event (prevents repeated notifications)\n  if (proposed === current) finalEvent = null;\n} else {\n  // Invalid transition — keep current, suppress event\n  finalPipeline = current;\n  finalEvent = null;\n}\n\n// ── Cover-up/reforma false-positive guard ──\n// If the lead clearly said \"nova\" in this message, never allow a\n// cover_up/reforma handoff (e.g. the classifier misread Beatriz's own\n// \"cobertura (cover-up) ou reforma\" question as the lead's answer).\nlet finalHandoff = h.reason || null;\nif (tipoDeterministic === 'nova' && (finalHandoff === 'cover_up' || finalHandoff === 'reforma')) {\n  finalHandoff = null;\n  if (finalPipeline === 'aguardando_artista') {\n    finalPipeline = current;\n    finalEvent = null;\n  }\n}\n\nreturn [{ json: {\n  lead_id: lead.id,\n  pipeline_status: finalPipeline,\n  event_type: finalEvent,\n  price_updated: !!(p.table_cents),\n\n  placement_val: q.placement || null,\n  body_zone_val: q.body_zone || null,\n  style_val: q.style || null,\n  primeira_tatuagem_val: q.first_tattoo || null,\n  significado_val: q.significado || null,\n  tipo_tatuagem_val: tipoDeterministic || q.tipo_tatuagem || null,\n\n  table_price_cents: p.table_cents || null,\n  negotiated_price_cents: p.nego_cents || null,\n\n  deposit_status_val: d.amount_cents ? 'aguardando_confirmacao' : null,\n  deposit_amount_cents: d.amount_cents || null,\n  booked_date_val: b.date ? (b.date + 'T' + (b.time || '12:00') + ':00') : null,\n  session_duration_min_val: null,\n  buffer_min_val: null,\n\n  handoff_reason: finalHandoff,\n\n  nome_val: parsed.name || null,\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1560,
+        1568,
         0
       ],
       "id": "cf-parse-classify-0000-0000-0000-000000001",
@@ -494,14 +474,13 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const f = $input.first().json;\n\nfunction esc(s) { return String(s || '').replace(/'/g, \"''\"); }\n\nconst sets = [];\n\nconst ps = esc(f.pipeline_status);\nsets.push(`pipeline_status = CASE\n    WHEN '${ps}' = 'qualificando' AND pipeline_status = 'novo' THEN 'qualificando'::text\n    WHEN '${ps}' = 'orcamento_enviado' AND pipeline_status IN ('novo','qualificando') THEN 'orcamento_enviado'::text\n    WHEN '${ps}' = 'aguardando_deposito' AND pipeline_status IN ('novo','qualificando','orcamento_enviado') THEN 'aguardando_deposito'::text\n    WHEN '${ps}' = 'agendado' AND pipeline_status IN ('novo','qualificando','orcamento_enviado','aguardando_deposito') THEN 'agendado'::text\n    WHEN '${ps}' = 'aguardando_artista' AND pipeline_status NOT IN ('fechado','perdido','agendado') THEN 'aguardando_artista'::text\n    WHEN '${ps}' = 'bloqueado' AND pipeline_status NOT IN ('fechado','perdido') THEN 'bloqueado'::text\n    ELSE pipeline_status END`);\n\nif (f.placement_val && f.placement_val !== 'null') sets.push(`placement = '${esc(f.placement_val)}'`);\nif (f.body_zone_val && f.body_zone_val !== 'null') sets.push(`body_zone = '${esc(f.body_zone_val)}'`);\nif (f.style_val && f.style_val !== 'null') sets.push(`style = '${esc(f.style_val)}'`);\nif (f.significado_val && f.significado_val !== 'null') sets.push(`significado = '${esc(f.significado_val)}'`);\nif (f.deposit_status_val && f.deposit_status_val !== 'null') sets.push(`deposit_status = '${esc(f.deposit_status_val)}'`);\n\nif (f.nome_val && f.nome_val !== 'null') sets.push(`nome = '${esc(f.nome_val)}'`);\n\nif (f.table_price_cents !== null && f.table_price_cents !== undefined && f.table_price_cents !== 'null')\n  sets.push(`table_price = ${f.table_price_cents}`);\nif (f.negotiated_price_cents !== null && f.negotiated_price_cents !== undefined && f.negotiated_price_cents !== 'null')\n  sets.push(`negotiated_price = ${f.negotiated_price_cents}`);\nif (f.deposit_amount_cents !== null && f.deposit_amount_cents !== undefined && f.deposit_amount_cents !== 'null')\n  sets.push(`deposit_amount = ${f.deposit_amount_cents}`);\nif (f.session_duration_min_val !== null && f.session_duration_min_val !== undefined && f.session_duration_min_val !== 'null')\n  sets.push(`session_duration_min = ${f.session_duration_min_val}`);\nif (f.buffer_min_val !== null && f.buffer_min_val !== undefined && f.buffer_min_val !== 'null')\n  sets.push(`buffer_min = ${f.buffer_min_val}`);\n\nif (f.primeira_tatuagem_val === true) sets.push(`primeira_tatuagem = true`);\nelse if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false`);\n\nif (f.booked_date_val && f.booked_date_val !== 'null')\n  sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);\n\nsets.push(`last_message_at = NOW()`);\nsets.push(`updated_at = NOW()`);\n\nconst query = `UPDATE public.leads SET ${sets.join(', ')} WHERE id = '${esc(String(f.lead_id))}'::uuid AND artist_id = 'b0000000-0000-0000-0000-000000000001' RETURNING id, pipeline_status, deposit_status;`;\n\nreturn { json: { ...f, query } };\n"
+        "jsCode": "const f = $input.first().json;\n\nfunction esc(s) { return String(s || '').replace(/'/g, \"''\"); }\n\nconst sets = [];\n\nconst ps = esc(f.pipeline_status);\nsets.push(`pipeline_status = CASE\n    WHEN '${ps}' = 'qualificando' AND pipeline_status = 'novo' THEN 'qualificando'::text\n    WHEN '${ps}' = 'orcamento_enviado' AND pipeline_status IN ('novo','qualificando') THEN 'orcamento_enviado'::text\n    WHEN '${ps}' = 'aguardando_deposito' AND pipeline_status IN ('novo','qualificando','orcamento_enviado') THEN 'aguardando_deposito'::text\n    WHEN '${ps}' = 'agendado' AND pipeline_status IN ('novo','qualificando','orcamento_enviado','aguardando_deposito') THEN 'agendado'::text\n    WHEN '${ps}' = 'aguardando_artista' AND pipeline_status NOT IN ('fechado','perdido','agendado') THEN 'aguardando_artista'::text\n    WHEN '${ps}' = 'bloqueado' AND pipeline_status NOT IN ('fechado','perdido') THEN 'bloqueado'::text\n    ELSE pipeline_status END`);\n\nif (f.placement_val && f.placement_val !== 'null') sets.push(`placement = '${esc(f.placement_val)}'`);\nif (f.body_zone_val && f.body_zone_val !== 'null') sets.push(`body_zone = '${esc(f.body_zone_val)}'`);\nif (f.style_val && f.style_val !== 'null') sets.push(`style = '${esc(f.style_val)}'`);\nif (f.significado_val && f.significado_val !== 'null') sets.push(`significado = '${esc(f.significado_val)}'`);\nif (f.tipo_tatuagem_val && f.tipo_tatuagem_val !== 'null') sets.push(`tipo_tatuagem = '${esc(f.tipo_tatuagem_val)}'`);\nif (f.deposit_status_val && f.deposit_status_val !== 'null') sets.push(`deposit_status = '${esc(f.deposit_status_val)}'`);\n\nif (f.nome_val && f.nome_val !== 'null') sets.push(`nome = '${esc(f.nome_val)}'`);\n\nif (f.table_price_cents !== null && f.table_price_cents !== undefined && f.table_price_cents !== 'null')\n  sets.push(`table_price = ${f.table_price_cents}`);\nif (f.negotiated_price_cents !== null && f.negotiated_price_cents !== undefined && f.negotiated_price_cents !== 'null')\n  sets.push(`negotiated_price = ${f.negotiated_price_cents}`);\nif (f.deposit_amount_cents !== null && f.deposit_amount_cents !== undefined && f.deposit_amount_cents !== 'null')\n  sets.push(`deposit_amount = ${f.deposit_amount_cents}`);\nif (f.session_duration_min_val !== null && f.session_duration_min_val !== undefined && f.session_duration_min_val !== 'null')\n  sets.push(`session_duration_min = ${f.session_duration_min_val}`);\nif (f.buffer_min_val !== null && f.buffer_min_val !== undefined && f.buffer_min_val !== 'null')\n  sets.push(`buffer_min = ${f.buffer_min_val}`);\n\nif (f.primeira_tatuagem_val === true) sets.push(`primeira_tatuagem = true`);\nelse if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false`);\n\nif (f.booked_date_val && f.booked_date_val !== 'null')\n  sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);\n\nsets.push(`last_message_at = NOW()`);\nsets.push(`updated_at = NOW()`);\n\nconst query = `UPDATE public.leads SET ${sets.join(', ')} WHERE id = '${esc(String(f.lead_id))}'::uuid AND artist_id = 'b0000000-0000-0000-0000-000000000001' RETURNING id, pipeline_status, deposit_status;`;\n\nreturn { json: { ...f, query } };\n"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        1300,
-        0
+        1456,
+        -224
       ],
       "id": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
       "name": "Build Update Query"
@@ -509,13 +488,14 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "={{ $json.query }}"
+        "query": "{{ $json.query }}",
+        "options": {}
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1560,
-        420
+        1568,
+        432
       ],
       "id": "e3c4d5e6-7f8a-9b0c-1d2e-3f4a5b6c7d8e",
       "name": "Update Lead",
@@ -524,8 +504,7 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
@@ -538,8 +517,8 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1820,
-        420
+        1824,
+        432
       ],
       "id": "f4d5e6f7-8a9b-0c1d-2e3f-4a5b6c7d8e9f",
       "name": "Log Event",
@@ -548,13 +527,11 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const lead = $('Upsert Lead').first().json;\nconst parsed = $('Parse Classification').first().json;\n\nreturn [{\n  json: {\n    lead_id: lead.id,\n    artist_id: 'b0000000-0000-0000-0000-000000000001',\n    nome: lead.nome,\n    telefone: lead.telefone,\n    pipeline_status: parsed.pipeline_status,\n    placement: parsed.placement_val,\n    body_zone: parsed.body_zone_val,\n    style: parsed.style_val,\n    table_price: parsed.table_price_cents,\n    negotiated_price: parsed.negotiated_price_cents,\n    deposit_status: parsed.deposit_status_val,\n    deposit_amount: parsed.deposit_amount_cents,\n    booked_date: parsed.booked_date_val,\n    session_duration_min: parsed.session_duration_min_val,\n    handoff_reason: parsed.handoff_reason,\n  }\n}];"
+        "jsCode": "const lead = $('Upsert Lead').first().json;\nconst parsed = $('Parse Classification').first().json;\n\nreturn [{\n  json: {\n    lead_id: lead.id,\n    artist_id: 'b0000000-0000-0000-0000-000000000001',\n    nome: lead.nome,\n    telefone: lead.telefone,\n    pipeline_status: parsed.pipeline_status,\n    placement: parsed.placement_val,\n    body_zone: parsed.body_zone_val,\n    style: parsed.style_val,\n    tipo_tatuagem: parsed.tipo_tatuagem_val,\n    table_price: parsed.table_price_cents,\n    negotiated_price: parsed.negotiated_price_cents,\n    deposit_status: parsed.deposit_status_val,\n    deposit_amount: parsed.deposit_amount_cents,\n    booked_date: parsed.booked_date_val,\n    session_duration_min: parsed.session_duration_min_val,\n    handoff_reason: parsed.handoff_reason,\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -576,7 +553,7 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        2340,
+        2352,
         0
       ],
       "id": "n0t1i2o3-5555-6666-7777-8888aaaabbbb",
@@ -586,8 +563,7 @@
           "id": "nngaQDfXHYQ1Q43P",
           "name": "main-db"
         }
-      },
-      "onError": "continueRegularOutput"
+      }
     },
     {
       "parameters": {
@@ -599,7 +575,7 @@
       "typeVersion": 1.2,
       "position": [
         2080,
-        420
+        432
       ],
       "id": "980d11b3-4057-45b5-bdd3-1259e43ae685",
       "name": "Send a text message",
@@ -613,14 +589,13 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const parseData = $('Parse Classification').first().json;\nconst updateData = $('Update Lead').first().json;\nconst leadData = $('Upsert Lead').first().json;\nconst agentOutput = ($('AI Agent').first().json.output || '').toLowerCase();\n\nconst event = (parseData && parseData.event_type) || null;\nconst status = (updateData && updateData.pipeline_status)\n  || (parseData && parseData.pipeline_status)\n  || '';\n\nconst leadNome = leadData && leadData.nome ? leadData.nome : 'Desconhecido';\nconst telefone = leadData && leadData.telefone ? leadData.telefone : '';\nconst whatsappLink = telefone && /^\\d{8,15}$/.test(telefone)\n  ? 'https://wa.me/' + telefone\n  : null;\n\n// Fallback: detect a handoff directly from Beatriz's message if the\n// classifier did not emit event=handoff_triggered (e.g. no slots available).\nconst handoffPhrases = ['vou te passar pro bruno', 'vou passar pro bruno', 'te passar pro artista', 'deixa eu te passar', 'vou te passar pro artista', 'passar o lead pro bruno'];\nconst saidHandoff = handoffPhrases.some(p => agentOutput.includes(p));\n\n// Fallback: detect a deposit request directly from Beatriz's message if the\n// classifier did not emit event=deposit_requested.\nconst depositPhrases = ['sinal de', 'sinal é de', 'chave pix', 'pix:', 'bruno.tattoo@pix.com.br', '30% do valor'];\nconst saidDeposit = depositPhrases.some(p => agentOutput.includes(p));\n\n// Only notify on an actual transition — event_type is set only when state changed\nif (!event && !saidHandoff && !saidDeposit) {\n  return [{ json: { send: false } }];\n}\n\n// ── Handoff ──\nif (event === 'handoff_triggered' || saidHandoff) {\n  const leadId = (parseData && parseData.lead_id) || '';\n  const reasonMap = {\n    cover_up: 'Cover-up',\n    lead_requested_artist: 'Lead pediu o artista',\n    below_piso: 'Contraproposta abaixo do piso',\n    vague: 'Descrição vaga',\n    audio_2x: 'Áudio/sticker repetido',\n    no_availability: 'Sem horário disponível no calendário',\n  };\n  const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'n\\u00E3o especificado';\n\n  const msg = [\n    '<b>\\u{1F514} Handoff: Lead precisa de aten\\u00E7\\u00E3o</b>',\n    '<b>Lead:</b> ' + leadNome,\n    '<b>Motivo:</b> ' + reason,\n  ];\n  if (telefone) msg.push('<b>Telefone:</b> ' + telefone);\n  if (whatsappLink) msg.push('<a href=\\\"' + whatsappLink + '\\\">Abrir no WhatsApp</a>');\n\n  return [{ json: {\n    send: true,\n    chatId: '-5195870017',\n    text: msg.join('\\n'),\n    btn1_text: '\\u2705 Confirmar',\n    btn1_cb: 'handoff:confirm:' + leadId,\n    btn2_text: '\\u274C Cancelar',\n    btn2_cb: 'handoff:cancel:' + leadId,\n  } }];\n}\n\n// ── Deposit requested ──\nif (event === 'deposit_requested' || saidDeposit) {\n  const leadId = parseData.lead_id || '';\n  const amount = parseData.deposit_amount_cents\n    ? 'R$ ' + (parseData.deposit_amount_cents / 100).toFixed(2).replace('.', ',')\n    : 'valor pendente';\n  const msg = [\n    '<b>\\u{1F4B0} Sinal solicitado</b>',\n    '<b>Lead:</b> ' + leadNome,\n    '<b>Valor:</b> ' + amount,\n    '<i>Confirme o recebimento do PIX</i>',\n  ].join('\\n');\n\n  return [{ json: {\n    send: true,\n    chatId: '-5195870017',\n    text: msg,\n    btn1_text: '\\u2705 Sinal Recebido',\n    btn1_cb: 'deposit:confirm:' + leadId,\n    btn2_text: '\\u274C N\\u00E3o Pago',\n    btn2_cb: 'deposit:cancel:' + leadId,\n  } }];\n}\n\n// ── No match — no notification ──\nreturn [{ json: { send: false } }];"
+        "jsCode": "const parseData = $('Parse Classification').first().json;\nconst updateData = $('Update Lead').first().json;\nconst leadData = $('Upsert Lead').first().json;\nconst agentOutput = ($('AI Agent').first().json.output || '').toLowerCase();\n\nconst event = (parseData && parseData.event_type) || null;\nconst status = (updateData && updateData.pipeline_status)\n  || (parseData && parseData.pipeline_status)\n  || '';\n\nconst leadNome = leadData && leadData.nome ? leadData.nome : 'Desconhecido';\nconst telefone = leadData && leadData.telefone ? leadData.telefone : '';\nconst whatsappLink = telefone && /^\\d{8,15}$/.test(telefone)\n  ? 'https://wa.me/' + telefone\n  : null;\n\n// Fallback: detect a handoff directly from Beatriz's message if the\n// classifier did not emit event=handoff_triggered (e.g. no slots available).\nconst handoffPhrases = ['vou te passar pro bruno', 'vou passar pro bruno', 'te passar pro artista', 'deixa eu te passar', 'vou te passar pro artista', 'passar o lead pro bruno'];\nconst saidHandoff = handoffPhrases.some(p => agentOutput.includes(p));\n\n// Fallback: detect a deposit request directly from Beatriz's message if the\n// classifier did not emit event=deposit_requested.\nconst depositPhrases = ['sinal de', 'sinal é de', 'chave pix', 'pix:', 'bruno.tattoo@pix.com.br', '30% do valor'];\nconst saidDeposit = depositPhrases.some(p => agentOutput.includes(p));\n\n// Only notify on an actual transition — event_type is set only when state changed\nif (!event && !saidHandoff && !saidDeposit) {\n  return [{ json: { send: false } }];\n}\n\n// ── Handoff ──\nif (event === 'handoff_triggered' || saidHandoff) {\n  const leadId = (parseData && parseData.lead_id) || '';\n  const reasonMap = {\n    cover_up: 'Cover-up',\n    reforma: 'Reforma de tatuagem',\n    lead_requested_artist: 'Lead pediu o artista',\n    below_piso: 'Contraproposta abaixo do piso',\n    vague: 'Descrição vaga',\n    audio_2x: 'Áudio/sticker repetido',\n    no_availability: 'Sem horário disponível no calendário',\n  };\n  const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'n\\u00E3o especificado';\n\n  const msg = [\n    '<b>\\u{1F514} Handoff: Lead precisa de aten\\u00E7\\u00E3o</b>',\n    '<b>Lead:</b> ' + leadNome,\n    '<b>Motivo:</b> ' + reason,\n  ];\n  if (telefone) msg.push('<b>Telefone:</b> ' + telefone);\n  if (whatsappLink) msg.push('<a href=\\\"' + whatsappLink + '\\\">Abrir no WhatsApp</a>');\n\n  return [{ json: {\n    send: true,\n    chatId: '-5195870017',\n    text: msg.join('\\n'),\n    btn1_text: '\\u2705 Confirmar',\n    btn1_cb: 'handoff:confirm:' + leadId,\n    btn2_text: '\\u274C Cancelar',\n    btn2_cb: 'handoff:cancel:' + leadId,\n  } }];\n}\n\n// ── Deposit requested ──\nif (event === 'deposit_requested' || saidDeposit) {\n  const leadId = parseData.lead_id || '';\n  const amount = parseData.deposit_amount_cents\n    ? 'R$ ' + (parseData.deposit_amount_cents / 100).toFixed(2).replace('.', ',')\n    : 'valor pendente';\n  const msg = [\n    '<b>\\u{1F4B0} Sinal solicitado</b>',\n    '<b>Lead:</b> ' + leadNome,\n    '<b>Valor:</b> ' + amount,\n    '<i>Confirme o recebimento do PIX</i>',\n  ].join('\\n');\n\n  return [{ json: {\n    send: true,\n    chatId: '-5195870017',\n    text: msg,\n    btn1_text: '\\u2705 Sinal Recebido',\n    btn1_cb: 'deposit:confirm:' + leadId,\n    btn2_text: '\\u274C N\\u00E3o Pago',\n    btn2_cb: 'deposit:cancel:' + leadId,\n  } }];\n}\n\n// ── No match — no notification ──\nreturn [{ json: { send: false } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        2340,
-        420
+        2352,
+        432
       ],
       "id": "a0b1c2d3-6666-7777-8888-99990000aaaa",
       "name": "Build Handoff Message"
@@ -652,16 +627,14 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
       "position": [
-        2600,
-        300
+        2608,
+        304
       ],
       "id": "send-notif-if-v2-0000-0000-000000000001",
       "name": "Send Notification?"
     },
     {
       "parameters": {
-        "resource": "message",
-        "operation": "sendMessage",
         "chatId": "={{ $json.chatId }}",
         "text": "={{ $json.text }}",
         "replyMarkup": "inlineKeyboard",
@@ -688,18 +661,19 @@
           ]
         },
         "additionalFields": {
-          "parse_mode": "HTML",
-          "appendAttribution": false
+          "appendAttribution": false,
+          "parse_mode": "HTML"
         }
       },
       "type": "n8n-nodes-base.telegram",
       "typeVersion": 1.2,
       "position": [
-        2600,
-        420
+        2608,
+        432
       ],
       "id": "b1c2d3e4-7777-8888-9999-aaaabbbbcccc",
       "name": "Send Handoff to Group",
+      "webhookId": "037de194-124c-47ff-aa1f-3af60dbf5090",
       "credentials": {
         "telegramApi": {
           "id": "ddaVhX88IF54TVAS",
