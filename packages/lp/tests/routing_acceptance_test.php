@@ -115,6 +115,16 @@ $resp = fetch("$base/onboard/nonexistent");
 assert_true($resp['status'] === 200, "/onboard/nonexistent status {$resp['status']} (expected 200)");
 assert_contains($resp['body'], '<html', '/onboard/nonexistent renders HTML');
 
+echo "Test: /agenda/<token> returns 200 (agenda handles its own routing)\n";
+$resp = fetch("$base/agenda/sometoken123456");
+assert_true($resp['status'] === 200, "/agenda/sometoken123456 status {$resp['status']} (expected 200)");
+assert_contains($resp['body'], '<html', '/agenda/sometoken123456 renders HTML');
+
+echo "Test: /agenda (no token) returns 200 with invalid-link state\n";
+$resp = fetch("$base/agenda");
+assert_true(in_array($resp['status'], [200, 404], true), "/agenda status {$resp['status']}");
+assert_contains($resp['body'], '<html', '/agenda renders HTML');
+
 // ---- Static file served directly ----
 echo "Test: GET /style.css returns 200 with CSS content type\n";
 $resp = fetch("$base/style.css");
