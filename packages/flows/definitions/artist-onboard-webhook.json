@@ -1,0 +1,534 @@
+{
+  "name": "Artist Onboard Webhook",
+  "description": "Self-serve WhatsApp connect (#8) — validate artist token, serve WAHA QR, poll scan state, consume token. Proxies WAHA (NOWEB) auth/qr + sessions.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "onboard-api",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "ob-webhook-0000-0000-0000-000000000001",
+      "name": "Onboard Webhook",
+      "webhookId": "ob-webhook-0000-0000-0000-000000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  a.id, a.nome, a.wa_session_slug, a.status,\n  $1::text   AS token,\n  $2::text   AS action,\n  $3::boolean AS refresh_qr,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::boolean, false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.refreshQr === true] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        0
+      ],
+      "id": "ob-resolve-0000-0000-0000-000000000001",
+      "name": "Resolve Artist by Token",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ob-if-token-cond-0000",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "id": "ob-if-token-0000-0000-0000-000000000001",
+      "name": "Token Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_token', message: 'Token de artista inválido ou desconhecido.' }) }}",
+        "options": {
+          "responseCode": 401
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        240
+      ],
+      "id": "ob-resp-bad-token-0000-0000-0000-000000000001",
+      "name": "Invalid Token Response"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 4,
+        "output": "={{ $json.action === 'validate' ? 0 : $json.action === 'status' ? 1 : $json.action === 'consume' ? 2 : 3 }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        780,
+        -200
+      ],
+      "id": "ob-switch-0000-0000-0000-000000000001",
+      "name": "Route by Action"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist by Token').first().json.wa_session_slug + '/auth/qr' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wahaApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        -400
+      ],
+      "id": "ob-fetch-qr-0000-0000-0000-000000000001",
+      "name": "Fetch QR",
+      "credentials": {
+        "wahaApi": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const artist = $('Resolve Artist by Token').first().json;\nconst resp = $input.first().json;\nconst qr = (resp && resp.data) || '';\n\nreturn [{\n  json: {\n    valid: true,\n    action: artist.action,\n    artist_name: artist.nome,\n    qr_image: qr,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -400
+      ],
+      "id": "ob-validate-resp-0000-0000-0000-000000000001",
+      "name": "Build Validate Response"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://waha.vaif.com.br/api/sessions/' + $('Resolve Artist by Token').first().json.wa_session_slug }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wahaApi",
+        "options": {
+          "timeout": 15000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1040,
+        -200
+      ],
+      "id": "ob-session-0000-0000-0000-000000000001",
+      "name": "Check Session",
+      "credentials": {
+        "wahaApi": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const artist = $('Resolve Artist by Token').first().json;\nconst sess = $input.first().json;\nconst connected = !!(sess && sess.me);\nconst refreshQr = artist.refresh_qr === true;\n\nreturn [{\n  json: {\n    connected: connected,\n    refresh_qr: refreshQr,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -200
+      ],
+      "id": "ob-parse-0000-0000-0000-000000000001",
+      "name": "Parse Session State"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "ob-if-connected-cond-0000",
+              "leftValue": "={{ $json.connected }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        -200
+      ],
+      "id": "ob-if-connected-0000-0000-0000-000000000001",
+      "name": "Connected?"
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist by Token').first().json.wa_session_slug + '/auth/qr' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wahaApi",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1820,
+        -200
+      ],
+      "id": "ob-refresh-qr-0000-0000-0000-000000000001",
+      "name": "Refresh QR",
+      "credentials": {
+        "wahaApi": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const resp = $input.first().json;\nconst qr = (resp && resp.data) || '';\n\nreturn [{ json: { connected: false, qr_image: qr } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2080,
+        -200
+      ],
+      "id": "ob-status-resp-0000-0000-0000-000000000001",
+      "name": "Build Status Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status FROM consume_onboarding_token($1);",
+        "options": {
+          "queryReplacement": "={{ [$json.token] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "ob-consume-0000-0000-0000-000000000001",
+      "name": "Consume Token",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const row = $input.first().json;\nreturn [{\n  json: {\n    success: !!row.id,\n    error: row.id ? null : 'token_not_consumed',\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "ob-consume-resp-0000-0000-0000-000000000001",
+      "name": "Build Consume Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2340,
+        0
+      ],
+      "id": "ob-resp-ok-0000-0000-0000-000000000001",
+      "name": "Onboard Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use validate, status ou consume.' }) }}",
+        "options": {
+          "responseCode": 400
+        }
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        -500
+      ],
+      "id": "ob-resp-bad-action-0000-0000-0000-000000000001",
+      "name": "Invalid Action Response"
+    }
+  ],
+  "connections": {
+    "Onboard Webhook": {
+      "main": [
+        [
+          {
+            "node": "Resolve Artist by Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Artist by Token": {
+      "main": [
+        [
+          {
+            "node": "Token Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Valid?": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Token Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "Fetch QR",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Check Session",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Consume Token",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Action Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch QR": {
+      "main": [
+        [
+          {
+            "node": "Build Validate Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Validate Response": {
+      "main": [
+        [
+          {
+            "node": "Onboard Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Session": {
+      "main": [
+        [
+          {
+            "node": "Parse Session State",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Session State": {
+      "main": [
+        [
+          {
+            "node": "Connected?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Connected?": {
+      "main": [
+        [
+          {
+            "node": "Onboard Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Refresh QR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Refresh QR": {
+      "main": [
+        [
+          {
+            "node": "Build Status Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Status Response": {
+      "main": [
+        [
+          {
+            "node": "Onboard Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Consume Token": {
+      "main": [
+        [
+          {
+            "node": "Build Consume Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Consume Response": {
+      "main": [
+        [
+          {
+            "node": "Onboard Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
