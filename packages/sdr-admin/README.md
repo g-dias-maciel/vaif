@@ -38,11 +38,15 @@ is kept after connect so one link serves both `/onboard` and `/agenda`.
 ## The link to send the artist
 
 ```
-https://<staging-host>/onboard/<token>
+https://dev.vaif.com.br/onboard/<token>
 ```
 
 After they scan and connect they land on `/onboard/sucesso`, and can open
-`https://<staging-host>/agenda/<token>` to manage availability.
+`https://dev.vaif.com.br/agenda/<token>` to manage availability.
+
+The token is generated automatically by the **Artist Onboarding Form**
+(`https://n8n.vaif.com.br/form/onboard`) — the form's success page prints the
+full link after the artist is created.
 
 ## Local dev
 

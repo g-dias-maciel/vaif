@@ -223,8 +223,9 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "={{ 'http://localhost:3000/api/sessions' }}",
-        "authentication": "genericCredentialType",
+        "url": "={{ 'http://waha.vaif.com.br/api/sessions' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wahaApi",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({ name: $('INSERT Artist').first().json.wa_session_slug, config: { webhooks: [{ url: 'https://n8n.vaif.com.br/webhook/waha-webhook', events: ['message'] }] } }) }}",
@@ -244,6 +245,10 @@
         "httpHeaderAuth": {
           "id": "uQsr20PaYqbQUAGD",
           "name": "WAHA account"
+        },
+        "wahaApi": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
         }
       }
     },
@@ -251,7 +256,7 @@
       "parameters": {
         "pageType": "end",
         "title": "Artista cadastrado com sucesso!",
-        "description": "={{ 'Compartilhe este link de onboarding com o artista:\\n\\n**' + $('INSERT Artist').first().json.nome + '**\\n\\nLink: https://vaif.com.br/onboard/' + $('INSERT Artist').first().json.onboarding_token + '\\n\\nSessão WhatsApp: ' + $('INSERT Artist').first().json.wa_session_slug }}"
+        "description": "={{ 'Compartilhe este link de onboarding com o artista:\\n\\n**' + $('INSERT Artist').first().json.nome + '**\\n\\nLink: https://dev.vaif.com.br/onboard/' + $('INSERT Artist').first().json.onboarding_token + '\\n\\nSessão WhatsApp: ' + $('INSERT Artist').first().json.wa_session_slug }}"
       },
       "type": "n8n-nodes-base.form",
       "typeVersion": 1,
