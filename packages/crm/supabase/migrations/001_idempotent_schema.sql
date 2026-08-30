@@ -12,6 +12,8 @@ CREATE TABLE IF NOT EXISTS artists (
   pix_key           TEXT,
   instagram_handle  TEXT,
   working_hours     JSONB,
+  ai_active_hours   JSONB,
+  timezone          TEXT,
   wa_session_slug   TEXT UNIQUE,
   status            TEXT NOT NULL DEFAULT 'stub'
     CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),
@@ -35,6 +37,8 @@ ALTER TABLE artists ADD COLUMN IF NOT EXISTS deposit_value      INTEGER;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS pix_key            TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS instagram_handle   TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS working_hours      JSONB;
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS ai_active_hours    JSONB;
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS timezone           TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS wa_session_slug    TEXT UNIQUE;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS status             TEXT NOT NULL DEFAULT 'stub';
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS onboarding_token   TEXT UNIQUE;
@@ -54,6 +58,7 @@ CREATE TABLE IF NOT EXISTS leads (
   style               TEXT,
   primeira_tatuagem   BOOLEAN,
   significado         TEXT,
+  tipo_tatuagem       TEXT,
   reference_pics      TEXT[],
   table_price         INTEGER,
   negotiated_price    INTEGER,
@@ -82,6 +87,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS body_zone             TEXT;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS style                 TEXT;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS primeira_tatuagem     BOOLEAN;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS significado           TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS tipo_tatuagem         TEXT;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS reference_pics        TEXT[];
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS table_price           INTEGER;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS negotiated_price      INTEGER;
@@ -142,6 +148,14 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_lead ON events (lead_id, created_at);
 
+-- Message debounce buffer — holds in-flight messages per chat so the agent
+-- waits for the lead to finish typing before answering the whole burst.
+CREATE TABLE IF NOT EXISTS message_buffer (
+  chat_id        TEXT PRIMARY KEY,
+  pending        TEXT,
+  last_msg_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Notion sync outbox — guarantees at-least-once delivery of pipeline
 -- changes to Notion. The Beatriz flow enqueues here (fast, local); a
 -- scheduled consumer drains pending rows and syncs to Notion with retries.
@@ -168,6 +182,20 @@ BEGIN
   PERFORM set_config('app.artist_id', target_artist_id::TEXT, true);
 END;
 $$ LANGUAGE plpgsql;
+
+-- Resolve the artist for an incoming WAHA session slug (session -> artist_id).
+-- Filters to active lifecycle states so suspended/offboarded artists get no match.
+CREATE OR REPLACE FUNCTION resolve_artist_from_session(
+  p_wa_session_slug TEXT
+) RETURNS SETOF artists AS $$
+BEGIN
+  RETURN QUERY
+    SELECT * FROM artists
+    WHERE wa_session_slug = p_wa_session_slug
+      AND status IN ('stub', 'onboarding', 'live')
+    LIMIT 1;
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
 CREATE OR REPLACE FUNCTION lookup_price(
   p_placement TEXT,
@@ -238,27 +266,94 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Availability is DERIVED from the artist's weekly working hours instead of
+-- pre-seeded calendar rows. working_hours is a JSONB object keyed by weekday
+-- (seg/ter/qua/qui/sex/sab/dom) whose values are arrays of "HH:MM-HH:MM"
+-- blocks, interpreted in the artist's own timezone (artists.timezone, not UTC).
+-- A slot is offered for every hour-aligned start that fits inside a working
+-- block and is long enough for the requested duration; it is free unless a
+-- 'booked' or 'blocked' calendar row overlaps it. Legacy 'available' rows are
+-- ignored entirely.
 CREATE OR REPLACE FUNCTION check_availability(
   p_artist_id UUID,
   p_from_date TIMESTAMPTZ,
   p_to_date TIMESTAMPTZ,
-  p_duration_min INTEGER
+  p_duration_min INTEGER DEFAULT 60
 ) RETURNS TABLE(
   id UUID,
   start_at TIMESTAMPTZ,
   end_at TIMESTAMPTZ,
   type TEXT
 ) AS $$
+DECLARE
+  v_tz      TEXT;
+  v_working JSONB;
+  v_day0    DATE;
+  v_day1    DATE;
+  v_dur     INTERVAL;
 BEGIN
+  SELECT a.timezone, a.working_hours INTO v_tz, v_working
+  FROM artists a
+  WHERE a.id = p_artist_id;
+
+  IF v_working IS NULL THEN
+    RETURN;
+  END IF;
+
+  v_tz := COALESCE(NULLIF(v_tz, ''), 'UTC');
+  v_day0 := (p_from_date AT TIME ZONE v_tz)::date;
+  v_day1 := (p_to_date AT TIME ZONE v_tz)::date;
+  v_dur := make_interval(mins => GREATEST(p_duration_min, 1));
+
   RETURN QUERY
-    SELECT c.id, c.start_at, c.end_at, c.type
-    FROM calendar c
-    WHERE c.artist_id = p_artist_id
-      AND c.start_at >= p_from_date
-      AND c.end_at <= p_to_date
-      AND c.type = 'available'
-      AND EXTRACT(EPOCH FROM (c.end_at - c.start_at)) / 60 >= p_duration_min
-    ORDER BY c.start_at;
+  WITH days AS (
+    SELECT generate_series(v_day0::timestamp, v_day1::timestamp, '1 day'::interval)::date AS day
+  ),
+  weeks AS (
+    SELECT day,
+           (ARRAY['seg','ter','qua','qui','sex','sab','dom'])[EXTRACT(ISODOW FROM day)::int] AS dow
+    FROM days
+  ),
+  blocks AS (
+    SELECT w.day, w.dow, b.value AS block
+    FROM weeks w
+    CROSS JOIN LATERAL jsonb_array_elements_text(v_working -> w.dow) AS b(value)
+  ),
+  spans AS (
+    SELECT
+      b.day,
+      (b.day + split_part(b.block, '-', 1)::time)::timestamp AS start_local,
+      (b.day + split_part(b.block, '-', 2)::time)::timestamp AS end_local
+    FROM blocks b
+  ),
+  starts AS (
+    SELECT
+      ((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) AS slot_start,
+      (((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) + v_dur) AS slot_end,
+      (s.end_local AT TIME ZONE v_tz) AS block_end
+    FROM spans s
+    CROSS JOIN LATERAL generate_series(
+      0,
+      GREATEST(0, ceil(EXTRACT(EPOCH FROM (s.end_local - s.start_local)) / 3600)::int - 1)
+    ) AS n
+  )
+  SELECT
+    md5(p_artist_id::text || st.slot_start::text || p_duration_min::text)::uuid AS id,
+    st.slot_start,
+    st.slot_end,
+    'available'::text AS type
+  FROM starts st
+  WHERE st.slot_start >= p_from_date
+    AND st.slot_end <= p_to_date
+    AND st.slot_end <= st.block_end
+    AND NOT EXISTS (
+      SELECT 1 FROM calendar c
+      WHERE c.artist_id = p_artist_id
+        AND c.type IN ('booked', 'blocked')
+        AND c.start_at < st.slot_end
+        AND c.end_at > st.slot_start
+    )
+  ORDER BY st.slot_start;
 END;
 $$ LANGUAGE plpgsql STABLE;
 
@@ -275,6 +370,19 @@ BEGIN
   SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;
   IF NOT FOUND THEN RETURN; END IF;
   v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;
+
+  -- Reject (don't insert) when the chosen window overlaps an existing
+  -- 'booked' or 'blocked' period for the same artist — no double-booking.
+  IF EXISTS (
+    SELECT 1 FROM calendar c
+    WHERE c.artist_id = v_lead.artist_id
+      AND c.type IN ('booked', 'blocked')
+      AND c.start_at < v_end_at
+      AND c.end_at > p_start_at
+  ) THEN
+    RETURN;
+  END IF;
+
   INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)
   VALUES (v_lead.artist_id, p_start_at, v_end_at, 'booked', p_lead_id);
   UPDATE leads SET
@@ -294,9 +402,46 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Block a period for an artist: creates a type='blocked' calendar row so
+-- check_availability stops offering those hours and book_slot rejects them.
+CREATE OR REPLACE FUNCTION block_slot(
+  p_artist_id UUID,
+  p_start_at TIMESTAMPTZ,
+  p_end_at TIMESTAMPTZ
+) RETURNS SETOF calendar AS $$
+DECLARE
+  v_block calendar;
+BEGIN
+  INSERT INTO calendar (artist_id, start_at, end_at, type)
+  VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')
+  RETURNING * INTO v_block;
+  RETURN NEXT v_block;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Remove a blocked period by its calendar row id.
+CREATE OR REPLACE FUNCTION unblock_slot(
+  p_block_id UUID
+) RETURNS SETOF calendar AS $$
+DECLARE
+  v_block calendar;
+BEGIN
+  DELETE FROM calendar
+  WHERE id = p_block_id AND type = 'blocked'
+  RETURNING * INTO v_block;
+  IF FOUND THEN
+    RETURN NEXT v_block;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Seed: artist Bruno (safe to re-run)
 -- display_name is NOT NULL in some deployments, so it is always populated.
-INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, wa_session_slug, status, whatsapp_number)
+-- ai_active_hours: janela em que a Beatriz atende, no fuso do artista (timezone).
+--   Ex: '{"start":"19:00","end":"08:00"}' = atende só à noite, silêncio de dia.
+--   NULL = Beatriz sempre ativa (padrão).
+-- timezone: IANA (ex: America/Sao_Paulo) — o horário de ai_active_hours é interpretado nele.
+INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'Bruno',
@@ -307,8 +452,25 @@ VALUES (
   'bruno.tattoo@pix.com.br',
   '@bruno.tattoo',
   '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
+  NULL,
+  'America/Sao_Paulo',
   'bruno-tattoo', 'live', '5511999990001'
-) ON CONFLICT (id) DO NOTHING;
+) ON CONFLICT (id) DO UPDATE SET
+  display_name      = EXCLUDED.display_name,
+  nome              = EXCLUDED.nome,
+  specialties       = EXCLUDED.specialties,
+  nao_faco          = EXCLUDED.nao_faco,
+  floor_pct         = EXCLUDED.floor_pct,
+  deposit_type      = EXCLUDED.deposit_type,
+  deposit_value     = EXCLUDED.deposit_value,
+  pix_key           = EXCLUDED.pix_key,
+  instagram_handle  = EXCLUDED.instagram_handle,
+  working_hours     = EXCLUDED.working_hours,
+  ai_active_hours   = EXCLUDED.ai_active_hours,
+  timezone          = EXCLUDED.timezone,
+  wa_session_slug   = EXCLUDED.wa_session_slug,
+  status            = EXCLUDED.status,
+  whatsapp_number   = EXCLUDED.whatsapp_number;
 
 -- Seed: pricing (safe to re-run)
 INSERT INTO pricing (artist_id, placement, body_zone, table_price, session_duration_min, buffer_min) VALUES
@@ -338,21 +500,11 @@ INSERT INTO pricing (artist_id, placement, body_zone, table_price, session_durat
   ('b0000000-0000-0000-0000-000000000001', 'perna',        'fechamento',140000, 300, 30)
 ON CONFLICT (artist_id, placement, body_zone) DO NOTHING;
 
--- Seed: calendar (safe to re-run — simple insert if calendar is empty)
-INSERT INTO calendar (artist_id, start_at, end_at, type)
-SELECT 'b0000000-0000-0000-0000-000000000001'::uuid,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '09:00'::TIME)::TIMESTAMPTZ,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '12:00'::TIME)::TIMESTAMPTZ,
-  'available'
-FROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d)
-WHERE NOT EXISTS (SELECT 1 FROM calendar WHERE type = 'available' LIMIT 1)
-UNION ALL
-SELECT 'b0000000-0000-0000-0000-000000000001'::uuid,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '14:00'::TIME)::TIMESTAMPTZ,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '18:00'::TIME)::TIMESTAMPTZ,
-  'available'
-FROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d)
-WHERE NOT EXISTS (SELECT 1 FROM calendar WHERE type = 'available' LIMIT 1);
+-- Seed: calendar
+-- NOTE: no longer seeded. Availability is derived on the fly from
+-- artists.working_hours (see check_availability), so pre-seeding 'available'
+-- rows is both unnecessary and harmful — stale slots would never expire.
+-- The calendar table only ever holds 'booked'/'blocked' rows from here on.
 
 -- ── Notion sync outbox helpers ──
 

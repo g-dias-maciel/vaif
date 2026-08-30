@@ -19,7 +19,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE TABLE IF NOT EXISTS artists (\n  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  nome              TEXT NOT NULL,\n  specialties       TEXT[],\n  nao_faco          TEXT[],\n  floor_pct         NUMERIC(5,2),\n  deposit_type      TEXT DEFAULT 'percent',\n  deposit_value     INTEGER,\n  pix_key           TEXT,\n  instagram_handle  TEXT,\n  working_hours     JSONB,\n  wa_session_slug   TEXT UNIQUE,\n  status            TEXT NOT NULL DEFAULT 'stub'\n    CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),\n  onboarding_token  TEXT UNIQUE,\n  whatsapp_number   TEXT,\n  notion_token      TEXT,\n  notion_clientes_database_id  TEXT,\n  notion_projects_database_id  TEXT,\n  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+        "query": "CREATE TABLE IF NOT EXISTS artists (\n  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  nome              TEXT NOT NULL,\n  specialties       TEXT[],\n  nao_faco          TEXT[],\n  floor_pct         NUMERIC(5,2),\n  deposit_type      TEXT DEFAULT 'percent',\n  deposit_value     INTEGER,\n  pix_key           TEXT,\n  instagram_handle  TEXT,\n  working_hours     JSONB,\n  ai_active_hours   JSONB,\n  timezone          TEXT,\n  wa_session_slug   TEXT UNIQUE,\n  status            TEXT NOT NULL DEFAULT 'stub'\n    CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),\n  onboarding_token  TEXT UNIQUE,\n  whatsapp_number   TEXT,\n  notion_token      TEXT,\n  notion_clientes_database_id  TEXT,\n  notion_projects_database_id  TEXT,\n  created_at        TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -228,7 +228,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS wa_session_slug    TEXT UNIQUE;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS ai_active_hours    JSONB;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -247,7 +247,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS status             TEXT NOT NULL DEFAULT 'stub';"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS timezone           TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -266,7 +266,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS onboarding_token   TEXT UNIQUE;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS wa_session_slug    TEXT UNIQUE;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -285,7 +285,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS whatsapp_number    TEXT;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS status             TEXT NOT NULL DEFAULT 'stub';"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -304,7 +304,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_token       TEXT;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS onboarding_token   TEXT UNIQUE;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -323,7 +323,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_clientes_database_id TEXT;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS whatsapp_number    TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -342,7 +342,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_projects_database_id TEXT;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_token       TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -361,7 +361,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE TABLE IF NOT EXISTS leads (\n  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  artist_id     UUID NOT NULL REFERENCES artists(id),\n  nome          TEXT,\n  telefone      TEXT NOT NULL,\n  lead_source   TEXT,\n  placement           TEXT,\n  body_zone           TEXT,\n  style               TEXT,\n  primeira_tatuagem   BOOLEAN,\n  significado         TEXT,\n  reference_pics      TEXT[],\n  table_price         INTEGER,\n  negotiated_price    INTEGER,\n  discount_percent    NUMERIC(5,2),\n  contrapartida       TEXT DEFAULT 'Instagram post + fechando agora',\n  booked_date         TIMESTAMPTZ,\n  session_duration_min INTEGER,\n  buffer_min          INTEGER,\n  deposit_amount      INTEGER,\n  deposit_status      TEXT DEFAULT 'nao_solicitado',\n  pipeline_status     TEXT NOT NULL DEFAULT 'novo',\n  handoff_reason      TEXT,\n  conversation_started TIMESTAMPTZ NOT NULL DEFAULT now(),\n  last_message_at      TIMESTAMPTZ,\n  notion_sync_status   TEXT DEFAULT 'pending'\n    CHECK (notion_sync_status IN ('pending','synced','failed')),\n  notion_synced_at     TIMESTAMPTZ,\n  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),\n  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_clientes_database_id TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -369,7 +369,7 @@
         1040,
         300
       ],
-      "name": "Mig_18_TBL_leads",
+      "name": "Mig_18_ALTER",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -380,7 +380,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS nome                  TEXT;"
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_projects_database_id TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -399,7 +399,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS placement             TEXT;"
+        "query": "CREATE TABLE IF NOT EXISTS leads (\n  id            UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  artist_id     UUID NOT NULL REFERENCES artists(id),\n  nome          TEXT,\n  telefone      TEXT NOT NULL,\n  lead_source   TEXT,\n  placement           TEXT,\n  body_zone           TEXT,\n  style               TEXT,\n  primeira_tatuagem   BOOLEAN,\n  significado         TEXT,\n  tipo_tatuagem       TEXT,\n  reference_pics      TEXT[],\n  table_price         INTEGER,\n  negotiated_price    INTEGER,\n  discount_percent    NUMERIC(5,2),\n  contrapartida       TEXT DEFAULT 'Instagram post + fechando agora',\n  booked_date         TIMESTAMPTZ,\n  session_duration_min INTEGER,\n  buffer_min          INTEGER,\n  deposit_amount      INTEGER,\n  deposit_status      TEXT DEFAULT 'nao_solicitado',\n  pipeline_status     TEXT NOT NULL DEFAULT 'novo',\n  handoff_reason      TEXT,\n  conversation_started TIMESTAMPTZ NOT NULL DEFAULT now(),\n  last_message_at      TIMESTAMPTZ,\n  notion_sync_status   TEXT DEFAULT 'pending'\n    CHECK (notion_sync_status IN ('pending','synced','failed')),\n  notion_synced_at     TIMESTAMPTZ,\n  created_at           TIMESTAMPTZ NOT NULL DEFAULT now(),\n  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -407,7 +407,7 @@
         260,
         400
       ],
-      "name": "Mig_20_ALTER",
+      "name": "Mig_20_TBL_leads",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -418,7 +418,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS body_zone             TEXT;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS nome                  TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -437,7 +437,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS style                 TEXT;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS placement             TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -456,7 +456,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS primeira_tatuagem     BOOLEAN;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS body_zone             TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -475,7 +475,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS significado           TEXT;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS style                 TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -494,7 +494,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS reference_pics        TEXT[];"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS primeira_tatuagem     BOOLEAN;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -513,7 +513,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS table_price           INTEGER;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS significado           TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -532,7 +532,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS negotiated_price      INTEGER;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS tipo_tatuagem         TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -551,7 +551,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS discount_percent      NUMERIC(5,2);"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS reference_pics        TEXT[];"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -570,7 +570,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS contrapartida         TEXT DEFAULT 'Instagram post + fechando agora';"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS table_price           INTEGER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -589,7 +589,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS booked_date           TIMESTAMPTZ;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS negotiated_price      INTEGER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -608,7 +608,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS session_duration_min  INTEGER;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS discount_percent      NUMERIC(5,2);"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -627,7 +627,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS buffer_min            INTEGER;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS contrapartida         TEXT DEFAULT 'Instagram post + fechando agora';"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -646,7 +646,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_amount        INTEGER;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS booked_date           TIMESTAMPTZ;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -665,7 +665,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_status        TEXT DEFAULT 'nao_solicitado';"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS session_duration_min  INTEGER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -684,7 +684,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS pipeline_status       TEXT NOT NULL DEFAULT 'novo';"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS buffer_min            INTEGER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -703,7 +703,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS handoff_reason        TEXT;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_amount        INTEGER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -722,7 +722,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS conversation_started  TIMESTAMPTZ NOT NULL DEFAULT now();"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_status        TEXT DEFAULT 'nao_solicitado';"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -741,7 +741,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_message_at       TIMESTAMPTZ;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS pipeline_status       TEXT NOT NULL DEFAULT 'novo';"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -760,7 +760,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_sync_status    TEXT DEFAULT 'pending';"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS handoff_reason        TEXT;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -779,7 +779,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_synced_at      TIMESTAMPTZ;"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS conversation_started  TIMESTAMPTZ NOT NULL DEFAULT now();"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -798,7 +798,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE INDEX IF NOT EXISTS idx_leads_artist_phone ON leads (artist_id, telefone);"
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_message_at       TIMESTAMPTZ;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -806,7 +806,64 @@
         520,
         800
       ],
-      "name": "Mig_41_IDX_idx_leads_artist_phon",
+      "name": "Mig_41_ALTER",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_sync_status    TEXT DEFAULT 'pending';"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        800
+      ],
+      "name": "Mig_42_ALTER",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_synced_at      TIMESTAMPTZ;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        800
+      ],
+      "name": "Mig_43_ALTER",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE INDEX IF NOT EXISTS idx_leads_artist_phone ON leads (artist_id, telefone);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        800
+      ],
+      "name": "Mig_44_IDX_idx_leads_artist_phon",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -822,10 +879,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        800
+        260,
+        900
       ],
-      "name": "Mig_42_IDX_idx_leads_pipeline",
+      "name": "Mig_45_IDX_idx_leads_pipeline",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -841,10 +898,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1040,
-        800
+        520,
+        900
       ],
-      "name": "Mig_43_IDX_idx_leads_notion_sync",
+      "name": "Mig_46_IDX_idx_leads_notion_sync",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -860,10 +917,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        800
+        780,
+        900
       ],
-      "name": "Mig_44_TBL_pricing",
+      "name": "Mig_47_TBL_pricing",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -879,10 +936,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        1040,
         900
       ],
-      "name": "Mig_45_IDX_idx_pricing_artist",
+      "name": "Mig_48_IDX_idx_pricing_artist",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -898,10 +955,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
+        1300,
         900
       ],
-      "name": "Mig_46_TBL_calendar",
+      "name": "Mig_49_TBL_calendar",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -917,10 +974,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        900
+        260,
+        1000
       ],
-      "name": "Mig_47_IDX_idx_calendar_artist_r",
+      "name": "Mig_50_IDX_idx_calendar_artist_r",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -936,10 +993,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1040,
-        900
+        520,
+        1000
       ],
-      "name": "Mig_48_TBL_events",
+      "name": "Mig_51_TBL_events",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -955,10 +1012,29 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        900
+        780,
+        1000
       ],
-      "name": "Mig_49_IDX_idx_events_lead",
+      "name": "Mig_52_IDX_idx_events_lead",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS message_buffer (\n  chat_id        TEXT PRIMARY KEY,\n  pending        TEXT,\n  last_msg_at    TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        1000
+      ],
+      "name": "Mig_53_TBL_message_buffer",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -974,10 +1050,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        1300,
         1000
       ],
-      "name": "Mig_50_TBL_notion_sync_outbox",
+      "name": "Mig_54_TBL_notion_sync_outbox",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -993,10 +1069,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
-        1000
+        260,
+        1100
       ],
-      "name": "Mig_51_IDX_idx_outbox_pending",
+      "name": "Mig_55_IDX_idx_outbox_pending",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1012,10 +1088,29 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        1000
+        520,
+        1100
       ],
-      "name": "Mig_52_FN_set_artist_context",
+      "name": "Mig_56_FN_set_artist_context",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION resolve_artist_from_session(\n  p_wa_session_slug TEXT\n) RETURNS SETOF artists AS $$\nBEGIN\n  RETURN QUERY\n    SELECT * FROM artists\n    WHERE wa_session_slug = p_wa_session_slug\n      AND status IN ('stub', 'onboarding', 'live')\n    LIMIT 1;\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        1100
+      ],
+      "name": "Mig_57_FN_resolve_artist_from_se",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1032,9 +1127,9 @@
       "typeVersion": 2.6,
       "position": [
         1040,
-        1000
+        1100
       ],
-      "name": "Mig_53_FN_lookup_price",
+      "name": "Mig_58_FN_lookup_price",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1051,9 +1146,9 @@
       "typeVersion": 2.6,
       "position": [
         1300,
-        1000
+        1100
       ],
-      "name": "Mig_54_FN_write_quote",
+      "name": "Mig_59_FN_write_quote",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1070,9 +1165,9 @@
       "typeVersion": 2.6,
       "position": [
         260,
-        1100
+        1200
       ],
-      "name": "Mig_55_FN_request_deposit",
+      "name": "Mig_60_FN_request_deposit",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1083,15 +1178,15 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION check_availability(\n  p_artist_id UUID,\n  p_from_date TIMESTAMPTZ,\n  p_to_date TIMESTAMPTZ,\n  p_duration_min INTEGER\n) RETURNS TABLE(\n  id UUID,\n  start_at TIMESTAMPTZ,\n  end_at TIMESTAMPTZ,\n  type TEXT\n) AS $$\nBEGIN\n  RETURN QUERY\n    SELECT c.id, c.start_at, c.end_at, c.type\n    FROM calendar c\n    WHERE c.artist_id = p_artist_id\n      AND c.start_at >= p_from_date\n      AND c.end_at <= p_to_date\n      AND c.type = 'available'\n      AND EXTRACT(EPOCH FROM (c.end_at - c.start_at)) / 60 >= p_duration_min\n    ORDER BY c.start_at;\nEND;\n$$ LANGUAGE plpgsql STABLE;"
+        "query": "CREATE OR REPLACE FUNCTION check_availability(\n  p_artist_id UUID,\n  p_from_date TIMESTAMPTZ,\n  p_to_date TIMESTAMPTZ,\n  p_duration_min INTEGER DEFAULT 60\n) RETURNS TABLE(\n  id UUID,\n  start_at TIMESTAMPTZ,\n  end_at TIMESTAMPTZ,\n  type TEXT\n) AS $$\nDECLARE\n  v_tz      TEXT;\n  v_working JSONB;\n  v_day0    DATE;\n  v_day1    DATE;\n  v_dur     INTERVAL;\nBEGIN\n  SELECT a.timezone, a.working_hours INTO v_tz, v_working\n  FROM artists a\n  WHERE a.id = p_artist_id;\n\n  IF v_working IS NULL THEN\n    RETURN;\n  END IF;\n\n  v_tz := COALESCE(NULLIF(v_tz, ''), 'UTC');\n  v_day0 := (p_from_date AT TIME ZONE v_tz)::date;\n  v_day1 := (p_to_date AT TIME ZONE v_tz)::date;\n  v_dur := make_interval(mins => GREATEST(p_duration_min, 1));\n\n  RETURN QUERY\n  WITH days AS (\n    SELECT generate_series(v_day0::timestamp, v_day1::timestamp, '1 day'::interval)::date AS day\n  ),\n  weeks AS (\n    SELECT day,\n           (ARRAY['seg','ter','qua','qui','sex','sab','dom'])[EXTRACT(ISODOW FROM day)::int] AS dow\n    FROM days\n  ),\n  blocks AS (\n    SELECT w.day, w.dow, b.value AS block\n    FROM weeks w\n    CROSS JOIN LATERAL jsonb_array_elements_text(v_working -> w.dow) AS b(value)\n  ),\n  spans AS (\n    SELECT\n      b.day,\n      (b.day + split_part(b.block, '-', 1)::time)::timestamp AS start_local,\n      (b.day + split_part(b.block, '-', 2)::time)::timestamp AS end_local\n    FROM blocks b\n  ),\n  starts AS (\n    SELECT\n      ((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) AS slot_start,\n      (((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) + v_dur) AS slot_end,\n      (s.end_local AT TIME ZONE v_tz) AS block_end\n    FROM spans s\n    CROSS JOIN LATERAL generate_series(\n      0,\n      GREATEST(0, ceil(EXTRACT(EPOCH FROM (s.end_local - s.start_local)) / 3600)::int - 1)\n    ) AS n\n  )\n  SELECT\n    md5(p_artist_id::text || st.slot_start::text || p_duration_min::text)::uuid AS id,\n    st.slot_start,\n    st.slot_end,\n    'available'::text AS type\n  FROM starts st\n  WHERE st.slot_start >= p_from_date\n    AND st.slot_end <= p_to_date\n    AND st.slot_end <= st.block_end\n    AND NOT EXISTS (\n      SELECT 1 FROM calendar c\n      WHERE c.artist_id = p_artist_id\n        AND c.type IN ('booked', 'blocked')\n        AND c.start_at < st.slot_end\n        AND c.end_at > st.slot_start\n    )\n  ORDER BY st.slot_start;\nEND;\n$$ LANGUAGE plpgsql STABLE;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
         520,
-        1100
+        1200
       ],
-      "name": "Mig_56_FN_check_availability",
+      "name": "Mig_61_FN_check_availability",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1102,15 +1197,15 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION book_slot(\n  p_lead_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_duration_min INTEGER,\n  p_buffer_min INTEGER DEFAULT 30\n) RETURNS SETOF leads AS $$\nDECLARE\n  v_lead leads;\n  v_end_at TIMESTAMPTZ;\nBEGIN\n  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;\n  IF NOT FOUND THEN RETURN; END IF;\n  v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;\n  INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)\n  VALUES (v_lead.artist_id, p_start_at, v_end_at, 'booked', p_lead_id);\n  UPDATE leads SET\n    booked_date = p_start_at,\n    session_duration_min = p_duration_min,\n    buffer_min = p_buffer_min,\n    pipeline_status = 'agendado',\n    updated_at = now()\n  WHERE id = p_lead_id\n  RETURNING * INTO v_lead;\n  IF FOUND THEN\n    INSERT INTO events (lead_id, artist_id, event_type, payload)\n    VALUES (p_lead_id, v_lead.artist_id, 'slot_booked',\n            jsonb_build_object('start_at', p_start_at, 'end_at', v_end_at, 'duration_min', p_duration_min, 'buffer_min', p_buffer_min));\n    RETURN NEXT v_lead;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql;"
+        "query": "CREATE OR REPLACE FUNCTION book_slot(\n  p_lead_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_duration_min INTEGER,\n  p_buffer_min INTEGER DEFAULT 30\n) RETURNS SETOF leads AS $$\nDECLARE\n  v_lead leads;\n  v_end_at TIMESTAMPTZ;\nBEGIN\n  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;\n  IF NOT FOUND THEN RETURN; END IF;\n  v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;\n\n  -- Reject (don't insert) when the chosen window overlaps an existing\n  -- 'booked' or 'blocked' period for the same artist — no double-booking.\n  IF EXISTS (\n    SELECT 1 FROM calendar c\n    WHERE c.artist_id = v_lead.artist_id\n      AND c.type IN ('booked', 'blocked')\n      AND c.start_at < v_end_at\n      AND c.end_at > p_start_at\n  ) THEN\n    RETURN;\n  END IF;\n\n  INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)\n  VALUES (v_lead.artist_id, p_start_at, v_end_at, 'booked', p_lead_id);\n  UPDATE leads SET\n    booked_date = p_start_at,\n    session_duration_min = p_duration_min,\n    buffer_min = p_buffer_min,\n    pipeline_status = 'agendado',\n    updated_at = now()\n  WHERE id = p_lead_id\n  RETURNING * INTO v_lead;\n  IF FOUND THEN\n    INSERT INTO events (lead_id, artist_id, event_type, payload)\n    VALUES (p_lead_id, v_lead.artist_id, 'slot_booked',\n            jsonb_build_object('start_at', p_start_at, 'end_at', v_end_at, 'duration_min', p_duration_min, 'buffer_min', p_buffer_min));\n    RETURN NEXT v_lead;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
         780,
-        1100
+        1200
       ],
-      "name": "Mig_57_FN_book_slot",
+      "name": "Mig_62_FN_book_slot",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1121,15 +1216,53 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, wa_session_slug, status, whatsapp_number)\nVALUES (\n  'b0000000-0000-0000-0000-000000000001',\n  'Bruno',\n  'Bruno',\n  ARRAY['realismo', 'blackwork', 'old_school'],\n  ARRAY['rosto', 'partes_intimas', 'dedos'],\n  80.00, 'percent', 30,\n  'bruno.tattoo@pix.com.br',\n  '@bruno.tattoo',\n  '{\"seg\":[\"09:00-12:00\",\"14:00-18:00\"],\"ter\":[\"09:00-12:00\",\"14:00-18:00\"],\"qua\":[\"09:00-12:00\",\"14:00-18:00\"],\"qui\":[\"09:00-12:00\",\"14:00-18:00\"],\"sex\":[\"09:00-12:00\",\"14:00-18:00\"],\"sab\":[\"09:00-13:00\"]}'::jsonb,\n  'bruno-tattoo', 'live', '5511999990001'\n) ON CONFLICT (id) DO NOTHING;"
+        "query": "CREATE OR REPLACE FUNCTION block_slot(\n  p_artist_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_end_at TIMESTAMPTZ\n) RETURNS SETOF calendar AS $$\nDECLARE\n  v_block calendar;\nBEGIN\n  INSERT INTO calendar (artist_id, start_at, end_at, type)\n  VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')\n  RETURNING * INTO v_block;\n  RETURN NEXT v_block;\nEND;\n$$ LANGUAGE plpgsql;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
         1040,
-        1100
+        1200
       ],
-      "name": "Mig_58_SEED_artists",
+      "name": "Mig_63_FN_block_slot",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION unblock_slot(\n  p_block_id UUID\n) RETURNS SETOF calendar AS $$\nDECLARE\n  v_block calendar;\nBEGIN\n  DELETE FROM calendar\n  WHERE id = p_block_id AND type = 'blocked'\n  RETURNING * INTO v_block;\n  IF FOUND THEN\n    RETURN NEXT v_block;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        1200
+      ],
+      "name": "Mig_64_FN_unblock_slot",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)\nVALUES (\n  'b0000000-0000-0000-0000-000000000001',\n  'Bruno',\n  'Bruno',\n  ARRAY['realismo', 'blackwork', 'old_school'],\n  ARRAY['rosto', 'partes_intimas', 'dedos'],\n  80.00, 'percent', 30,\n  'bruno.tattoo@pix.com.br',\n  '@bruno.tattoo',\n  '{\"seg\":[\"09:00-12:00\",\"14:00-18:00\"],\"ter\":[\"09:00-12:00\",\"14:00-18:00\"],\"qua\":[\"09:00-12:00\",\"14:00-18:00\"],\"qui\":[\"09:00-12:00\",\"14:00-18:00\"],\"sex\":[\"09:00-12:00\",\"14:00-18:00\"],\"sab\":[\"09:00-13:00\"]}'::jsonb,\n  NULL,\n  'America/Sao_Paulo',\n  'bruno-tattoo', 'live', '5511999990001'\n) ON CONFLICT (id) DO UPDATE SET\n  display_name      = EXCLUDED.display_name,\n  nome              = EXCLUDED.nome,\n  specialties       = EXCLUDED.specialties,\n  nao_faco          = EXCLUDED.nao_faco,\n  floor_pct         = EXCLUDED.floor_pct,\n  deposit_type      = EXCLUDED.deposit_type,\n  deposit_value     = EXCLUDED.deposit_value,\n  pix_key           = EXCLUDED.pix_key,\n  instagram_handle  = EXCLUDED.instagram_handle,\n  working_hours     = EXCLUDED.working_hours,\n  ai_active_hours   = EXCLUDED.ai_active_hours,\n  timezone          = EXCLUDED.timezone,\n  wa_session_slug   = EXCLUDED.wa_session_slug,\n  status            = EXCLUDED.status,\n  whatsapp_number   = EXCLUDED.whatsapp_number;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        1300
+      ],
+      "name": "Mig_65_SEED_artists",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1145,29 +1278,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        1100
+        520,
+        1300
       ],
-      "name": "Mig_59_SEED_pricing",
-      "credentials": {
-        "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
-        }
-      }
-    },
-    {
-      "parameters": {
-        "operation": "executeQuery",
-        "query": "INSERT INTO calendar (artist_id, start_at, end_at, type)\nSELECT 'b0000000-0000-0000-0000-000000000001'::uuid,\n  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '09:00'::TIME)::TIMESTAMPTZ,\n  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '12:00'::TIME)::TIMESTAMPTZ,\n  'available'\nFROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d)\nWHERE NOT EXISTS (SELECT 1 FROM calendar WHERE type = 'available' LIMIT 1)\nUNION ALL\nSELECT 'b0000000-0000-0000-0000-000000000001'::uuid,\n  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '14:00'::TIME)::TIMESTAMPTZ,\n  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '18:00'::TIME)::TIMESTAMPTZ,\n  'available'\nFROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d)\nWHERE NOT EXISTS (SELECT 1 FROM calendar WHERE type = 'available' LIMIT 1);"
-      },
-      "type": "n8n-nodes-base.postgres",
-      "typeVersion": 2.6,
-      "position": [
-        260,
-        1200
-      ],
-      "name": "Mig_60_SEED_calendar",
+      "name": "Mig_66_SEED_pricing",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1183,10 +1297,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
-        1200
+        780,
+        1300
       ],
-      "name": "Mig_61_FN_enqueue_notion_sync",
+      "name": "Mig_67_FN_enqueue_notion_sync",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1202,10 +1316,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        1200
+        1040,
+        1300
       ],
-      "name": "Mig_62_FN_claim_notion_sync_rows",
+      "name": "Mig_68_FN_claim_notion_sync_rows",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1221,10 +1335,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1040,
-        1200
+        1300,
+        1300
       ],
-      "name": "Mig_63_FN_complete_notion_sync_r",
+      "name": "Mig_69_FN_complete_notion_sync_r",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1240,10 +1354,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        1200
+        260,
+        1400
       ],
-      "name": "Mig_64_FN_fail_notion_sync_row",
+      "name": "Mig_70_FN_fail_notion_sync_row",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1455,14 +1569,14 @@
       "main": [
         [
           {
-            "node": "Mig_18_TBL_leads",
+            "node": "Mig_18_ALTER",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_18_TBL_leads": {
+    "Mig_18_ALTER": {
       "main": [
         [
           {
@@ -1477,14 +1591,14 @@
       "main": [
         [
           {
-            "node": "Mig_20_ALTER",
+            "node": "Mig_20_TBL_leads",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_20_ALTER": {
+    "Mig_20_TBL_leads": {
       "main": [
         [
           {
@@ -1708,260 +1822,326 @@
       "main": [
         [
           {
-            "node": "Mig_41_IDX_idx_leads_artist_phon",
+            "node": "Mig_41_ALTER",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_41_IDX_idx_leads_artist_phon": {
+    "Mig_41_ALTER": {
       "main": [
         [
           {
-            "node": "Mig_42_IDX_idx_leads_pipeline",
+            "node": "Mig_42_ALTER",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_42_IDX_idx_leads_pipeline": {
+    "Mig_42_ALTER": {
       "main": [
         [
           {
-            "node": "Mig_43_IDX_idx_leads_notion_sync",
+            "node": "Mig_43_ALTER",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_43_IDX_idx_leads_notion_sync": {
+    "Mig_43_ALTER": {
       "main": [
         [
           {
-            "node": "Mig_44_TBL_pricing",
+            "node": "Mig_44_IDX_idx_leads_artist_phon",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_44_TBL_pricing": {
+    "Mig_44_IDX_idx_leads_artist_phon": {
       "main": [
         [
           {
-            "node": "Mig_45_IDX_idx_pricing_artist",
+            "node": "Mig_45_IDX_idx_leads_pipeline",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_45_IDX_idx_pricing_artist": {
+    "Mig_45_IDX_idx_leads_pipeline": {
       "main": [
         [
           {
-            "node": "Mig_46_TBL_calendar",
+            "node": "Mig_46_IDX_idx_leads_notion_sync",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_46_TBL_calendar": {
+    "Mig_46_IDX_idx_leads_notion_sync": {
       "main": [
         [
           {
-            "node": "Mig_47_IDX_idx_calendar_artist_r",
+            "node": "Mig_47_TBL_pricing",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_47_IDX_idx_calendar_artist_r": {
+    "Mig_47_TBL_pricing": {
       "main": [
         [
           {
-            "node": "Mig_48_TBL_events",
+            "node": "Mig_48_IDX_idx_pricing_artist",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_48_TBL_events": {
+    "Mig_48_IDX_idx_pricing_artist": {
       "main": [
         [
           {
-            "node": "Mig_49_IDX_idx_events_lead",
+            "node": "Mig_49_TBL_calendar",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_49_IDX_idx_events_lead": {
+    "Mig_49_TBL_calendar": {
       "main": [
         [
           {
-            "node": "Mig_50_TBL_notion_sync_outbox",
+            "node": "Mig_50_IDX_idx_calendar_artist_r",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_50_TBL_notion_sync_outbox": {
+    "Mig_50_IDX_idx_calendar_artist_r": {
       "main": [
         [
           {
-            "node": "Mig_51_IDX_idx_outbox_pending",
+            "node": "Mig_51_TBL_events",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_51_IDX_idx_outbox_pending": {
+    "Mig_51_TBL_events": {
       "main": [
         [
           {
-            "node": "Mig_52_FN_set_artist_context",
+            "node": "Mig_52_IDX_idx_events_lead",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_52_FN_set_artist_context": {
+    "Mig_52_IDX_idx_events_lead": {
       "main": [
         [
           {
-            "node": "Mig_53_FN_lookup_price",
+            "node": "Mig_53_TBL_message_buffer",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_53_FN_lookup_price": {
+    "Mig_53_TBL_message_buffer": {
       "main": [
         [
           {
-            "node": "Mig_54_FN_write_quote",
+            "node": "Mig_54_TBL_notion_sync_outbox",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_54_FN_write_quote": {
+    "Mig_54_TBL_notion_sync_outbox": {
       "main": [
         [
           {
-            "node": "Mig_55_FN_request_deposit",
+            "node": "Mig_55_IDX_idx_outbox_pending",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_55_FN_request_deposit": {
+    "Mig_55_IDX_idx_outbox_pending": {
       "main": [
         [
           {
-            "node": "Mig_56_FN_check_availability",
+            "node": "Mig_56_FN_set_artist_context",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_56_FN_check_availability": {
+    "Mig_56_FN_set_artist_context": {
       "main": [
         [
           {
-            "node": "Mig_57_FN_book_slot",
+            "node": "Mig_57_FN_resolve_artist_from_se",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_57_FN_book_slot": {
+    "Mig_57_FN_resolve_artist_from_se": {
       "main": [
         [
           {
-            "node": "Mig_58_SEED_artists",
+            "node": "Mig_58_FN_lookup_price",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_58_SEED_artists": {
+    "Mig_58_FN_lookup_price": {
       "main": [
         [
           {
-            "node": "Mig_59_SEED_pricing",
+            "node": "Mig_59_FN_write_quote",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_59_SEED_pricing": {
+    "Mig_59_FN_write_quote": {
       "main": [
         [
           {
-            "node": "Mig_60_SEED_calendar",
+            "node": "Mig_60_FN_request_deposit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_60_SEED_calendar": {
+    "Mig_60_FN_request_deposit": {
       "main": [
         [
           {
-            "node": "Mig_61_FN_enqueue_notion_sync",
+            "node": "Mig_61_FN_check_availability",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_61_FN_enqueue_notion_sync": {
+    "Mig_61_FN_check_availability": {
       "main": [
         [
           {
-            "node": "Mig_62_FN_claim_notion_sync_rows",
+            "node": "Mig_62_FN_book_slot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_62_FN_claim_notion_sync_rows": {
+    "Mig_62_FN_book_slot": {
       "main": [
         [
           {
-            "node": "Mig_63_FN_complete_notion_sync_r",
+            "node": "Mig_63_FN_block_slot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_63_FN_complete_notion_sync_r": {
+    "Mig_63_FN_block_slot": {
       "main": [
         [
           {
-            "node": "Mig_64_FN_fail_notion_sync_row",
+            "node": "Mig_64_FN_unblock_slot",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_64_FN_unblock_slot": {
+      "main": [
+        [
+          {
+            "node": "Mig_65_SEED_artists",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_65_SEED_artists": {
+      "main": [
+        [
+          {
+            "node": "Mig_66_SEED_pricing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_66_SEED_pricing": {
+      "main": [
+        [
+          {
+            "node": "Mig_67_FN_enqueue_notion_sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_67_FN_enqueue_notion_sync": {
+      "main": [
+        [
+          {
+            "node": "Mig_68_FN_claim_notion_sync_rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_68_FN_claim_notion_sync_rows": {
+      "main": [
+        [
+          {
+            "node": "Mig_69_FN_complete_notion_sync_r",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_69_FN_complete_notion_sync_r": {
+      "main": [
+        [
+          {
+            "node": "Mig_70_FN_fail_notion_sync_row",
             "type": "main",
             "index": 0
           }

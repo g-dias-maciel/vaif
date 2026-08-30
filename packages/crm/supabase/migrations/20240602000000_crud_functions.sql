@@ -245,25 +245,96 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 
 
 -- ============================================================
--- 9. check_availability(artist_id UUID, from_date TIMESTAMPTZ, to_date TIMESTAMPTZ, duration_min INTEGER)
---    → RETURNS available calendar rows
+-- 9. check_availability(artist_id UUID, from_date TIMESTAMPTZ, to_date TIMESTAMPTZ, duration_min INTEGER DEFAULT 60)
+--    → RETURNS derived bookable slots
+--    Availability is DERIVED from the artist's weekly working hours (a JSONB
+--    object keyed by weekday seg/ter/qua/qui/sex/sab/dom with "HH:MM-HH:MM"
+--    block arrays), interpreted in the artist's own timezone (artists.timezone,
+--    not UTC). Slots are hour-aligned, sized to the requested duration, and free
+--    unless a 'booked' or 'blocked' calendar row overlaps them. Legacy
+--    'available' rows are ignored entirely.
 --    Trigger: after deposit confirmed, before booking
 -- ============================================================
 CREATE OR REPLACE FUNCTION check_availability(
   p_artist_id UUID,
   p_from_date TIMESTAMPTZ,
   p_to_date TIMESTAMPTZ,
-  p_duration_min INTEGER
-) RETURNS SETOF calendar AS $$
+  p_duration_min INTEGER DEFAULT 60
+) RETURNS TABLE(
+  id UUID,
+  start_at TIMESTAMPTZ,
+  end_at TIMESTAMPTZ,
+  type TEXT
+) AS $$
+DECLARE
+  v_tz      TEXT;
+  v_working JSONB;
+  v_day0    DATE;
+  v_day1    DATE;
+  v_dur     INTERVAL;
 BEGIN
+  SELECT a.timezone, a.working_hours INTO v_tz, v_working
+  FROM artists a
+  WHERE a.id = p_artist_id;
+
+  IF v_working IS NULL THEN
+    RETURN;
+  END IF;
+
+  v_tz := COALESCE(NULLIF(v_tz, ''), 'UTC');
+  v_day0 := (p_from_date AT TIME ZONE v_tz)::date;
+  v_day1 := (p_to_date AT TIME ZONE v_tz)::date;
+  v_dur := make_interval(mins => GREATEST(p_duration_min, 1));
+
   RETURN QUERY
-    SELECT * FROM calendar
-    WHERE artist_id = p_artist_id
-      AND type = 'available'
-      AND start_at >= p_from_date
-      AND end_at <= p_to_date
-      AND EXTRACT(EPOCH FROM (end_at - start_at)) / 60 >= p_duration_min
-    ORDER BY start_at;
+  WITH days AS (
+    SELECT generate_series(v_day0::timestamp, v_day1::timestamp, '1 day'::interval)::date AS day
+  ),
+  weeks AS (
+    SELECT day,
+           (ARRAY['seg','ter','qua','qui','sex','sab','dom'])[EXTRACT(ISODOW FROM day)::int] AS dow
+    FROM days
+  ),
+  blocks AS (
+    SELECT w.day, w.dow, b.value AS block
+    FROM weeks w
+    CROSS JOIN LATERAL jsonb_array_elements_text(v_working -> w.dow) AS b(value)
+  ),
+  spans AS (
+    SELECT
+      b.day,
+      (b.day + split_part(b.block, '-', 1)::time)::timestamp AS start_local,
+      (b.day + split_part(b.block, '-', 2)::time)::timestamp AS end_local
+    FROM blocks b
+  ),
+  starts AS (
+    SELECT
+      ((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) AS slot_start,
+      (((s.start_local + (n || ' hours')::interval) AT TIME ZONE v_tz) + v_dur) AS slot_end,
+      (s.end_local AT TIME ZONE v_tz) AS block_end
+    FROM spans s
+    CROSS JOIN LATERAL generate_series(
+      0,
+      GREATEST(0, ceil(EXTRACT(EPOCH FROM (s.end_local - s.start_local)) / 3600)::int - 1)
+    ) AS n
+  )
+  SELECT
+    md5(p_artist_id::text || st.slot_start::text || p_duration_min::text)::uuid AS id,
+    st.slot_start,
+    st.slot_end,
+    'available'::text AS type
+  FROM starts st
+  WHERE st.slot_start >= p_from_date
+    AND st.slot_end <= p_to_date
+    AND st.slot_end <= st.block_end
+    AND NOT EXISTS (
+      SELECT 1 FROM calendar c
+      WHERE c.artist_id = p_artist_id
+        AND c.type IN ('booked', 'blocked')
+        AND c.start_at < st.slot_end
+        AND c.end_at > st.slot_start
+    )
+  ORDER BY st.slot_start;
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
@@ -288,6 +359,18 @@ BEGIN
 
   v_end_at := p_start_at + (p_duration_min + p_buffer_min) * INTERVAL '1 minute';
 
+  -- Reject (don't insert) when the chosen window overlaps an existing
+  -- 'booked' or 'blocked' period for the same artist — no double-booking.
+  IF EXISTS (
+    SELECT 1 FROM calendar c
+    WHERE c.artist_id = v_artist_id
+      AND c.type IN ('booked', 'blocked')
+      AND c.start_at < v_end_at
+      AND c.end_at > p_start_at
+  ) THEN
+    RETURN;
+  END IF;
+
   -- Mark the calendar block as booked
   INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)
   VALUES (v_artist_id, p_start_at, v_end_at, 'booked', p_lead_id);
@@ -311,6 +394,48 @@ BEGIN
 
   SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;
   RETURN NEXT v_lead;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ============================================================
+-- 10b. block_slot(artist_id UUID, start_at TIMESTAMPTZ, end_at TIMESTAMPTZ)
+--      → RETURNS calendar row (type='blocked')
+--      Trigger: artist/admin marks an off-day or personal appointment
+-- ============================================================
+CREATE OR REPLACE FUNCTION block_slot(
+  p_artist_id UUID,
+  p_start_at TIMESTAMPTZ,
+  p_end_at TIMESTAMPTZ
+) RETURNS SETOF calendar AS $$
+DECLARE
+  v_block calendar;
+BEGIN
+  INSERT INTO calendar (artist_id, start_at, end_at, type)
+  VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')
+  RETURNING * INTO v_block;
+  RETURN NEXT v_block;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+
+-- ============================================================
+-- 10c. unblock_slot(block_id UUID)
+--      → RETURNS the removed calendar row (or empty set)
+--      Trigger: artist/admin reopens a blocked period
+-- ============================================================
+CREATE OR REPLACE FUNCTION unblock_slot(
+  p_block_id UUID
+) RETURNS SETOF calendar AS $$
+DECLARE
+  v_block calendar;
+BEGIN
+  DELETE FROM calendar
+  WHERE id = p_block_id AND type = 'blocked'
+  RETURNING * INTO v_block;
+  IF FOUND THEN
+    RETURN NEXT v_block;
+  END IF;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 

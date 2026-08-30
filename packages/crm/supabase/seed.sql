@@ -8,7 +8,7 @@
 -- ============================================================
 -- Sample artist: Bruno (tattoo artist)
 -- ============================================================
-INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, wa_session_slug, status, whatsapp_number)
+INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'Bruno',
@@ -27,6 +27,8 @@ VALUES (
     "sex": ["09:00-12:00", "14:00-18:00"],
     "sab": ["09:00-13:00"]
   }'::jsonb,
+  NULL,
+  'America/Sao_Paulo',
   'bruno-tattoo',
   'live',
   '5511999990001'
@@ -74,19 +76,9 @@ VALUES
   ('b0000000-0000-0000-0000-000000000001', 'perna',        'fechamento', 140000, 300, 30);
 
 -- ============================================================
--- Sample calendar slots for the next 7 days
+-- Calendar slots: NO LONGER SEEDED.
+-- Availability is derived on the fly from artists.working_hours (see
+-- check_availability), interpreted in the artist's timezone. Pre-seeding
+-- 'available' rows is removed so stale slots can't reappear. The calendar
+-- table only ever holds 'booked'/'blocked' rows from here on.
 -- ============================================================
-INSERT INTO calendar (artist_id, start_at, end_at, type)
-SELECT
-  'b0000000-0000-0000-0000-000000000001'::uuid,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '09:00'::TIME)::TIMESTAMPTZ,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '12:00'::TIME)::TIMESTAMPTZ,
-  'available'
-FROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d)
-UNION ALL
-SELECT
-  'b0000000-0000-0000-0000-000000000001'::uuid,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '14:00'::TIME)::TIMESTAMPTZ,
-  (DATE_TRUNC('day', now()) + (d.d || ' days')::INTERVAL + '18:00'::TIME)::TIMESTAMPTZ,
-  'available'
-FROM (VALUES (1),(2),(3),(4),(5),(6),(7)) AS d(d);

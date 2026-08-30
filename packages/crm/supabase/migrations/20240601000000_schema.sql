@@ -16,6 +16,8 @@ CREATE TABLE artists (
   pix_key           TEXT,
   instagram_handle  TEXT,
   working_hours     JSONB,
+  ai_active_hours   JSONB,
+  timezone          TEXT,
   wa_session_slug   TEXT UNIQUE,
   status            TEXT NOT NULL DEFAULT 'stub'
     CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),
@@ -48,6 +50,7 @@ CREATE TABLE leads (
   style               TEXT,
   primeira_tatuagem   BOOLEAN,
   significado         TEXT,
+  tipo_tatuagem       TEXT,
   reference_pics      TEXT[],
 
   -- Pricing
