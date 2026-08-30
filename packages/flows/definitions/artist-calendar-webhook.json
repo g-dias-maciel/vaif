@@ -1,0 +1,381 @@
+{
+  "name": "Artist Calendar Webhook",
+  "description": "Agenda admin webhook (#29) — list availability (derived 60-min slots + blocks), block and unblock time ranges for an artist, backed by Postgres. Auth: per-artist onboarding token; unknown/invalid tokens are rejected.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "calendar",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "cal-webhook-0000-0000-0000-000000000001",
+      "name": "Calendar Webhook",
+      "webhookId": "cal-webhook-0000-0000-0000-000000000001"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "options": {
+          "queryReplacement": "={{ [$json.token, $json.action, $json.start_at, $json.end_at, $json.block_id, $json.duration_min] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        0
+      ],
+      "id": "cal-resolve-0000-0000-0000-000000000001",
+      "name": "Resolve Artist by Token",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.id }}",
+              "operation": "isNotEmpty"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        520,
+        0
+      ],
+      "id": "cal-if-token-0000-0000-0000-000000000001",
+      "name": "Token Valid?"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 401,
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_token', message: 'Token de artista inválido ou desconhecido.' }) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        200
+      ],
+      "id": "cal-resp-bad-token-0000-0000-0000-000000000001",
+      "name": "Invalid Token Response"
+    },
+    {
+      "parameters": {
+        "mode": "expression",
+        "numberOutputs": 4,
+        "output": "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : $json.action === 'unblock' ? 2 : 3 }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        780,
+        -200
+      ],
+      "id": "cal-switch-0000-0000-0000-000000000001",
+      "name": "Route by Action"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "(\n  SELECT id, start_at, end_at, type\n  FROM (\n    SELECT id, start_at, end_at, 'available'::text AS type\n    FROM check_availability(\n      $1::uuid,\n      COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),\n      COALESCE($3::timestamptz, now() + interval '60 days'),\n      COALESCE($4::integer, 60)\n    )\n    UNION ALL\n    SELECT id, start_at, end_at, type\n    FROM calendar\n    WHERE artist_id = $1::uuid\n      AND type = 'blocked'\n      AND end_at > now()\n  ) s\n  ORDER BY start_at\n)\nUNION ALL\nSELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text;",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.start_at, $json.end_at, $json.duration_min] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        -400
+      ],
+      "id": "cal-list-0000-0000-0000-000000000001",
+      "name": "List Availability",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst artist = $('Resolve Artist by Token').first().json;\n\nconst available = [];\nconst blocks = [];\n\nfor (const item of items) {\n  const row = item.json;\n  if (!row.id) continue; // sentinel row\n  const entry = { id: row.id, start_at: row.start_at, end_at: row.end_at };\n  if (row.type === 'blocked') blocks.push(entry);\n  else available.push(entry);\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: 'list',\n    artist_id: artist.id,\n    artist_name: artist.nome,\n    duration_min: artist.duration_min || 60,\n    timezone: artist.timezone,\n    available,\n    blocks,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -400
+      ],
+      "id": "cal-list-resp-0000-0000-0000-000000000001",
+      "name": "Build List Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, artist_id, start_at, end_at, type\nFROM block_slot($1::uuid, $2::timestamptz, $3::timestamptz);",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.start_at, $json.end_at] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        -200
+      ],
+      "id": "cal-block-0000-0000-0000-000000000001",
+      "name": "Block Slot",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const row = $input.first().json;\nreturn [{\n  json: {\n    success: true,\n    action: 'block',\n    block: { id: row.id, start_at: row.start_at, end_at: row.end_at },\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        -200
+      ],
+      "id": "cal-block-resp-0000-0000-0000-000000000001",
+      "name": "Build Block Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH removed AS (\n  SELECT * FROM unblock_slot($1::uuid)\n)\nSELECT id, artist_id, start_at, end_at, type\nFROM removed\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM removed);",
+        "options": {
+          "queryReplacement": "={{ [$json.block_id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        0
+      ],
+      "id": "cal-unblock-0000-0000-0000-000000000001",
+      "name": "Unblock Slot",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const row = $input.first().json;\nif (!row.id) {\n  return [{\n    json: {\n      success: false,\n      action: 'unblock',\n      error: 'block_not_found',\n      message: 'Bloqueio não encontrado.',\n    }\n  }];\n}\nreturn [{\n  json: {\n    success: true,\n    action: 'unblock',\n    block: { id: row.id, start_at: row.start_at, end_at: row.end_at },\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        0
+      ],
+      "id": "cal-unblock-resp-0000-0000-0000-000000000001",
+      "name": "Build Unblock Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 200,
+        "responseBody": "={{ JSON.stringify($json) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1560,
+        -200
+      ],
+      "id": "cal-resp-ok-0000-0000-0000-000000000001",
+      "name": "Calendar Response"
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseCode": 400,
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}"
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        -500
+      ],
+      "id": "cal-resp-bad-action-0000-0000-0000-000000000001",
+      "name": "Invalid Action Response"
+    }
+  ],
+  "connections": {
+    "Calendar Webhook": {
+      "main": [
+        [
+          {
+            "node": "Resolve Artist by Token",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resolve Artist by Token": {
+      "main": [
+        [
+          {
+            "node": "Token Valid?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Token Valid?": {
+      "main": [
+        [
+          {
+            "node": "Route by Action",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Token Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route by Action": {
+      "main": [
+        [
+          {
+            "node": "List Availability",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Block Slot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unblock Slot",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Action Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Availability": {
+      "main": [
+        [
+          {
+            "node": "Build List Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build List Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Block Slot": {
+      "main": [
+        [
+          {
+            "node": "Build Block Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Block Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unblock Slot": {
+      "main": [
+        [
+          {
+            "node": "Build Unblock Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Unblock Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

@@ -35,6 +35,7 @@ runtime via `getenv()` in the PHP API files.
 | `DB_PASSWORD` | Database password | ✅ |
 | `N8N_LEAD_WEBHOOK_URL` | n8n webhook for new leads | optional |
 | `N8N_CALENDAR_WEBHOOK_URL` | n8n webhook for calendar bookings | optional |
+| `N8N_AGENDA_WEBHOOK_URL` | n8n webhook for artist agenda availability + block/unblock (webhook path `calendar`) | optional |
 
 Use Coolify's **`@` secret/database linking** if you attach a Coolify-managed
 MySQL database so credentials are injected automatically.
@@ -43,7 +44,7 @@ MySQL database so credentials are injected automatically.
 
 ## 3. Routing
 
-Routing for `/blog`, `/artists` and `/onboard` is handled by the bundled
+Routing for `/blog`, `/artists`, `/onboard` and `/agenda` is handled by the bundled
 `deploy/nginx.conf` **inside the container** — no Custom Nginx Config is needed
 for the Docker deployment.
 

@@ -37,6 +37,11 @@ if ($path === '/onboard' || str_starts_with($path, '/onboard/')) {
     return;
 }
 
+if ($path === '/agenda' || str_starts_with($path, '/agenda/')) {
+    include __DIR__ . '/agenda/index.php';
+    return;
+}
+
 http_response_code(404);
 echo '<!DOCTYPE html><html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1></body></html>';
 return;
