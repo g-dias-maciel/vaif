@@ -22,9 +22,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,\n  false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
         "options": {
-          "queryReplacement": "={{ [$json.token, $json.action, $json.start_at, $json.end_at, $json.block_id, $json.duration_min] }}"
+          "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -45,13 +45,26 @@
     {
       "parameters": {
         "conditions": {
-          "string": [
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
             {
-              "value1": "={{ $json.id }}",
-              "operation": "isNotEmpty"
+              "id": "cal-if-token-cond-0000",
+              "leftValue": "={{ $json.found }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
             }
-          ]
-        }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
@@ -65,8 +78,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseCode": 401,
-        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_token', message: 'Token de artista inválido ou desconhecido.' }) }}"
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_token', message: 'Token de artista inválido ou desconhecido.' }) }}",
+        "options": {
+          "responseCode": 401
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.2,
@@ -207,8 +222,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseCode": 200,
-        "responseBody": "={{ JSON.stringify($json) }}"
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.2,
@@ -222,8 +239,10 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseCode": 400,
-        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}"
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}",
+        "options": {
+          "responseCode": 400
+        }
       },
       "type": "n8n-nodes-base.respondToWebhook",
       "typeVersion": 1.2,

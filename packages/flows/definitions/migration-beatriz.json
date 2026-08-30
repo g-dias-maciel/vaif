@@ -1121,7 +1121,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION lookup_price(\n  p_placement TEXT,\n  p_body_zone TEXT,\n  p_artist_id UUID\n) RETURNS TABLE(\n  placement TEXT,\n  body_zone TEXT,\n  table_price INTEGER,\n  session_duration_min INTEGER,\n  buffer_min INTEGER\n) AS $$\nBEGIN\n  RETURN QUERY\n    SELECT p.placement, p.body_zone, p.table_price, p.session_duration_min, p.buffer_min\n    FROM pricing p\n    WHERE p.artist_id = p_artist_id\n      AND p.placement = p_placement\n      AND p.body_zone = p_body_zone\n      AND p.active = true\n    LIMIT 1;\nEND;\n$$ LANGUAGE plpgsql STABLE;"
+        "query": "CREATE OR REPLACE FUNCTION validate_onboarding_token(\n  p_token TEXT\n) RETURNS SETOF artists AS $$\nBEGIN\n  RETURN QUERY\n    SELECT * FROM artists\n    WHERE onboarding_token = p_token\n      AND status = 'stub'\n      AND created_at > now() - INTERVAL '24 hours';\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -1129,7 +1129,64 @@
         1040,
         1100
       ],
-      "name": "Mig_58_FN_lookup_price",
+      "name": "Mig_58_FN_validate_onboarding_to",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION consume_onboarding_token(\n  p_token TEXT\n) RETURNS SETOF artists AS $$\nDECLARE\n  v_artist artists;\nBEGIN\n  UPDATE artists SET\n    status = 'onboarding',\n    wa_session_slug = wa_session_slug  -- no-op, keeps existing slug\n  WHERE onboarding_token = p_token\n    AND status = 'stub'\n    AND created_at > now() - INTERVAL '24 hours'\n  RETURNING * INTO v_artist;\n\n  IF v_artist.id IS NOT NULL THEN\n    RETURN NEXT v_artist;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        1100
+      ],
+      "name": "Mig_59_FN_consume_onboarding_tok",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION complete_artist_onboarding(\n  p_artist_id UUID\n) RETURNS SETOF artists AS $$\nDECLARE\n  v_artist artists;\nBEGIN\n  UPDATE artists SET\n    status = 'live'\n  WHERE id = p_artist_id\n    AND status = 'onboarding'\n  RETURNING * INTO v_artist;\n\n  IF v_artist.id IS NOT NULL THEN\n    RETURN NEXT v_artist;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        1200
+      ],
+      "name": "Mig_60_FN_complete_artist_onboar",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION lookup_price(\n  p_placement TEXT,\n  p_body_zone TEXT,\n  p_artist_id UUID\n) RETURNS TABLE(\n  placement TEXT,\n  body_zone TEXT,\n  table_price INTEGER,\n  session_duration_min INTEGER,\n  buffer_min INTEGER\n) AS $$\nBEGIN\n  RETURN QUERY\n    SELECT p.placement, p.body_zone, p.table_price, p.session_duration_min, p.buffer_min\n    FROM pricing p\n    WHERE p.artist_id = p_artist_id\n      AND p.placement = p_placement\n      AND p.body_zone = p_body_zone\n      AND p.active = true\n    LIMIT 1;\nEND;\n$$ LANGUAGE plpgsql STABLE;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        1200
+      ],
+      "name": "Mig_61_FN_lookup_price",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1145,10 +1202,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        1100
+        780,
+        1200
       ],
-      "name": "Mig_59_FN_write_quote",
+      "name": "Mig_62_FN_write_quote",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1164,10 +1221,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        1040,
         1200
       ],
-      "name": "Mig_60_FN_request_deposit",
+      "name": "Mig_63_FN_request_deposit",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1183,10 +1240,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
+        1300,
         1200
       ],
-      "name": "Mig_61_FN_check_availability",
+      "name": "Mig_64_FN_check_availability",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1202,10 +1259,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        1200
+        260,
+        1300
       ],
-      "name": "Mig_62_FN_book_slot",
+      "name": "Mig_65_FN_book_slot",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1221,10 +1278,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1040,
-        1200
+        520,
+        1300
       ],
-      "name": "Mig_63_FN_block_slot",
+      "name": "Mig_66_FN_block_slot",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1240,10 +1297,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        1200
+        780,
+        1300
       ],
-      "name": "Mig_64_FN_unblock_slot",
+      "name": "Mig_67_FN_unblock_slot",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1259,10 +1316,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        1040,
         1300
       ],
-      "name": "Mig_65_SEED_artists",
+      "name": "Mig_68_SEED_artists",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1278,10 +1335,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        520,
+        1300,
         1300
       ],
-      "name": "Mig_66_SEED_pricing",
+      "name": "Mig_69_SEED_pricing",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1297,10 +1354,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        780,
-        1300
+        260,
+        1400
       ],
-      "name": "Mig_67_FN_enqueue_notion_sync",
+      "name": "Mig_70_FN_enqueue_notion_sync",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1316,10 +1373,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1040,
-        1300
+        520,
+        1400
       ],
-      "name": "Mig_68_FN_claim_notion_sync_rows",
+      "name": "Mig_71_FN_claim_notion_sync_rows",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1335,10 +1392,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        1300,
-        1300
+        780,
+        1400
       ],
-      "name": "Mig_69_FN_complete_notion_sync_r",
+      "name": "Mig_72_FN_complete_notion_sync_r",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -1354,10 +1411,10 @@
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
       "position": [
-        260,
+        1040,
         1400
       ],
-      "name": "Mig_70_FN_fail_notion_sync_row",
+      "name": "Mig_73_FN_fail_notion_sync_row",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -2009,139 +2066,172 @@
       "main": [
         [
           {
-            "node": "Mig_58_FN_lookup_price",
+            "node": "Mig_58_FN_validate_onboarding_to",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_58_FN_lookup_price": {
+    "Mig_58_FN_validate_onboarding_to": {
       "main": [
         [
           {
-            "node": "Mig_59_FN_write_quote",
+            "node": "Mig_59_FN_consume_onboarding_tok",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_59_FN_write_quote": {
+    "Mig_59_FN_consume_onboarding_tok": {
       "main": [
         [
           {
-            "node": "Mig_60_FN_request_deposit",
+            "node": "Mig_60_FN_complete_artist_onboar",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_60_FN_request_deposit": {
+    "Mig_60_FN_complete_artist_onboar": {
       "main": [
         [
           {
-            "node": "Mig_61_FN_check_availability",
+            "node": "Mig_61_FN_lookup_price",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_61_FN_check_availability": {
+    "Mig_61_FN_lookup_price": {
       "main": [
         [
           {
-            "node": "Mig_62_FN_book_slot",
+            "node": "Mig_62_FN_write_quote",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_62_FN_book_slot": {
+    "Mig_62_FN_write_quote": {
       "main": [
         [
           {
-            "node": "Mig_63_FN_block_slot",
+            "node": "Mig_63_FN_request_deposit",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_63_FN_block_slot": {
+    "Mig_63_FN_request_deposit": {
       "main": [
         [
           {
-            "node": "Mig_64_FN_unblock_slot",
+            "node": "Mig_64_FN_check_availability",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_64_FN_unblock_slot": {
+    "Mig_64_FN_check_availability": {
       "main": [
         [
           {
-            "node": "Mig_65_SEED_artists",
+            "node": "Mig_65_FN_book_slot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_65_SEED_artists": {
+    "Mig_65_FN_book_slot": {
       "main": [
         [
           {
-            "node": "Mig_66_SEED_pricing",
+            "node": "Mig_66_FN_block_slot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_66_SEED_pricing": {
+    "Mig_66_FN_block_slot": {
       "main": [
         [
           {
-            "node": "Mig_67_FN_enqueue_notion_sync",
+            "node": "Mig_67_FN_unblock_slot",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_67_FN_enqueue_notion_sync": {
+    "Mig_67_FN_unblock_slot": {
       "main": [
         [
           {
-            "node": "Mig_68_FN_claim_notion_sync_rows",
+            "node": "Mig_68_SEED_artists",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_68_FN_claim_notion_sync_rows": {
+    "Mig_68_SEED_artists": {
       "main": [
         [
           {
-            "node": "Mig_69_FN_complete_notion_sync_r",
+            "node": "Mig_69_SEED_pricing",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Mig_69_FN_complete_notion_sync_r": {
+    "Mig_69_SEED_pricing": {
       "main": [
         [
           {
-            "node": "Mig_70_FN_fail_notion_sync_row",
+            "node": "Mig_70_FN_enqueue_notion_sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_70_FN_enqueue_notion_sync": {
+      "main": [
+        [
+          {
+            "node": "Mig_71_FN_claim_notion_sync_rows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_71_FN_claim_notion_sync_rows": {
+      "main": [
+        [
+          {
+            "node": "Mig_72_FN_complete_notion_sync_r",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_72_FN_complete_notion_sync_r": {
+      "main": [
+        [
+          {
+            "node": "Mig_73_FN_fail_notion_sync_row",
             "type": "main",
             "index": 0
           }

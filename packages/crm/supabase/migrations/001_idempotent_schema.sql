@@ -197,6 +197,61 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
+-- Validate onboarding token (exists, still in stub, not older than 24h).
+CREATE OR REPLACE FUNCTION validate_onboarding_token(
+  p_token TEXT
+) RETURNS SETOF artists AS $$
+BEGIN
+  RETURN QUERY
+    SELECT * FROM artists
+    WHERE onboarding_token = p_token
+      AND status = 'stub'
+      AND created_at > now() - INTERVAL '24 hours';
+END;
+$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
+
+-- Consume onboarding token: activate artist.
+-- NOTE: onboarding_token is KEPT (not nulled) so it stays the artist's stable
+-- per-artist link — reused by /agenda once live.
+CREATE OR REPLACE FUNCTION consume_onboarding_token(
+  p_token TEXT
+) RETURNS SETOF artists AS $$
+DECLARE
+  v_artist artists;
+BEGIN
+  UPDATE artists SET
+    status = 'onboarding',
+    wa_session_slug = wa_session_slug  -- no-op, keeps existing slug
+  WHERE onboarding_token = p_token
+    AND status = 'stub'
+    AND created_at > now() - INTERVAL '24 hours'
+  RETURNING * INTO v_artist;
+
+  IF v_artist.id IS NOT NULL THEN
+    RETURN NEXT v_artist;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Transition artist from onboarding to live.
+CREATE OR REPLACE FUNCTION complete_artist_onboarding(
+  p_artist_id UUID
+) RETURNS SETOF artists AS $$
+DECLARE
+  v_artist artists;
+BEGIN
+  UPDATE artists SET
+    status = 'live'
+  WHERE id = p_artist_id
+    AND status = 'onboarding'
+  RETURNING * INTO v_artist;
+
+  IF v_artist.id IS NOT NULL THEN
+    RETURN NEXT v_artist;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
 CREATE OR REPLACE FUNCTION lookup_price(
   p_placement TEXT,
   p_body_zone TEXT,

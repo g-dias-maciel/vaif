@@ -576,7 +576,9 @@ END;
 $$ LANGUAGE plpgsql STABLE SECURITY DEFINER;
 
 
--- Consume onboarding token: activate artist, nullify token
+-- Consume onboarding token: activate artist.
+-- NOTE: onboarding_token is KEPT (not nulled) so it remains the artist's
+-- stable per-artist link — reused by /agenda for the admin page once live.
 CREATE OR REPLACE FUNCTION consume_onboarding_token(
   p_token TEXT
 ) RETURNS SETOF artists AS $$
@@ -585,7 +587,6 @@ DECLARE
 BEGIN
   UPDATE artists SET
     status = 'onboarding',
-    onboarding_token = NULL,
     wa_session_slug = wa_session_slug  -- no-op, keeps existing slug
   WHERE onboarding_token = p_token
     AND status = 'stub'

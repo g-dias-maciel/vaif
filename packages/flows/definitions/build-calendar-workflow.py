@@ -56,6 +56,8 @@ MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
 # the Switch and downstream Postgres nodes can read them from $json.
 # UNION ALL guarantees a row even for unknown tokens (n8n Postgres nodes skip
 # downstream on empty results), so the invalid-token branch can respond.
+# `found` is explicit: n8n's isNotEmpty returns TRUE for null, so a null-uuid
+# row must be gated on the boolean, not on id presence.
 RESOLVE_ARTIST_QUERY = """\
 SELECT
   a.id, a.nome, a.timezone, a.status,
@@ -64,13 +66,15 @@ SELECT
   $3::text     AS start_at,
   $4::text     AS end_at,
   $5::text     AS block_id,
-  $6::integer  AS duration_min
+  $6::integer  AS duration_min,
+  (a.id IS NOT NULL) AS found
 FROM artists a
 WHERE a.onboarding_token = $1
 UNION ALL
 SELECT
   NULL::uuid, NULL::text, NULL::text, NULL::text,
-  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer
+  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
+  false AS found
 WHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)
 LIMIT 1;"""
 
@@ -198,7 +202,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": RESOLVE_ARTIST_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.token, $json.action, $json.start_at, $json.end_at, $json.block_id, $json.duration_min] }}"
+                    "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -212,13 +216,26 @@ WF = {
         {
             "parameters": {
                 "conditions": {
-                    "string": [
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
                         {
-                            "value1": "={{ $json.id }}",
-                            "operation": "isNotEmpty",
+                            "id": "cal-if-token-cond-0000",
+                            "leftValue": "={{ $json.found }}",
+                            "rightValue": True,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals",
+                            },
                         }
-                    ]
-                }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
             },
             "type": "n8n-nodes-base.if",
             "typeVersion": 2.2,
@@ -230,8 +247,8 @@ WF = {
         {
             "parameters": {
                 "respondWith": "json",
-                "responseCode": 401,
                 "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_token', message: 'Token de artista inválido ou desconhecido.' }) }}",
+                "options": {"responseCode": 401},
             },
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1.2,
@@ -341,8 +358,8 @@ WF = {
         {
             "parameters": {
                 "respondWith": "json",
-                "responseCode": 200,
                 "responseBody": "={{ JSON.stringify($json) }}",
+                "options": {"responseCode": 200},
             },
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1.2,
@@ -354,8 +371,8 @@ WF = {
         {
             "parameters": {
                 "respondWith": "json",
-                "responseCode": 400,
                 "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}",
+                "options": {"responseCode": 400},
             },
             "type": "n8n-nodes-base.respondToWebhook",
             "typeVersion": 1.2,
