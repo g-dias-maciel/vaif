@@ -85,11 +85,16 @@ def _create_artist():
     rc, lines = psql("""
         INSERT INTO artists (nome, whatsapp_number, specialties, nao_faco,
         floor_pct, deposit_type, deposit_value, pix_key, instagram_handle,
-        wa_session_slug, status)
+        wa_session_slug, status, working_hours, timezone)
         VALUES ('Harness Artist', '5511999990000',
         '{realismo,blackwork}', '{pescoco}', 80, 'percent', 20, 'pix-test',
-        '@harness_test', 'harness-session', 'live')
-        ON CONFLICT DO NOTHING
+        '@harness_test', 'harness-session', 'live',
+        '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
+        'America/Sao_Paulo')
+        ON CONFLICT (wa_session_slug) DO UPDATE SET
+          working_hours = EXCLUDED.working_hours,
+          timezone = EXCLUDED.timezone,
+          status = 'live'
         RETURNING id""")
     return lines[0] if lines else None
 
@@ -202,34 +207,136 @@ def test_deposit_flow(artist_id):
     assert_eq(lines[0], "confirmado", "Deposit confirmed")
 
 
-def test_book_slot(artist_id):
-    """Test 7: check_availability + book_slot."""
-    rc, lines = psql("SELECT id FROM leads WHERE telefone = '5511999999001'")
-    lead_id = lines[0]
+def test_check_availability(artist_id):
+    """Test 7: availability is derived from working_hours, not seeded rows."""
+    # Never empty for a 60-day window when working_hours is set.
+    rc, lines = psql(
+        "SELECT count(*)::int > 0 FROM check_availability($1, date_trunc('day', now())::timestamptz, now() + interval '60 days', 120)",
+        [artist_id]
+    )
+    assert_true(lines[0] == "t" if lines else False, "Derived slots never empty for 60-day window")
 
-    # Create available slot
+    # Legacy 'available' calendar rows are ignored by the derivation.
     psql(f"""
         INSERT INTO calendar (artist_id, start_at, end_at, type)
         VALUES ('{artist_id}', now() + interval '2 days', now() + interval '2 days 5 hours', 'available')
         ON CONFLICT DO NOTHING""")
-
     rc, lines = psql(
-        "SELECT count(*)::int > 0 FROM check_availability($1, now(), now() + interval '7 days', 120)",
+        "SELECT count(*)::int FROM check_availability($1, now(), now() + interval '3 days', 60) ca JOIN calendar c ON c.type = 'available' AND c.start_at = ca.start_at",
         [artist_id]
     )
-    assert_true(lines[0] == "t" if lines else False, "Availability found")
+    assert_eq(lines[0], "0", "Legacy available rows are ignored by derivation")
 
-    rc, lines = psql("SELECT start_at FROM calendar WHERE artist_id = $1 AND type = 'available' LIMIT 1", [artist_id])
+    # Slots are 60-minute aligned (start on the hour).
+    rc, lines = psql(
+        "SELECT count(*)::int FROM check_availability($1, now(), now() + interval '30 days', 120) WHERE EXTRACT(MINUTE FROM start_at) <> 0 OR EXTRACT(SECOND FROM start_at) <> 0",
+        [artist_id]
+    )
+    assert_eq(lines[0], "0", "All derived slots start on the hour")
+
+    # Blocked periods are excluded from the result.
+    rc, lines = psql(
+        "SELECT start_at FROM check_availability($1, now(), now() + interval '30 days', 60) ORDER BY start_at LIMIT 1",
+        [artist_id]
+    )
     slot_start = lines[0]
+    psql(f"""
+        INSERT INTO calendar (artist_id, start_at, end_at, type)
+        VALUES ('{artist_id}', '{slot_start}'::timestamptz, '{slot_start}'::timestamptz + interval '90 minutes', 'blocked')
+        ON CONFLICT DO NOTHING""")
+    rc, lines = psql(
+        "SELECT count(*)::int FROM check_availability($1, now(), now() + interval '30 days', 60) ca JOIN calendar c ON c.type = 'blocked' AND c.start_at < ca.end_at AND c.end_at > ca.start_at",
+        [artist_id]
+    )
+    assert_eq(lines[0], "0", "Blocked periods are excluded from availability")
+
+
+def test_book_slot(artist_id):
+    """Test 8: book_slot reserves a derived slot, which then disappears."""
+    rc, lines = psql("SELECT id FROM leads WHERE telefone = '5511999999001'")
+    lead_id = lines[0]
+
+    # Book the first derived 180-minute slot (no seeded 'available' rows exist).
+    rc, lines = psql(
+        "SELECT start_at FROM check_availability($1, now(), now() + interval '30 days', 180) ORDER BY start_at LIMIT 1",
+        [artist_id]
+    )
+    assert_true(lines and lines[0], "A derived slot is available to book")
+    slot_start = lines[0]
+
     rc, lines = psql(
         "SELECT pipeline_status FROM book_slot($1, $2::timestamptz, 180, 30)",
         [lead_id, slot_start]
     )
     assert_true("agendado" in (lines[0] if lines else ""), "Booking confirmed")
 
+    # The booked slot is excluded from subsequent availability.
+    rc, lines = psql(
+        "SELECT count(*)::int FROM check_availability($1, now(), now() + interval '30 days', 180) WHERE start_at = $2::timestamptz",
+        [artist_id, slot_start]
+    )
+    assert_eq(lines[0], "0", "Booked slot excluded from availability")
+
+
+def test_booking_conflicts(artist_id):
+    """Test 9: overlap rejection + block/unblock primitives."""
+    # Fresh leads for the competing attempts.
+    rc, lines = psql("SELECT id FROM create_lead($1, '5511999999004', 'Conflict Lead A')", [artist_id])
+    lead_a = lines[0] if lines else None
+    rc, lines = psql("SELECT id FROM create_lead($1, '5511999999005', 'Conflict Lead B')", [artist_id])
+    lead_b = lines[0] if lines else None
+    assert_true(lead_a and lead_b, "Conflict leads created")
+
+    # Pin one concrete 60-min slot so both attempts target the same window.
+    rc, lines = psql(
+        "SELECT start_at FROM check_availability($1, now(), now() + interval '30 days', 60) ORDER BY start_at LIMIT 1",
+        [artist_id]
+    )
+    assert_true(lines and lines[0], "A 60-min slot is available")
+    slot_start = lines[0]
+
+    # Lead A books it -> succeeds.
+    rc, lines = psql("SELECT count(*)::int FROM book_slot($1, $2::timestamptz, 60, 30)", [lead_a, slot_start])
+    assert_eq(lines[0], "1", "First booking of a slot succeeds")
+
+    # Lead B tries the same window -> rejected, lead unchanged, no row.
+    rc, lines = psql("SELECT count(*)::int FROM book_slot($1, $2::timestamptz, 60, 30)", [lead_b, slot_start])
+    assert_eq(lines[0], "0", "Overlapping booking is rejected")
+    rc, lines = psql("SELECT pipeline_status FROM leads WHERE id = $1", [lead_b])
+    assert_eq(lines[0], "novo", "Rejected lead stays unbooked")
+    rc, lines = psql("SELECT count(*)::int FROM calendar WHERE lead_id = $1", [lead_b])
+    assert_eq(lines[0], "0", "Rejected lead has no calendar row")
+
+    # block_slot a fresh window, then a booking into it is rejected.
+    rc, lines = psql(
+        "SELECT start_at FROM check_availability($1, now(), now() + interval '30 days', 60) WHERE start_at > $2::timestamptz ORDER BY start_at LIMIT 1",
+        [artist_id, slot_start]
+    )
+    assert_true(lines and lines[0], "A second slot is available to block")
+    block_start = lines[0]
+
+    rc, lines = psql(
+        "SELECT id, type FROM block_slot($1, $2::timestamptz, $2::timestamptz + interval '2 hours')",
+        [artist_id, block_start]
+    )
+    assert_true(lines and "blocked" in lines[0], "block_slot creates a blocked row")
+    block_id = lines[0].split("|")[0]
+
+    rc, lines = psql("SELECT count(*)::int FROM book_slot($1, $2::timestamptz, 60, 30)", [lead_b, block_start])
+    assert_eq(lines[0], "0", "Booking over a blocked period is rejected")
+
+    # unblock_slot removes it and frees the window again.
+    rc, lines = psql("SELECT count(*)::int FROM unblock_slot($1::uuid)", [block_id])
+    assert_eq(lines[0], "1", "unblock_slot removes the blocked row")
+    rc, lines = psql("SELECT count(*)::int FROM calendar WHERE id = $1::uuid", [block_id])
+    assert_eq(lines[0], "0", "Blocked row is gone")
+
+    rc, lines = psql("SELECT count(*)::int FROM book_slot($1, $2::timestamptz, 60, 30)", [lead_b, block_start])
+    assert_eq(lines[0], "1", "Freed window can be booked again")
+
 
 def test_handoff(artist_id):
-    """Test 8: mark_handoff sets correct state."""
+    """Test 10: mark_handoff sets correct state."""
     rc, lines = psql("SELECT id FROM leads WHERE telefone = '5511999999001'")
     lead_id = lines[0]
     rc, lines = psql(
@@ -242,7 +349,7 @@ def test_handoff(artist_id):
 
 
 def test_close_lost(artist_id):
-    """Test 9: close_lost transition."""
+    """Test 11: close_lost transition."""
     # Create a new lead for this
     rc, lines = psql("SELECT id FROM create_lead($1, '5511999999002', 'Lost Lead')", [artist_id])
     lead_id = lines[0] if lines else None
@@ -253,7 +360,7 @@ def test_close_lost(artist_id):
 
 
 def test_price_lookup(artist_id):
-    """Test 10: lookup_price finds correct price."""
+    """Test 12: lookup_price finds correct price."""
     rc, lines = psql(
         "SELECT table_price FROM lookup_price($1, $2, $3)",
         ["braco_externo", "medio", artist_id]
@@ -267,7 +374,7 @@ def test_price_lookup(artist_id):
 
 
 def test_artist_resolution(artist_id):
-    """Test 11: resolve_artist_from_session."""
+    """Test 13: resolve_artist_from_session."""
     rc, lines = psql("SELECT id FROM resolve_artist_from_session('harness-session')")
     assert_true(lines and artist_id in lines[0], "Artist resolved by session slug")
     rc, lines = psql("SELECT count(*)::int = 0 FROM resolve_artist_from_session('no-such-session')")
@@ -275,7 +382,7 @@ def test_artist_resolution(artist_id):
 
 
 def test_multi_tenancy_isolation(artist_id):
-    """Test 12: Two artists — leads don't cross-contaminate."""
+    """Test 14: Two artists — leads don't cross-contaminate."""
     artist2_id = _create_artist2()
 
     # Create lead for artist 1
@@ -297,7 +404,7 @@ def test_multi_tenancy_isolation(artist_id):
 
 
 def test_onboarding_lifecycle():
-    """Test 13: Artist onboarding token validation + consumption + completion."""
+    """Test 15: Artist onboarding token validation + consumption + completion."""
     artist_id = None
     rc, lines = psql("""
         INSERT INTO artists (nome, whatsapp_number, wa_session_slug, status, onboarding_token)
@@ -340,7 +447,9 @@ TESTS = [
     ("pipeline", "mark_pipeline_state transitions correctly", test_pipeline_state),
     ("write_quote", "write_quote stores price, pipeline → orcamento_enviado", test_write_quote),
     ("deposit_flow", "request_deposit → confirm_deposit", test_deposit_flow),
-    ("book_slot", "check_availability + book_slot", test_book_slot),
+    ("availability", "check_availability derives slots from working_hours", test_check_availability),
+    ("book_slot", "book_slot reserves a derived slot, then it disappears", test_book_slot),
+    ("booking_conflicts", "overlap rejection + block/unblock primitives", test_booking_conflicts),
     ("handoff", "mark_handoff → aguardando_artista", test_handoff),
     ("close_lost", "close_lost → perdido", test_close_lost),
     ("price_lookup", "lookup_price finds correct price", test_price_lookup),

@@ -1,11 +1,12 @@
 // Parse conversation to extract qualification fields from user's message
 // and detect price/handoff from Beatriz's response.
+// WhatsApp variant — reads from WAHA webhook payload instead of Telegram.
 
 const lead = $('Upsert Lead').first().json;
-const triggerMsg = $('Telegram Trigger').first().json.message;
+const waInput = $('WAHA Webhook').first().json;
 const agentOutput = $('AI Agent').first().json;
 
-const userText = (triggerMsg.text || '').toLowerCase();
+const userText = (waInput.body?.payload?.body || '').toLowerCase();
 const beatrizText = (agentOutput.output || '').toLowerCase();
 
 // ── 1. Extract qualification fields from user's message ──
@@ -45,9 +46,17 @@ function extractPlacement(text) {
 const zoneMap = new Map([
   ['fechamento', 'fechamento'], ['fechar', 'fechamento'], ['fechado', 'fechamento'],
   ['sleeve', 'fechamento'],
-  ['pequeno', 'pequeno'], ['pequena', 'pequeno'],
-  ['médio', 'medio'], ['média', 'medio'], ['medio', 'medio'],
+  ['inteiro', 'fechamento'], ['inteira', 'fechamento'],
+  ['completo', 'fechamento'], ['completa', 'fechamento'],
+  ['cobrir tudo', 'fechamento'],
+  ['quase tudo', 'grande'], ['a maior parte', 'grande'], ['maior parte', 'grande'],
   ['grande', 'grande'],
+  ['uma área média', 'medio'], ['area media', 'medio'], ['metade', 'medio'],
+  ['médio', 'medio'], ['média', 'medio'], ['medio', 'medio'],
+  ['só uma partinha', 'pequeno'], ['so uma partinha', 'pequeno'], ['partinha', 'pequeno'],
+  ['um pedacinho', 'pequeno'], ['pedacinho', 'pequeno'],
+  ['só um detalhe', 'pequeno'], ['so um detalhe', 'pequeno'],
+  ['pequeno', 'pequeno'], ['pequena', 'pequeno'],
 ]);
 
 function extractBodyZone(text) {
@@ -123,7 +132,6 @@ function detectPrice(text) {
 // ── 3. Detect handoff ──
 
 function detectHandoff(beatrizText, userText) {
-  // User-side triggers first (higher priority)
   if (/cobrir|cob[ei]rtura|tatuagem por cima|por cima de(?:sta| uma)/.test(userText)) {
     return { reason: 'cover_up' };
   }
@@ -136,7 +144,6 @@ function detectHandoff(beatrizText, userText) {
     return { reason: 'lead_requested_artist' };
   }
 
-  // Beatriz-side handoff patterns
   const handoffPatterns = [
     'passar direto pro', 'passar pro artista', 'falar com o artista',
     'vou te passar pro', 'vou passar pro', 'passar para o artista'
@@ -149,7 +156,38 @@ function detectHandoff(beatrizText, userText) {
   return null;
 }
 
-// ── 4. Run extraction ──
+// ── 4. Detect deposit request ──
+
+function detectDepositRequest(beatrizText) {
+  if (/(?:pix|chave|sinal|depósito|deposito|transfer[êe]ncia|comprovante)/.test(beatrizText)
+    && /(?:envi[ao]|manda|pass[ao]|encaminho)/.test(beatrizText)) {
+    const re = /r\$\s*([\d.]+)(?:[.,](\d{2}))?/g;
+    let m;
+    let minPrice = null;
+    while ((m = re.exec(beatrizText)) !== null) {
+      const reais = parseInt(m[1].replace(/\./g, ''), 10);
+      const cents = m[2] ? parseInt(m[2], 10) : 0;
+      const val = reais + cents / 100;
+      if (minPrice === null || val < minPrice) minPrice = val;
+    }
+    // Deposit amount is typically the smallest R$ value (30% of negotiated)
+    return minPrice ? Math.round(minPrice * 100) : null;
+  }
+  return null;
+}
+
+// ── 5. Detect booking confirmation ──
+
+function detectBooking(beatrizText) {
+  if (/(?:agendado|agendamento|confirmado|marcado|marcamos|esperamos|te espero|data\s+\d|hor[aá]rio|dia\s+\d)/.test(beatrizText)
+    && /(?:obrigad[ao]|valeu|confiança|confianca)/.test(beatrizText)) {
+    const dateMatch = beatrizText.match(/dia\s+(\d{1,2}[\/\-]\d{1,2})/);
+    return { scheduled: true, date_ref: dateMatch ? dateMatch[1] : null };
+  }
+  return null;
+}
+
+// ── 6. Run extraction ──
 
 const placement = extractPlacement(userText);
 const bodyZone = extractBodyZone(userText);
@@ -159,22 +197,38 @@ const significado = extractSignificado(userText);
 const tipoTatuagem = extractTipoTatuagem(userText);
 const priceDetected = detectPrice(beatrizText);
 const handoffDetected = detectHandoff(beatrizText, userText);
+const depositAmount = detectDepositRequest(beatrizText);
+const bookingDetected = detectBooking(beatrizText);
 
-// ── 5. Pipeline transitions ──
+// ── 7. Pipeline transitions ──
 
 let newPipeline = lead.pipeline_status;
 let eventType = null;
 let priceUpdated = false;
+let depositStatusVal = null;
+let bookedDateVal = null;
 
 if (lead.pipeline_status === 'novo' && (placement || style || bodyZone || primeiraTatuagem !== null)) {
   newPipeline = 'qualificando';
   eventType = 'pipeline_state_changed';
 }
 
-if (priceDetected && lead.pipeline_status !== 'orcamento_enviado') {
+if (priceDetected && lead.pipeline_status === 'novo' || priceDetected && lead.pipeline_status === 'qualificando') {
   newPipeline = 'orcamento_enviado';
   eventType = 'quote_sent';
   priceUpdated = true;
+}
+
+if (depositAmount && (lead.pipeline_status === 'orcamento_enviado' || lead.pipeline_status === 'novo' || lead.pipeline_status === 'qualificando')) {
+  newPipeline = 'aguardando_deposito';
+  eventType = 'deposit_requested';
+  depositStatusVal = 'aguardando_confirmacao';
+}
+
+if (bookingDetected && lead.pipeline_status !== 'agendado' && lead.pipeline_status !== 'fechado' && lead.pipeline_status !== 'perdido') {
+  newPipeline = 'agendado';
+  eventType = 'slot_booked';
+  bookedDateVal = bookingDetected.date_ref;
 }
 
 if (handoffDetected && lead.pipeline_status !== 'aguardando_artista' && lead.pipeline_status !== 'fechado' && lead.pipeline_status !== 'perdido') {
@@ -182,7 +236,7 @@ if (handoffDetected && lead.pipeline_status !== 'aguardando_artista' && lead.pip
   eventType = 'handoff_triggered';
 }
 
-// ── 6. Prices in cents for DB ──
+// ── 8. Prices in cents for DB ──
 
 const tablePriceCents = priceDetected ? Math.round(priceDetected.table_price * 100) : null;
 const negotiatedPriceCents = priceDetected ? Math.round(priceDetected.negotiated_price * 100) : null;
@@ -204,13 +258,18 @@ return [{
     table_price_cents: tablePriceCents,
     negotiated_price_cents: negotiatedPriceCents,
 
+    deposit_status_val: depositStatusVal,
+    deposit_amount_cents: depositAmount,
+    booked_date_val: bookedDateVal,
+    session_duration_min_val: null,
+    buffer_min_val: null,
+
     handoff_reason: handoffDetected ? handoffDetected.reason : null,
 
     agent_text: agentOutput.output || '',
-    user_text: triggerMsg.text || '',
+    user_text: waInput.body?.payload?.body || '',
 
-    // Debug fields
     price_extracted_raw: priceDetected,
-    handoff_extracted_raw: handoffDetected
+    handoff_extracted_raw: handoffDetected,
   }
 }];

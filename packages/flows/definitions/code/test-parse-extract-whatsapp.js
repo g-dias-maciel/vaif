@@ -11,14 +11,18 @@ const code = fs.readFileSync(path.join(__dirname, 'parse-extract-whatsapp.js'), 
 function runExtraction(userText, beatrizText, leadData) {
   const mockData = {
     'WAHA Webhook': {
-      event: 'message',
-      session: 'bruno_tattoo',
-      payload: {
-        id: 'true_551199999@c.us_ABC123',
-        from: '5511999999999@c.us',
-        body: userText || '',
-        type: 'chat',
-        _data: { notifyName: 'Test User' },
+      headers: {},
+      params: {},
+      query: {},
+      body: {
+        session: 'bruno-tattoo',
+        payload: {
+          id: 'true_551199999@c.us_ABC123',
+          from: '5511999999999@c.us',
+          body: userText || '',
+          type: 'chat',
+          _data: { notifyName: 'Test User' },
+        },
       },
     },
     'AI Agent': {
@@ -127,6 +131,21 @@ test('body zone "pequeno"', () => {
   assert(r.body_zone_val === 'pequeno', `got ${r.body_zone_val}`);
 });
 
+test('body zone "fechamento" via "o braço inteiro"', () => {
+  const r = runExtraction('Quero o braço inteiro', 'Que projeto!');
+  assert(r.body_zone_val === 'fechamento', `got ${r.body_zone_val}`);
+});
+
+test('body zone "pequeno" via "só uma partinha"', () => {
+  const r = runExtraction('Só uma partinha no pulso', 'Entendi!');
+  assert(r.body_zone_val === 'pequeno', `got ${r.body_zone_val}`);
+});
+
+test('body zone "medio" via "área média"', () => {
+  const r = runExtraction('Uma área média no antebraço', 'Boa!');
+  assert(r.body_zone_val === 'medio', `got ${r.body_zone_val}`);
+});
+
 // ── First tattoo ──
 test('first tattoo = true', () => {
   const r = runExtraction('Vai ser a primeira tattoo', 'Que legal!');
@@ -142,6 +161,27 @@ test('first tattoo = false', () => {
 test('significado extraction', () => {
   const r = runExtraction('É em homenagem ao meu pai', 'Que lindo!');
   assert(r.significado_val != null, `got ${r.significado_val}`);
+});
+
+// ── Tipo de tatuagem ──
+test('tipo: nova', () => {
+  const r = runExtraction('É uma tatuagem nova', 'Legal!');
+  assert(r.tipo_tatuagem_val === 'nova', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: cobertura', () => {
+  const r = runExtraction('Quero cobrir uma tatuagem velha', 'Entendi.');
+  assert(r.tipo_tatuagem_val === 'cobertura', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: reforma', () => {
+  const r = runExtraction('Quero reformar uma tatuagem no braço', 'Entendi.');
+  assert(r.tipo_tatuagem_val === 'reforma', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: null when not mentioned', () => {
+  const r = runExtraction('Oi, tudo bem?', 'Oi!');
+  assert(r.tipo_tatuagem_val === null, `got ${r.tipo_tatuagem_val}`);
 });
 
 // ── Price detection ──
@@ -194,6 +234,16 @@ test('handoff: lead asks for artist', () => {
   );
   assert(r.pipeline_status === 'aguardando_artista', `got ${r.pipeline_status}`);
   assert(r.handoff_reason === 'lead_requested_artist', `got ${r.handoff_reason}`);
+});
+
+test('handoff: reforma in user message', () => {
+  const r = runExtraction(
+    'Quero reformar uma tatuagem antiga',
+    'Reforma também é bem específica — vou te passar direto pro Bruno.',
+    makeLead('novo')
+  );
+  assert(r.pipeline_status === 'aguardando_artista', `got ${r.pipeline_status}`);
+  assert(r.handoff_reason === 'reforma', `got ${r.handoff_reason}`);
 });
 
 // ── No false positives ──
@@ -282,7 +332,7 @@ test('all output fields present', () => {
   const r = runExtraction('Oi', 'Olá!', makeLead('novo'));
   const fields = ['lead_id', 'pipeline_status', 'event_type', 'placement_val',
     'body_zone_val', 'style_val', 'primeira_tatuagem_val', 'significado_val',
-    'table_price_cents', 'negotiated_price_cents', 'handoff_reason', 'agent_text',
+    'tipo_tatuagem_val', 'table_price_cents', 'negotiated_price_cents', 'handoff_reason', 'agent_text',
     'deposit_status_val', 'deposit_amount_cents', 'booked_date_val',
     'session_duration_min_val', 'buffer_min_val'];
   for (const f of fields) {

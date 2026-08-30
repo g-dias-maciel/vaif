@@ -58,7 +58,7 @@ def _clean_payload(wf, keep_ids=False, is_create=False):
     must be preserved so LangChain sub-node references stay intact.
     On CREATE, credentials and description must be stripped (added later via update).
     """
-    strip_fields = ["onError", "notes"]
+    strip_fields = ["notes"]
     if not keep_ids:
         strip_fields.extend(["id", "webhookId"])
     if is_create:

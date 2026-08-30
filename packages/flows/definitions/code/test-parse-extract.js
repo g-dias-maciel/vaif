@@ -141,6 +141,27 @@ test('significado extraction', () => {
   assert(r.significado_val != null, `got ${r.significado_val}`);
 });
 
+// ── Tipo de tatuagem ──
+test('tipo: nova', () => {
+  const r = runExtraction('É uma tatuagem nova', 'Legal!');
+  assert(r.tipo_tatuagem_val === 'nova', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: cobertura', () => {
+  const r = runExtraction('Quero cobrir uma tatuagem velha', 'Entendi.');
+  assert(r.tipo_tatuagem_val === 'cobertura', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: reforma', () => {
+  const r = runExtraction('Quero reformar uma tatuagem no braço', 'Entendi.');
+  assert(r.tipo_tatuagem_val === 'reforma', `got ${r.tipo_tatuagem_val}`);
+});
+
+test('tipo: null when not mentioned', () => {
+  const r = runExtraction('Oi, tudo bem?', 'Oi!');
+  assert(r.tipo_tatuagem_val === null, `got ${r.tipo_tatuagem_val}`);
+});
+
 // ── Price detection ──
 test('detects price in Beatriz response', () => {
   const r = runExtraction(
@@ -193,6 +214,16 @@ test('handoff: lead asks for artist', () => {
   assert(r.handoff_reason === 'lead_requested_artist', `got ${r.handoff_reason}`);
 });
 
+test('handoff: reforma in user message', () => {
+  const r = runExtraction(
+    'Quero reformar uma tatuagem antiga',
+    'Reforma também é bem específica — vou te passar direto pro Bruno.',
+    makeLead('novo')
+  );
+  assert(r.pipeline_status === 'aguardando_artista', `got ${r.pipeline_status}`);
+  assert(r.handoff_reason === 'reforma', `got ${r.handoff_reason}`);
+});
+
 // ── No false positives ──
 test('greeting stays novo', () => {
   const r = runExtraction('Oi', 'Olá! Eu sou a Beatriz. Como posso te ajudar?', makeLead('novo'));
@@ -214,7 +245,8 @@ test('all output fields present', () => {
   const r = runExtraction('Oi', 'Olá!', makeLead('novo'));
   const fields = ['lead_id', 'pipeline_status', 'event_type', 'placement_val',
     'body_zone_val', 'style_val', 'primeira_tatuagem_val', 'significado_val',
-    'table_price_cents', 'negotiated_price_cents', 'handoff_reason', 'agent_text'];
+    'tipo_tatuagem_val', 'table_price_cents', 'negotiated_price_cents',
+    'handoff_reason', 'agent_text'];
   for (const f of fields) {
     assert(f in r, `missing field: ${f}`);
   }
