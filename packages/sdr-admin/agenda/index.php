@@ -281,39 +281,9 @@ HTML;
 $artist_name = htmlspecialchars($data['artist_name'] ?? 'Artista');
 $tz = (string) ($data['timezone'] ?? 'UTC');
 $tz = $tz !== '' ? $tz : 'UTC';
-$duration_min = (int) ($data['duration_min'] ?? 60);
 
-$available = is_array($data['available'] ?? null) ? $data['available'] : [];
 $blocks    = is_array($data['blocks'] ?? null) ? $data['blocks'] : [];
-$available_count = count($available);
 $blocks_count    = count($blocks);
-
-// Availability list
-$available_html = '';
-if (count($available) === 0) {
-    $available_html = '<p class="slot-empty">Nenhum horário livre no momento.</p>';
-} else {
-    $items = '';
-    foreach ($available as $slot) {
-        $id  = htmlspecialchars((string) ($slot['id'] ?? ''));
-        $st  = fmt_datetime((string) ($slot['start_at'] ?? ''), $tz);
-        $en  = fmt_datetime((string) ($slot['end_at'] ?? ''), $tz);
-        $startRaw = htmlspecialchars((string) ($slot['start_at'] ?? ''));
-        $endRaw   = htmlspecialchars((string) ($slot['end_at'] ?? ''));
-        $items .= <<<LI
-        <li id="slot-$id" class="available-slot">
-            <span class="slot-time">$st – $en</span>
-            <form method="post" class="inline-form">
-                <input type="hidden" name="action" value="block">
-                <input type="hidden" name="start_at" value="$startRaw">
-                <input type="hidden" name="end_at" value="$endRaw">
-                <button type="submit" class="btn btn--ghost">Bloquear</button>
-            </form>
-        </li>
-LI;
-    }
-    $available_html = '<ul class="slot-list">' . $items . '</ul>';
-}
 
 // Blocks list
 $blocks_html = '';
@@ -354,14 +324,6 @@ $body = <<<HTML
     <div class="divider">&#x25C6;</div>
 
     $flash_html
-
-    <section class="agenda-section available-section" data-available-count="$available_count">
-        <h3 class="section-title">Disponibilidade</h3>
-        <p class="section-sub">Sessões de {$duration_min} min — fuso horário: $tz</p>
-        $available_html
-    </section>
-
-    <div class="divider">&#x25C6;</div>
 
     <section class="agenda-section">
         <h3 class="section-title">Bloquear horário</h3>

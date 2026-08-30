@@ -91,7 +91,6 @@ request("$mockBase/?reset=1");
 echo "=== Agenda Admin Page Acceptance Tests ===\n\n";
 
 $VALID = 'testvalidtoken123';
-$SLOT1_ID = 'aaaa1111-0000-0000-0000-000000000001';
 $BLOCK1_ID = 'cccc3333-0000-0000-0000-000000000001';
 
 // --- Test 1: missing token → invalid link state ---
@@ -111,7 +110,7 @@ assert_contains($resp['body'], 'expirou', 'Unknown token mentions expiry');
 assert_not_contains($resp['body'], 'João Silva', 'No artist content leaked for invalid token');
 
 // --- Test 3: valid token — page structure + branding ---
-echo "Test: valid token renders the agenda with availability\n";
+echo "Test: valid token renders the agenda with block UI\n";
 $resp = request("$base/agenda/$VALID");
 assert_true($resp['status'] === 200, "/agenda/<valid> status {$resp['status']}");
 assert_contains($resp['body'], '<!DOCTYPE html>', 'Has DOCTYPE');
@@ -119,20 +118,21 @@ assert_contains($resp['body'], 'card', 'Uses card layout');
 assert_contains($resp['body'], '#D4B04C', 'Gold accent present');
 assert_contains($resp['body'], 'fonts.googleapis.com', 'Google Fonts loaded');
 assert_contains($resp['body'], 'João Silva', 'Artist name shown');
-assert_contains($resp['body'], 'Disponibilidade', 'Availability section present');
+assert_contains($resp['body'], 'Bloquear horário', 'Block form section present');
 assert_contains($resp['body'], 'Bloquear', 'Block UI present');
 assert_contains($resp['body'], 'Horários bloqueados', 'Blocks section present');
+assert_not_contains($resp['body'], 'Disponibilidade', 'No availability slot-list rendered');
+assert_not_contains($resp['body'], 'available-section', 'No availability section rendered');
 assert_contains($resp['body'], 'America/Sao_Paulo', 'Artist timezone surfaced');
 assert_not_contains($resp['body'], 'PHP Warning', 'No PHP warnings');
 assert_not_contains($resp['body'], 'Fatal error', 'No fatal errors');
 
-// --- Test 4: availability shown in the artist's timezone ---
-// Mock returns 2026-09-10T13:00:00Z; America/Sao_Paulo (UTC-3) → 10/09/2026 10:00.
-echo "Test: availability rendered in the artist's timezone\n";
-assert_contains($resp['body'], '10/09/2026 10:00', 'First slot converted to artist timezone');
+// --- Test 4: block form carries the artist's timezone ---
+echo "Test: block form surfaces the artist's timezone\n";
+assert_contains($resp['body'], 'fuso horário (America/Sao_Paulo)', 'Block form notes artist timezone');
 
-// --- Test 5: block a range → leaves availability, appears in blocks ---
-echo "Test: blocking a range removes it from availability and lists the block\n";
+// --- Test 5: block a range → appears in blocks ---
+echo "Test: blocking a range lists the block\n";
 $resp = request("$base/agenda/$VALID", [
     'action' => 'block',
     'start_at' => '2026-09-10T13:00:00Z',
@@ -142,11 +142,9 @@ assert_true($resp['status'] === 200, "block POST status {$resp['status']}");
 assert_contains($resp['body'], 'bloqueado', 'Block success message shown');
 
 $resp = request("$base/agenda/$VALID");
-assert_contains($resp['body'], 'data-available-count="1"', 'Availability dropped to 1 slot');
 assert_contains($resp['body'], 'data-block-count="1"', 'Block count is 1');
 assert_contains($resp['body'], 'cccc3333-0000-0000-0000-000000000001', 'Block id rendered');
 assert_contains($resp['body'], 'Desbloquear', 'Unblock button rendered for the block');
-assert_not_contains($resp['body'], "slot-$SLOT1_ID", 'Blocked slot no longer offered as available');
 
 // --- Test 6: custom range block form present + converts artist-local time to UTC ---
 echo "Test: custom block-range form converts local time to UTC for the webhook\n";
@@ -168,12 +166,11 @@ assert_true($resp['status'] === 200, "custom block POST status {$resp['status']}
 assert_contains($resp['body'], 'bloqueado', 'Custom block success message shown');
 
 $resp = request("$base/agenda/$VALID");
-assert_contains($resp['body'], 'data-available-count="1"', 'Custom block dropped availability to 1');
 assert_contains($resp['body'], 'data-block-count="1"', 'Custom block listed');
 assert_contains($resp['body'], '10/09/2026 10:00 – 10/09/2026 11:00', 'Block rendered in artist local time');
 
-// --- Test 7: unblock a range → it returns to availability ---
-echo "Test: unblocking restores the range to availability\n";
+// --- Test 7: unblock a range → no longer listed as blocked ---
+echo "Test: unblocking removes the block\n";
 $resp = request("$base/agenda/$VALID", [
     'action' => 'unblock',
     'block_id' => $BLOCK1_ID,
@@ -182,7 +179,6 @@ assert_true($resp['status'] === 200, "unblock POST status {$resp['status']}");
 assert_contains($resp['body'], 'desbloqueado', 'Unblock success message shown');
 
 $resp = request("$base/agenda/$VALID");
-assert_contains($resp['body'], 'data-available-count="2"', 'Availability restored to 2 slots');
 assert_contains($resp['body'], 'data-block-count="0"', 'Block count back to 0');
 assert_not_contains($resp['body'], 'cccc3333-0000-0000-0000-000000000001', 'Block id no longer rendered');
 
