@@ -351,7 +351,7 @@ if (artistNome) {
 const saidHandoff = handoffPhrases.some(p => agentOutput.includes(p));
 
 // Fallback: detect a deposit request directly from Beatriz's message.
-const depositPhrases = ['sinal de', 'sinal é de', 'chave pix', 'pix:', '% do valor'];
+const depositPhrases = ['sinal de', 'sinal é de', 'sinal no valor de', 'trabalhamos com um sinal', 'chave pix', 'pix é', 'pix:', '% do valor'];
 const saidDeposit = depositPhrases.some(p => agentOutput.includes(p));
 
 // Only notify on an actual transition — event_type is set only when state changed
@@ -841,7 +841,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT id, start_at, end_at, type FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz, now() + interval '60 days', {{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}) ORDER BY start_at LIMIT 10",
+                "query": "SELECT id, start_at, end_at, type FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', {{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}) ORDER BY start_at LIMIT 10",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
