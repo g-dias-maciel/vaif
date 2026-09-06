@@ -1,10 +1,10 @@
 <?php
 /**
- * Onboarding portal — vaif.com.br/onboard/<token>
+ * Onboarding portal — <host>/onboard/<token>
  * Self-serve page where artists scan QR and connect via WhatsApp.
  *
- * Ticket: #8 — Self-serve onboarding portal
- * Dependencies: #6 — Artist onboarding (n8n Form creates stub + token)
+ * Talks to the Artist Onboard Webhook (n8n, path /onboard-api) with an
+ * `action` field: validate | status | consume. Standalone sdr-admin bundle.
  */
 
 declare(strict_types=1);
@@ -21,7 +21,7 @@ function call_n8n(string $url, array $data = []): ?array
             'method'  => empty($data) ? 'GET' : 'POST',
             'header'  => "Content-Type: application/json\r\n",
             'content' => empty($data) ? null : json_encode($data),
-            'timeout' => 10,
+            'timeout' => 15,
         ],
     ]);
     $body = @file_get_contents($url, false, $ctx);
@@ -129,7 +129,7 @@ if ($path === '/onboard/sucesso' || str_ends_with($path, '/onboard/sucesso')) {
     // The token is carried through the query string so the success page can
     // deep-link the artist straight to their own /agenda/<token>.
     $sucesso_token = preg_replace('/[^a-z0-9]/i', '', (string) ($_GET['token'] ?? ''));
-    $agenda_href = $sucesso_token !== '' ? "/agenda/$sucesso_token" : '/';
+    $agenda_href = $sucesso_token !== '' ? "/agenda/$sucesso_token" : '/agenda/';
     $body = <<<HTML
     <div class="card">
         <div class="icon-large">&#x2705;</div>
@@ -165,9 +165,9 @@ HTML;
     exit;
 }
 
-// Validate token against n8n webhook
-$validate_url = getenv('N8N_ONBOARD_VALIDATE_WEBHOOK_URL') ?: '';
-if ($validate_url === '') {
+// Validate token against the n8n onboard webhook
+$webhook_url = getenv('N8N_ONBOARD_WEBHOOK_URL') ?: '';
+if ($webhook_url === '') {
     $body = <<<HTML
     <div class="card">
         <div class="icon-large">&#x26A0;</div>
@@ -180,7 +180,7 @@ HTML;
     exit;
 }
 
-$result = call_n8n($validate_url, ['token' => $token]);
+$result = call_n8n($webhook_url, ['token' => $token, 'action' => 'validate']);
 
 if ($result === null || !($result['valid'] ?? false)) {
     $msg = htmlspecialchars($result['error'] ?? 'Este link expirou ou já foi utilizado. Solicite um novo link de onboarding ao parceiro VAIF.');
@@ -198,8 +198,7 @@ HTML;
 
 // --- Token is valid — render onboarding page ---
 $artist_name = htmlspecialchars($result['artist_name'] ?? 'Artista');
-$consume_url = htmlspecialchars(getenv('N8N_ONBOARD_CONSUME_WEBHOOK_URL') ?: '');
-$status_url  = htmlspecialchars(getenv('N8N_ONBOARD_SESSION_STATUS_URL') ?: '');
+$webhook_url_js = addcslashes($webhook_url, "'\\");
 
 // QR image (base64 PNG string or empty)
 $qr_image = $result['qr_image'] ?? '';
@@ -213,9 +212,6 @@ if ($qr_image !== '') {
 
 // JS config (encode for safe embedding in <script>)
 $js_token  = json_encode(['token' => $token]);
-$js_status = addcslashes($status_url, "'\\");
-$js_consume = addcslashes($consume_url, "'\\");
-$has_qr = $qr_image !== '' ? 'true' : 'false';
 
 $body = <<<HTML
 <div class="card">
@@ -249,8 +245,7 @@ $body = <<<HTML
 <script>
 (function() {
     var token = $js_token;
-    var statusUrl = '$js_status';
-    var consumeUrl = '$js_consume';
+    var webhookUrl = '$webhook_url_js';
     var consumed = false;
     var pollCount = 0;
 
@@ -270,6 +265,14 @@ $body = <<<HTML
         }
     }
 
+    function post(payload) {
+        return fetch(webhookUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        }).then(function(r) { return r.json(); });
+    }
+
     function checkStatus() {
         if (consumed) return;
         pollCount++;
@@ -278,23 +281,12 @@ $body = <<<HTML
             return;
         }
 
-        fetch(statusUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token.token })
-        })
-        .then(function(r) { return r.json(); })
+        post(Object.assign({ action: 'status' }, token))
         .then(function(data) {
             if (data && data.connected) {
                 consumed = true;
                 setConnected();
-                if (consumeUrl) {
-                    fetch(consumeUrl, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ token: token.token })
-                    });
-                }
+                post(Object.assign({ action: 'consume' }, token));
                 setTimeout(function() {
                     window.location.href = '/onboard/sucesso?token=' + token.token;
                 }, 2000);
@@ -304,12 +296,7 @@ $body = <<<HTML
     }
 
     function refreshQr() {
-        fetch(statusUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ token: token.token, refreshQr: true })
-        })
-        .then(function(r) { return r.json(); })
+        post(Object.assign({ action: 'status', refreshQr: true }, token))
         .then(function(data) {
             if (data && data.qr_image) {
                 var img = document.getElementById('qr-image');
@@ -322,7 +309,7 @@ $body = <<<HTML
     setInterval(checkStatus, 5000);
     checkStatus();
 
-    if ($has_qr) {
+    if (document.getElementById('qr-image')) {
         setInterval(refreshQr, 55000); // Refresh QR every 55s
     }
 })();

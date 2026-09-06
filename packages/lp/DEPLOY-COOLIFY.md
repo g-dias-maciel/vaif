@@ -36,6 +36,7 @@ runtime via `getenv()` in the PHP API files.
 | `N8N_LEAD_WEBHOOK_URL` | n8n webhook for new leads | optional |
 | `N8N_CALENDAR_WEBHOOK_URL` | n8n webhook for calendar bookings | optional |
 | `N8N_AGENDA_WEBHOOK_URL` | n8n webhook for artist agenda availability + block/unblock (webhook path `calendar`) | optional |
+| `N8N_ONBOARD_WEBHOOK_URL` | n8n webhook for artist onboarding — validate/status/consume QR connect (webhook path `onboard-api`). Set to `https://n8n.vaif.com.br/webhook/onboard-api`. Without it `/onboard/*` shows "Em manutenção" | required for `/onboard/*` |
 
 Use Coolify's **`@` secret/database linking** if you attach a Coolify-managed
 MySQL database so credentials are injected automatically.
