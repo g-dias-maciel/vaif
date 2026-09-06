@@ -23,6 +23,7 @@ CREATE TABLE artists (
     CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),
   onboarding_token  TEXT UNIQUE,
   whatsapp_number   TEXT,
+  telegram_group_id TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 

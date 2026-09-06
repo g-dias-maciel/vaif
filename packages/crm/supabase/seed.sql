@@ -8,7 +8,7 @@
 -- ============================================================
 -- Sample artist: Bruno (tattoo artist)
 -- ============================================================
-INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)
+INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number, telegram_group_id)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'Bruno',
@@ -31,7 +31,8 @@ VALUES (
   'America/Sao_Paulo',
   'bruno-tattoo',
   'live',
-  '5511999990001'
+  '5511999990001',
+  '-5195870017'
 );
 
 -- ============================================================

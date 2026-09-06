@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS artists (
     CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),
   onboarding_token  TEXT UNIQUE,
   whatsapp_number   TEXT,
+  telegram_group_id TEXT,
   notion_token      TEXT,
   notion_clientes_database_id  TEXT,
   notion_projects_database_id  TEXT,
@@ -43,6 +44,7 @@ ALTER TABLE artists ADD COLUMN IF NOT EXISTS wa_session_slug    TEXT UNIQUE;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS status             TEXT NOT NULL DEFAULT 'stub';
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS onboarding_token   TEXT UNIQUE;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS whatsapp_number    TEXT;
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS telegram_group_id  TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_token       TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_clientes_database_id TEXT;
 ALTER TABLE artists ADD COLUMN IF NOT EXISTS notion_projects_database_id TEXT;
@@ -244,6 +246,46 @@ BEGIN
     status = 'live'
   WHERE id = p_artist_id
     AND status = 'onboarding'
+  RETURNING * INTO v_artist;
+
+  IF v_artist.id IS NOT NULL THEN
+    RETURN NEXT v_artist;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Pause the SDR for a live artist (artist request / payment issue). The
+-- WhatsApp agent's resolve_artist_from_session() only matches stub/onboarding/
+-- live, so a suspended artist stops receiving answers and new bookings.
+CREATE OR REPLACE FUNCTION suspend_artist(
+  p_artist_id UUID
+) RETURNS SETOF artists AS $$
+DECLARE
+  v_artist artists;
+BEGIN
+  UPDATE artists SET
+    status = 'suspended'
+  WHERE id = p_artist_id
+    AND status = 'live'
+  RETURNING * INTO v_artist;
+
+  IF v_artist.id IS NOT NULL THEN
+    RETURN NEXT v_artist;
+  END IF;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- Re-activate a suspended artist back to live.
+CREATE OR REPLACE FUNCTION resume_artist(
+  p_artist_id UUID
+) RETURNS SETOF artists AS $$
+DECLARE
+  v_artist artists;
+BEGIN
+  UPDATE artists SET
+    status = 'live'
+  WHERE id = p_artist_id
+    AND status = 'suspended'
   RETURNING * INTO v_artist;
 
   IF v_artist.id IS NOT NULL THEN
@@ -496,7 +538,7 @@ $$ LANGUAGE plpgsql;
 --   Ex: '{"start":"19:00","end":"08:00"}' = atende só à noite, silêncio de dia.
 --   NULL = Beatriz sempre ativa (padrão).
 -- timezone: IANA (ex: America/Sao_Paulo) — o horário de ai_active_hours é interpretado nele.
-INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)
+INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number, telegram_group_id)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'Bruno',
@@ -509,7 +551,7 @@ VALUES (
   '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
   NULL,
   'America/Sao_Paulo',
-  'bruno-tattoo', 'live', '5511999990001'
+  'bruno-tattoo', 'live', '5511999990001', '-5195870017'
 ) ON CONFLICT (id) DO UPDATE SET
   display_name      = EXCLUDED.display_name,
   nome              = EXCLUDED.nome,
@@ -525,7 +567,8 @@ VALUES (
   timezone          = EXCLUDED.timezone,
   wa_session_slug   = EXCLUDED.wa_session_slug,
   status            = EXCLUDED.status,
-  whatsapp_number   = EXCLUDED.whatsapp_number;
+  whatsapp_number   = EXCLUDED.whatsapp_number,
+  telegram_group_id = EXCLUDED.telegram_group_id;
 
 -- Seed: pricing (safe to re-run)
 INSERT INTO pricing (artist_id, placement, body_zone, table_price, session_duration_min, buffer_min) VALUES

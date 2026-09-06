@@ -46,7 +46,7 @@ TELEGRAM_OPS = {"telegramApi": {"id": "pL4lbcexwUidxd1r", "name": "Beatriz Ops"}
 #    would otherwise take the "found" branch. Gate on `found` instead. ──
 RESOLVE_ARTIST_QUERY = """SELECT id, nome, wa_session_slug, status, ai_active_hours, timezone,
        specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key,
-       instagram_handle, whatsapp_number,
+       instagram_handle, whatsapp_number, telegram_group_id,
        (id IS NOT NULL) AS found
 FROM resolve_artist_from_session($1)
 UNION ALL
@@ -64,6 +64,7 @@ SELECT NULL::uuid                    AS id,
        NULL::text                    AS pix_key,
        NULL::text                    AS instagram_handle,
        NULL::text                    AS whatsapp_number,
+       NULL::text                    AS telegram_group_id,
        false                         AS found
 WHERE NOT EXISTS (SELECT 1 FROM resolve_artist_from_session($1))
 LIMIT 1;"""
@@ -335,6 +336,11 @@ const status = (updateData && updateData.pipeline_status)
   || (parseData && parseData.pipeline_status)
   || '';
 
+// Per-artist ops Telegram group (handoff/deposit confirm buttons). Required —
+// if the artist has none configured, skip the notification so it never goes
+// to the wrong group.
+const opsChatId = (artistData && artistData.telegram_group_id) || '';
+
 const leadNome = leadData && leadData.nome ? leadData.nome : 'Desconhecido';
 const telefone = leadData && leadData.telefone ? leadData.telefone : '';
 const whatsappLink = telefone && /^\d{8,15}$/.test(telefone)
@@ -363,6 +369,12 @@ if (!event && !saidHandoff && !saidDeposit) {
   return [{ json: { send: false } }];
 }
 
+// Artist must have a Telegram ops group configured to receive the buttons.
+if (!opsChatId) {
+  console.error('[Beatriz-WhatsApp] Artist sem telegram_group_id configurado:', artistData && artistData.nome);
+  return [{ json: { send: false } }];
+}
+
 // ── Handoff ──
 if (event === 'handoff_triggered' || saidHandoff) {
   const leadId = (parseData && parseData.lead_id) || '';
@@ -387,7 +399,7 @@ if (event === 'handoff_triggered' || saidHandoff) {
 
   return [{ json: {
     send: true,
-    chatId: '-5195870017',
+    chatId: opsChatId,
     text: msg.join('\n'),
     btn1_text: '\u2705 Confirmar',
     btn1_cb: 'handoff:confirm:' + leadId,
@@ -411,7 +423,7 @@ if (event === 'deposit_requested' || saidDeposit) {
 
   return [{ json: {
     send: true,
-    chatId: '-5195870017',
+    chatId: opsChatId,
     text: msg,
     btn1_text: '\u2705 Sinal Recebido',
     btn1_cb: 'deposit:confirm:' + leadId,

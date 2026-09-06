@@ -33,6 +33,7 @@ CREATE TABLE artists (
     CHECK (status IN ('stub','onboarding','live','suspended','offboarded')),
   onboarding_token  TEXT UNIQUE,
   whatsapp_number   TEXT,
+  telegram_group_id TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
@@ -589,7 +590,7 @@ $$ LANGUAGE plpgsql SECURITY DEFINER;
 -- ============================================================
 -- Seed data — Sample artist "Bruno" + pricing
 -- ============================================================
-INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number)
+INSERT INTO artists (id, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, whatsapp_number, telegram_group_id)
 VALUES (
   'b0000000-0000-0000-0000-000000000001',
   'Bruno',
@@ -605,7 +606,8 @@ VALUES (
   'America/Sao_Paulo',
   'bruno-tattoo',
   'live',
-  '5511999990001'
+  '5511999990001',
+  '-5195870017'
 );
 
 INSERT INTO pricing (artist_id, placement, body_zone, table_price, session_duration_min, buffer_min)

@@ -22,6 +22,13 @@
               "placeholder": "5511999990001"
             },
             {
+              "fieldLabel": "Grupo Telegram (chat id)",
+              "fieldType": "text",
+              "requiredField": true,
+              "fieldName": "telegram_group_id",
+              "placeholder": "-5195870017 (grupo onde a Beatriz responde handoffs/sinal)"
+            },
+            {
               "fieldLabel": "Especialidades (vírgula)",
               "fieldType": "text",
               "fieldName": "specialties",
@@ -163,9 +170,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "INSERT INTO public.artists (\n  nome, whatsapp_number, specialties, nao_faco, floor_pct,\n  deposit_type, deposit_value, pix_key, instagram_handle,\n  wa_session_slug, status, onboarding_token,\n  display_name, timezone, working_hours, ai_active_hours\n) VALUES (\n  $1, $2, $3, $4, $5,\n  $6, $7, $8, $9,\n  $10, 'stub', $11,\n  $12, $13, $14::jsonb, $15::jsonb\n) ON CONFLICT (wa_session_slug) DO UPDATE SET\n  onboarding_token = EXCLUDED.onboarding_token,\n  display_name = EXCLUDED.display_name,\n  timezone = EXCLUDED.timezone,\n  working_hours = EXCLUDED.working_hours,\n  ai_active_hours = EXCLUDED.ai_active_hours,\n  whatsapp_number = EXCLUDED.whatsapp_number,\n  specialties = EXCLUDED.specialties,\n  nao_faco = EXCLUDED.nao_faco,\n  floor_pct = EXCLUDED.floor_pct,\n  deposit_type = EXCLUDED.deposit_type,\n  deposit_value = EXCLUDED.deposit_value,\n  pix_key = EXCLUDED.pix_key,\n  instagram_handle = EXCLUDED.instagram_handle\nRETURNING id, nome, wa_session_slug, onboarding_token;",
+        "query": "INSERT INTO public.artists (\n  nome, whatsapp_number, specialties, nao_faco, floor_pct,\n  deposit_type, deposit_value, pix_key, instagram_handle,\n  wa_session_slug, status, onboarding_token,\n  display_name, timezone, working_hours, ai_active_hours, telegram_group_id\n) VALUES (\n  $1, $2, $3, $4, $5,\n  $6, $7, $8, $9,\n  $10, 'stub', $11,\n  $12, $13, $14::jsonb, $15::jsonb, $16\n) ON CONFLICT (wa_session_slug) DO UPDATE SET\n  onboarding_token = EXCLUDED.onboarding_token,\n  display_name = EXCLUDED.display_name,\n  timezone = EXCLUDED.timezone,\n  working_hours = EXCLUDED.working_hours,\n  ai_active_hours = EXCLUDED.ai_active_hours,\n  whatsapp_number = EXCLUDED.whatsapp_number,\n  telegram_group_id = EXCLUDED.telegram_group_id,\n  specialties = EXCLUDED.specialties,\n  nao_faco = EXCLUDED.nao_faco,\n  floor_pct = EXCLUDED.floor_pct,\n  deposit_type = EXCLUDED.deposit_type,\n  deposit_value = EXCLUDED.deposit_value,\n  pix_key = EXCLUDED.pix_key,\n  instagram_handle = EXCLUDED.instagram_handle\nRETURNING id, nome, wa_session_slug, onboarding_token;",
         "options": {
-          "queryReplacement": "={{\n  [\n    $json.nome,\n    $json.whatsapp_number,\n    ($json.specialties ? $json.specialties.split(',').map(s => s.trim()) : []),\n    ($json.nao_faco ? $json.nao_faco.split(',').map(s => s.trim()) : []),\n    ($json.floor_pct ? parseFloat($json.floor_pct) : null),\n    ($json.deposit_type || 'percent'),\n    ($json.deposit_value ? parseInt($json.deposit_value) : null),\n    ($json.pix_key || null),\n    ($json.instagram_handle || null),\n    $json.wa_session_slug,\n    $json.onboarding_token,\n    ($json.display_name || $json.nome),\n    ($json.timezone || 'America/Sao_Paulo'),\n    JSON.stringify($json.working_hours || {}),\n    ($json.ai_active_hours ? JSON.stringify($json.ai_active_hours) : null)\n  ]\n}}"
+          "queryReplacement": "={{\n  [\n    $json.nome,\n    $json.whatsapp_number,\n    ($json.specialties ? $json.specialties.split(',').map(s => s.trim()) : []),\n    ($json.nao_faco ? $json.nao_faco.split(',').map(s => s.trim()) : []),\n    ($json.floor_pct ? parseFloat($json.floor_pct) : null),\n    ($json.deposit_type || 'percent'),\n    ($json.deposit_value ? parseInt($json.deposit_value) : null),\n    ($json.pix_key || null),\n    ($json.instagram_handle || null),\n    $json.wa_session_slug,\n    $json.onboarding_token,\n    ($json.display_name || $json.nome),\n    ($json.timezone || 'America/Sao_Paulo'),\n    JSON.stringify($json.working_hours || {}),\n    ($json.ai_active_hours ? JSON.stringify($json.ai_active_hours) : null),\n    ($json.telegram_group_id || null)\n  ]\n}}"
         }
       },
       "type": "n8n-nodes-base.postgres",
