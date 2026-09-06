@@ -96,6 +96,13 @@ function render_html(string $title, string $body, string $extra_head = ''): stri
             color: rgb(160, 154, 142); font-size: 0.9rem;
             padding: 16px 4px; text-align: center;
         }
+        .booked-item { flex-direction: column; align-items: flex-start; gap: 4px; }
+        .booked-main { display: flex; flex-direction: column; gap: 2px; width: 100%; }
+        .booked-detail { font-size: 0.8rem; color: rgb(160, 154, 142); }
+        .booked-placement {
+            font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase;
+            color: #D4B04C; font-weight: 600;
+        }
         .btn {
             display: inline-block; background: #D4B04C; color: #0A0A0A;
             padding: 10px 20px; border-radius: 8px; text-decoration: none;
@@ -225,6 +232,8 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $payload['end_at']   = $end_at;
     } elseif ($action === 'unblock') {
         $payload['block_id'] = (string) ($_POST['block_id'] ?? '');
+    } elseif ($action === 'suspend' || $action === 'resume') {
+        // no extra params needed — the webhook resolves the artist by token
     }
 
     $result = call_n8n($webhook_url, $payload);
@@ -251,6 +260,14 @@ HTML;
         $flash = ($result['success'] ?? false)
             ? ['type' => 'success', 'text' => 'Período desbloqueado com sucesso.']
             : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível desbloquear o período.')];
+    } elseif ($action === 'suspend') {
+        $flash = ($result['success'] ?? false)
+            ? ['type' => 'success', 'text' => 'Atendimento pausado. A Beatriz não vai mais responder novos contatos até você reativar.']
+            : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível pausar o atendimento.')];
+    } elseif ($action === 'resume') {
+        $flash = ($result['success'] ?? false)
+            ? ['type' => 'success', 'text' => 'Atendimento reativado. A Beatriz já volta a responder seus contatos.']
+            : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível reativar o atendimento.')];
     }
 }
 
@@ -309,6 +326,56 @@ LI;
     $blocks_html = '<ul class="slot-list">' . $items . '</ul>';
 }
 
+// SDR status (from list response) — default 'live' when absent
+$sdr_status = (string) ($data['status'] ?? 'live');
+$is_active = $sdr_status === 'live' || $sdr_status === 'onboarding';
+
+// Status toggle section
+if ($is_active) {
+    $status_badge = '<div class="status-badge status-success" style="display:inline-block;">&#x25CF; Atendimento ativo</div>';
+    $status_btn   = <<<BTN
+    <form method="post" class="inline-form">
+        <input type="hidden" name="action" value="suspend">
+        <button type="submit" class="btn btn--danger">Pausar atendimento</button>
+    </form>
+BTN;
+} else {
+    $status_badge = '<div class="status-badge status-error" style="display:inline-block;">&#x25CF; Atendimento pausado</div>';
+    $status_btn   = <<<BTN
+    <form method="post" class="inline-form">
+        <input type="hidden" name="action" value="resume">
+        <button type="submit" class="btn">Reativar atendimento</button>
+    </form>
+BTN;
+}
+
+// Scheduled tattoos (upcoming booked slots)
+$booked = is_array($data['booked'] ?? null) ? $data['booked'] : [];
+$booked_count = count($booked);
+$booked_html = '';
+if ($booked_count === 0) {
+    $booked_html = '<p class="slot-empty">Nenhuma tatuagem agendada no momento.</p>';
+} else {
+    $items = '';
+    foreach ($booked as $b) {
+        $id        = htmlspecialchars((string) ($b['id'] ?? ''));
+        $st        = fmt_datetime((string) ($b['start_at'] ?? ''), $tz);
+        $en        = fmt_datetime((string) ($b['end_at'] ?? ''), $tz);
+        $client    = htmlspecialchars((string) ($b['client_name'] ?? 'Cliente'));
+        $placement = htmlspecialchars((string) ($b['placement'] ?? ''));
+        $items .= <<<LI
+        <li id="booked-$id" class="booked-item">
+            <div class="booked-main">
+                <span class="slot-time">$client</span>
+                <span class="booked-detail">$st – $en</span>
+            </div>
+            <span class="booked-placement">$placement</span>
+        </li>
+LI;
+    }
+    $booked_html = '<ul class="slot-list">' . $items . '</ul>';
+}
+
 // Flash message
 $flash_html = '';
 if ($flash !== null) {
@@ -319,11 +386,27 @@ if ($flash !== null) {
 $body = <<<HTML
 <div class="card">
     <h1>Agenda de $artist_name</h1>
-    <h2>Gerencie sua disponibilidade. Bloqueie horários para compromissos pessoais — a Beatriz não agenda clientes nos períodos bloqueados.</h2>
+    <h2>Gerencie sua disponibilidade e veja suas tatuagens agendadas. A Beatriz agenda e responde seus contatos automaticamente.</h2>
 
     <div class="divider">&#x25C6;</div>
 
     $flash_html
+
+    <section class="agenda-section sdr-section" data-sdr-status="$sdr_status">
+        <h3 class="section-title">Atendimento da Beatriz</h3>
+        $status_badge
+        <div style="margin-top: 16px;">$status_btn</div>
+        <p class="section-sub">Ao pausar, a Beatriz para de responder novos contatos e não agenda mais clientes até você reativar.</p>
+    </section>
+
+    <div class="divider">&#x25C6;</div>
+
+    <section class="agenda-section booked-section" data-booked-count="$booked_count">
+        <h3 class="section-title">Tatuagens agendadas</h3>
+        $booked_html
+    </section>
+
+    <div class="divider">&#x25C6;</div>
 
     <section class="agenda-section">
         <h3 class="section-title">Bloquear horário</h3>

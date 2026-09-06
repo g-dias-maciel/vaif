@@ -20,18 +20,23 @@ workflow; the resolve query below is the single seam to adapt.
 
 Contract (POST JSON body, top-level fields — same shape the existing webhook
 flows read, e.g. WAHA `$json.session`):
-  { token, action: 'list'|'block'|'unblock', start_at?, end_at?, block_id?, duration_min? }
+  { token, action: 'list'|'block'|'unblock'|'suspend'|'resume', start_at?, end_at?, block_id?, duration_min? }
 
   - list     -> { success, action, artist_id, artist_name, duration_min,
-                  available: [{id,start_at,end_at}], blocks: [{id,start_at,end_at}] }
+                  timezone, status, available: [{id,start_at,end_at}],
+                  blocks: [{id,start_at,end_at}], booked: [{id,start_at,end_at,client_name,placement,telefone}] }
                  available comes from check_availability(...) (derived 60-min
                  slots, artist timezone); blocks are calendar type='blocked'
-                 rows that have not ended yet. Defaults: from = today,
-                 to = +60 days, duration_min = 60.
+                 rows and booked are type='booked' rows (the artist's scheduled
+                 tattoos, joined to leads) that have not ended yet. status is
+                 the artist's SDR lifecycle state (live/suspended/...).
+                 Defaults: from = today, to = +60 days, duration_min = 60.
   - block    -> { success, action, block: {id,start_at,end_at} }  (block_slot)
   - unblock  -> { success, action, block: {...} }                 (unblock_slot)
                  or { success: false, error: 'block_not_found' } when the id
                  does not reference an existing 'blocked' row.
+  - suspend  -> { success, action, status }  (suspend_artist: live -> suspended)
+  - resume   -> { success, action, status }  (resume_artist: suspended -> live)
   Invalid/missing token -> HTTP 401 { success: false, error: 'invalid_token' }.
   Unknown action        -> HTTP 400 { success: false, error: 'invalid_action' }.
 
@@ -78,13 +83,16 @@ SELECT
 WHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)
 LIMIT 1;"""
 
-# Derived 60-min slots (check_availability, artist timezone) + existing blocks.
-# The trailing sentinel row guarantees a response even when nothing is free.
+# Derived 60-min slots (check_availability, artist timezone) + existing blocks
+# + upcoming booked slots (the artist's scheduled tattoos, joined to leads for
+# client name / placement / phone). The trailing sentinel row guarantees a
+# response even when nothing is free.
 LIST_AVAILABILITY_QUERY = """\
 (
-  SELECT id, start_at, end_at, type
+  SELECT id, start_at, end_at, type, lead_nome, placement, telefone
   FROM (
-    SELECT id, start_at, end_at, 'available'::text AS type
+    SELECT id, start_at, end_at, 'available'::text AS type,
+           NULL::text AS lead_nome, NULL::text AS placement, NULL::text AS telefone
     FROM check_availability(
       $1::uuid,
       COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),
@@ -92,16 +100,46 @@ LIST_AVAILABILITY_QUERY = """\
       COALESCE($4::integer, 60)
     )
     UNION ALL
-    SELECT id, start_at, end_at, type
-    FROM calendar
-    WHERE artist_id = $1::uuid
-      AND type = 'blocked'
-      AND end_at > now()
+    SELECT c.id, c.start_at, c.end_at, c.type,
+           NULL::text, NULL::text, NULL::text
+    FROM calendar c
+    WHERE c.artist_id = $1::uuid
+      AND c.type = 'blocked'
+      AND c.end_at > now()
+    UNION ALL
+    SELECT c.id, c.start_at, c.end_at, 'booked'::text AS type,
+           l.nome, l.placement, l.telefone
+    FROM calendar c
+    LEFT JOIN leads l ON l.id = c.lead_id
+    WHERE c.artist_id = $1::uuid
+      AND c.type = 'booked'
+      AND c.end_at > now()
   ) s
   ORDER BY start_at
 )
 UNION ALL
-SELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text;"""
+SELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text,
+       NULL::text, NULL::text, NULL::text;"""
+
+BLOCK_SLOT_QUERY = """\
+SELECT id, artist_id, start_at, end_at, type
+FROM block_slot($1::uuid, $2::timestamptz, $3::timestamptz);"""
+
+UNBLOCK_SLOT_QUERY = """\
+WITH removed AS (
+  SELECT * FROM unblock_slot($1::uuid)
+)
+SELECT id, artist_id, start_at, end_at, type
+FROM removed
+UNION ALL
+SELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text
+WHERE NOT EXISTS (SELECT 1 FROM removed);"""
+
+SUSPEND_ARTIST_QUERY = """\
+SELECT id, status FROM suspend_artist($1::uuid);"""
+
+RESUME_ARTIST_QUERY = """\
+SELECT id, status FROM resume_artist($1::uuid);"""
 
 BLOCK_SLOT_QUERY = """\
 SELECT id, artist_id, start_at, end_at, type
@@ -122,13 +160,25 @@ const artist = $('Resolve Artist by Token').first().json;
 
 const available = [];
 const blocks = [];
+const booked = [];
 
 for (const item of items) {
   const row = item.json;
   if (!row.id) continue; // sentinel row
-  const entry = { id: row.id, start_at: row.start_at, end_at: row.end_at };
-  if (row.type === 'blocked') blocks.push(entry);
-  else available.push(entry);
+  if (row.type === 'booked') {
+    booked.push({
+      id: row.id,
+      start_at: row.start_at,
+      end_at: row.end_at,
+      client_name: row.lead_nome || null,
+      placement: row.placement || null,
+      telefone: row.telefone || null,
+    });
+  } else if (row.type === 'blocked') {
+    blocks.push({ id: row.id, start_at: row.start_at, end_at: row.end_at });
+  } else {
+    available.push({ id: row.id, start_at: row.start_at, end_at: row.end_at });
+  }
 }
 
 return [{
@@ -139,8 +189,10 @@ return [{
     artist_name: artist.nome,
     duration_min: artist.duration_min || 60,
     timezone: artist.timezone,
+    status: artist.status,
     available,
     blocks,
+    booked,
   }
 }];"""
 
@@ -172,14 +224,34 @@ return [{
   }
 }];"""
 
+STATUS_RESPONSE_JS = r"""const row = $input.first().json;
+if (!row.id) {
+  return [{
+    json: {
+      success: false,
+      action: $json.action,
+      error: 'status_transition_not_allowed',
+      message: 'Transição de status não permitida.',
+    }
+  }];
+}
+return [{
+  json: {
+    success: true,
+    action: $json.action,
+    status: row.status,
+  }
+}];"""
+
 SWITCH_OUTPUT_EXPR = (
     "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : "
-    "$json.action === 'unblock' ? 2 : 3 }}"
+    "$json.action === 'unblock' ? 2 : $json.action === 'suspend' ? 3 : "
+    "$json.action === 'resume' ? 4 : 5 }}"
 )
 
 WF = {
     "name": "Artist Calendar Webhook",
-    "description": "Agenda admin webhook (#29) — list availability (derived 60-min slots + blocks), block and unblock time ranges for an artist, backed by Postgres. Auth: per-artist onboarding token; unknown/invalid tokens are rejected.",
+    "description": "Agenda admin webhook (#29) — list scheduled tattoos + availability (derived 60-min slots + blocks), block/unblock time ranges, and suspend/resume the SDR for an artist, backed by Postgres. Auth: per-artist onboarding token; unknown/invalid tokens are rejected.",
     "nodes": [
         # 1. Webhook Trigger
         {
@@ -260,7 +332,7 @@ WF = {
         {
             "parameters": {
                 "mode": "expression",
-                "numberOutputs": 4,
+                "numberOutputs": 6,
                 "output": SWITCH_OUTPUT_EXPR,
                 "options": {},
             },
@@ -354,7 +426,63 @@ WF = {
             "id": "cal-unblock-resp-0000-0000-0000-000000000001",
             "name": "Build Unblock Response",
         },
-        # 12. Success response (shared by list/block/unblock branches)
+        # 11b. Suspend Artist (output 3)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": SUSPEND_ARTIST_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 200],
+            "id": "cal-suspend-0000-0000-0000-000000000001",
+            "name": "Suspend Artist",
+            "credentials": MAIN_DB,
+        },
+        # 11c. Suspend Response
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": STATUS_RESPONSE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1300, 200],
+            "id": "cal-suspend-resp-0000-0000-0000-000000000001",
+            "name": "Build Suspend Response",
+        },
+        # 11d. Resume Artist (output 4)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": RESUME_ARTIST_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 400],
+            "id": "cal-resume-0000-0000-0000-000000000001",
+            "name": "Resume Artist",
+            "credentials": MAIN_DB,
+        },
+        # 11e. Resume Response
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": STATUS_RESPONSE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1300, 400],
+            "id": "cal-resume-resp-0000-0000-0000-000000000001",
+            "name": "Build Resume Response",
+        },
+        # 12. Success response (shared by list/block/unblock/suspend/resume)
         {
             "parameters": {
                 "respondWith": "json",
@@ -367,11 +495,11 @@ WF = {
             "id": "cal-resp-ok-0000-0000-0000-000000000001",
             "name": "Calendar Response",
         },
-        # 13. Invalid action response (switch output 3)
+        # 13. Invalid action response (switch output 5)
         {
             "parameters": {
                 "respondWith": "json",
-                "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend ou resume.' }) }}",
                 "options": {"responseCode": 400},
             },
             "type": "n8n-nodes-base.respondToWebhook",
@@ -399,6 +527,8 @@ WF = {
                 [{"node": "List Availability", "type": "main", "index": 0}],
                 [{"node": "Block Slot", "type": "main", "index": 0}],
                 [{"node": "Unblock Slot", "type": "main", "index": 0}],
+                [{"node": "Suspend Artist", "type": "main", "index": 0}],
+                [{"node": "Resume Artist", "type": "main", "index": 0}],
                 [{"node": "Invalid Action Response", "type": "main", "index": 0}],
             ]
         },
@@ -418,6 +548,18 @@ WF = {
             "main": [[{"node": "Build Unblock Response", "type": "main", "index": 0}]]
         },
         "Build Unblock Response": {
+            "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
+        },
+        "Suspend Artist": {
+            "main": [[{"node": "Build Suspend Response", "type": "main", "index": 0}]]
+        },
+        "Build Suspend Response": {
+            "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
+        },
+        "Resume Artist": {
+            "main": [[{"node": "Build Resume Response", "type": "main", "index": 0}]]
+        },
+        "Build Resume Response": {
             "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
         },
     },

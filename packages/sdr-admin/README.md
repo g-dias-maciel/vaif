@@ -5,7 +5,7 @@ the production landing page (which isn't ready yet). It contains just the two
 pages the artist needs:
 
 - `/onboard/<token>` — scan the WAHA QR to connect the artist's WhatsApp Business
-- `/agenda/<token>` — see derived availability and block/unblock days off
+- `/agenda/<token>` — see scheduled tattoos, pause/reactivate the SDR, and block/unblock days off
 
 ## Layout
 
@@ -24,13 +24,13 @@ sdr-admin/
 | Variable | Description |
 |---|---|
 | `N8N_ONBOARD_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/onboard-api` — validate/status/consume QR connect |
-| `N8N_AGENDA_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/calendar` — availability list + block/unblock |
+| `N8N_AGENDA_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/calendar` — list scheduled/blocked + block/unblock + suspend/resume |
 
 ## Backing n8n workflows (already deployed on staging)
 
 - `Artist Onboard Webhook` (path `onboard-api`) — token validation, WAHA QR
   fetch (base64), scan-state polling, token consume.
-- `Artist Calendar Webhook` (path `calendar`) — availability list, block, unblock.
+- `Artist Calendar Webhook` (path `calendar`) — list scheduled tattoos + blocks, block/unblock, and suspend/resume the SDR.
 
 Both resolve the artist from the same per-artist `onboarding_token`; the token
 is kept after connect so one link serves both `/onboard` and `/agenda`.

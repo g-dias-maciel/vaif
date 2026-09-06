@@ -42,11 +42,16 @@ function mock_respond(array $payload, int $code = 200): void
 // Reset hook used by the test harness before each run.
 if (($_GET['reset'] ?? '') === '1') {
     mock_save_state([
+        'status' => 'live',
         'available' => [
             ['id' => 'aaaa1111-0000-0000-0000-000000000001', 'start_at' => '2026-09-10T13:00:00Z', 'end_at' => '2026-09-10T14:00:00Z'],
             ['id' => 'aaaa1111-0000-0000-0000-000000000002', 'start_at' => '2026-09-11T14:00:00Z', 'end_at' => '2026-09-11T15:00:00Z'],
         ],
         'blocks' => [],
+        'booked' => [
+            ['id' => 'eeee5555-0000-0000-0000-000000000001', 'start_at' => '2026-09-12T16:00:00Z', 'end_at' => '2026-09-12T18:00:00Z', 'client_name' => 'Maria Souza', 'placement' => 'braco_interno'],
+            ['id' => 'eeee5555-0000-0000-0000-000000000002', 'start_at' => '2026-09-15T17:00:00Z', 'end_at' => '2026-09-15T18:00:00Z', 'client_name' => 'Pedro Lima', 'placement' => 'antebraco'],
+        ],
     ]);
     mock_respond(['success' => true, 'reset' => true]);
 }
@@ -73,8 +78,10 @@ switch ($action) {
             'artist_name' => 'João Silva',
             'duration_min' => 60,
             'timezone' => 'America/Sao_Paulo',
+            'status' => $state['status'] ?? 'live',
             'available' => $state['available'],
             'blocks' => $state['blocks'],
+            'booked' => $state['booked'],
         ]);
 
     case 'block':
@@ -115,6 +122,22 @@ switch ($action) {
         usort($state['available'], static fn (array $a, array $b): int => strcmp($a['start_at'], $b['start_at']));
         mock_save_state($state);
         mock_respond(['success' => true, 'action' => 'unblock', 'block' => $removed]);
+
+    case 'suspend':
+        if (($state['status'] ?? 'live') !== 'live') {
+            mock_respond(['success' => false, 'action' => 'suspend', 'error' => 'status_transition_not_allowed', 'message' => 'Transição de status não permitida.']);
+        }
+        $state['status'] = 'suspended';
+        mock_save_state($state);
+        mock_respond(['success' => true, 'action' => 'suspend', 'status' => 'suspended']);
+
+    case 'resume':
+        if (($state['status'] ?? 'live') !== 'suspended') {
+            mock_respond(['success' => false, 'action' => 'resume', 'error' => 'status_transition_not_allowed', 'message' => 'Transição de status não permitida.']);
+        }
+        $state['status'] = 'live';
+        mock_save_state($state);
+        mock_respond(['success' => true, 'action' => 'resume', 'status' => 'live']);
 
     default:
         mock_respond(

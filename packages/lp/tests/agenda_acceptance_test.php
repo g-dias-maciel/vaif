@@ -182,7 +182,54 @@ $resp = request("$base/agenda/$VALID");
 assert_contains($resp['body'], 'data-block-count="0"', 'Block count back to 0');
 assert_not_contains($resp['body'], 'cccc3333-0000-0000-0000-000000000001', 'Block id no longer rendered');
 
-// --- Test 8: no PHP errors in any state ---
+// --- Test 8: scheduled tattoos section renders upcoming bookings ---
+echo "Test: scheduled tattoos section lists upcoming bookings\n";
+$resp = request("$base/agenda/$VALID");
+assert_contains($resp['body'], 'Tatuagens agendadas', 'Scheduled tattoos section present');
+assert_contains($resp['body'], 'data-booked-count="2"', 'Booked count is 2');
+assert_contains($resp['body'], 'Maria Souza', 'First booked client name shown');
+assert_contains($resp['body'], 'Pedro Lima', 'Second booked client name shown');
+assert_contains($resp['body'], 'braco_interno', 'First booked placement shown');
+assert_contains($resp['body'], 'antebraco', 'Second booked placement shown');
+// 2026-09-12T16:00:00Z in America/Sao_Paulo (UTC-3) -> 12/09/2026 13:00
+assert_contains($resp['body'], '12/09/2026 13:00', 'Booked slot rendered in artist local time');
+
+// --- Test 9: SDR status banner shows active by default ---
+echo "Test: SDR status banner defaults to active\n";
+$resp = request("$base/agenda/$VALID");
+assert_contains($resp['body'], 'Atendimento da Beatriz', 'SDR status section present');
+assert_contains($resp['body'], 'data-sdr-status="live"', 'SDR status is live');
+assert_contains($resp['body'], 'Atendimento ativo', 'Active status badge shown');
+assert_contains($resp['body'], 'Pausar atendimento', 'Pause button shown');
+
+// --- Test 10: pause the SDR → status flips to suspended with reactivate ---
+echo "Test: pausing the SDR shows suspended status and reactivate button\n";
+$resp = request("$base/agenda/$VALID", [
+    'action' => 'suspend',
+]);
+assert_true($resp['status'] === 200, "suspend POST status {$resp['status']}");
+assert_contains($resp['body'], 'pausado', 'Pause success message shown');
+
+$resp = request("$base/agenda/$VALID");
+assert_contains($resp['body'], 'data-sdr-status="suspended"', 'SDR status is suspended');
+assert_contains($resp['body'], 'Atendimento pausado', 'Paused status badge shown');
+assert_contains($resp['body'], 'Reativar atendimento', 'Reactivate button shown');
+assert_not_contains($resp['body'], 'Pausar atendimento', 'Pause button hidden while paused');
+
+// --- Test 11: reactivate the SDR → back to live ---
+echo "Test: reactivating the SDR restores active status\n";
+$resp = request("$base/agenda/$VALID", [
+    'action' => 'resume',
+]);
+assert_true($resp['status'] === 200, "resume POST status {$resp['status']}");
+assert_contains($resp['body'], 'reativado', 'Resume success message shown');
+
+$resp = request("$base/agenda/$VALID");
+assert_contains($resp['body'], 'data-sdr-status="live"', 'SDR status back to live');
+assert_contains($resp['body'], 'Atendimento ativo', 'Active status badge restored');
+assert_contains($resp['body'], 'Pausar atendimento', 'Pause button restored');
+
+// --- Test 12: no PHP errors in any state ---
 echo "Test: no PHP errors exposed across states\n";
 foreach ([
     "$base/agenda/",

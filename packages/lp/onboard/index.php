@@ -126,6 +126,10 @@ $path = parse_url($_SERVER['REQUEST_URI'] ?? '/', PHP_URL_PATH);
 
 // Route: /onboard/sucesso
 if ($path === '/onboard/sucesso' || str_ends_with($path, '/onboard/sucesso')) {
+    // The token is carried through the query string so the success page can
+    // deep-link the artist straight to their own /agenda/<token>.
+    $sucesso_token = preg_replace('/[^a-z0-9]/i', '', (string) ($_GET['token'] ?? ''));
+    $agenda_href = $sucesso_token !== '' ? "/agenda/$sucesso_token" : '/';
     $body = <<<HTML
     <div class="card">
         <div class="icon-large">&#x2705;</div>
@@ -134,7 +138,7 @@ if ($path === '/onboard/sucesso' || str_ends_with($path, '/onboard/sucesso')) {
         <p style="color: rgb(160,154,142); font-size: 0.9rem; margin: 16px 0;">
             Agora abra seu WhatsApp Business. A Beatriz vai te enviar uma mensagem para guiar a configuração do seu perfil.
         </p>
-        <a href="/" class="btn">Ir para o site</a>
+        <a href="$agenda_href" class="btn">Gerenciar minha agenda</a>
     </div>
 HTML;
     echo render_html('Conectado', $body);
@@ -292,7 +296,7 @@ $body = <<<HTML
                     });
                 }
                 setTimeout(function() {
-                    window.location.href = '/onboard/sucesso';
+                    window.location.href = '/onboard/sucesso?token=' + token.token;
                 }, 2000);
             }
         })

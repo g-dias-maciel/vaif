@@ -1,6 +1,6 @@
 {
   "name": "Artist Calendar Webhook",
-  "description": "Agenda admin webhook (#29) — list availability (derived 60-min slots + blocks), block and unblock time ranges for an artist, backed by Postgres. Auth: per-artist onboarding token; unknown/invalid tokens are rejected.",
+  "description": "Agenda admin webhook (#29) — list scheduled tattoos + availability (derived 60-min slots + blocks), block/unblock time ranges, and suspend/resume the SDR for an artist, backed by Postgres. Auth: per-artist onboarding token; unknown/invalid tokens are rejected.",
   "nodes": [
     {
       "parameters": {
@@ -95,8 +95,8 @@
     {
       "parameters": {
         "mode": "expression",
-        "numberOutputs": 4,
-        "output": "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : $json.action === 'unblock' ? 2 : 3 }}",
+        "numberOutputs": 6,
+        "output": "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : $json.action === 'unblock' ? 2 : $json.action === 'suspend' ? 3 : $json.action === 'resume' ? 4 : 5 }}",
         "options": {}
       },
       "type": "n8n-nodes-base.switch",
@@ -111,7 +111,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "(\n  SELECT id, start_at, end_at, type\n  FROM (\n    SELECT id, start_at, end_at, 'available'::text AS type\n    FROM check_availability(\n      $1::uuid,\n      COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),\n      COALESCE($3::timestamptz, now() + interval '60 days'),\n      COALESCE($4::integer, 60)\n    )\n    UNION ALL\n    SELECT id, start_at, end_at, type\n    FROM calendar\n    WHERE artist_id = $1::uuid\n      AND type = 'blocked'\n      AND end_at > now()\n  ) s\n  ORDER BY start_at\n)\nUNION ALL\nSELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text;",
+        "query": "(\n  SELECT id, start_at, end_at, type, lead_nome, placement, telefone\n  FROM (\n    SELECT id, start_at, end_at, 'available'::text AS type,\n           NULL::text AS lead_nome, NULL::text AS placement, NULL::text AS telefone\n    FROM check_availability(\n      $1::uuid,\n      COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),\n      COALESCE($3::timestamptz, now() + interval '60 days'),\n      COALESCE($4::integer, 60)\n    )\n    UNION ALL\n    SELECT c.id, c.start_at, c.end_at, c.type,\n           NULL::text, NULL::text, NULL::text\n    FROM calendar c\n    WHERE c.artist_id = $1::uuid\n      AND c.type = 'blocked'\n      AND c.end_at > now()\n    UNION ALL\n    SELECT c.id, c.start_at, c.end_at, 'booked'::text AS type,\n           l.nome, l.placement, l.telefone\n    FROM calendar c\n    LEFT JOIN leads l ON l.id = c.lead_id\n    WHERE c.artist_id = $1::uuid\n      AND c.type = 'booked'\n      AND c.end_at > now()\n  ) s\n  ORDER BY start_at\n)\nUNION ALL\nSELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text,\n       NULL::text, NULL::text, NULL::text;",
         "options": {
           "queryReplacement": "={{ [$json.id, $json.start_at, $json.end_at, $json.duration_min] }}"
         }
@@ -134,7 +134,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const items = $input.all();\nconst artist = $('Resolve Artist by Token').first().json;\n\nconst available = [];\nconst blocks = [];\n\nfor (const item of items) {\n  const row = item.json;\n  if (!row.id) continue; // sentinel row\n  const entry = { id: row.id, start_at: row.start_at, end_at: row.end_at };\n  if (row.type === 'blocked') blocks.push(entry);\n  else available.push(entry);\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: 'list',\n    artist_id: artist.id,\n    artist_name: artist.nome,\n    duration_min: artist.duration_min || 60,\n    timezone: artist.timezone,\n    available,\n    blocks,\n  }\n}];"
+        "jsCode": "const items = $input.all();\nconst artist = $('Resolve Artist by Token').first().json;\n\nconst available = [];\nconst blocks = [];\nconst booked = [];\n\nfor (const item of items) {\n  const row = item.json;\n  if (!row.id) continue; // sentinel row\n  if (row.type === 'booked') {\n    booked.push({\n      id: row.id,\n      start_at: row.start_at,\n      end_at: row.end_at,\n      client_name: row.lead_nome || null,\n      placement: row.placement || null,\n      telefone: row.telefone || null,\n    });\n  } else if (row.type === 'blocked') {\n    blocks.push({ id: row.id, start_at: row.start_at, end_at: row.end_at });\n  } else {\n    available.push({ id: row.id, start_at: row.start_at, end_at: row.end_at });\n  }\n}\n\nreturn [{\n  json: {\n    success: true,\n    action: 'list',\n    artist_id: artist.id,\n    artist_name: artist.nome,\n    duration_min: artist.duration_min || 60,\n    timezone: artist.timezone,\n    status: artist.status,\n    available,\n    blocks,\n    booked,\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -221,6 +221,80 @@
     },
     {
       "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status FROM suspend_artist($1::uuid);",
+        "options": {
+          "queryReplacement": "={{ [$json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        200
+      ],
+      "id": "cal-suspend-0000-0000-0000-000000000001",
+      "name": "Suspend Artist",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const row = $input.first().json;\nif (!row.id) {\n  return [{\n    json: {\n      success: false,\n      action: $json.action,\n      error: 'status_transition_not_allowed',\n      message: 'Transição de status não permitida.',\n    }\n  }];\n}\nreturn [{\n  json: {\n    success: true,\n    action: $json.action,\n    status: row.status,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        200
+      ],
+      "id": "cal-suspend-resp-0000-0000-0000-000000000001",
+      "name": "Build Suspend Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT id, status FROM resume_artist($1::uuid);",
+        "options": {
+          "queryReplacement": "={{ [$json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        400
+      ],
+      "id": "cal-resume-0000-0000-0000-000000000001",
+      "name": "Resume Artist",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const row = $input.first().json;\nif (!row.id) {\n  return [{\n    json: {\n      success: false,\n      action: $json.action,\n      error: 'status_transition_not_allowed',\n      message: 'Transição de status não permitida.',\n    }\n  }];\n}\nreturn [{\n  json: {\n    success: true,\n    action: $json.action,\n    status: row.status,\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        400
+      ],
+      "id": "cal-resume-resp-0000-0000-0000-000000000001",
+      "name": "Build Resume Response"
+    },
+    {
+      "parameters": {
         "respondWith": "json",
         "responseBody": "={{ JSON.stringify($json) }}",
         "options": {
@@ -239,7 +313,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block ou unblock.' }) }}",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend ou resume.' }) }}",
         "options": {
           "responseCode": 400
         }
@@ -320,6 +394,20 @@
         ],
         [
           {
+            "node": "Suspend Artist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Resume Artist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
             "node": "Invalid Action Response",
             "type": "main",
             "index": 0
@@ -383,6 +471,50 @@
       ]
     },
     "Build Unblock Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Suspend Artist": {
+      "main": [
+        [
+          {
+            "node": "Build Suspend Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Suspend Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Resume Artist": {
+      "main": [
+        [
+          {
+            "node": "Build Resume Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Resume Response": {
       "main": [
         [
           {
