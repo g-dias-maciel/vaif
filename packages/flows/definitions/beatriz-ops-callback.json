@@ -1,0 +1,279 @@
+{
+  "name": "Beatriz Ops Callback",
+  "description": "Handles Telegram inline-button callbacks (deposit/handoff confirm+cancel) from the ops group on 'Telegram account 2'. Deterministic: parse callback, update the lead in Postgres, answer/edit the group message, and send the fixed 'Sinal recebido' confirmation to the lead via WAHA.",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "callback_query"
+        ],
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ],
+      "id": "oc-trigger-0000-0000-0000-000000000001",
+      "name": "Telegram Trigger",
+      "webhookId": "oc-7f6d4a2e-1b3c-4d5e-8f9a-0b1c2d3e4f5a",
+      "credentials": {
+        "telegramApi": {
+          "id": "pL4lbcexwUidxd1r",
+          "name": "Beatriz Ops"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const cq = $('Telegram Trigger').first().json.callback_query;\nconst data = (cq.data || '').split(':');\nconst type = data[0];\nconst action = data[1] || null;\nconst leadId = data[2] || null;\nconst messageId = cq.message ? cq.message.message_id : null;\nconst chatId = cq.message ? cq.message.chat.id : null;\nconst callbackId = cq.id;\n\nlet query = null;\nlet answerText = '';\nlet editText = '';\n\nif (type === 'handoff') {\n  if (action === 'confirm') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'fechado\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u2705 Handoff aceito! Lead movido para fechado.';\n    editText = '<b>\\u2705 Handoff aceito</b>';\n  } else if (action === 'cancel') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'perdido\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u274C Handoff recusado. Lead movido para perdido.';\n    editText = '<b>\\u274C Handoff recusado</b>';\n  }\n} else if (type === 'deposit') {\n  if (action === 'confirm') {\n    query = 'WITH u AS (UPDATE public.leads l SET deposit_status = \\'confirmado\\' WHERE l.id = \\'' + leadId + '\\'::uuid RETURNING l.id, l.pipeline_status, l.telefone, l.nome, l.booked_date, l.artist_id) SELECT u.id, u.pipeline_status, u.telefone, u.nome, u.booked_date, a.wa_session_slug, a.nome AS artista_nome FROM u LEFT JOIN public.artists a ON a.id = u.artist_id;';\n    answerText = '\\u2705 Sinal confirmado! Prossiga com o agendamento.';\n    editText = '<b>\\u2705 Sinal Recebido \\u2014 Pronto para agendamento</b>';\n  } else if (action === 'cancel') {\n    query = 'UPDATE public.leads SET pipeline_status = \\'perdido\\' WHERE id = \\'' + leadId + '\\'::uuid RETURNING id, pipeline_status;';\n    answerText = '\\u274C Sinal n\\u00E3o recebido. Lead movido para perdido.';\n    editText = '<b>\\u274C Sinal N\\u00E3o Recebido</b>';\n  }\n}\n\nreturn [{ json: {\n  type,\n  action,\n  lead_id: leadId,\n  answer_text: answerText,\n  edit_text: editText,\n  callback_id: callbackId,\n  message_id: messageId,\n  chat_id: chatId,\n  query,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        260,
+        0
+      ],
+      "id": "oc-parse-0000-0000-0000-000000000001",
+      "name": "Parse Callback"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        0
+      ],
+      "id": "oc-update-0000-0000-0000-000000000001",
+      "name": "Update Lead (Callback)",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "resource": "callback",
+        "queryId": "={{ $('Parse Callback').first().json.callback_id }}",
+        "additionalFields": {}
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        780,
+        -200
+      ],
+      "id": "oc-answer-0000-0000-0000-000000000001",
+      "name": "Answer Callback",
+      "webhookId": "oc-answer-0a1b2c3d-4e5f-6789-abcd-ef0123456789",
+      "credentials": {
+        "telegramApi": {
+          "id": "pL4lbcexwUidxd1r",
+          "name": "Beatriz Ops"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "editMessageText",
+        "chatId": "={{ $('Parse Callback').first().json.chat_id }}",
+        "messageId": "={{ $('Parse Callback').first().json.message_id }}",
+        "text": "={{ $('Parse Callback').first().json.edit_text }}",
+        "additionalFields": {
+          "parse_mode": "HTML"
+        }
+      },
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1040,
+        -200
+      ],
+      "id": "oc-edit-0000-0000-0000-000000000001",
+      "name": "Edit Handoff Message",
+      "webhookId": "oc-edit-9f8e7d6c-5b4a-3210-fedc-ba9876543210",
+      "credentials": {
+        "telegramApi": {
+          "id": "pL4lbcexwUidxd1r",
+          "name": "Beatriz Ops"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const parseData = $('Parse Callback').first().json;\nconst updated = $('Update Lead (Callback)').first().json;\n\nconst isDepositConfirm = parseData.type === 'deposit' && parseData.action === 'confirm';\nif (!isDepositConfirm || !updated || !updated.telefone) {\n  return [{ json: { send: false } }];\n}\n\nfunction fmtDate(iso) {\n  const dias = ['domingo','segunda','terça','quarta','quinta','sexta','sábado'];\n  const dt = new Date(iso);\n  const parts = new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', weekday: 'long', day: 'numeric', hour: 'numeric', hour12: false }).formatToParts(dt);\n  let wd='', dia='', hora='';\n  for (const p of parts) {\n    if (p.type==='weekday') wd = p.value;\n    if (p.type==='day') dia = p.value;\n    if (p.type==='hour') hora = p.value;\n  }\n  return wd + ', dia ' + dia + ' às ' + hora + ' horas';\n}\n\nconst artista = updated.artista_nome || 'artista';\nconst quando = updated.booked_date ? fmtDate(updated.booked_date) : null;\nconst text = quando\n  ? 'Sinal recebido! Seu agendamento está confirmado para ' + quando + '. O ' + artista + ' te espera lá!'\n  : 'Sinal recebido! Seu agendamento está confirmado. O ' + artista + ' te espera lá!';\n\nreturn [{ json: { send: true, session: updated.wa_session_slug, chatId: updated.telefone + '@c.us', text } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        780,
+        200
+      ],
+      "id": "oc-build-0000-0000-0000-000000000001",
+      "name": "Build Deposit Confirm Message"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "oc-dep-if-cond-0000",
+              "leftValue": "={{ $json.send }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        1040,
+        200
+      ],
+      "id": "oc-dep-if-0000-0000-0000-000000000001",
+      "name": "Send Deposit Confirm?"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://waha.vaif.com.br/api/sendText",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "wahaApi",
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "session",
+              "value": "={{ $json.session }}"
+            },
+            {
+              "name": "chatId",
+              "value": "={{ $json.chatId }}"
+            },
+            {
+              "name": "text",
+              "value": "={{ $json.text }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1300,
+        200
+      ],
+      "id": "oc-waha-0000-0000-0000-000000000001",
+      "name": "Send WAHA Deposit Confirm",
+      "credentials": {
+        "wahaApi": {
+          "id": "uQsr20PaYqbQUAGD",
+          "name": "WAHA account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Parse Callback",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Callback": {
+      "main": [
+        [
+          {
+            "node": "Update Lead (Callback)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update Lead (Callback)": {
+      "main": [
+        [
+          {
+            "node": "Answer Callback",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Deposit Confirm Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Answer Callback": {
+      "main": [
+        [
+          {
+            "node": "Edit Handoff Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Deposit Confirm Message": {
+      "main": [
+        [
+          {
+            "node": "Send Deposit Confirm?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Deposit Confirm?": {
+      "main": [
+        [
+          {
+            "node": "Send WAHA Deposit Confirm",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

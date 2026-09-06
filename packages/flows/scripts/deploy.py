@@ -102,13 +102,24 @@ def create_workflow(def_path):
     return wf_id
 
 
+def get_workflow(wf_id):
+    return request("GET", f"/workflows/{wf_id}")
+
+
 def update_workflow(wf_id, def_path):
     with open(def_path) as f:
         wf = json.load(f)
 
+    # n8n's PUT /workflows/{id} can reset `active` to false, silently taking a
+    # production workflow offline. Preserve the pre-update active state and
+    # re-activate if the update turned it off.
+    was_active = bool(get_workflow(wf_id).get("active", False))
     payload = _clean_payload(wf, keep_ids=True)
     result = request("PUT", f"/workflows/{wf_id}", payload)
     print(f"Updated: {result.get('name')} (ID: {wf_id})")
+    if was_active and not result.get("active"):
+        request("POST", f"/workflows/{wf_id}/activate", {})
+        print(f"Re-activated: {wf_id}")
 
 def activate(wf_id):
     request("POST", f"/workflows/{wf_id}/activate", {})

@@ -36,6 +36,10 @@ CLASSIFY_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/classify-conve
 POSTGRES = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
 OPENROUTER = {"openRouterApi": {"id": "ow26hPDMir1dMfz0", "name": "OpenRouter account"}}
 WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
+# Dedicated ops bot — receives the deposit/handoff confirm buttons (callback_query)
+# handled by the "Beatriz Ops Callback" workflow. Kept separate from "Telegram
+# account 2" (VAIF Agent) because Telegram allows one webhook per bot.
+TELEGRAM_OPS = {"telegramApi": {"id": "pL4lbcexwUidxd1r", "name": "Beatriz Ops"}}
 
 # ── Resolve Artist: session slug -> artist row, plus an explicit `found`
 #    boolean. n8n's `isNotEmpty` returns TRUE for null, so a null-uuid row
@@ -1124,7 +1128,7 @@ return [{
             "position": [5980, 260],
             "id": "tg-notify-0000-0000-0000-000000000001",
             "name": "Send Notification to Group",
-            "credentials": {"telegramApi": {"id": "ddaVhX88IF54TVAS", "name": "Telegram account 2"}},
+            "credentials": TELEGRAM_OPS,
         },
     ],
     "connections": {
