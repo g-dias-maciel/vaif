@@ -118,10 +118,10 @@
     {
       "parameters": {
         "fromEmail": "contato@vaif.com.br",
-        "toEmail": "={{ $json.email }}",
+        "toEmail": "={{ $('Montar Diagnóstico').item.json.email }}",
         "subject": "Seu diagnóstico gratuito VAIF está pronto",
         "emailFormat": "html",
-        "html": "={{ $json.html_email }}",
+        "html": "={{ $('Montar Diagnóstico').item.json.html_email }}",
         "options": {}
       },
       "type": "n8n-nodes-base.emailSend",
