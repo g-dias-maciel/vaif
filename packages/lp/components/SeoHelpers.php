@@ -2,6 +2,31 @@
 
 declare(strict_types=1);
 
+/**
+ * Encode JSON-LD safely.
+ *
+ * JSON_HEX_TAG escapes `<` and `>` so a config value containing `</script>`
+ * can never terminate the surrounding <script> block.
+ */
+function encodeJsonLd(array $data): string
+{
+    try {
+        $json = json_encode(
+            $data,
+            JSON_UNESCAPED_SLASHES
+            | JSON_UNESCAPED_UNICODE
+            | JSON_HEX_TAG
+            | JSON_HEX_AMP
+            | JSON_HEX_APOS
+            | JSON_HEX_QUOT
+            | JSON_THROW_ON_ERROR
+        );
+        return jsonLdScript($json);
+    } catch (JsonException $e) {
+        return '';
+    }
+}
+
 function jsonLdScript(string $json): string
 {
     return '<script type="application/ld+json">' . "\n" . $json . "\n" . '</script>';
@@ -26,12 +51,7 @@ function generateOrganizationJsonLd(): string
         ],
     ];
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
-    }
+    return encodeJsonLd($data);
 }
 
 function generateBlogPostingJsonLd(array $post): string
@@ -65,23 +85,30 @@ function generateBlogPostingJsonLd(array $post): string
         $data['mainEntityOfPage'] = $post['mainEntityOfPage'];
     }
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
-    }
+    return encodeJsonLd($data);
 }
 
+/**
+ * Tattoo studio / local business schema.
+ *
+ * Accepts the plain keys used by the artist template (name, url, image,
+ * address, telephone, priceRange, sameAs) plus the richer keys that drive
+ * local + AI search: description, type, geo, openingHours, areaServed,
+ * knowsAbout, aggregateRating and review.
+ */
 function generateLocalBusinessJsonLd(array $artist): string
 {
     $data = [
         '@context' => 'https://schema.org',
-        '@type' => 'LocalBusiness',
+        '@type' => $artist['type'] ?? 'LocalBusiness',
         'name' => $artist['name'] ?? '',
         'url' => $artist['url'] ?? '',
         'image' => $artist['image'] ?? '',
     ];
+
+    if (!empty($artist['description'])) {
+        $data['description'] = $artist['description'];
+    }
 
     if (!empty($artist['address'])) {
         $data['address'] = [
@@ -90,6 +117,15 @@ function generateLocalBusinessJsonLd(array $artist): string
             'addressLocality' => $artist['address']['city'] ?? '',
             'addressRegion' => $artist['address']['state'] ?? '',
             'postalCode' => $artist['address']['zip'] ?? '',
+            'addressCountry' => $artist['address']['country'] ?? 'BR',
+        ];
+    }
+
+    if (!empty($artist['geo']['latitude']) && !empty($artist['geo']['longitude'])) {
+        $data['geo'] = [
+            '@type' => 'GeoCoordinates',
+            'latitude' => $artist['geo']['latitude'],
+            'longitude' => $artist['geo']['longitude'],
         ];
     }
 
@@ -105,16 +141,45 @@ function generateLocalBusinessJsonLd(array $artist): string
         $data['sameAs'] = $artist['sameAs'];
     }
 
-    if (!empty($artist['openingHoursSpecification'])) {
+    if (!empty($artist['areaServed'])) {
+        $data['areaServed'] = $artist['areaServed'];
+    }
+
+    if (!empty($artist['knowsAbout'])) {
+        $data['knowsAbout'] = $artist['knowsAbout'];
+    }
+
+    $hours = $artist['openingHours'] ?? null;
+    if (is_array($hours) && !empty($hours['days']) && !empty($hours['opens']) && !empty($hours['closes'])) {
+        $data['openingHoursSpecification'] = [
+            [
+                '@type' => 'OpeningHoursSpecification',
+                'dayOfWeek' => array_values($hours['days']),
+                'opens' => $hours['opens'],
+                'closes' => $hours['closes'],
+            ],
+        ];
+    } elseif (!empty($artist['openingHoursSpecification'])) {
         $data['openingHoursSpecification'] = $artist['openingHoursSpecification'];
     }
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
+    if (!empty($artist['aggregateRating']['ratingValue'])) {
+        $rating = [
+            '@type' => 'AggregateRating',
+            'ratingValue' => (string) $artist['aggregateRating']['ratingValue'],
+            'bestRating' => '5',
+        ];
+        if (!empty($artist['aggregateRating']['reviewCount'])) {
+            $rating['reviewCount'] = (string) $artist['aggregateRating']['reviewCount'];
+        }
+        $data['aggregateRating'] = $rating;
     }
+
+    if (!empty($artist['review']) && is_array($artist['review'])) {
+        $data['review'] = $artist['review'];
+    }
+
+    return encodeJsonLd($data);
 }
 
 function generatePersonJsonLd(array $artist): string
@@ -127,16 +192,39 @@ function generatePersonJsonLd(array $artist): string
         'image' => $artist['image'] ?? '',
     ];
 
+    if (!empty($artist['description'])) {
+        $data['description'] = $artist['description'];
+    }
+
+    if (!empty($artist['url'])) {
+        $data['url'] = $artist['url'];
+    }
+
     if (!empty($artist['sameAs'])) {
         $data['sameAs'] = $artist['sameAs'];
     }
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
+    if (!empty($artist['knowsAbout'])) {
+        $data['knowsAbout'] = $artist['knowsAbout'];
     }
+
+    if (!empty($artist['address'])) {
+        $data['address'] = [
+            '@type' => 'PostalAddress',
+            'addressLocality' => $artist['address']['city'] ?? '',
+            'addressRegion' => $artist['address']['state'] ?? '',
+            'addressCountry' => $artist['address']['country'] ?? 'BR',
+        ];
+    }
+
+    if (!empty($artist['worksFor'])) {
+        $data['worksFor'] = [
+            '@type' => 'TattooParlor',
+            'name' => $artist['worksFor'],
+        ];
+    }
+
+    return encodeJsonLd($data);
 }
 
 function generateFaqPageJsonLd(array $faqItems): string
@@ -159,12 +247,7 @@ function generateFaqPageJsonLd(array $faqItems): string
         'mainEntity' => $questions,
     ];
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
-    }
+    return encodeJsonLd($data);
 }
 
 function generateBreadcrumbListJsonLd(array $crumbs): string
@@ -187,10 +270,5 @@ function generateBreadcrumbListJsonLd(array $crumbs): string
         'itemListElement' => $items,
     ];
 
-    try {
-        $json = json_encode($data, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE | JSON_THROW_ON_ERROR);
-        return jsonLdScript($json);
-    } catch (JsonException $e) {
-        return '';
-    }
+    return encodeJsonLd($data);
 }

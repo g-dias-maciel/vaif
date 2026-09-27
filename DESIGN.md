@@ -147,9 +147,16 @@ The page is a single-column narrative stack with two-column breakouts at key mom
 - Two-column services grid at 900px+, single-column below.
 - Three-column footer (2:1:1 ratio), single-column on mobile.
 
-**Breakpoints:** 900px (tablet collapse), 768px (mobile nav + full single-column), 600px (tight mobile).
+**Breakpoints:** 900px (tablet collapse), 768px (mobile nav + full single-column), 600px (tight mobile), 480px and 380px (small phones). The `/artists/<slug>` template uses the 768/600/480/380 set.
 
 **Spacing rhythm:** The spacing scale (8, 16, 24, 40, 60, 80) follows an 8px base unit with exponential feel. Component internal padding leans toward 40px/60px for luxury breathing room; compact elements (time slots, nav pills) use 16px.
+
+### Surfaces
+
+The system spans two surfaces that share color, type, spacing and the diamond/needle motifs:
+
+- **Agency landing page** (`packages/lp/index.php`, `style.css`): the broadcast stack that sells VAIF. Uses the full scroll choreography (`fade-in-up` with staggered `delay-1/2/3` reveals) and the 900/768/600 breakpoints.
+- **Artist template** (`packages/lp/artists/`, `artist.css`): a per-artist portfolio at `/artists/<slug>` — hero, portfolio, cover-up comparison, about, booking, testimonials, Instagram, FAQ, location. Same palette, type and motifs, but its own nav and 768/600/480/380 breakpoints. Sections render statically rather than with the agency's scroll choreography. Widget shells (booking box, testimonial cards, portfolio tiles) use the 8px/16px radii reserved for contained shells.
 
 ## Elevation & Depth
 

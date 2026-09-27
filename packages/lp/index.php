@@ -461,7 +461,7 @@
     <footer class="footer-extended">
         <div class="footer-grid">
             <div class="footer-brand">
-                <img src="img/vaif_logo.png" alt="VAIF" class="footer-logo-img">
+                <img src="img/vaif_logo.webp" alt="VAIF" class="footer-logo-img">
                 <p>Agência especializada em captação de clientes de alto padrão para estúdios de tatuagem no Brasil. Resultados comprovados com mais de 40 estúdios.</p>
             </div>
             <div class="footer-col">

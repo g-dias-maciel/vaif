@@ -40,7 +40,13 @@ function render_html(string $title, string $body, string $extra_head = ''): stri
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>$title — VAIF</title>
-    <link rel="icon" type="image/x-icon" href="/img/favicon.ico">
+    <link rel="icon" href="/img/favicon/favicon.ico" sizes="any" type="image/x-icon">
+    <link rel="icon" href="/img/favicon/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="icon" href="/img/favicon/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="/img/favicon/apple-touch-icon.png">
+    <link rel="icon" href="/img/favicon/android-chrome-192x192.png" sizes="192x192" type="image/png">
+    <link rel="icon" href="/img/favicon/android-chrome-512x512.png" sizes="512x512" type="image/png">
+    <link rel="manifest" href="/img/favicon/site.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;600;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">

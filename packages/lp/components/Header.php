@@ -2,7 +2,7 @@
     <nav class="navbar">
         <div class="container">
             <a href="index.php" class="nav-brand">
-                <img src="img/vaif_logo.png" alt="VAIF" class="nav-logo-img">
+                <img src="img/vaif_logo.webp" alt="VAIF" class="nav-logo-img">
                 <span class="nav-tagline">Automatize o seu estúdio</span>
             </a>
             <button class="nav-hamburger" id="nav-hamburger" aria-label="Abrir menu" aria-expanded="false">

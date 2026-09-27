@@ -187,6 +187,165 @@ test('Calculadora v2 has calculator form', str_contains($calc2, 'id="calcForm"')
 test('Calculadora v2 has lead form', str_contains($calc2, 'id="leadForm"'));
 test('Calculadora v2 uses marquee-set wrappers', str_contains($calc2, 'class="marquee-set"'));
 
+// ── 7c. Calculadora warm-up video facade ────────────────
+echo "\n=== Calculadora warm-up video ===\n";
+$videoFacadeJs = fetch("{$BASE}/js/video-facade.js");
+test('calculadora.php has warm-up video facade',
+    str_contains($calc, 'data-video-id="oI9-nRi5gQ8"'),
+    'Missing data-video-id facade on calculadora');
+test('calculadora.php loads video-facade.js',
+    str_contains($calc, 'js/video-facade.js'),
+    'Missing video-facade.js include on calculadora');
+test('calculadora.php dropped placeholder video image',
+    !str_contains($calc, 'placehold.co/560x315'),
+    'placehold.co video placeholder still present');
+test('calculadora-v2.php has warm-up video facade',
+    str_contains($calc2, 'data-video-id="oI9-nRi5gQ8"'),
+    'Missing data-video-id facade on calculadora-v2');
+test('calculadora-v2.php loads video-facade.js',
+    str_contains($calc2, 'js/video-facade.js'),
+    'Missing video-facade.js include on calculadora-v2');
+test('video-facade.js uses privacy-enhanced embed',
+    str_contains($videoFacadeJs, 'youtube-nocookie.com/embed'),
+    'Facade does not use youtube-nocookie.com');
+test('video-facade.js defers iframe until click',
+    str_contains($videoFacadeJs, 'addEventListener') && !str_contains($videoFacadeJs, '<iframe'),
+    'Facade does not defer iframe creation to a click');
+test('video-facade.js drives any [data-video-id]',
+    str_contains($videoFacadeJs, "querySelectorAll('[data-video-id]')"),
+    'Facade selector is not generic');
+
+// ── 7d. Calculadora testimonial video (Sergio Moraes) ──
+echo "\n=== Calculadora testimonial video ===\n";
+test('calculadora.php has testimonial video facade',
+    str_contains($calc, 'data-video-id="xERLTwPdnPk"'),
+    'Missing testimonial video facade on calculadora');
+test('calculadora-v2.php has testimonial video facade',
+    str_contains($calc2, 'data-video-id="xERLTwPdnPk"'),
+    'Missing testimonial video facade on calculadora-v2');
+test('testimonial video sits before the lead form',
+    strpos($calc, 'data-video-id="xERLTwPdnPk"') !== false
+        && strpos($calc, 'data-video-id="xERLTwPdnPk"') < strpos($calc, 'id="leadForm"'),
+    'Testimonial video should appear before the lead form');
+test('testimonial video credits the artist',
+    str_contains($calc, '@sergiomoraestattoo'),
+    'Missing @sergiomoraestattoo caption');
+test('testimonial block hidden after lead submit',
+    str_contains($calc, ".depoimento-video-block'"),
+    'Testimonial block not hidden in calculadora.php submit handler');
+
+// ── 7e. Carousel result images optimized to WebP ────────
+echo "\n=== Carousel result images (WebP) ===\n";
+foreach (['guitattoo', 'rsilva', 'dinho'] as $artist) {
+    test("calculadora.php uses webp for {$artist} result photo",
+        str_contains($calc, "/img/{$artist}_resultado.webp"),
+        "Missing webp result photo for {$artist}");
+}
+test('calculadora.php carousel has no legacy raster refs',
+    !str_contains($calc, '_resultado.png') && !str_contains($calc, '_resultado.jpeg'),
+    'Legacy PNG/JPEG carousel reference still present');
+test('calculadora.php carousel photos lazy-load',
+    str_contains($calc, 'carousel-photo" src="/img/guitattoo_resultado.webp" alt="Gui Tattoo" loading="lazy"'),
+    'Result photos are not lazy-loaded');
+test('calculadora-v2.php uses webp result photos',
+    str_contains($calc2, '/img/rsilva_resultado.webp'),
+    'Missing webp result photo on calculadora-v2');
+foreach (['guitattoo_resultado.webp', 'rsilva_resultado.webp', 'dinho_resultado.webp'] as $f) {
+    $p = __DIR__ . '/../img/' . $f;
+    $data = is_file($p) ? file_get_contents($p) : '';
+    test("webp asset {$f} is valid WebP",
+        substr($data, 0, 4) === 'RIFF' && substr($data, 8, 4) === 'WEBP',
+        'Missing or invalid WebP file');
+}
+test('legacy result source images removed',
+    !is_file(__DIR__ . '/../img/rsilva_resultado.png')
+        && !is_file(__DIR__ . '/../img/dinho_resultado.png')
+        && !is_file(__DIR__ . '/../img/guitattoo_resultado.jpeg'),
+    'Legacy large source images still present');
+
+// ── 7f. Logo + favicons optimized ───────────────────────
+echo "\n=== Logo & favicons ===\n";
+$logoWebp = __DIR__ . '/../img/vaif_logo.webp';
+$lw = is_file($logoWebp) ? file_get_contents($logoWebp) : '';
+test('vaif_logo.webp is valid WebP',
+    substr($lw, 0, 4) === 'RIFF' && substr($lw, 8, 4) === 'WEBP',
+    'Missing or invalid vaif_logo.webp');
+test('Header nav logo uses webp',
+    str_contains(file_get_contents(__DIR__ . '/../components/Header.php'), 'img/vaif_logo.webp'),
+    'Nav logo not switched to webp');
+test('Homepage footer logo uses webp',
+    str_contains($index, 'img/vaif_logo.webp'),
+    'Footer logo not switched to webp');
+test('og:image keeps PNG for social crawlers',
+    str_contains($index, 'https://vaif.com.br/img/vaif_logo.png'),
+    'og:image should remain PNG');
+
+$favicons = [
+    'favicon-16x16.png' => 16,
+    'favicon-32x32.png' => 32,
+    'apple-touch-icon.png' => 180,
+    'android-chrome-192x192.png' => 192,
+    'android-chrome-512x512.png' => 512,
+];
+foreach ($favicons as $f => $size) {
+    $p = __DIR__ . '/../img/favicon/' . $f;
+    $d = is_file($p) ? file_get_contents($p) : '';
+    $isPng = substr($d, 0, 8) === "\x89PNG\r\n\x1a\n";
+    $w = $isPng ? unpack('N', substr($d, 16, 4))[1] : 0;
+    $h = $isPng ? unpack('N', substr($d, 20, 4))[1] : 0;
+    test("favicon {$f} is a {$size}x{$size} square PNG",
+        $isPng && $w === $size && $h === $size,
+        "got {$w}x{$h}");
+}
+
+$icoPath = __DIR__ . '/../img/favicon/favicon.ico';
+$ico = is_file($icoPath) ? file_get_contents($icoPath) : '';
+$icoCount = strlen($ico) >= 6 ? unpack('v', substr($ico, 4, 2))[1] : 0;
+test('favicon.ico embeds 16/32/48', $icoCount === 3, "entries={$icoCount}");
+
+$manifest = is_file(__DIR__ . '/../img/favicon/site.webmanifest')
+    ? file_get_contents(__DIR__ . '/../img/favicon/site.webmanifest') : '';
+test('webmanifest icon paths resolve under /img/favicon/',
+    str_contains($manifest, '/img/favicon/android-chrome-192x192.png')
+        && str_contains($manifest, '/img/favicon/android-chrome-512x512.png'),
+    'webmanifest icon paths are wrong');
+
+// ── 7g. Broken favicon paths on LP utility pages ────────
+echo "\n=== Favicon paths (LP utility pages) ===\n";
+foreach (['onboard/index.php', 'agenda/index.php'] as $page) {
+    $src = file_get_contents(__DIR__ . '/../' . $page);
+    test("{$page} links the existing favicon.ico",
+        str_contains($src, 'href="/img/favicon/favicon.ico"'),
+        'Favicon path is wrong');
+    test("{$page} has no broken /img/favicon.ico link",
+        !str_contains($src, 'href="/img/favicon.ico"'),
+        'Broken favicon path still present');
+    test("{$page} has the full favicon set",
+        str_contains($src, 'apple-touch-icon')
+            && str_contains($src, 'android-chrome-512x512.png')
+            && str_contains($src, 'site.webmanifest'),
+        'Incomplete favicon set');
+}
+
+// ── 7h. Qualification floor lowered to R$4k ─────────────
+echo "\n=== Qualification gate (R$4k) ===\n";
+$gateSources = [
+    'calculadora.php' => $calc,
+    'js/calculadora-page.js' => file_get_contents(__DIR__ . '/../js/calculadora-page.js'),
+    'js/calculator.js' => file_get_contents(__DIR__ . '/../js/calculator.js'),
+];
+foreach ($gateSources as $name => $content) {
+    test("{$name} gates at >= 4000",
+        str_contains($content, 'faturamento >= 4000'),
+        'Qualification floor not lowered');
+    test("{$name} has no stale > 7000 gate",
+        !str_contains($content, 'faturamento > 7000'),
+        'Stale 7000 threshold still present');
+}
+test('Conviction copy references R$ 4.000',
+    str_contains($calc, 'R$ 4.000 com realismo') && str_contains($calc2, 'R$ 4.000 com realismo'),
+    'Conviction copy still says R$ 7.000');
+
 // ── 8. JS files load ──────────────────────────────────
 echo "\n=== JavaScript ===\n";
 $mainJs = file_get_contents(__DIR__ . '/../js/main.js'); // Already loaded
@@ -237,7 +396,7 @@ foreach ($sectionIds as $sid) {
 // WhatsApp
 test('WhatsApp link contains correct number', str_contains($artistPage, 'wa.me/5511999999999'),
     'WhatsApp number not found in page');
-test('WhatsApp link has correct message text', str_contains($artistPage, 'Ola,%20vim%20pelo%20seu%20site%20no%20vaif.com.br'),
+test('WhatsApp link has correct message text', str_contains($artistPage, 'vim%20pelo%20seu%20site%20no%20vaif.com.br'),
     'WhatsApp message text incorrect');
 
 // Hero background video
@@ -263,8 +422,8 @@ test('JSON-LD Person schema present', str_contains($artistPage, '"@type":"Person
     'JSON-LD Person missing');
 test('JSON-LD FAQPage schema present', str_contains($artistPage, '"@type":"FAQPage"'),
     'JSON-LD FAQPage missing');
-test('JSON-LD LocalBusiness schema present', str_contains($artistPage, '"@type":"LocalBusiness"'),
-    'JSON-LD LocalBusiness missing');
+test('JSON-LD TattooParlor schema present', str_contains($artistPage, '"@type":"TattooParlor"'),
+    'JSON-LD TattooParlor missing');
 test('JSON-LD BreadcrumbList schema present', str_contains($artistPage, '"@type":"BreadcrumbList"'),
     'JSON-LD BreadcrumbList missing');
 test('Artist page has canonical URL', str_contains($artistPage, '<link rel="canonical" href="https://vaif.com.br/artists/joao-silva">'),
@@ -302,8 +461,8 @@ echo "\n=== SEO (#26) ===\n";
 $robots = fetch("{$BASE}/robots.txt");
 test('robots.txt returns 200', strlen($robots) > 0);
 test('robots.txt allows OAI-SearchBot', str_contains($robots, 'OAI-SearchBot'));
-test('robots.txt disallows GPTBot', str_contains($robots, 'GPTBot'));
-test('robots.txt disallows Google-Extended', str_contains($robots, 'Google-Extended'));
+test('robots.txt allows GPTBot (AI discovery)', preg_match('/User-agent: GPTBot\s+Allow: \//', $robots) === 1);
+test('robots.txt allows Google-Extended (AI discovery)', preg_match('/User-agent: Google-Extended\s+Allow: \//', $robots) === 1);
 test('robots.txt references sitemap', str_contains($robots, 'Sitemap: https://vaif.com.br/sitemap.xml'));
 
 // Test sitemap

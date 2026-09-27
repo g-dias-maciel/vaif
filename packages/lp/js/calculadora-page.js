@@ -41,6 +41,7 @@ async function handleLeadSubmit(event) {
             document.querySelector('.locked-action').style.display = 'none';
             document.getElementById('instrucaoForm').style.display = 'none';
             document.querySelector('.conviction-block').style.display = 'none';
+            document.querySelector('.depoimento-video-block').style.display = 'none';
 
             const nomePrimeiro = form.nome.value.split(' ')[0];
             const calc = window.calcData || {};
@@ -58,7 +59,7 @@ async function handleLeadSubmit(event) {
             await new Promise(function(r) { setTimeout(r, 1500); });
             document.getElementById('analyzingOverlay').style.display = 'none';
 
-            if (window.calcData.faturamento > 7000) {
+            if (window.calcData.faturamento >= 4000) {
                 try {
                     const resHorarios = await fetch('/api/leads/get_horarios.php');
                     const dataHorarios = await resHorarios.json();

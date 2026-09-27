@@ -85,6 +85,32 @@ function test(label, ok, detail = '') {
   const calcTitle = await calcPage.title();
   test('Calculadora page loads', calcTitle.length > 0, `title="${calcTitle}"`);
 
+  // Warm-up video facade — branded poster until click, then privacy-enhanced embed
+  const facadeCount = await calcPage.locator('.homework-video[data-video-id="oI9-nRi5gQ8"]').count();
+  test('Calculadora warm-up video facade present', facadeCount > 0, `count=${facadeCount}`);
+  test('Warm-up facade ships no embed before click',
+    await calcPage.locator('.homework-video iframe').count() === 0);
+  await calcPage.evaluate(() => {
+    document.querySelector('.homework-video[data-video-id]').click();
+  });
+  await calcPage.waitForTimeout(200);
+  const embedSrc = await calcPage.locator('.homework-video iframe').first().getAttribute('src');
+  test('Clicking facade injects youtube-nocookie embed',
+    !!embedSrc && embedSrc.includes('youtube-nocookie.com/embed/oI9-nRi5gQ8'),
+    `src=${embedSrc}`);
+
+  // Testimonial video (Sergio Moraes) — same click-to-load facade
+  const depCount = await calcPage.locator('.depoimento-video[data-video-id="xERLTwPdnPk"]').count();
+  test('Calculadora testimonial video facade present', depCount > 0, `count=${depCount}`);
+  await calcPage.evaluate(() => {
+    document.querySelector('.depoimento-video[data-video-id]').click();
+  });
+  await calcPage.waitForTimeout(200);
+  const depSrc = await calcPage.locator('.depoimento-video iframe').first().getAttribute('src');
+  test('Clicking testimonial loads youtube-nocookie embed',
+    !!depSrc && depSrc.includes('youtube-nocookie.com/embed/xERLTwPdnPk'),
+    `src=${depSrc}`);
+
   // ── Calculadora v2 page ───────────────────────────────
   console.log('\n=== Calculadora v2 page ===');
   const calc2Page = await ctx.newPage();

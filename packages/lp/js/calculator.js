@@ -236,7 +236,7 @@ async function handleLeadSubmit(event) {
 
             const nomePrimeiro = form.nome.value.split(' ')[0];
 
-            if (window.calcData.faturamento > 7000) {
+            if (window.calcData.faturamento >= 4000) {
                 try {
                     const resHorarios = await fetch('/api/leads/get_horarios.php');
                     const dataHorarios = await resHorarios.json();

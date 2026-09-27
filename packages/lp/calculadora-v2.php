@@ -269,8 +269,22 @@
                 <!-- OTIMIZAÇÃO: Bloco de Convicção -->
                 <div class="conviction-block fade-in-up delay-1">
                     <p style="font-size: 13px; color: var(--text-main); max-width: 520px; margin: 0 auto 20px; line-height: 1.8;">
-                        Se você fatura acima de <strong style="color: var(--gold);">R$ 7.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica — é seu sistema de captação. Enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada. <strong>A diferença não é talento. É processo.</strong>
+                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica — é seu sistema de captação. Enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada. <strong>A diferença não é talento. É processo.</strong>
                     </p>
+                </div>
+
+                <!-- Depoimento em Vídeo -->
+                <div class="depoimento-video-block fade-in-up">
+                    <p class="depoimento-video-title">Veja o que diz quem já escalou com a VAIF</p>
+                    <div class="depoimento-video" data-video-id="xERLTwPdnPk" data-video-title="Depoimento de Sergio Moraes" role="button" tabindex="0" aria-label="Assistir ao depoimento de Sergio Moraes">
+                        <div class="depoimento-poster">
+                            <span class="depoimento-poster-label">Depoimento — Sergio Moraes</span>
+                        </div>
+                        <div class="depoimento-play" aria-hidden="true">
+                            <svg width="18" height="20" viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"></polygon></svg>
+                        </div>
+                    </div>
+                    <p class="depoimento-video-caption">Sergio Moraes — <a href="https://instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer">@sergiomoraestattoo</a></p>
                 </div>
 
                 <!-- OTIMIZAÇÃO: Gatilho de Curiosidade no Texto -->
@@ -409,9 +423,11 @@
                         <!-- Card: Dever de Casa com Micro-Compromisso -->
                         <div class="homework-card">
                             <p class="homework-label">Passo Obrigatório Antes da Reunião:</p>
-                            <div class="homework-video">
-                                <img src="https://placehold.co/560x315/1a1a1a/555?text=Assista+ao+V%C3%ADdeo+de+Aquecimento&font=montserrat" alt="Vídeo de aquecimento">
-                                <div class="homework-play">
+                            <div class="homework-video" data-video-id="oI9-nRi5gQ8" data-video-title="Vídeo de aquecimento" role="button" tabindex="0" aria-label="Assistir ao vídeo de aquecimento">
+                                <div class="homework-poster">
+                                    <span class="homework-poster-label">Assista ao vídeo de aquecimento</span>
+                                </div>
+                                <div class="homework-play" aria-hidden="true">
                                     <svg width="18" height="20" viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"></polygon></svg>
                                 </div>
                             </div>
@@ -452,7 +468,7 @@
 
                     <!-- Slide 1 -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/guitattoo_resultado.jpeg" alt="Gui Tattoo">
+                        <img class="carousel-photo" src="/img/guitattoo_resultado.webp" alt="Gui Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/Guitattoobh" target="_blank" rel="noopener noreferrer">@Guitattoobh</a></p>
                         <div class="carousel-result">De <span>R$ 7k</span> para <span>R$ 20k</span> em 60 dias, com a agenda sempre lotada</div>
                         <p class="carousel-quote">Conheci o trabalho da VAIF em um momento onde a agenda estava vazia, não conseguia subir o preço das minhas tatuagens, estava sem perspectiva. Hoje, quase 2 anos depois, continuo o trabalho com eles e graças a Deus com a agenda lotada.</p>
@@ -460,7 +476,7 @@
 
                     <!-- Slide 2 (card do meio → inicial) -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/rsilva_resultado.png" alt="Rodrigo Silva">
+                        <img class="carousel-photo" src="/img/rsilva_resultado.webp" alt="Rodrigo Silva" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer">@rsilvatattoo</a></p>
                         <div class="carousel-result">De <span>R$ 9k</span> para <span>R$ 38k</span> em 30 dias</div>
                         <p class="carousel-quote">A VAIF assumiu quando abri meu estúdio. Na época, tinha acabado de me mudar para uma cidade nova, sem clientes e precisava de capital. No primeiro mês já vi o meu faturamento sair de 9 mil reais para 38 mil reais. Desde então a agenda fica lotada com pelo menos um mês de antecedência.</p>
@@ -468,7 +484,7 @@
 
                     <!-- Slide 3 -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/dinho_resultado.png" alt="Dinho Tattoo">
+                        <img class="carousel-photo" src="/img/dinho_resultado.webp" alt="Dinho Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer">@dinho_tattoo091</a></p>
                         <div class="carousel-result">De <span>R$ 15k</span> para <span>R$ 48k</span> em 75 dias</div>
                         <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio, já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
@@ -496,5 +512,6 @@
     <script src="js/main.js"></script>
     <script src="js/calculator.js"></script>
     <script src="js/calculadora-page.js"></script>
+    <script src="js/video-facade.js"></script>
 </body>
 </html>

@@ -1,13 +1,28 @@
-User-agent: OAI-SearchBot
+# AI + search crawlers are welcome — this site wants to be discoverable and
+# recommended by both traditional search engines and AI assistants.
+
+User-agent: *
 Allow: /
 
 User-agent: GPTBot
-Disallow: /
+Allow: /
+
+User-agent: OAI-SearchBot
+Allow: /
+
+User-agent: ChatGPT-User
+Allow: /
 
 User-agent: Google-Extended
-Disallow: /
+Allow: /
 
-User-agent: *
+User-agent: PerplexityBot
+Allow: /
+
+User-agent: ClaudeBot
+Allow: /
+
+User-agent: Applebot-Extended
 Allow: /
 
 Sitemap: https://vaif.com.br/sitemap.xml

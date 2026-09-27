@@ -52,7 +52,7 @@ Tattoo artists work 8–12 hour sessions, check WhatsApp sporadically between cl
 - R$18k average monthly revenue increase per studio.
 - 78% lead-to-booking conversion rate.
 - R$12 average cost per qualified lead.
-- Artist result screenshots: `packages/lp/img/rsilva_resultado.png`, `dinho_resultado.png`, `guitattoo_resultado.jpeg`.
+- Artist result screenshots: `packages/lp/img/rsilva_resultado.webp`, `dinho_resultado.webp`, `guitattoo_resultado.webp` (WebP, 440×440, served in the calculadora carousel).
 - Client roster (Instagram handles in marquee): Jhonatan Masters, Rodrigo Silva, Sergio Moraes, Kleber Rocker, Bueno Tattoo, Dinho Tattoo.
 - **Absences:** No video testimonials, no case study write-ups, no third-party press or awards.
 

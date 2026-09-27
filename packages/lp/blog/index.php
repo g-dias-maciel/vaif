@@ -71,7 +71,7 @@ function render_page(string $title, string $body, string $extra_head = ''): stri
         <nav class="navbar">
             <div class="container">
                 <a href="/" class="nav-brand">
-                    <img src="/img/vaif_logo.png" alt="VAIF" class="nav-logo-img">
+                    <img src="/img/vaif_logo.webp" alt="VAIF" class="nav-logo-img">
                     <span class="nav-tagline">Blog</span>
                 </a>
                 <ul class="nav-links" id="nav-links">

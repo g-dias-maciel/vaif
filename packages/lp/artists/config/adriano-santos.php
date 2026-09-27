@@ -6,26 +6,77 @@ return [
     'slug'             => 'adriano-santos',
     'display_name'     => 'Adriano Santos',
     'instagram_handle' => 'studiomadri_tattoo',
-    'style'            => 'Realismo Preto & Cinza, Tribal, Fine Line, Coberturas, Oriental',
+    'style'            => 'Realismo Preto & Cinza, Coberturas, Tribal, Fine Line, Oriental',
+    // Especialidade destacada — habilita blocos exclusivos (ex.: antes/depois de coberturas).
+    'specialty'        => 'coberturas',
     'profile_photo'    => 'https://images.unsplash.com/photo-1598371839696-5c5bb00bdc28?w=1200&q=85',
-    'whatsapp_number'  => '5511999999999',
+    // Fotos locais em WebP (artists/adriano-santos/media/). Enquanto o arquivo não existir,
+    // a página usa profile_photo como fallback.
+    'hero_photo'       => 'adriano-hero.webp',
+    'about_photo'      => 'adriano-bio.webp',
+    'whatsapp_number'  => '553599968249',
+    'whatsapp_message' => 'Olá, Adriano! Vim pelo seu site. Quero tatuar: (descreva a ideia) | Região do corpo: | Tenho referências:',
+    'price_range'      => 'R$ 1.200+',
 
     'hero_headline'    => 'Adriano Santos | Especialista em Coberturas | Poços de Caldas',
-    'hero_subheadline' => 'Transformo memórias em arte eterna na pele. Especialista em coberturas impossiveis há mais de 20 anos, com centenas de clientes satisfeitos em Poços de Caldas e região.',
+    'hero_subheadline' => 'Transformo memórias em arte eterna na pele. Especialista em coberturas impossíveis há mais de 20 anos, com centenas de clientes satisfeitos em Poços de Caldas e região.',
 
     'portfolio' => [
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Leão&font=montserrat',     'alt' => 'Tatuagem realismo leão'],
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Rosto&font=montserrat',   'alt' => 'Tatuagem realismo rosto feminino'],
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Animal&font=montserrat',  'alt' => 'Tatuagem realismo lobo'],
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Religioso&font=montserrat', 'alt' => 'Tatuagem realismo religioso'],
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Retrato&font=montserrat', 'alt' => 'Tatuagem realismo retrato'],
-        ['src' => 'https://placehold.co/400x400/1a1a1a/D4B04C?text=Realismo+Geométrico&font=montserrat', 'alt' => 'Tatuagem realismo geométrico'],
+        ['src' => 'portfolio-01.webp', 'alt' => 'Tatuagem em preto e cinza no antebraço'],
+        ['src' => 'portfolio-02.webp', 'alt' => 'Tatuagem blackwork no peito com letras ornamentadas'],
+        ['src' => 'portfolio-03.webp', 'alt' => 'Tatuagem de tigre nas costas em preto e cinza'],
+        ['src' => 'portfolio-04.webp', 'alt' => 'Tatuagem de guerreiro viking no braço'],
+        ['src' => 'portfolio-05.webp', 'alt' => 'Tatuagem de guerreiro espartano no braço com moldura grega'],
+        ['src' => 'portfolio-06.webp', 'alt' => 'Tatuagem em preto e cinza de mulher alada com adorno no braço'],
     ],
 
-    'bio' => "<p>Minha jornada na tatuagem começou há 20 anos, quando troquei o design gráfico pelas agulhas. Desde então, me dedico exclusivamente ao <strong style=\"color:#D4B04C;\">realismo preto e cinza</strong>, uma técnica que exige precisão absoluta e sensibilidade artística.</p>\n<p>Cada projeto que assumo é tratado como uma obra única. Trabalho apenas com <strong style=\"color:#D4B04C;\">clientes que valorizam arte de alto padrão</strong> — meu ticket médio é de R$ 2.500 por sessão, e a agenda costuma estar lotada com 2 a 3 meses de antecedência.</p>\n<p>Já participei de convenções internacionais em São Paulo, Buenos Aires e Nova York, e meu trabalho já foi destaque em revistas especializadas como Tattoo Life e Inked Mag.</p>",
+    // Bloco "Antes e Depois" — opcional, disponível para qualquer artista.
+    // Aponta para arquivos em artists/adriano-santos/media/ (ou URLs absolutas).
+    'before_after' => [
+        'tag'               => 'Especialidade',
+        'heading'           => 'Coberturas',
+        'heading_highlight' => 'antes e depois',
+        'nav_label'         => 'Coberturas',
+        'description'       => 'Uma seleção de coberturas feitas no Studio Madri Tattoo. Arraste a barra dourada para revelar como cada tatuagem antiga ganhou uma nova história.',
+
+        'items' => [
+            [
+                'before'  => 'cobertura-01-antes.webp',
+                'after'   => 'cobertura-01-depois.webp',
+                'title'   => 'Leão realista sobre tatuagem antiga',
+                'caption' => 'Traço tribal e chamas já desbotados no braço, cobertos por um leão em realismo preto e cinza que devolve definição e contraste à região.',
+            ],
+            [
+                'before'  => 'cobertura-02-antes.webp',
+                'after'   => 'cobertura-02-depois.webp',
+                'title'   => 'Guerreiro espartano com moldura grega',
+                'caption' => 'Blackwork tribal antigo no ombro transformado em um guerreiro espartano em preto e cinza, com elmo de pluma vermelha e moldura em chave grega.',
+            ],
+            [
+                'before'  => 'cobertura-03-antes.webp',
+                'after'   => 'cobertura-03-depois.webp',
+                'title'   => 'Rosa e mandala em preto e cinza',
+                'caption' => 'Rosa antiga com a cor já apagada, coberta por uma composição de rosa e mandala em preto e cinza, finalizada com pontilhismo.',
+            ],
+        ],
+    ],
+
+    'bio' => "<p><strong style=\"color:#D4B04C;\">Adriano Silva dos Santos</strong>, aos 40 anos, é tatuador e fundador do <strong style=\"color:#D4B04C;\">Studio Madri Tattoo</strong>, localizado em Poços de Caldas, Minas Gerais.</p>\n<p>Seu primeiro contato com a tatuagem aconteceu em <strong style=\"color:#D4B04C;\">2005, na cidade de São Paulo</strong>, onde residiu por 14 anos e construiu sua trajetória profissional. Durante esse período, aprimorou suas habilidades e trabalhou com diversos estilos de tatuagem, desenvolvendo uma experiência ampla e uma técnica cada vez mais precisa.</p>\n<p>Há cerca de seis anos, Adriano mudou-se para Minas Gerais, onde deu continuidade à sua carreira e fundou o Studio Madri Tattoo. Atualmente, seu principal foco está nas tatuagens de <strong style=\"color:#D4B04C;\">cobertura</strong> e no <strong style=\"color:#D4B04C;\">realismo preto e cinza</strong>, embora continue trabalhando com diferentes estilos de tatuagem.</p>\n<p>Ao longo dos anos, desenvolveu uma <strong style=\"color:#D4B04C;\">técnica própria</strong> para realizar coberturas de maneira mais rápida, eficiente e com resultados cuidadosamente planejados. Esse trabalho fez com que clientes de Poços de Caldas e de outras localidades procurassem seu estúdio em busca de sua experiência, especialmente para transformar ou corrigir tatuagens antigas.</p>\n<p>Casado com <strong style=\"color:#D4B04C;\">Michelle</strong> e pai da <strong style=\"color:#D4B04C;\">Lis</strong>, Adriano concilia sua vida familiar com a dedicação à arte da tatuagem. Hoje, segue construindo sua história em Minas Gerais, oferecendo aos seus clientes um trabalho personalizado, responsável e focado na qualidade de cada resultado.</p>",
 
     'cta_text' => 'Agende sua sessão pelo WhatsApp',
     'anos_de_experiencia' => '20',
+
+    'stats' => [
+        ['value' => '20+',  'label' => 'Anos de Experiência'],
+        ['value' => '600+', 'label' => 'Tatuagens Realizadas'],
+        ['value' => '4.95', 'label' => 'Avaliação Média'],
+    ],
+
+    'opening_hours' => [
+        'days'   => ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'],
+        'opens'  => '10:00',
+        'closes' => '19:00',
+    ],
 
     'testimonials' => [
         [
@@ -58,12 +109,8 @@ return [
         'https://www.instagram.com/studiomadri_tattoo/reel/DayUPFlBTQk/',
     ],
 
-    'faq' => [
-        [
-            'question' => 'Qual o valor médio de uma tatuagem de realismo?',
-            'answer'   => 'Meu ticket médio é de R$ 2.500 por sessão. Uma peça de realismo pode levar de 1 a 6 sessões dependendo do tamanho e complexidade. Peças pequenas (até 10cm) partem de R$ 1.200.',
-        ],
-    ],
+    // FAQ do artista — mescla com os padrões do template (sobrescreve por pergunta).
+    'faq' => [],
 
     'location' => [
         'street'          => 'Rua Osvaldo Cruz, 135',
@@ -71,6 +118,8 @@ return [
         'city'            => 'Poços de Caldas',
         'state'           => 'MG',
         'zip'             => '37701-161',
+        'lat'             => -21.7912641,
+        'lng'             => -46.5590475,
         'maps_embed_url'  => 'https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3704.715632835156!2d-46.5590475!3d-21.7912641!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x94b6657448c605d3%3A0x9257fadbc973e643!2sStudio%20Madri%20Tattoo%20e%20Piercing!5e0!3m2!1sen!2sde!4v1786638069915!5m2!1sen!2sde',
         'studio_name'     => 'Studio Madri Tattoo e Piercing — Jardim Santa Rita',
     ],

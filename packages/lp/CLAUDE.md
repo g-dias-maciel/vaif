@@ -4,8 +4,8 @@
 A multi-step lead generation funnel for "Lucro Oculto" — a financial diagnostic + free consultation booking aimed at high-end realism tattoo artists in Brazil.
 
 **Funnel flow:** Hero → Calculator → Result (loss number) → Lead capture (name/WhatsApp/Insta) → Conditional:
-- High-ticket (faturamento > R$ 7k) → Calendar booking for specialist call
-- Low-ticket (≤ R$ 7k) → Ebook discount offer (coupon: `TATTOO10K`)
+- Qualifying (faturamento ≥ R$ 4k) → Calendar booking for specialist call
+- Below floor (< R$ 4k) → Ebook discount offer (coupon: `TATTOO10K`)
 
 **Target audience:** Brazilian tattoo artists, realism/high-end, already earning 5-figures monthly.
 
@@ -54,8 +54,8 @@ A multi-step lead generation funnel for "Lucro Oculto" — a financial diagnosti
 ### Step 3: Conditional Post-Submit (lines 1238–1265)
 | Condition | Action |
 |---|---|
-| `faturamento > 7000` | Show `#nativeCalendarBlock` — 2-day grid (today/tomorrow) with slots at 10:00, 14:00, 17:00 BRT. Confirm → saves to DB + n8n webhook |
-| `faturamento <= 7000` | Show `#ebookBlock` — premium box with coupon code `TATTOO10K`, links to `https://ebook.vaif.com.br/tatuador-10k` |
+| `faturamento >= 4000` | Show `#nativeCalendarBlock` — 2-day grid (today/tomorrow) with slots at 10:00, 14:00, 17:00 BRT. Confirm → saves to DB + n8n webhook |
+| `faturamento < 4000` | Show `#ebookBlock` — premium box with coupon code `TATTOO10K`, links to `https://ebook.vaif.com.br/tatuador-10k` |
 
 ### Step 4: Success (lines 1287–1305)
 - `#successMessage` shown with personalized text based on whether they booked or skipped

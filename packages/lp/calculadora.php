@@ -809,13 +809,142 @@
 
         .homework-video {
             position: relative;
+            width: 100%;
+            max-width: 320px;
+            margin: 0 auto;
+            aspect-ratio: 9 / 16;
+            background: linear-gradient(160deg, #1c1c1c 0%, #0c0c0c 100%);
+            border: 1px solid var(--border-color);
+            overflow: hidden;
             cursor: pointer;
         }
 
-        .homework-video img {
+        .homework-video.is-playing {
+            cursor: default;
+        }
+
+        .homework-video iframe {
+            position: absolute;
+            inset: 0;
             width: 100%;
-            display: block;
+            height: 100%;
+            border: 0;
+        }
+
+        .homework-poster {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 18px;
+            background: radial-gradient(circle at 50% 38%, rgba(212, 176, 76, 0.14) 0%, rgba(212, 176, 76, 0) 62%);
+        }
+
+        .homework-poster-label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            text-align: center;
+        }
+
+        /* ─── Depoimento em Vídeo (result screen, antes do formulário) ─── */
+        .depoimento-video-block {
+            margin: 45px auto 0;
+            max-width: 560px;
+        }
+
+        .depoimento-video-title {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            text-align: center;
+            margin-bottom: 16px;
+        }
+
+        .depoimento-video {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            background: linear-gradient(160deg, #1c1c1c 0%, #0c0c0c 100%);
             border: 1px solid var(--border-color);
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .depoimento-video.is-playing {
+            cursor: default;
+        }
+
+        .depoimento-video iframe {
+            position: absolute;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            border: 0;
+        }
+
+        .depoimento-poster {
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            padding: 18px;
+            background: radial-gradient(circle at 50% 40%, rgba(212, 176, 76, 0.16) 0%, rgba(212, 176, 76, 0) 60%);
+        }
+
+        .depoimento-poster-label {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--gold);
+            text-align: center;
+        }
+
+        .depoimento-play {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 56px;
+            height: 56px;
+            background: var(--gold);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 0.3s ease;
+        }
+
+        .depoimento-video:hover .depoimento-play {
+            transform: translate(-50%, -50%) scale(1.1);
+        }
+
+        .depoimento-video-caption {
+            font-family: 'Montserrat', sans-serif;
+            font-size: 12px;
+            color: var(--text-muted);
+            text-align: center;
+            margin-top: 14px;
+            letter-spacing: 0.5px;
+        }
+
+        .depoimento-video-caption a {
+            color: var(--gold);
+            text-decoration: none;
+        }
+
+        .depoimento-video-caption a:hover {
+            text-decoration: underline;
         }
 
         .homework-play {
@@ -1442,8 +1571,22 @@
                 <!-- OTIMIZAÇÃO: Bloco de Convicção -->
                 <div class="conviction-block fade-in-up delay-1">
                     <p style="font-size: 13px; color: var(--text-main); max-width: 520px; margin: 0 auto 20px; line-height: 1.8;">
-                        Se você fatura acima de <strong style="color: var(--gold);">R$ 7.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica — é seu sistema de captação. Enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada. <strong>A diferença não é talento. É processo.</strong>
+                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica — é seu sistema de captação. Enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada. <strong>A diferença não é talento. É processo.</strong>
                     </p>
+                </div>
+
+                <!-- Depoimento em Vídeo -->
+                <div class="depoimento-video-block fade-in-up">
+                    <p class="depoimento-video-title">Veja o que diz quem já escalou com a VAIF</p>
+                    <div class="depoimento-video" data-video-id="xERLTwPdnPk" data-video-title="Depoimento de Sergio Moraes" role="button" tabindex="0" aria-label="Assistir ao depoimento de Sergio Moraes">
+                        <div class="depoimento-poster">
+                            <span class="depoimento-poster-label">Depoimento — Sergio Moraes</span>
+                        </div>
+                        <div class="depoimento-play" aria-hidden="true">
+                            <svg width="18" height="20" viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"></polygon></svg>
+                        </div>
+                    </div>
+                    <p class="depoimento-video-caption">Sergio Moraes — <a href="https://instagram.com/sergiomoraestattoo" target="_blank" rel="noopener noreferrer">@sergiomoraestattoo</a></p>
                 </div>
 
                 <!-- OTIMIZAÇÃO: Gatilho de Curiosidade no Texto -->
@@ -1582,9 +1725,11 @@
                         <!-- Card: Dever de Casa com Micro-Compromisso -->
                         <div class="homework-card">
                             <p class="homework-label">Passo Obrigatório Antes da Reunião:</p>
-                            <div class="homework-video">
-                                <img src="https://placehold.co/560x315/1a1a1a/555?text=Assista+ao+V%C3%ADdeo+de+Aquecimento&font=montserrat" alt="Vídeo de aquecimento">
-                                <div class="homework-play">
+                            <div class="homework-video" data-video-id="oI9-nRi5gQ8" data-video-title="Vídeo de aquecimento" role="button" tabindex="0" aria-label="Assistir ao vídeo de aquecimento">
+                                <div class="homework-poster">
+                                    <span class="homework-poster-label">Assista ao vídeo de aquecimento</span>
+                                </div>
+                                <div class="homework-play" aria-hidden="true">
                                     <svg width="18" height="20" viewBox="0 0 24 24" fill="#000"><polygon points="5,3 19,12 5,21"></polygon></svg>
                                 </div>
                             </div>
@@ -1625,7 +1770,7 @@
 
                     <!-- Slide 1 -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/guitattoo_resultado.jpeg" alt="Gui Tattoo">
+                        <img class="carousel-photo" src="/img/guitattoo_resultado.webp" alt="Gui Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/Guitattoobh" target="_blank" rel="noopener noreferrer">@Guitattoobh</a></p>
                         <div class="carousel-result">De <span>R$ 7k</span> para <span>R$ 20k</span> em 60 dias, com a agenda sempre lotada</div>
                         <p class="carousel-quote">Conheci o trabalho da VAIF em um momento onde a agenda estava vazia, não conseguia subir o preço das minhas tatuagens, estava sem perspectiva. Hoje, quase 2 anos depois, continuo o trabalho com eles e graças a Deus com a agenda lotada.</p>
@@ -1633,7 +1778,7 @@
 
                     <!-- Slide 2 (card do meio → inicial) -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/rsilva_resultado.png" alt="Rodrigo Silva">
+                        <img class="carousel-photo" src="/img/rsilva_resultado.webp" alt="Rodrigo Silva" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer">@rsilvatattoo</a></p>
                         <div class="carousel-result">De <span>R$ 9k</span> para <span>R$ 38k</span> em 30 dias</div>
                         <p class="carousel-quote">A VAIF assumiu quando abri meu estúdio. Na época, tinha acabado de me mudar para uma cidade nova, sem clientes e precisava de capital. No primeiro mês já vi o meu faturamento sair de 9 mil reais para 38 mil reais. Desde então a agenda fica lotada com pelo menos um mês de antecedência.</p>
@@ -1641,7 +1786,7 @@
 
                     <!-- Slide 3 -->
                     <div class="carousel-slide">
-                        <img class="carousel-photo" src="/img/dinho_resultado.png" alt="Dinho Tattoo">
+                        <img class="carousel-photo" src="/img/dinho_resultado.webp" alt="Dinho Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer">@dinho_tattoo091</a></p>
                         <div class="carousel-result">De <span>R$ 15k</span> para <span>R$ 48k</span> em 75 dias</div>
                         <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio, já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
@@ -1963,6 +2108,7 @@
                     document.querySelector('.locked-action').style.display = 'none';
                     document.getElementById('instrucaoForm').style.display = 'none';
                     document.querySelector('.conviction-block').style.display = 'none';
+                    document.querySelector('.depoimento-video-block').style.display = 'none';
 
                     const nomePrimeiro = form.nome.value.split(' ')[0];
                     const calc = window.calcData || {};
@@ -1982,7 +2128,7 @@
                     await new Promise(function(r) { setTimeout(r, 1500); });
                     document.getElementById('analyzingOverlay').style.display = 'none';
 
-                    if (window.calcData.faturamento > 7000) {
+                    if (window.calcData.faturamento >= 4000) {
                         try {
                             const resHorarios = await fetch('/api/leads/get_horarios.php');
                             const dataHorarios = await resHorarios.json();
@@ -2127,5 +2273,6 @@
             }
         }
     </script>
+    <script src="js/video-facade.js"></script>
 </body>
 </html>

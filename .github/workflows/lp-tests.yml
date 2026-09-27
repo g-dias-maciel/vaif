@@ -1,0 +1,48 @@
+name: LP tests
+
+on:
+  push:
+    paths:
+      - "packages/lp/**"
+      - ".github/workflows/lp-tests.yml"
+  pull_request:
+    paths:
+      - "packages/lp/**"
+
+jobs:
+  php-tests:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/lp
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: "8.1"
+          extensions: mbstring, curl, json, gd
+          coverage: none
+
+      - name: Run test suites
+        # The dev server must live in the same step as the tests: background
+        # processes do not survive between Actions steps.
+        run: |
+          php -S localhost:8000 -t . router.php > /tmp/lp-server.log 2>&1 &
+          SERVER_PID=$!
+          sleep 1
+          curl -sf -o /dev/null http://localhost:8000/artists/adriano-santos
+
+          php tests/artists/media.test.php
+          php tests/artists/specialty.test.php
+          php tests/artists/before_after.test.php
+          php tests/artist_mobile_acceptance_test.php
+          php tests/artist_photos_acceptance_test.php
+          php tests/artist_seo_acceptance_test.php
+          php tests/before_after_acceptance_test.php
+          php tests/routing_acceptance_test.php
+          php tests/acceptance_test.php
+
+          kill "$SERVER_PID"

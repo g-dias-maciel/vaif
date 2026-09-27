@@ -292,13 +292,142 @@
 
 .homework-video {
     position: relative;
+    width: 100%;
+    max-width: 320px;
+    margin: 0 auto;
+    aspect-ratio: 9 / 16;
+    background: linear-gradient(160deg, #1c1c1c 0%, #0c0c0c 100%);
+    border: 1px solid var(--border-color);
+    overflow: hidden;
     cursor: pointer;
 }
 
-.homework-video img {
+.homework-video.is-playing {
+    cursor: default;
+}
+
+.homework-video iframe {
+    position: absolute;
+    inset: 0;
     width: 100%;
-    display: block;
+    height: 100%;
+    border: 0;
+}
+
+.homework-poster {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 18px;
+    background: radial-gradient(circle at 50% 38%, rgba(212, 176, 76, 0.14) 0%, rgba(212, 176, 76, 0) 62%);
+}
+
+.homework-poster-label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-align: center;
+}
+
+/* ─── Depoimento em Vídeo (result screen, antes do formulário) ─── */
+.depoimento-video-block {
+    margin: 45px auto 0;
+    max-width: 560px;
+}
+
+.depoimento-video-title {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.depoimento-video {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: linear-gradient(160deg, #1c1c1c 0%, #0c0c0c 100%);
     border: 1px solid var(--border-color);
+    overflow: hidden;
+    cursor: pointer;
+}
+
+.depoimento-video.is-playing {
+    cursor: default;
+}
+
+.depoimento-video iframe {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    border: 0;
+}
+
+.depoimento-poster {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 18px;
+    background: radial-gradient(circle at 50% 40%, rgba(212, 176, 76, 0.16) 0%, rgba(212, 176, 76, 0) 60%);
+}
+
+.depoimento-poster-label {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+    text-align: center;
+}
+
+.depoimento-play {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 56px;
+    height: 56px;
+    background: var(--gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: transform 0.3s ease;
+}
+
+.depoimento-video:hover .depoimento-play {
+    transform: translate(-50%, -50%) scale(1.1);
+}
+
+.depoimento-video-caption {
+    font-family: 'Montserrat', sans-serif;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 14px;
+    letter-spacing: 0.5px;
+}
+
+.depoimento-video-caption a {
+    color: var(--gold);
+    text-decoration: none;
+}
+
+.depoimento-video-caption a:hover {
+    text-decoration: underline;
 }
 
 .homework-play {
