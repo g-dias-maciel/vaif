@@ -156,6 +156,13 @@ test('Form has Instagram field', str_contains($index, 'name="f-instagram"'));
 test('Form has revenue field', str_contains($index, 'name="f-revenue"'));
 test('Form has ticket field', str_contains($index, 'name="f-ticket"'));
 
+// Diagnostic endpoint reports missing env var clearly
+$diagPhp = file_get_contents(__DIR__ . '/../api/leads/diagnostico.php');
+test('diagnostico.php reads N8N_DIAGNOSTICO_WEBHOOK_URL', str_contains($diagPhp, "getenv('N8N_DIAGNOSTICO_WEBHOOK_URL')"),
+    'Missing getenv N8N_DIAGNOSTICO_WEBHOOK_URL in diagnostico.php');
+test('diagnostico.php fails clearly when env var missing', str_contains($diagPhp, 'N8N_DIAGNOSTICO_WEBHOOK_URL not set'),
+    'diagnostico.php should report missing env var instead of silently succeeding');
+
 // ── 7. Calculadora page isolated ───────────────────────
 echo "\n=== Calculadora page ===\n";
 test('Calculadora has inline style', str_contains($calc, '<style>'),
