@@ -56,7 +56,7 @@
         "message": "={{ $json.tg_text }}",
         "approvalOptions": {
           "values": {
-            "approvalType": "single",
+            "approvalType": "double",
             "approveLabel": "=✅ Aprovar Diagnóstico",
             "disapproveLabel": "=❌ Rejeitar"
           }
@@ -72,6 +72,8 @@
         0
       ],
       "id": "diag-telegram-0000-0000-0000-000000000003",
+      "webhookId": "0deabcc9-f07b-4b15-a67d-e3ae9cff58d3",
+      "alwaysOutputData": false,
       "name": "Aprovar Diagnóstico",
       "credentials": {
         "telegramApi": {
