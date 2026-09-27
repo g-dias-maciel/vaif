@@ -91,6 +91,20 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 - Returns `{ success: true, ocupados: ["2026-07-02 10:00:00", ...] }`
 - On DB error returns `{ success: false, ocupados: [] }` (graceful degradation)
 
+### `POST /api/leads/diagnostico.php` (free diagnostic form)
+- Receives JSON from the final qualification form (`#qualification-form`): `nome, studio, whatsapp, email, instagram, faturamento, ticket, origem`
+- Validates `nome`, `whatsapp`, `email` are present
+- Forwards raw JSON to n8n (`N8N_DIAGNOSTICO_WEBHOOK_URL` = `https://n8n.vaif.com.br/webhook/diagnostico`) — non-blocking, 5s timeout
+- No MySQL insert (diagnostic is a separate lead magnet from the calculadora; n8n handles persistence/delivery)
+- Returns `{ success: true }` or `{ success: false, error: "..." }`
+
+### Diagnostic delivery (n8n workflow "Diagnóstico Gratuito")
+1. Webhook receives lead → responds `{ success: true }` immediately (Respond Ok node)
+2. Code node auto-fills the diagnostic (sessões implícitas = faturamento ÷ ticket, benchmark vs R$ 3.000+, HTML email body, Telegram summary)
+3. Telegram `sendAndWait` sends the draft to the ops group (`1062411741`, bot credential `Telegram account`) with Aprovar/Rejeitar buttons
+4. If approved → SMTP (`emailSend` with Titan 587 credential) sends the rich HTML email to the lead
+- The WhatsApp CTA in the form success screen uses `https://wa.me/5521999553136` (same number as calculadora)
+
 ### `POST /api/leads/update_agendamento.php`
 - Receives `{ whatsapp, data_agendamento }`
 - Updates lead's `data_agendamento` field (matched by whatsapp, latest id)
@@ -122,8 +136,9 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 | `DB_NAME` | Database name |
 | `DB_USER` | Database user |
 | `DB_PASSWORD` | Database password |
-| `N8N_LEAD_WEBHOOK_URL` | n8n webhook for new lead notifications (replaced Make.com) |
+| `N8N_LEAD_WEBHOOK_URL` | n8n webhook for new leads (calculadora funnel) |
 | `N8N_CALENDAR_WEBHOOK_URL` | n8n webhook for calendar booking confirmations |
+| `N8N_DIAGNOSTICO_WEBHOOK_URL` | n8n webhook for the free diagnostic form (workflow `Diagnóstico Gratuito`, path `diagnostico`) |
 
 ---
 

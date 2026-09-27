@@ -189,8 +189,10 @@ const QualifyingForm = (function() {
         'f-name': { min: 3, label: 'Nome completo' },
         'f-studio': { min: 2, label: 'Nome do estúdio' },
         'f-whatsapp': { min: 14, label: 'WhatsApp' },
+        'f-email': { type: 'email', label: 'E-mail' },
         'f-instagram': { pattern: /^[\w.]+$/, label: 'Instagram' },
-        'f-revenue': { type: 'number', min: 0, label: 'Faturamento' }
+        'f-revenue': { type: 'number', min: 0, label: 'Faturamento' },
+        'f-ticket': { type: 'number', min: 0, label: 'Ticket médio' }
     };
 
     const showError = (el, msg) => {
@@ -226,6 +228,12 @@ const QualifyingForm = (function() {
             const num = parseBrNumber(val);
             if (isNaN(num) || num < rules.min) {
                 showError(el, 'Informe um valor válido');
+                return false;
+            }
+        } else if (rules.type === 'email') {
+            const emailRe = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRe.test(val)) {
+                showError(el, 'Informe um e-mail válido');
                 return false;
             }
         } else if (rules.min && val.length < rules.min) {
@@ -265,18 +273,23 @@ const QualifyingForm = (function() {
 
             const payload = Object.fromEntries(new FormData(this).entries());
             payload['f-revenue'] = parseBrNumber(payload['f-revenue']);
+            payload['f-ticket'] = parseBrNumber(payload['f-ticket']);
+            payload['f-email'] = (payload['f-email'] || '').trim().toLowerCase();
 
             if (typeof fbq !== 'undefined') fbq('track', 'Lead');
             if (typeof _paq !== 'undefined') _paq.push(['trackEvent', 'Formulario_Final', 'Lead_Enviado', payload['f-name']]);
 
-            fetch('/api/leads/submit.php', {
+            fetch('/api/leads/diagnostico.php', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     nome: payload['f-name'],
+                    studio: payload['f-studio'],
                     whatsapp: payload['f-whatsapp'],
+                    email: payload['f-email'],
                     instagram: payload['f-instagram'],
                     faturamento: payload['f-revenue'],
+                    ticket: payload['f-ticket'],
                     origem: 'formulario_final'
                 })
             })
@@ -287,8 +300,8 @@ const QualifyingForm = (function() {
                 successMsg.style.display = 'block';
                 successMsg.innerHTML = `
                     <h3>Diagnóstico Solicitado!</h3>
-                    <p>Obrigado, <strong>${payload['f-name'].split(' ')[0]}</strong>! Nosso especialista vai analisar seus dados e te chamar no WhatsApp em até <strong>15 minutos</strong>.</p>
-                    <a href="https://wa.me/5511999999999" class="success-cta" target="_blank">Falar no WhatsApp Agora →</a>
+                    <p>Obrigado, <strong>${payload['f-name'].split(' ')[0]}</strong>! Nosso especialista vai analisar seus dados e enviar seu diagnóstico completo por e-mail em até <strong>24 horas</strong>.</p>
+                    <a href="https://wa.me/5521999553136" class="success-cta" target="_blank">Prefere falar agora? Chame no WhatsApp →</a>
                 `;
             })
             .catch(() => {
@@ -297,8 +310,8 @@ const QualifyingForm = (function() {
                 successMsg.style.display = 'block';
                 successMsg.innerHTML = `
                     <h3>Diagnóstico Solicitado!</h3>
-                    <p>Recebemos seus dados, <strong>${payload['f-name'].split(' ')[0]}</strong>! Um especialista vai te chamar no WhatsApp em instantes.</p>
-                    <a href="https://wa.me/5511999999999" class="success-cta" target="_blank">Falar no WhatsApp Agora →</a>
+                    <p>Recebemos seus dados, <strong>${payload['f-name'].split(' ')[0]}</strong>! Nosso especialista vai enviar seu diagnóstico por e-mail em até 24 horas.</p>
+                    <a href="https://wa.me/5521999553136" class="success-cta" target="_blank">Prefere falar agora? Chame no WhatsApp →</a>
                 `;
             });
         });

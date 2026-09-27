@@ -53,10 +53,18 @@ function setupInputMasks(scope = document) {
     });
 
     // Revenue mask — only digits, dots (thousands), and commas (decimal)
-    const revenueInputs = scope.querySelectorAll('input[name="f-revenue"], input[name="chat-revenue"]');
+    const revenueInputs = scope.querySelectorAll('input[name="f-revenue"], input[name="f-ticket"], input[name="chat-revenue"]');
     revenueInputs.forEach(input => {
         input.addEventListener('input', function() {
             this.value = this.value.replace(/[^0-9.,]/g, '');
+        });
+    });
+
+    // Email — trim and lowercase
+    const emailInputs = scope.querySelectorAll('input[name="f-email"]');
+    emailInputs.forEach(input => {
+        input.addEventListener('input', function() {
+            this.value = this.value.trim().toLowerCase();
         });
     });
 }

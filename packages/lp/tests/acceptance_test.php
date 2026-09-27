@@ -151,8 +151,10 @@ test('Qualification form exists', str_contains($index, 'id="qualification-form"'
 test('Form has name field', str_contains($index, 'name="f-name"'));
 test('Form has studio field', str_contains($index, 'name="f-studio"'));
 test('Form has WhatsApp field', str_contains($index, 'name="f-whatsapp"'));
+test('Form has email field', str_contains($index, 'name="f-email"'));
 test('Form has Instagram field', str_contains($index, 'name="f-instagram"'));
 test('Form has revenue field', str_contains($index, 'name="f-revenue"'));
+test('Form has ticket field', str_contains($index, 'name="f-ticket"'));
 
 // ── 7. Calculadora page isolated ───────────────────────
 echo "\n=== Calculadora page ===\n";

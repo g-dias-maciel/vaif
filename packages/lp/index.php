@@ -370,7 +370,7 @@
                     </div>
                     <div class="form-trust-badge">
                         <svg viewBox="0 0 24 24"><polyline points="20 6 9 17 4 12"/></svg>
-                        <span>Resposta em até 15 minutos pelo WhatsApp</span>
+                        <span>Diagnóstico entregue em até 24h por e-mail</span>
                     </div>
                 </div>
             </div>
@@ -403,12 +403,27 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">Faturamento Mensal Atual (R$)</label>
-                        <div class="input-wrapper">
-                            <span class="input-prefix">R$</span>
-                            <input type="text" inputmode="numeric" class="form-input" name="f-revenue" placeholder="Ex: 15.000" required>
+                        <label class="form-label">E-mail</label>
+                        <input type="email" class="form-input no-prefix" name="f-email" placeholder="voce@email.com" autocomplete="email" required>
+                        <span class="input-hint">Enviaremos seu diagnóstico completo para este e-mail</span>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Faturamento Mensal Atual (R$)</label>
+                            <div class="input-wrapper">
+                                <span class="input-prefix">R$</span>
+                                <input type="text" inputmode="numeric" class="form-input" name="f-revenue" placeholder="Ex: 15.000" required>
+                            </div>
+                            <span class="input-hint">Apenas números. Ex: 15000 ou 15000,00</span>
                         </div>
-                        <span class="input-hint">Apenas números, sem vírgulas. Ex: 15000 (não use "15 mil" nem "15.000")</span>
+                        <div class="form-group">
+                            <label class="form-label">Ticket Médio por Sessão (R$)</label>
+                            <div class="input-wrapper">
+                                <span class="input-prefix">R$</span>
+                                <input type="text" inputmode="numeric" class="form-input" name="f-ticket" placeholder="Ex: 3.000" required>
+                            </div>
+                            <span class="input-hint">Valor médio cobrado por sessão</span>
+                        </div>
                     </div>
 
                     <div class="diamond-divider">
@@ -425,7 +440,7 @@
                         <div class="exp-step-arrow">→</div>
                         <div class="exp-step">
                             <span class="exp-step-num">2</span>
-                            <span class="exp-step-text">Envio do <strong>diagnóstico personalizado</strong> via WhatsApp</span>
+                            <span class="exp-step-text">Envio do <strong>diagnóstico personalizado</strong> por e-mail</span>
                         </div>
                         <div class="exp-step-arrow">→</div>
                         <div class="exp-step">
