@@ -235,7 +235,7 @@
         "nodeCredentialType": "wahaApi",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({ name: $('INSERT Artist').first().json.wa_session_slug, config: { webhooks: [{ url: 'https://n8n.vaif.com.br/webhook/waha-webhook', events: ['message'] }] } }) }}",
+        "jsonBody": "={{ JSON.stringify({ name: $('INSERT Artist').first().json.wa_session_slug, config: { webhooks: [{ url: 'https://n8n.vaif.com.br/webhook/waha-webhook', events: ['message', 'presence.update'] }] } }) }}",
         "options": {
           "timeout": 30000
         }

@@ -5,6 +5,7 @@ Você classifica conversas de um estúdio de tatuagem. Dada a mensagem do lead e
 Pipeline atual: {{pipeline}}
 
 - Se Beatriz apresentou preço → pipeline=orcamento_enviado, event=quote_sent
+  - ⚠ **SÓ marque `orcamento_enviado` se `duvidas_eliminadas=true` no price_gate abaixo.** Se Beatriz apresentou preço sem o lead ter dito explicitamente que não tem mais dúvidas, NÃO marque orcamento_enviado — mantenha o pipeline atual e event=null.
 - Se Beatriz pediu PIX/sinal/depósito → pipeline=aguardando_deposito, event=deposit_requested, extraia o valor do sinal em centavos
 - Se Beatriz confirmou agendamento ("Fechado! [data] às [hora]") → pipeline=agendado, event=slot_booked, extraia a data YYYY-MM-DD e o horário HH:MM
 - Se Beatriz EXPLICITAMENTE disse que vai passar o lead para o artista (ex: "vou te passar pro Bruno", "deixa eu te passar pro artista", ou disse que não há horário disponível e vai passar para o artista) → pipeline=aguardando_artista, event=handoff_triggered, extraia o motivo
@@ -34,6 +35,11 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - table_cents: preço de tabela (à vista) em centavos
 - nego_cents: preço negociado final em centavos (se não houve negociação, mesmo valor da tabela)
 
+## Gate de preço (extraia da conversa)
+
+- `processo_explicado`: true se a resposta da BEATRIZ contém a explicação do processo de criação do artista (ex: "processo de criação", "vai sentar junto com você", "projeto exclusivo", "tirar as medidas do local", "encaixe perfeito no seu corpo"). false se ela ainda não explicou.
+- `duvidas_eliminadas`: true SOMENTE quando a mensagem do LEAD é uma resposta explícita de que não tem mais dúvidas, logo após a Beatriz perguntar "Antes de falarmos de valores, ficou alguma dúvida?" ou "Mais alguma dúvida?". Exemplos válidos: "não", "não tenho", "sem dúvidas", "pode mandar", "manda o valor", "pode falar", "é isso", "tranquilo". NÃO conta: "ok", "beleza", "entendi", silêncio, ou qualquer resposta que ainda contenha uma pergunta.
+
 ## Motivos de handoff
 
 cover_up, reforma, lead_requested_artist, below_piso, vague, audio_2x, no_availability
@@ -62,6 +68,10 @@ Retorne APENAS este JSON. Use null para campos ausentes:
   "pricing": {
     "table_cents": 60000 or null,
     "nego_cents": 60000 or null
+  },
+  "price_gate": {
+    "processo_explicado": true or false,
+    "duvidas_eliminadas": true or false
   },
   "deposit": {
     "amount_cents": 18000 or null

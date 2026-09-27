@@ -73,6 +73,7 @@ CREATE TABLE IF NOT EXISTS leads (
   deposit_status      TEXT DEFAULT 'nao_solicitado',
   pipeline_status     TEXT NOT NULL DEFAULT 'novo',
   handoff_reason      TEXT,
+  processo_explicado  BOOLEAN DEFAULT false,
   conversation_started TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_message_at      TIMESTAMPTZ,
   notion_sync_status   TEXT DEFAULT 'pending'
@@ -102,6 +103,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_amount        INTEGER;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_status        TEXT DEFAULT 'nao_solicitado';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS pipeline_status       TEXT NOT NULL DEFAULT 'novo';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS handoff_reason        TEXT;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS processo_explicado    BOOLEAN DEFAULT false;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS conversation_started  TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_message_at       TIMESTAMPTZ;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_sync_status    TEXT DEFAULT 'pending';
@@ -152,11 +154,19 @@ CREATE INDEX IF NOT EXISTS idx_events_lead ON events (lead_id, created_at);
 
 -- Message debounce buffer — holds in-flight messages per chat so the agent
 -- waits for the lead to finish typing before answering the whole burst.
+-- last_typing_at/typing_state carry WAHA presence.update signals so the agent
+-- can hold the reply while the lead is still composing.
 CREATE TABLE IF NOT EXISTS message_buffer (
   chat_id        TEXT PRIMARY KEY,
   pending        TEXT,
-  last_msg_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+  last_msg_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  last_typing_at TIMESTAMPTZ,
+  typing_state   TEXT
 );
+
+-- Reconcile message_buffer if it already existed without presence columns.
+ALTER TABLE message_buffer ADD COLUMN IF NOT EXISTS last_typing_at TIMESTAMPTZ;
+ALTER TABLE message_buffer ADD COLUMN IF NOT EXISTS typing_state   TEXT;
 
 -- Notion sync outbox — guarantees at-least-once delivery of pipeline
 -- changes to Notion. The Beatriz flow enqueues here (fast, local); a

@@ -153,3 +153,38 @@ Past each script into the Telegram bot. Check Beatriz's responses against the co
 👤 Lead: Beleza, fecha aí então
 ✅ Check: Só agora avança para datas (Check Availability) + sinal PIX.
 ```
+
+## 12. Apresentação obrigatória — lead já descreve a tatuagem na 1ª mensagem
+
+```
+👤 Lead: Oi, quero fazer um fechamento de braço em realismo
+✅ Check: PRIMEIRA coisa: Beatriz se apresenta ("Oi! Eu sou a Beatriz, assistente do [artista]...").
+✅ Check: NUNCA vai direto para "que tatuagem nova/cobertura/reforma?" sem se apresentar.
+✅ Check: Só depois da apresentação continua a descoberta (ou cumprimenta e pergunta o nome).
+```
+
+## 13. Gate de preço — lead pede o valor cedo
+
+```
+👤 Lead: Oi, quero uma tatuagem nova no antebraço
+✅ Check: Apresentação + descoberta normal. NÃO fala de preço.
+👤 Lead: Quanto vai custar?
+✅ Check: NÃO informa valor. Explica o processo de criação do [artista] (Fase 4) e pergunta "Antes de falarmos de valores, ficou alguma dúvida?".
+👤 Lead: Quanto tempo demora a sessão?
+✅ Check: Responde a dúvida em 1-2 frases e pergunta "Mais alguma dúvida?". NÃO manda valor.
+👤 Lead: Não, só isso mesmo
+✅ Check: SÓ AGORA apresenta o preço (à vista + parcelado) e PARA com "Como fica esse valor para você?".
+✅ Check (DB): pipeline só vira "orcamento_enviado" quando `duvidas_eliminadas=true`. Mensagem de preço sem essa confirmação NÃO registra orçamento.
+```
+
+## 14. Mensagens picadas — tratar o burst como uma mensagem só
+
+```
+👤 Lead: oi
+👤 Lead: queria uma tattoo
+👤 Lead: no antebraço
+👤 Lead: estilo realismo
+✅ Check: Beatriz responde UMA vez ao conjunto (debounce), não uma resposta por mensagem.
+✅ Check: Se o lead estiver digitando (presence typing), a resposta só sai depois que ele para de digitar + alguns segundos de silêncio.
+✅ Check: Antes de responder, aparece o indicador "digitando..." e a resposta sai com um pequeno atraso proporcional ao tamanho (nunca instantânea).
+```

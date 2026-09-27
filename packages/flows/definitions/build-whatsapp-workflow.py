@@ -2,8 +2,8 @@
 """Build the Beatriz WhatsApp workflow JSON definition.
 
 Mirrors the deployed Telegram core agent (debounce, dynamic classification,
-guarded pipeline transitions, handoff/deposit notifications) exactly, and
-differs ONLY in the transport layer: WAHA webhook/sendText instead of Telegram.
+guarded pipeline transitions, handoff/deposit notifications), and differs ONLY
+in the transport layer: WAHA webhook/sendText instead of Telegram.
 
 Core (identical to Telegram):
   Resolve Artist → Debounce (buffer + wait for burst) → Upsert Lead
@@ -23,6 +23,19 @@ WhatsApp/WAHA differences (transport + multi-tenancy only):
   - No callback branch (Telegram-only inline keyboard confirmations).
   - Dynamic system prompt rendered from the artist's own pricing/PIX/piso
     (the Telegram testbed hardcodes Bruno's values).
+
+WhatsApp-only behaviours (no Telegram equivalent):
+  - Route Event: message events go through the agent; presence.update events
+    feed the debounce buffer's typing state so the agent never answers while
+    the lead is still composing.
+  - Subscribe Presence: best-effort per-chat WAHA presence subscription so
+    typing events actually arrive.
+  - Debounce is a quiet-period loop: a burst is answered only after a few
+    seconds with no new message AND no active typing (with a safety cap).
+  - Humanize delay + start/stopTyping: a short, length-scaled pause before the
+    reply so the agent does not answer instantly.
+  - Price gate: the creative-process explanation and the lead's explicit
+    "no more doubts" are persisted/guarded so a quote can't be sent early.
 """
 import json, os
 
@@ -120,6 +133,8 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Upsert Lead').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Upsert Lead').first().json.significado || '?') "
+    "+ ' processo_explicado=' + ($('Upsert Lead').first().json.processo_explicado ? 'sim' : 'nao') "
+    "+ ' primeira_mensagem=' + ($('Upsert Lead').first().json.is_new ? 'sim' : 'nao') "
     "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
     "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
     "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) "
@@ -144,13 +159,79 @@ if (!text) {
 
 return [{ json: { chat_id: session + ':' + from, phone: from, msg_text: text, msg_ts: Date.now() } }];"""
 
-DEBOUNCE_RESOLVE_JS = """const state = $('Get Buffer State').first().json;
+DEBOUNCE_RESOLVE_JS = """const state = $('Get Buffer State').first().json || {};
 const msgTs = $('Debounce Start').first().json.msg_ts;
 const chatId = $('Debounce Start').first().json.chat_id;
-const lastTs = state && state.last_msg_at ? new Date(state.last_msg_at).getTime() : msgTs;
-const isLast = lastTs <= msgTs;
-const combined = (state && state.pending ? state.pending : '').trim();
-return [{ json: { is_last: isLast, combined_text: combined, chat_id: chatId } }];"""
+
+const toMs = (v) => (v ? new Date(v).getTime() : 0);
+const lastMsgAt = toMs(state.last_msg_at) || msgTs;
+const lastTypingAt = toMs(state.last_typing_at);
+
+// A newer message means another execution of this burst owns the reply.
+const isStale = lastMsgAt > msgTs;
+
+const now = Date.now();
+// Answer only after this much silence (no new message, no typing).
+const QUIET_MS = 4000;
+// While WAHA reports the lead as actively typing, hold the reply. Cap the
+// wait so a lost "paused" presence event can never stall the conversation.
+const TYPING_GRACE_MS = 30000;
+
+const typingActive = state.typing_state === 'typing'
+  && (now - lastTypingAt) < TYPING_GRACE_MS;
+const lastActivity = Math.max(lastMsgAt, lastTypingAt);
+const quiet = (now - lastActivity) >= QUIET_MS;
+
+const decision = isStale ? 'stop' : (typingActive || !quiet) ? 'wait' : 'process';
+const combined = (state.pending || '').trim();
+
+return [{ json: { decision: decision, is_stale: isStale, combined_text: combined, chat_id: chatId } }];"""
+
+# ── Presence: WAHA sends presence.update with the lead's typing state. We only
+#    record it against the debounce buffer so the resolve loop above can hold
+#    the reply — no AI work happens on a presence event. ──
+PRESENCE_START_JS = """const wa = $('WAHA Webhook').first().json.body || {};
+const p = wa.payload || {};
+const session = wa.session || 'unknown';
+const chatId = String(p.id || '');
+const presences = Array.isArray(p.presences) ? p.presences : [];
+
+// Direct chats carry a single participant; take the last known presence.
+let presence = null;
+for (const item of presences) {
+  if (item && item.lastKnownPresence) presence = item.lastKnownPresence;
+}
+
+const from = chatId.replace('@c.us', '').split('@')[0];
+
+return [{ json: {
+  chat_id: session + ':' + from,
+  presence: presence || 'paused',
+  is_typing: presence === 'typing' || presence === 'recording',
+  phone: from,
+  session: wa.session,
+} }];"""
+
+PRESENCE_UPSERT_QUERY = (
+    "INSERT INTO message_buffer (chat_id, pending, last_msg_at, last_typing_at, typing_state)\n"
+    "VALUES ($1, NULL, now(), now(), $2)\n"
+    "ON CONFLICT (chat_id) DO UPDATE SET\n"
+    "  last_typing_at = now(),\n"
+    "  typing_state   = EXCLUDED.typing_state\n"
+    "RETURNING chat_id;"
+)
+
+# ── Humanize: scale the pause before replying to the reply length, clamped so
+#    it never feels instant nor sluggish. Deterministic (no Math.random) so the
+#    behaviour is reproducible and testable. ──
+HUMANIZE_DELAY_JS = """const out = ($('Parse Classification').first().json.final_reply || $('AI Agent').first().json.output || '').toString();
+const words = out.trim().split(/\\s+/).filter(Boolean).length;
+
+let secs = 0.8 + words / 3.2;              // ~3.2 palavras por segundo
+secs = Math.max(1.5, Math.min(6, secs));   // nunca instantâneo, nunca arrastado
+secs += (out.length % 7) / 10;             // variação leve e determinística
+
+return [{ json: { delay_seconds: Math.round(secs * 10) / 10 } }];"""
 
 # ── Classification: same prompt + parse as the Telegram testbed. ──
 BUILD_CLASSIFICATION_PROMPT_JS = (
@@ -183,6 +264,7 @@ const p = parsed.pricing || {};
 const d = parsed.deposit || {};
 const h = parsed.handoff || {};
 const b = parsed.booking || {};
+const g = parsed.price_gate || {};
 const lead = $('Upsert Lead').first().json;
 const agentOutput = $('AI Agent').first().json.output || '';
 
@@ -196,9 +278,25 @@ function detectTipo(text) {
 }
 const tipoDeterministic = detectTipo(rawLead);
 
+// ── Price gate signals ──
+// Creative process explained: deterministic detection of the Fase 4 text in
+// Beatriz's reply, the classifier flag, or the persisted flag. Dúvidas
+// eliminadas: only the classifier can tell whether the lead explicitly cleared
+// doubts this turn. A quote is only legitimate when both are true.
+const agentLower = agentOutput.toLowerCase();
+const processoDeterministic = ['processo de criação', 'projeto exclusivo', 'sentar junto com você', 'tirar as medidas', 'encaixe perfeito'].some(frase => agentLower.includes(frase));
+const processoExplicado = processoDeterministic || g.processo_explicado === true || lead.processo_explicado === true;
+const duvidasEliminadas = g.duvidas_eliminadas === true;
+
 // ── Transition guard — prevent invalid/repeated transitions ──
 const current = lead.pipeline_status || 'novo';
 let proposed = parsed.pipeline || current;
+
+// The price gate is open once the creative process was explained AND either the
+// lead cleared doubts this turn or the quote stage was already reached before
+// (negotiation/deposit/booking turns must stay open).
+const gateAlreadyOpen = ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+const priceGateOpen = processoExplicado && (duvidasEliminadas || gateAlreadyOpen);
 
 const saidCutoff = /não posso continuar essa conversa/.test(agentOutput.toLowerCase());
 const neverBlock = ['agendado', 'fechado', 'perdido'];
@@ -243,11 +341,30 @@ if (tipoDeterministic === 'nova' && (finalHandoff === 'cover_up' || finalHandoff
   }
 }
 
+// ── Price gate: a quote transition only counts once the gate is open.
+//    Otherwise the pipeline stays where it was and any explicit price in the
+//    reply is replaced by the safe doubts question (hard output gate). ──
+if (!priceGateOpen && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(finalPipeline)) {
+  finalPipeline = current;
+  finalEvent = null;
+}
+
+const hasPrice = /R\$\s*\d/.test(agentOutput);
+const hasDeposit = /sinal|pix/i.test(agentOutput);
+const priceGateViolation = (hasPrice || hasDeposit) && !priceGateOpen;
+const finalReply = priceGateViolation
+  ? 'Antes de falarmos de valores, ficou alguma dúvida?'
+  : agentOutput;
+
 return [{ json: {
   lead_id: lead.id,
   pipeline_status: finalPipeline,
   event_type: finalEvent,
-  price_updated: !!(p.table_cents),
+  price_updated: !!(p.table_cents) && !priceGateViolation,
+  processo_explicado_val: processoDeterministic || g.processo_explicado === true,
+  duvidas_eliminadas_val: duvidasEliminadas,
+  price_gate_violation: priceGateViolation,
+  final_reply: finalReply,
 
   placement_val: q.placement || null,
   body_zone_val: q.body_zone || null,
@@ -256,12 +373,12 @@ return [{ json: {
   significado_val: q.significado || null,
   tipo_tatuagem_val: tipoDeterministic || q.tipo_tatuagem || null,
 
-  table_price_cents: p.table_cents || null,
-  negotiated_price_cents: p.nego_cents || null,
+  table_price_cents: priceGateViolation ? null : (p.table_cents || null),
+  negotiated_price_cents: priceGateViolation ? null : (p.nego_cents || null),
 
-  deposit_status_val: d.amount_cents ? 'aguardando_confirmacao' : null,
-  deposit_amount_cents: d.amount_cents || null,
-  booked_date_val: b.date ? (b.date + 'T' + (b.time || '12:00') + ':00') : null,
+  deposit_status_val: priceGateViolation ? null : (d.amount_cents ? 'aguardando_confirmacao' : null),
+  deposit_amount_cents: priceGateViolation ? null : (d.amount_cents || null),
+  booked_date_val: priceGateViolation ? null : (b.date ? (b.date + 'T' + (b.time || '12:00') + ':00') : null),
   session_duration_min_val: null,
   buffer_min_val: null,
 
@@ -310,6 +427,9 @@ if (f.buffer_min_val !== null && f.buffer_min_val !== undefined && f.buffer_min_
 if (f.primeira_tatuagem_val === true) sets.push(`primeira_tatuagem = true`);
 else if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false`);
 
+// Once the creative process has been explained, it stays explained.
+if (f.processo_explicado_val === true) sets.push(`processo_explicado = true`);
+
 if (f.booked_date_val && f.booked_date_val !== 'null')
   sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);
 
@@ -329,7 +449,7 @@ BUILD_HANDOFF_MESSAGE_JS = r"""const parseData = $('Parse Classification').first
 const updateData = $('Update Lead').first().json;
 const leadData = $('Upsert Lead').first().json;
 const artistData = $('Resolve Artist').first().json;
-const agentOutput = ($('AI Agent').first().json.output || '').toLowerCase();
+const agentOutput = (($('Parse Classification').first().json.final_reply) || ($('AI Agent').first().json.output) || '').toLowerCase();
 
 const event = (parseData && parseData.event_type) || null;
 const status = (updateData && updateData.pipeline_status)
@@ -501,6 +621,50 @@ WF = {
             "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
             "name": "Artist Found?",
         },
+        # 3b. Route Event — presence updates only feed the debounce buffer;
+        #     messages continue through the AI window gate. Anything else
+        #     (session.status, acks) is dropped on the unconnected 3rd output.
+        {
+            "parameters": {
+                "mode": "expression",
+                "numberOutputs": 3,
+                "output": "={{ $('WAHA Webhook').first().json.body.event === 'presence.update' ? 0 : ($('WAHA Webhook').first().json.body.event === 'message' ? 1 : 2) }}",
+                "options": {},
+            },
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3.2,
+            "position": [780, 0],
+            "id": "rt-event-0000-0000-0000-000000000001",
+            "name": "Route Event",
+        },
+        # 3c. Presence Start — normalize WAHA presence.update into a buffer key.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PRESENCE_START_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1040, 240],
+            "id": "pr-start-0000-0000-0000-000000000001",
+            "name": "Presence Start",
+        },
+        # 3d. Presence Upsert — record typing state for the debounce loop.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": PRESENCE_UPSERT_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.chat_id, $json.presence] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1300, 240],
+            "id": "pr-upsert-0000-0000-0000-000000000001",
+            "name": "Presence Upsert",
+            "credentials": POSTGRES,
+        },
         # 4. Missing Session Log (false branch)
         {
             "parameters": {
@@ -520,7 +684,13 @@ return [{ json: { error: true, reason: 'session_not_found', session_slug: slug }
         {
             "parameters": {
                 "mode": "runOnceForAllItems",
-                "jsCode": """const artist = $('Resolve Artist').first().json;
+                "jsCode": """const wa = $('WAHA Webhook').first().json.body || {};
+// Ignore the agent's own outgoing messages (message.any safety net).
+if (wa.payload && wa.payload.fromMe === true) {
+  return [{ json: { in_window: false } }];
+}
+
+const artist = $('Resolve Artist').first().json;
 const hours = artist.ai_active_hours;
 
 if (!hours || !hours.start || !hours.end) {
@@ -593,6 +763,25 @@ return [{ json: { in_window: inWindow } }];""",
             "id": "db-start-0000-0000-0000-000000000001",
             "name": "Debounce Start",
         },
+        # 7b. Subscribe Presence — best-effort per-chat subscription so WAHA
+        #     emits presence.update (typing) for the lead. Runs as a fan-out
+        #     branch so it never delays the debounce/AI path.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/presence/' + $('WAHA Webhook').first().json.body.payload.from + '/subscribe' }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "wahaApi",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [1300, 200],
+            "id": "db-subscribe-0000-0000-0000-000000000001",
+            "name": "Subscribe Presence",
+            "credentials": WAHA,
+            "onError": "continueRegularOutput",
+        },
         # 8. Debounce Accumulate
         {
             "parameters": {
@@ -601,7 +790,7 @@ return [{ json: { in_window: inWindow } }];""",
 VALUES ($1, $2, to_timestamp($3::float8 / 1000.0))
 ON CONFLICT (chat_id) DO UPDATE SET
   pending = COALESCE(message_buffer.pending, '') || E'\n' || $2,
-  last_msg_at = to_timestamp($3::float8 / 1000.0)
+  last_msg_at = GREATEST(message_buffer.last_msg_at, to_timestamp($3::float8 / 1000.0))
 RETURNING pending;""",
                 "options": {
                     "queryReplacement": "={{ [$json.chat_id, $json.msg_text, $json.msg_ts] }}"
@@ -631,7 +820,7 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT last_msg_at, pending FROM message_buffer WHERE chat_id = $1;",
+                "query": "SELECT last_msg_at, last_typing_at, typing_state, pending FROM message_buffer WHERE chat_id = $1;",
                 "options": {
                     "queryReplacement": "={{ [$('Debounce Start').first().json.chat_id] }}"
                 },
@@ -655,42 +844,26 @@ RETURNING pending;""",
             "id": "db-resolve-0000-0000-0000-000000000001",
             "name": "Debounce Resolve",
         },
-        # 12. IF Last?
+        # 12. Debounce Decision — process the burst, keep waiting (typing / new
+        #     activity), or stop (a newer message execution owns the reply).
         {
             "parameters": {
-                "conditions": {
-                    "options": {
-                        "caseSensitive": True,
-                        "leftValue": "",
-                        "typeValidation": "strict",
-                        "version": 3,
-                    },
-                    "conditions": [
-                        {
-                            "id": "db-if-last-cond-0000",
-                            "leftValue": "={{ $json.is_last }}",
-                            "rightValue": True,
-                            "operator": {
-                                "type": "boolean",
-                                "operation": "equals",
-                            },
-                        }
-                    ],
-                    "combinator": "and",
-                },
+                "mode": "expression",
+                "numberOutputs": 3,
+                "output": "={{ $json.decision === 'process' ? 0 : ($json.decision === 'wait' ? 1 : 2) }}",
                 "options": {},
             },
-            "type": "n8n-nodes-base.if",
-            "typeVersion": 2,
+            "type": "n8n-nodes-base.switch",
+            "typeVersion": 3.2,
             "position": [2340, 0],
-            "id": "db-if-last-0000-0000-0000-000000000001",
-            "name": "IF Last?",
+            "id": "db-decision-0000-0000-0000-000000000001",
+            "name": "Debounce Decision",
         },
-        # 13. Clear Buffer (true branch)
+        # 13. Clear Buffer (process branch)
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "UPDATE message_buffer SET pending = NULL WHERE chat_id = $1;",
+                "query": "UPDATE message_buffer SET pending = NULL, typing_state = NULL WHERE chat_id = $1;",
                 "options": {
                     "queryReplacement": "={{ [$json.chat_id] }}"
                 },
@@ -741,7 +914,9 @@ ORDER BY placement, body_zone;""",
             "parameters": {
                 "operation": "executeQuery",
                 "query": """WITH existing AS (
-  SELECT id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price
+  SELECT id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
+         COALESCE(processo_explicado, false) AS processo_explicado,
+         false AS is_new
   FROM public.leads
   WHERE artist_id = $3::uuid
     AND telefone = $1
@@ -755,7 +930,9 @@ inserted AS (
     'novo',
     NOW()
   WHERE NOT EXISTS (SELECT 1 FROM existing)
-  RETURNING id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price
+  RETURNING id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
+            COALESCE(processo_explicado, false) AS processo_explicado,
+            true AS is_new
 )
 SELECT * FROM existing
 UNION ALL
@@ -1021,6 +1198,51 @@ return [{
             "credentials": POSTGRES,
             "onError": "continueRegularOutput",
         },
+        # 32b. Build Humanize Delay — reply-time proportional to reply length.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": HUMANIZE_DELAY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5200, 420],
+            "id": "hu-build-0000-0000-0000-000000000001",
+            "name": "Build Humanize Delay",
+        },
+        # 32c. Send Typing — show "typing…" while the agent composes.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/startTyping' }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "wahaApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from }) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [5460, 420],
+            "id": "hu-typing-0000-0000-0000-000000000001",
+            "name": "Send Typing",
+            "credentials": WAHA,
+            "onError": "continueRegularOutput",
+        },
+        # 32d. Humanize Delay — short, length-scaled pause before replying.
+        {
+            "parameters": {
+                "resume": "timeInterval",
+                "amount": "={{ $('Build Humanize Delay').first().json.delay_seconds }}",
+                "unit": "seconds",
+            },
+            "type": "n8n-nodes-base.wait",
+            "typeVersion": 1.2,
+            "position": [5200, 560],
+            "id": "hu-wait-0000-0000-0000-000000000001",
+            "name": "Humanize Delay",
+        },
         # 33. Send WAHA Message — reply to the lead
         {
             "parameters": {
@@ -1041,7 +1263,7 @@ return [{
                         },
                         {
                             "name": "text",
-                            "value": "={{ $('AI Agent').first().json.output }}",
+                            "value": "={{ $('Parse Classification').first().json.final_reply }}",
                         },
                     ]
                 },
@@ -1054,6 +1276,26 @@ return [{
             "position": [5200, 260],
             "id": "wa-send-0000-0000-0000-000000000001",
             "name": "Send WAHA Message",
+            "credentials": WAHA,
+            "onError": "continueRegularOutput",
+        },
+        # 33b. Stop Typing — clear the composing indicator after the send.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/stopTyping' }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "wahaApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from }) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [5460, 500],
+            "id": "hu-stoptyping-0000-0000-0000-000000000001",
+            "name": "Stop Typing",
             "credentials": WAHA,
             "onError": "continueRegularOutput",
         },
@@ -1152,9 +1394,19 @@ return [{
         },
         "Artist Found?": {
             "main": [
-                [{"node": "Check AI Window", "type": "main", "index": 0}],
+                [{"node": "Route Event", "type": "main", "index": 0}],
                 [{"node": "Missing Session Log", "type": "main", "index": 0}],
             ]
+        },
+        "Route Event": {
+            "main": [
+                [{"node": "Presence Start", "type": "main", "index": 0}],
+                [{"node": "Check AI Window", "type": "main", "index": 0}],
+                [],
+            ]
+        },
+        "Presence Start": {
+            "main": [[{"node": "Presence Upsert", "type": "main", "index": 0}]]
         },
         "Check AI Window": {
             "main": [[{"node": "In AI Window?", "type": "main", "index": 0}]]
@@ -1166,7 +1418,10 @@ return [{
             ]
         },
         "Debounce Start": {
-            "main": [[{"node": "Debounce Accumulate", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "Debounce Accumulate", "type": "main", "index": 0},
+                {"node": "Subscribe Presence", "type": "main", "index": 0},
+            ]]
         },
         "Debounce Accumulate": {
             "main": [[{"node": "Wait", "type": "main", "index": 0}]]
@@ -1178,11 +1433,12 @@ return [{
             "main": [[{"node": "Debounce Resolve", "type": "main", "index": 0}]]
         },
         "Debounce Resolve": {
-            "main": [[{"node": "IF Last?", "type": "main", "index": 0}]]
+            "main": [[{"node": "Debounce Decision", "type": "main", "index": 0}]]
         },
-        "IF Last?": {
+        "Debounce Decision": {
             "main": [
                 [{"node": "Clear Buffer", "type": "main", "index": 0}],
+                [{"node": "Wait", "type": "main", "index": 0}],
                 [],
             ]
         },
@@ -1244,9 +1500,21 @@ return [{
             "main": [[{"node": "Enqueue Notion Sync", "type": "main", "index": 0}]]
         },
         "Enqueue Notion Sync": {
+            "main": [[{"node": "Build Humanize Delay", "type": "main", "index": 0}]]
+        },
+        "Build Humanize Delay": {
+            "main": [[{"node": "Send Typing", "type": "main", "index": 0}]]
+        },
+        "Send Typing": {
+            "main": [[{"node": "Humanize Delay", "type": "main", "index": 0}]]
+        },
+        "Humanize Delay": {
             "main": [[{"node": "Send WAHA Message", "type": "main", "index": 0}]]
         },
         "Send WAHA Message": {
+            "main": [[{"node": "Stop Typing", "type": "main", "index": 0}]]
+        },
+        "Stop Typing": {
             "main": [[{"node": "Build Handoff Message", "type": "main", "index": 0}]]
         },
         "Build Handoff Message": {
