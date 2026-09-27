@@ -1,4 +1,8 @@
-const lead = $input.first().json;
+const webhookJson = $('Diagnostico Webhook').first().json;
+// n8n Webhook v2 nests the POST payload under `.body`; fall back to the top level
+const lead = (webhookJson.body && typeof webhookJson.body === 'object')
+  ? webhookJson.body
+  : webhookJson;
 
 const nome = lead.nome || 'Cliente';
 const studio = lead.studio || '';
