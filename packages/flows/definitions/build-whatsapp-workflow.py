@@ -134,9 +134,11 @@ AGENT_TEXT_EXPR = (
     "+ ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Upsert Lead').first().json.significado || '?') "
     "+ ' processo_explicado=' + ($('Upsert Lead').first().json.processo_explicado ? 'sim' : 'nao') "
+    "+ ' preco_liberado=' + ($('Upsert Lead').first().json.preco_liberado ? 'sim' : 'nao') "
     "+ ' primeira_mensagem=' + ($('Upsert Lead').first().json.is_new ? 'sim' : 'nao') "
     "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
     "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
+    "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Upsert Lead').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.negotiated_price || l.table_price; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
     "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) "
     "+ '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' "
     "+ ($('Debounce Resolve').first().json.combined_text || '') }}"
@@ -292,11 +294,15 @@ const duvidasEliminadas = g.duvidas_eliminadas === true;
 const current = lead.pipeline_status || 'novo';
 let proposed = parsed.pipeline || current;
 
-// The price gate is open once the creative process was explained AND either the
-// lead cleared doubts this turn or the quote stage was already reached before
-// (negotiation/deposit/booking turns must stay open).
-const gateAlreadyOpen = ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
-const priceGateOpen = processoExplicado && (duvidasEliminadas || gateAlreadyOpen);
+// The price gate is a ONE-TIME checkpoint. Once it is open it stays open:
+// either the persisted flag was set, or the pipeline already reached the quote
+// stage, or it just opened this turn (process explained + doubts cleared).
+// The process/doubts condition is only required the FIRST time — after that a
+// negotiation turn ("está caro") must never be sent back to the doubts question.
+const precoLiberadoJa = lead.preco_liberado === true;
+const gateAlreadyOpen = precoLiberadoJa || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+const gateJustOpened = processoExplicado && duvidasEliminadas;
+const priceGateOpen = gateAlreadyOpen || gateJustOpened;
 
 const saidCutoff = /não posso continuar essa conversa/.test(agentOutput.toLowerCase());
 const neverBlock = ['agendado', 'fechado', 'perdido'];
@@ -351,10 +357,34 @@ if (!priceGateOpen && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].i
 
 const hasPrice = /R\$\s*\d/.test(agentOutput);
 const hasDeposit = /sinal|pix/i.test(agentOutput);
+
+// Deterministic quote state: the moment the gate is open and the reply carries
+// a price, a quote WAS sent — record it even if the classifier missed it.
+// (This is the bug that left the pipeline stuck at "qualificando" after the
+// first price, which then made every negotiation turn look pre-gate.)
+if (priceGateOpen && hasPrice && !finalHandoff
+    && ['novo', 'qualificando'].includes(finalPipeline)) {
+  finalPipeline = 'orcamento_enviado';
+  if (!finalEvent) finalEvent = 'quote_sent';
+}
+
 const priceGateViolation = (hasPrice || hasDeposit) && !priceGateOpen;
-const finalReply = priceGateViolation
+let finalReply = priceGateViolation
   ? 'Antes de falarmos de valores, ficou alguma dúvida?'
   : agentOutput;
+
+// ── Doubt-loop enforcement ──
+// While the creative process is explained but the price gate is still closed
+// (no price yet), every reply must keep the door open by ending with
+// "Mais alguma dúvida?". The model sometimes replaces it with a generic
+// sign-off ("estou à disposição"); enforce it deterministically.
+const askedDoubts = /mais alguma d[uú]vida|ficou alguma d[uú]vida/i.test(agentOutput);
+const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
+const preGateDoubtLoop = !priceGateOpen && processoExplicado && !duvidasEliminadas;
+if (preGateDoubtLoop && !priceGateViolation && !hasPrice
+    && !goingToArtist && !askedDoubts && finalReply.trim()) {
+  finalReply = finalReply.trim() + '\\n\\nMais alguma dúvida?';
+}
 
 return [{ json: {
   lead_id: lead.id,
@@ -362,6 +392,7 @@ return [{ json: {
   event_type: finalEvent,
   price_updated: !!(p.table_cents) && !priceGateViolation,
   processo_explicado_val: processoDeterministic || g.processo_explicado === true,
+  preco_liberado_val: precoLiberadoJa || gateJustOpened,
   duvidas_eliminadas_val: duvidasEliminadas,
   price_gate_violation: priceGateViolation,
   final_reply: finalReply,
@@ -378,7 +409,9 @@ return [{ json: {
 
   deposit_status_val: priceGateViolation ? null : (d.amount_cents ? 'aguardando_confirmacao' : null),
   deposit_amount_cents: priceGateViolation ? null : (d.amount_cents || null),
-  booked_date_val: priceGateViolation ? null : (b.date ? (b.date + 'T' + (b.time || '12:00') + ':00') : null),
+  // booked_date is authoritative from the Book Slot tool only — the classifier
+  // cannot reliably reconstruct the exact slot instant (timezone/year).
+  booked_date_val: null,
   session_duration_min_val: null,
   buffer_min_val: null,
 
@@ -430,6 +463,10 @@ else if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false
 // Once the creative process has been explained, it stays explained.
 if (f.processo_explicado_val === true) sets.push(`processo_explicado = true`);
 
+// Once the price gate is open, it never closes again — this is what lets
+// negotiation turns skip the doubts checkpoint.
+if (f.preco_liberado_val === true) sets.push(`preco_liberado = true`);
+
 if (f.booked_date_val && f.booked_date_val !== 'null')
   sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);
 
@@ -462,9 +499,23 @@ const status = (updateData && updateData.pipeline_status)
 const opsChatId = (artistData && artistData.telegram_group_id) || '';
 
 const leadNome = leadData && leadData.nome ? leadData.nome : 'Desconhecido';
-const telefone = leadData && leadData.telefone ? leadData.telefone : '';
+const telefone = leadData && leadData.telefone ? String(leadData.telefone).replace(/\D/g, '') : '';
 const whatsappLink = telefone && /^\d{8,15}$/.test(telefone)
   ? 'https://wa.me/' + telefone
+  : null;
+
+// Human-friendly BR formatting: +55 11 99999-0001
+const formatPhone = (d) => {
+  if (!d) return '';
+  if (d.length === 13) return '+' + d.slice(0, 2) + ' ' + d.slice(2, 4) + ' ' + d.slice(4, 9) + '-' + d.slice(9);
+  if (d.length === 12) return '+' + d.slice(0, 2) + ' ' + d.slice(2, 4) + ' ' + d.slice(4, 8) + '-' + d.slice(8);
+  return '+' + d;
+};
+const telefoneDisplay = formatPhone(telefone);
+const telefoneLine = telefoneDisplay
+  ? (whatsappLink
+      ? '<b>Telefone:</b> <a href="' + whatsappLink + '">' + telefoneDisplay + '</a>'
+      : '<b>Telefone:</b> ' + telefoneDisplay)
   : null;
 
 // Fallback: detect a handoff directly from Beatriz's message if the
@@ -514,8 +565,8 @@ if (event === 'handoff_triggered' || saidHandoff) {
     '<b>Lead:</b> ' + leadNome,
     '<b>Motivo:</b> ' + reason,
   ];
-  if (telefone) msg.push('<b>Telefone:</b> ' + telefone);
-  if (whatsappLink) msg.push('<a href="' + whatsappLink + '">Abrir no WhatsApp</a>');
+  if (telefoneLine) msg.push(telefoneLine);
+  if (whatsappLink) msg.push('\u{1F449} <a href="' + whatsappLink + '">Abrir no WhatsApp</a>');
 
   return [{ json: {
     send: true,
@@ -534,12 +585,15 @@ if (event === 'deposit_requested' || saidDeposit) {
   const amount = parseData.deposit_amount_cents
     ? 'R$ ' + (parseData.deposit_amount_cents / 100).toFixed(2).replace('.', ',')
     : 'valor pendente';
-  const msg = [
+  const dm = [
     '<b>\u{1F4B0} Sinal solicitado</b>',
     '<b>Lead:</b> ' + leadNome,
-    '<b>Valor:</b> ' + amount,
-    '<i>Confirme o recebimento do PIX</i>',
-  ].join('\n');
+  ];
+  if (telefoneLine) dm.push(telefoneLine);
+  dm.push('<b>Valor:</b> ' + amount);
+  if (whatsappLink) dm.push('\u{1F449} <a href="' + whatsappLink + '">Abrir no WhatsApp</a>');
+  dm.push('<i>Confirme o recebimento do PIX</i>');
+  const msg = dm.join('\n');
 
   return [{ json: {
     send: true,
@@ -914,8 +968,9 @@ ORDER BY placement, body_zone;""",
             "parameters": {
                 "operation": "executeQuery",
                 "query": """WITH existing AS (
-  SELECT id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
+  SELECT id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
          COALESCE(processo_explicado, false) AS processo_explicado,
+         COALESCE(preco_liberado, false) AS preco_liberado,
          false AS is_new
   FROM public.leads
   WHERE artist_id = $3::uuid
@@ -930,8 +985,9 @@ inserted AS (
     'novo',
     NOW()
   WHERE NOT EXISTS (SELECT 1 FROM existing)
-  RETURNING id, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
+  RETURNING id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
             COALESCE(processo_explicado, false) AS processo_explicado,
+            COALESCE(preco_liberado, false) AS preco_liberado,
             true AS is_new
 )
 SELECT * FROM existing
@@ -988,25 +1044,11 @@ SELECT * FROM inserted;""",
             "id": "d0e1f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
             "name": "AI Agent",
         },
-        # 20. Lookup Price Tool
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT placement, body_zone, table_price, session_duration_min, buffer_min FROM lookup_price('{{ $fromAI('placement', 'Placement da tatuagem, ex: braco, costas, perna') }}', '{{ $fromAI('body_zone', 'Zona corporal, ex: pequeno, medio, grande, fechamento') }}', '{{ $('Resolve Artist').first().json.id }}'::uuid)",
-                "options": {},
-            },
-            "type": "n8n-nodes-base.postgresTool",
-            "typeVersion": 2.6,
-            "position": [2600, -720],
-            "id": "p1a2b3c4-5d6e-7f8a-9b0c-1d2e3f4a5b6c",
-            "name": "Lookup Price",
-            "credentials": POSTGRES,
-        },
         # 21. Write Quote Tool
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM write_quote('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem no formato [Contexto: lead_id=UUID]') }}'::uuid, {{ $fromAI('table_price', 'Preço de tabela em centavos de real', 'number') }}, {{ $fromAI('negotiated_price', 'Preço negociado em centavos de real. Se não houve desconto, use o mesmo valor de table_price', 'number') }})",
+                "query": "SELECT * FROM write_quote('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem no formato [Contexto: lead_id=UUID]') }}'::uuid, NULLIF('{{ $fromAI('table_price', 'Preço de tabela em centavos de real', 'number') }}', 'undefined')::integer, NULLIF('{{ $fromAI('negotiated_price', 'Preço negociado em centavos de real. Se não houve desconto, use o mesmo valor de table_price', 'number') }}', 'undefined')::integer)",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1020,7 +1062,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM request_deposit('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, {{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }})",
+                "query": "SELECT * FROM request_deposit('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, NULLIF('{{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }}', 'undefined')::integer)",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1034,7 +1076,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT id, start_at, end_at, type FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', {{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}) ORDER BY start_at LIMIT 10",
+                "query": "SELECT id, start_at, end_at, type FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120)) ORDER BY start_at LIMIT 10",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1048,7 +1090,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM book_slot('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, {{ $fromAI('duration_min', 'Duração da sessão em minutos (do lookup_price)', 'number') }}, {{ $fromAI('buffer_min', 'Buffer em minutos (do lookup_price, padrão 30)', 'number') }})",
+                "query": "SELECT * FROM book_slot_checked('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number') }}', 'undefined')::integer, 120), COALESCE(NULLIF('{{ $fromAI('buffer_min', 'Buffer em minutos — padrão 30', 'number') }}', 'undefined')::integer, 30))",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1383,6 +1425,7 @@ return [{
             "id": "tg-notify-0000-0000-0000-000000000001",
             "name": "Send Notification to Group",
             "credentials": TELEGRAM_OPS,
+            "onError": "continueRegularOutput",
         },
     ],
     "connections": {
@@ -1459,9 +1502,6 @@ return [{
         },
         "Postgres Chat Memory": {
             "ai_memory": [[{"node": "AI Agent", "type": "ai_memory", "index": 0}]]
-        },
-        "Lookup Price": {
-            "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
         },
         "Write Quote": {
             "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]

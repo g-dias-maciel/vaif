@@ -1,0 +1,95 @@
+{
+  "name": "Admin Reset Leads",
+  "description": "Guarded admin action — wipe lead history (all artists, or one artist by session slug). Calls reset_leads(). Requires {\"confirm\":\"DELETE_LEADS\"}. Destructive: no undo.",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "reset-leads",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [0, 0],
+      "id": "arl-webhook-0000-0000-0000-000000000001",
+      "name": "Reset Webhook",
+      "webhookId": "arl-webhook-0000-0000-0000-000000000001"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "arl-confirm-cond-0000",
+              "leftValue": "={{ $json.body.confirm }}",
+              "rightValue": "DELETE_LEADS",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [260, 0],
+      "id": "arl-if-0000-0000-0000-000000000001",
+      "name": "Confirm?"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT reset_leads(NULLIF($1, '')) AS result;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.artist_slug || ''] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [560, -120],
+      "id": "arl-reset-0000-0000-0000-000000000001",
+      "name": "Reset Leads",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: { ok: false, error: 'missing confirmation: send {\"confirm\":\"DELETE_LEADS\"} (optional \"artist_slug\" to scope one artist)' } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [560, 120],
+      "id": "arl-refuse-0000-0000-0000-000000000001",
+      "name": "Refuse"
+    }
+  ],
+  "connections": {
+    "Reset Webhook": {
+      "main": [[{"node": "Confirm?", "type": "main", "index": 0}]]
+    },
+    "Confirm?": {
+      "main": [
+        [{"node": "Reset Leads", "type": "main", "index": 0}],
+        [{"node": "Refuse", "type": "main", "index": 0}]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

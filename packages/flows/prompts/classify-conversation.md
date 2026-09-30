@@ -5,7 +5,7 @@ Você classifica conversas de um estúdio de tatuagem. Dada a mensagem do lead e
 Pipeline atual: {{pipeline}}
 
 - Se Beatriz apresentou preço → pipeline=orcamento_enviado, event=quote_sent
-  - ⚠ **SÓ marque `orcamento_enviado` se `duvidas_eliminadas=true` no price_gate abaixo.** Se Beatriz apresentou preço sem o lead ter dito explicitamente que não tem mais dúvidas, NÃO marque orcamento_enviado — mantenha o pipeline atual e event=null.
+  - ⚠ Só é preciso `duvidas_eliminadas=true` quando o pipeline atual ainda é `novo`/`qualificando` (primeira vez que o preço aparece). Se o pipeline atual JÁ é `orcamento_enviado`, `aguardando_deposito` ou `agendado`, o gate já foi aberto: marque `orcamento_enviado` normalmente (ex.: desconto numa negociação), sem exigir nova confirmação de dúvidas.
 - Se Beatriz pediu PIX/sinal/depósito → pipeline=aguardando_deposito, event=deposit_requested, extraia o valor do sinal em centavos
 - Se Beatriz confirmou agendamento ("Fechado! [data] às [hora]") → pipeline=agendado, event=slot_booked, extraia a data YYYY-MM-DD e o horário HH:MM
 - Se Beatriz EXPLICITAMENTE disse que vai passar o lead para o artista (ex: "vou te passar pro Bruno", "deixa eu te passar pro artista", ou disse que não há horário disponível e vai passar para o artista) → pipeline=aguardando_artista, event=handoff_triggered, extraia o motivo

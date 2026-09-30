@@ -74,6 +74,7 @@ CREATE TABLE IF NOT EXISTS leads (
   pipeline_status     TEXT NOT NULL DEFAULT 'novo',
   handoff_reason      TEXT,
   processo_explicado  BOOLEAN DEFAULT false,
+  preco_liberado      BOOLEAN DEFAULT false,
   conversation_started TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_message_at      TIMESTAMPTZ,
   notion_sync_status   TEXT DEFAULT 'pending'
@@ -104,6 +105,7 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS deposit_status        TEXT DEFAULT 'n
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS pipeline_status       TEXT NOT NULL DEFAULT 'novo';
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS handoff_reason        TEXT;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS processo_explicado    BOOLEAN DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS preco_liberado        BOOLEAN DEFAULT false;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS conversation_started  TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_message_at       TIMESTAMPTZ;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_sync_status    TEXT DEFAULT 'pending';
@@ -509,6 +511,64 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+-- Book a slot ONLY if it is a real, free, future slot derived from the
+-- artist's working hours. Rejects hallucinated/past dates and already-booked
+-- windows, returning no rows instead of writing a bad calendar entry.
+CREATE OR REPLACE FUNCTION book_slot_checked(
+  p_lead_id UUID,
+  p_start_at TIMESTAMPTZ,
+  p_duration_min INTEGER DEFAULT 120,
+  p_buffer_min INTEGER DEFAULT 30
+) RETURNS SETOF leads AS $$
+DECLARE
+  v_artist UUID;
+  v_tz TEXT;
+  v_candidate TIMESTAMPTZ;
+BEGIN
+  SELECT artist_id INTO v_artist FROM leads WHERE id = p_lead_id;
+  IF v_artist IS NULL THEN
+    RETURN;
+  END IF;
+  SELECT COALESCE(NULLIF(timezone, ''), 'UTC') INTO v_tz FROM artists WHERE id = v_artist;
+
+  -- 1) Exact instant is a real, free, future slot.
+  IF p_start_at > now() AND EXISTS (
+    SELECT 1
+    FROM check_availability(
+      v_artist,
+      p_start_at - interval '1 hour',
+      p_start_at + (GREATEST(p_duration_min, 1) || ' minutes')::interval + interval '1 hour',
+      GREATEST(p_duration_min, 1)
+    )
+    WHERE start_at = p_start_at
+  ) THEN
+    RETURN QUERY SELECT * FROM book_slot(p_lead_id, p_start_at, p_duration_min, p_buffer_min);
+    RETURN;
+  END IF;
+
+  -- 2) Reconcile the model's timezone: it often sends the wall-clock time with
+  --    a "Z" (UTC) suffix even though it means the artist's local time. Treat
+  --    the requested clock time as the artist's local time and re-check.
+  v_candidate := (p_start_at AT TIME ZONE 'UTC') AT TIME ZONE v_tz;
+  IF v_candidate > now() AND EXISTS (
+    SELECT 1
+    FROM check_availability(
+      v_artist,
+      v_candidate - interval '1 hour',
+      v_candidate + (GREATEST(p_duration_min, 1) || ' minutes')::interval + interval '1 hour',
+      GREATEST(p_duration_min, 1)
+    )
+    WHERE start_at = v_candidate
+  ) THEN
+    RETURN QUERY SELECT * FROM book_slot(p_lead_id, v_candidate, p_duration_min, p_buffer_min);
+    RETURN;
+  END IF;
+
+  -- Neither the exact instant nor its local-time reading is a real slot.
+  RETURN;
+END;
+$$ LANGUAGE plpgsql;
+
 -- Block a period for an artist: creates a type='blocked' calendar row so
 -- check_availability stops offering those hours and book_slot rejects them.
 CREATE OR REPLACE FUNCTION block_slot(
@@ -561,7 +621,10 @@ VALUES (
   '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
   NULL,
   'America/Sao_Paulo',
-  'bruno-tattoo', 'live', '5511999990001', '-5195870017'
+  -- slug matches the WAHA session used for the test artist (dashboard session
+  -- is named "default"); keep it in sync so re-running this migration doesn't
+  -- remap the session out from under the agent.
+  'default', 'live', '5511999990001', '-5195870017'
 ) ON CONFLICT (id) DO UPDATE SET
   display_name      = EXCLUDED.display_name,
   nome              = EXCLUDED.nome,
@@ -710,5 +773,82 @@ BEGIN
 
   UPDATE leads SET notion_sync_status = 'failed', updated_at = now()
   WHERE id = (SELECT lead_id FROM notion_sync_outbox WHERE id = p_id);
+END;
+$$ LANGUAGE plpgsql;
+
+-- ── Lead-history reset ──
+-- Deletes lead history FK-safely. Pass NULL to wipe EVERY artist, or a session
+-- slug (e.g. 'default') to wipe just that artist. Order matters: events,
+-- notion outbox and lead-linked calendar rows first, then n8n's chat memory
+-- (session_id = lead id), then leads, then the debounce buffer.
+-- Returns per-table deleted counts. Destructive and not reversible.
+CREATE OR REPLACE FUNCTION reset_leads(p_artist_slug TEXT DEFAULT NULL)
+RETURNS JSONB AS $$
+DECLARE
+  v_artist_id  UUID;
+  v_events     INTEGER := 0;
+  v_outbox     INTEGER := 0;
+  v_calendar   INTEGER := 0;
+  v_memory     INTEGER := 0;
+  v_leads      INTEGER := 0;
+  v_buffer     INTEGER := 0;
+  v_has_memory BOOLEAN := to_regclass('public.chat_memory') IS NOT NULL;
+BEGIN
+  IF p_artist_slug IS NULL THEN
+    DELETE FROM events;
+    GET DIAGNOSTICS v_events = ROW_COUNT;
+
+    DELETE FROM notion_sync_outbox;
+    GET DIAGNOSTICS v_outbox = ROW_COUNT;
+
+    DELETE FROM calendar WHERE lead_id IS NOT NULL;
+    GET DIAGNOSTICS v_calendar = ROW_COUNT;
+
+    IF v_has_memory THEN
+      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads)';
+      GET DIAGNOSTICS v_memory = ROW_COUNT;
+    END IF;
+
+    DELETE FROM leads;
+    GET DIAGNOSTICS v_leads = ROW_COUNT;
+
+    DELETE FROM message_buffer;
+    GET DIAGNOSTICS v_buffer = ROW_COUNT;
+  ELSE
+    SELECT id INTO v_artist_id FROM artists WHERE wa_session_slug = p_artist_slug;
+    IF v_artist_id IS NULL THEN
+      RAISE EXCEPTION 'reset_leads: no artist with wa_session_slug=%', p_artist_slug;
+    END IF;
+
+    DELETE FROM events WHERE artist_id = v_artist_id;
+    GET DIAGNOSTICS v_events = ROW_COUNT;
+
+    DELETE FROM notion_sync_outbox WHERE artist_id = v_artist_id;
+    GET DIAGNOSTICS v_outbox = ROW_COUNT;
+
+    DELETE FROM calendar WHERE artist_id = v_artist_id AND lead_id IS NOT NULL;
+    GET DIAGNOSTICS v_calendar = ROW_COUNT;
+
+    IF v_has_memory THEN
+      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads WHERE artist_id = $1)' USING v_artist_id;
+      GET DIAGNOSTICS v_memory = ROW_COUNT;
+    END IF;
+
+    DELETE FROM leads WHERE artist_id = v_artist_id;
+    GET DIAGNOSTICS v_leads = ROW_COUNT;
+
+    DELETE FROM message_buffer WHERE chat_id LIKE p_artist_slug || ':%';
+    GET DIAGNOSTICS v_buffer = ROW_COUNT;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'artist_slug', p_artist_slug,
+    'leads', v_leads,
+    'events', v_events,
+    'calendar', v_calendar,
+    'notion_outbox', v_outbox,
+    'chat_memory', v_memory,
+    'message_buffer', v_buffer
+  );
 END;
 $$ LANGUAGE plpgsql;

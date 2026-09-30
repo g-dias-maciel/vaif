@@ -1,0 +1,38 @@
+name: Flows tests
+
+on:
+  push:
+    paths:
+      - "packages/flows/**"
+      - "packages/crm/supabase/migrations/**"
+      - ".github/workflows/flows-tests.yml"
+  pull_request:
+    paths:
+      - "packages/flows/**"
+      - "packages/crm/supabase/migrations/**"
+
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      # All of these are offline: no DB, n8n, WAHA or model calls.
+      - name: Prompt + workflow wiring
+        run: python3 packages/flows/tests/test_system_prompt.py
+
+      - name: Price gate truth table
+        run: node packages/flows/definitions/code/test-price-gate.js
+
+      - name: Conversation suite (units + scenarios)
+        run: node packages/flows/tests/conversation/run.js

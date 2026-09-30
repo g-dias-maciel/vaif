@@ -1,0 +1,221 @@
+{
+  "scenarios": [
+    {
+      "name": "intro-first",
+      "description": "New lead opens with a detailed request; Beatriz must introduce herself (model behaviour; enforced globally by the no-price invariant in mock mode).",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "novo", "processo_explicado": false, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "Oi, quero um fechamento de braço em realismo",
+          "model": "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Me conta, essa seria sua primeira tatuagem?",
+          "classify": { "pipeline": "qualificando", "qualification": { "placement": "braco", "body_zone": "fechamento", "style": "realismo" } },
+          "expect": { "finalReplyIncludes": ["Beatriz"], "finalReplyExcludes": ["R$"] }
+        }
+      ]
+    },
+    {
+      "name": "price-gate-blocks-early",
+      "description": "Lead asks price too early and the model misbehaves; the gate must replace the quote and not advance the pipeline.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "novo", "processo_explicado": false, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "Quanto custa uma tatuagem de leão no braço?",
+          "model": "Fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros.",
+          "classify": { "pipeline": "qualificando", "pricing": { "table_cents": 150000, "nego_cents": 150000 } },
+          "expect": {
+            "finalReplyIncludes": ["Antes de falarmos de valores"],
+            "finalReplyExcludes": ["R$"],
+            "gateViolation": true,
+            "state": { "pipeline_status": "qualificando" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "doubt-loop-two-questions",
+      "description": "Regression: after the process explanation the lead asks two questions; the second answer ends with a generic sign-off and must still keep the doubt loop open.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "quanto tempo pra fazer a tatuagem?",
+          "model": "Depende do tamanho e dos detalhes, mas um fechamento de braço leva de 4 a 6 horas. Mais alguma dúvida?",
+          "classify": { "pipeline": "qualificando" },
+          "expect": { "finalReplyMatches": ["Mais alguma d[uú]vida\\?"] }
+        },
+        {
+          "lead": "doi muito?",
+          "model": "A dor varia de pessoa para pessoa. Se precisar de mais alguma informação, estou à disposição!",
+          "classify": { "pipeline": "qualificando" },
+          "expect": {
+            "finalReplyMatches": ["Mais alguma d[uú]vida\\?\\s*$"],
+            "finalReplyIncludes": ["A dor varia de pessoa para pessoa"],
+            "gateViolation": false
+          }
+        },
+        {
+          "lead": "não",
+          "model": "Perfeito! Para fechamento no braço fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros. Como fica esse valor para você?",
+          "classify": { "pipeline": "orcamento_enviado", "price_gate": { "duvidas_eliminadas": true }, "pricing": { "table_cents": 150000, "nego_cents": 150000 } },
+          "expect": {
+            "finalReplyIncludes": ["R$ 1.500"],
+            "state": { "pipeline_status": "orcamento_enviado", "preco_liberado": true }
+          }
+        }
+      ]
+    },
+    {
+      "name": "negotiation-no-reask",
+      "description": "Regression: once the gate is open, a price objection must trigger negotiation and never re-ask the doubts question.",
+      "artist": { "nome": "Bruno" },
+      "floor_pct": 80,
+      "initial": { "pipeline_status": "orcamento_enviado", "processo_explicado": true, "preco_liberado": true },
+      "turns": [
+        {
+          "lead": "achei um pouco fora do que eu consigo pagar",
+          "model": "Entendi, e é totalmente válido. Se você fechar agora consigo um desconto: fica R$ 1.200 à vista ou em até 6x de R$ 200 sem juros. O que acha?",
+          "classify": { "pipeline": "orcamento_enviado", "pricing": { "table_cents": 150000, "nego_cents": 120000 } },
+          "expect": {
+            "finalReplyIncludes": ["R$ 1.200"],
+            "finalReplyExcludes": ["Antes de falarmos de valores", "Mais alguma dúvida"]
+          }
+        }
+      ]
+    },
+    {
+      "name": "generic-placement-asks-region",
+      "description": "A generic placement must ask which region instead of handing off or claiming prices are unavailable.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "quero fechar o braço",
+          "model": "Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?",
+          "classify": { "pipeline": "qualificando", "qualification": { "placement": "braco", "body_zone": "fechamento" } },
+          "expect": {
+            "finalReplyMatches": ["antebra"],
+            "finalReplyExcludes": ["R$", "passar pro Bruno"],
+            "handoff": false
+          }
+        }
+      ]
+    },
+    {
+      "name": "coverup-handoff",
+      "description": "Explicit cover-up must hand off immediately with no price.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "novo", "processo_explicado": false, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "oi, quero cobrir uma tatuagem antiga",
+          "model": "Cover-ups são bem específicos. Vou te passar pro Bruno, ele vai avaliar sua referência.",
+          "classify": { "pipeline": "aguardando_artista", "handoff": { "reason": "cover_up" } },
+          "expect": { "handoff": true, "finalReplyExcludes": ["R$"] }
+        }
+      ]
+    },
+    {
+      "name": "below-floor-handoff",
+      "description": "A below-floor counteroffer during negotiation must hand off.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "orcamento_enviado", "processo_explicado": true, "preco_liberado": true },
+      "turns": [
+        {
+          "lead": "só pago R$ 100",
+          "model": "Entendi. Deixa eu te passar pro Bruno, ele vê o que consegue fazer.",
+          "classify": { "pipeline": "aguardando_artista", "handoff": { "reason": "below_piso" } },
+          "expect": { "handoff": true }
+        }
+      ]
+    },
+    {
+      "name": "premature-deposit-blocked",
+      "description": "A PIX/sinal request before the gate opens must be blocked and not persisted.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "como faço pra pagar?",
+          "model": "O sinal é R$ 450 no PIX: bruno.tattoo@pix.com.br",
+          "classify": { "pipeline": "aguardando_deposito", "deposit": { "amount_cents": 45000 } },
+          "expect": {
+            "finalReplyIncludes": ["Antes de falarmos de valores"],
+            "finalReplyExcludes": ["R$"],
+            "gateViolation": true,
+            "state": { "deposit_status": "nao_solicitado" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "booking-flow",
+      "description": "After price acceptance: offer days, then times, then confirm the slot and request the signal.",
+      "artist": { "nome": "Bruno" },
+      "floor_pct": 80,
+      "initial": { "pipeline_status": "orcamento_enviado", "processo_explicado": true, "preco_liberado": true },
+      "turns": [
+        {
+          "lead": "fechado, pode ser",
+          "model": "Perfeito! Posso te atender segunda, dia 5 ou quarta, dia 7. Qual fica melhor pra você?",
+          "classify": { "pipeline": "orcamento_enviado" },
+          "expect": { "finalReplyIncludes": ["dia 5"], "finalReplyExcludes": ["Mais alguma dúvida", "Antes de falarmos de valores"] }
+        },
+        {
+          "lead": "segunda",
+          "model": "Na segunda, dia 5, tenho às 14 horas ou às 16 horas. Qual fica melhor pra você?",
+          "classify": { "pipeline": "orcamento_enviado" },
+          "expect": { "finalReplyIncludes": ["14 horas"] }
+        },
+        {
+          "lead": "14 horas",
+          "model": "Fechado! Seu horário está pré-agendado para segunda, dia 5 às 14 horas. Trabalhamos com um sinal de R$ 450, que é descontado do total. O PIX é: bruno.tattoo@pix.com.br",
+          "classify": { "pipeline": "aguardando_deposito", "deposit": { "amount_cents": 45000 }, "pricing": { "table_cents": 150000, "nego_cents": 150000 } },
+          "expect": {
+            "finalReplyIncludes": ["R$ 450"],
+            "state": { "pipeline_status": "aguardando_deposito", "deposit_status": "aguardando_confirmacao" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "discount-within-floor",
+      "description": "A negotiated discount must stay at or above the artist floor (80% → R$ 1.200 of R$ 1.500).",
+      "artist": { "nome": "Bruno" },
+      "floor_pct": 80,
+      "initial": { "pipeline_status": "orcamento_enviado", "processo_explicado": true, "preco_liberado": true },
+      "turns": [
+        {
+          "lead": "queria um desconto",
+          "model": "Consigo um desconto de 20%: fica R$ 1.200 à vista, com a contrapartida de um post no Instagram. Fecho pra você agora?",
+          "classify": { "pipeline": "orcamento_enviado", "pricing": { "table_cents": 150000, "nego_cents": 120000 } },
+          "expect": {
+            "finalReplyIncludes": ["R$ 1.200"],
+            "state": { "negotiated_price": 120000 }
+          }
+        }
+      ]
+    },
+    {
+      "name": "signal-objections",
+      "description": "Objections about the signal must be handled: it reserves the slot and is discounted from the total.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "aguardando_deposito", "processo_explicado": true, "preco_liberado": true },
+      "turns": [
+        {
+          "lead": "por que preciso pagar sinal?",
+          "model": "O sinal garante e reserva o seu horário, e é descontado do valor total da tatuagem. Não é um custo extra.",
+          "classify": { "pipeline": "aguardando_deposito" },
+          "expect": { "finalReplyMatches": ["(descont|reserv|garant)"] }
+        },
+        {
+          "lead": "posso pagar tudo no dia?",
+          "model": "Sem o sinal o horário não fica reservado para você. Como ele é descontado do total, você não paga nada a mais.",
+          "classify": { "pipeline": "aguardando_deposito" },
+          "expect": { "finalReplyMatches": ["(reserv|descont)"] }
+        }
+      ]
+    }
+  ]
+}

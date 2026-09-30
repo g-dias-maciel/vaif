@@ -104,6 +104,7 @@ check('reply kept as-is', r.final_reply.includes('R$ 1.500'), r.final_reply);
 check('no violation', r.price_gate_violation === false);
 check('pipeline → orcamento_enviado', r.pipeline_status === 'orcamento_enviado', r.pipeline_status);
 check('pricing persisted', r.table_price_cents === 150000);
+check('gate flag persisted on first quote', r.preco_liberado_val === true);
 
 // ── D. Negotiation turn: quote stage already reached ──
 console.log('=== Negotiation after the gate is open ===');
@@ -119,7 +120,36 @@ check('discount quote allowed', r.price_gate_violation === false);
 check('reply kept', r.final_reply.includes('R$ 1.200'));
 check('pipeline stays orcamento_enviado', r.pipeline_status === 'orcamento_enviado', r.pipeline_status);
 
-// ── E. Deposit request after the gate is open ──
+// ── D2. Sticky gate: preco_liberado persisted, process flag lost ──
+console.log('=== Negotiation with sticky gate flag (processo_explicado=false) ===');
+r = runParse({
+  lead: { id: 'L4b', pipeline_status: 'qualificando', processo_explicado: false, preco_liberado: true },
+  agentOutput: 'Se fechar agora faço R$ 1.200 em vez de R$ 1.500.',
+  classifier: gate({ pipeline: 'orcamento_enviado', pricing: { table_cents: 150000, nego_cents: 120000 } }),
+});
+check('sticky gate keeps negotiation open', r.price_gate_violation === false);
+check('reply kept', r.final_reply.includes('R$ 1.200'));
+
+// ── D3. Regression: quote stage reached but processo_explicado flag false ──
+console.log('=== Regression: negotiation after quote stage, no process flag ===');
+r = runParse({
+  lead: { id: 'L4c', pipeline_status: 'orcamento_enviado', processo_explicado: false, preco_liberado: false },
+  agentOutput: 'Consigo fazer por R$ 1.200 à vista.',
+  classifier: gate({ pipeline: 'orcamento_enviado', pricing: { table_cents: 150000, nego_cents: 120000 } }),
+});
+check('quote stage alone keeps the gate open', r.price_gate_violation === false);
+check('no re-ask of the doubts question', r.final_reply.includes('R$ 1.200'));
+
+// ── D4. First quote still blocked without process (gate not yet opened) ──
+console.log('=== First quote with no process and no sticky flag still blocked ===');
+r = runParse({
+  lead: { id: 'L4d', pipeline_status: 'qualificando', processo_explicado: false, preco_liberado: false },
+  agentOutput: 'Fica R$ 1.500 à vista.',
+  classifier: gate({ pipeline: 'orcamento_enviado' }),
+});
+check('blocked before the gate opens', r.price_gate_violation === true);
+check('reply is the doubts question', r.final_reply === DOUBTS_Q);
+
 console.log('=== Deposit after the gate is open ===');
 r = runParse({
   lead: { id: 'L5', pipeline_status: 'aguardando_deposito', processo_explicado: true },
@@ -139,6 +169,61 @@ r = runParse({
 check('premature deposit blocked', r.price_gate_violation === true);
 check('deposit not persisted', r.deposit_amount_cents === null && r.deposit_status_val === null);
 check('pipeline stays qualificando', r.pipeline_status === 'qualificando', r.pipeline_status);
+
+// ── H. Production reproduction: classifier misses orcamento_enviado ──
+// Turn 1 sends the first price while the classifier proposes pipeline
+// "qualificando" (the real bug). The gate must still open AND the pipeline
+// must advance deterministically. Turn 2 is the negotiation after it.
+console.log('=== Production case: first quote with classifier missing orcamento ===');
+const turn1 = runParse({
+  lead: { id: 'L8', pipeline_status: 'qualificando', processo_explicado: true, preco_liberado: false },
+  agentOutput: 'Perfeito! Agora, vamos falar sobre os valores. Para o fechamento no braço, fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros. Como fica esse valor para você?',
+  classifier: gate({ pipeline: 'qualificando', price_gate: { duvidas_eliminadas: true }, pricing: { table_cents: 150000, nego_cents: 150000 } }),
+});
+check('first quote not replaced', turn1.final_reply.includes('R$ 1.500'));
+check('pipeline advanced to orcamento_enviado despite classifier', turn1.pipeline_status === 'orcamento_enviado', turn1.pipeline_status);
+check('gate flag persisted', turn1.preco_liberado_val === true);
+
+console.log('=== Production case: negotiation turn after that quote ===');
+const turn2 = runParse({
+  lead: { id: 'L8', pipeline_status: turn1.pipeline_status, processo_explicado: turn1.processo_explicado_val, preco_liberado: turn1.preco_liberado_val },
+  agentOutput: 'Entendi, e é totalmente válido. Para ajudar, posso te oferecer uma condição especial: se você fechar agora, consigo fazer um desconto de 20%, ficando R$ 1.200 à vista ou em até 6x de R$ 200 sem juros. O que acha?',
+  classifier: gate({ pipeline: 'qualificando', pricing: { table_cents: 150000, nego_cents: 120000 } }),
+});
+check('discount NOT replaced by the doubts question', turn2.final_reply.includes('R$ 1.200'), turn2.final_reply);
+check('no violation on negotiation', turn2.price_gate_violation === false);
+check('pipeline stays orcamento_enviado', turn2.pipeline_status === 'orcamento_enviado', turn2.pipeline_status);
+
+// ── I. Doubt-loop enforcement (pre-price) ──
+console.log('=== Doubt loop enforced while pre-price ===');
+let d = runParse({
+  lead: { id: 'L9', pipeline_status: 'qualificando', processo_explicado: true, preco_liberado: false },
+  agentOutput: 'A dor varia de pessoa para pessoa. Se precisar de mais alguma informação, estou à disposição!',
+  classifier: gate({ pipeline: 'qualificando' }),
+});
+check('generic sign-off gets the doubts question appended', /Mais alguma d[uú]vida\?$/.test(d.final_reply.trim()), d.final_reply);
+check('original answer preserved', d.final_reply.includes('A dor varia de pessoa para pessoa'));
+
+d = runParse({
+  lead: { id: 'L9', pipeline_status: 'qualificando', processo_explicado: true, preco_liberado: false },
+  agentOutput: 'A dor varia de pessoa para pessoa. Mais alguma dúvida?',
+  classifier: gate({ pipeline: 'qualificando' }),
+});
+check('follow-up not duplicated', (d.final_reply.match(/Mais alguma d[uú]vida\?/gi) || []).length === 1, d.final_reply);
+
+d = runParse({
+  lead: { id: 'L9', pipeline_status: 'qualificando', processo_explicado: true, preco_liberado: false },
+  agentOutput: 'Para braco_externo fechamento fica R$ 1.500 à vista.',
+  classifier: gate({ pipeline: 'orcamento_enviado', price_gate: { duvidas_eliminadas: true }, pricing: { table_cents: 150000 } }),
+});
+check('price turn does NOT get the doubts question appended', !/Mais alguma d[uú]vida/i.test(d.final_reply), d.final_reply);
+
+d = runParse({
+  lead: { id: 'L9', pipeline_status: 'qualificando', processo_explicado: false, preco_liberado: false },
+  agentOutput: 'Que legal! Qual estilo você tem em mente?',
+  classifier: gate({ pipeline: 'qualificando' }),
+});
+check('discovery phase untouched (process not explained)', d.final_reply === 'Que legal! Qual estilo você tem em mente?', d.final_reply);
 
 // ── G. Non-price reply before the gate is not touched ──
 console.log('=== Non-price reply before the gate ===');

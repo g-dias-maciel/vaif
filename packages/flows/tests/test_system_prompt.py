@@ -171,23 +171,55 @@ check("agent text threads primeira_mensagem",
 
 # ── 3c. Rule 2: hard price gate ──
 print("=== Price gate ===")
-check("context exposes processo_explicado",
-      "processo_explicado=SIM/NAO" in template)
-check("prompt has the GATE DE PREÇO section",
-      "## GATE DE PREÇO (regra inviolável)" in template)
+check("context exposes processo_explicado and preco_liberado",
+      "processo_explicado=SIM/NAO" in template and "preco_liberado=SIM/NAO" in template)
+check("prompt has the one-time price gate section",
+      "## GATE DE PREÇO (checkpoint ÚNICO" in template)
 check("prompt requires process explained before price",
       "`processo_explicado=SIM` no contexto" in template)
 check("prompt requires explicit no-doubts before price",
       "disse EXPLICITAMENTE, na mensagem dele, que não tem mais nenhuma dúvida" in template)
-check("prompt forbids quoting while processo_explicado=nao",
-      "NUNCA mencione valores (R$, parcelas, 6x, sinal) enquanto `processo_explicado=nao`" in template)
-check("checklist references the price gate",
-      "GATE DE PREÇO: só fale de valores quando `processo_explicado=SIM`" in template)
+check("prompt once-gate is permanent and skips the doubts question",
+      "o gate está ABERTO PARA SEMPRE" in template
+      and "NUNCA mais pergunte \"Antes de falarmos de valores, ficou alguma dúvida?\"" in template)
+check("negotiation phase forbids re-asking the doubts question",
+      "NUNCA pergunte \"Antes de falarmos de valores, ficou alguma dúvida?\" nem \"Mais alguma dúvida?\" — isso já foi resolvido" in template)
 check("classifier emits price_gate.duvidas_eliminadas",
       '"duvidas_eliminadas": true or false' in CLASSIFY_TEMPLATE)
-check("classifier blocks orcamento_enviado without duvidas_eliminadas",
-      "SÓ marque `orcamento_enviado` se `duvidas_eliminadas=true`" in CLASSIFY_TEMPLATE)
+check("classifier only needs duvidas before the first quote",
+      "o gate já foi aberto" in CLASSIFY_TEMPLATE)
 parse_js = nodes["Parse Classification"]["parameters"]["jsCode"]
+check("parse gate is sticky once opened",
+      "precoLiberadoJa" in parse_js and "gateAlreadyOpen = precoLiberadoJa ||" in parse_js)
+check("parse deterministically records a sent quote even if classifier missed it",
+      "Deterministic quote state" in parse_js
+      and "finalPipeline = 'orcamento_enviado'" in parse_js)
+check("parse does not persist classifier booking dates (Book Slot is authoritative)",
+      "booked_date_val: null" in parse_js and "authoritative from the Book Slot tool" in parse_js)
+check("update query persists preco_liberado",
+      "preco_liberado = true" in nodes["Build Update Query"]["parameters"]["jsCode"])
+check("redundant Lookup Price tool removed from the agent",
+      "Lookup Price" not in nodes
+      and not any(c.get("node") == "Lookup Price"
+                  for t in wf["connections"].values()
+                  for b in t.get("ai_tool", []) for c in b))
+check("prompt treats the price table as authoritative",
+      "A tabela abaixo é a fonte oficial dos preços" in template)
+check("prompt handles generic placements without handoff",
+      "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
+check("parse enforces the doubt-loop follow-up while pre-price",
+      "preGateDoubtLoop" in parse_js and "Mais alguma dúvida?'" in parse_js)
+check("prompt states the last-line doubt rule",
+      "REGRA DA ÚLTIMA LINHA" in template)
+check("upsert returns preco_liberado",
+      "COALESCE(preco_liberado, false) AS preco_liberado" in nodes["Upsert Lead"]["parameters"]["query"])
+check("agent text threads preco_liberado",
+      "preco_liberado=" in AGENT_TEXT_JS)
+check("agent text exposes a precomputed signal amount",
+      "sinal_reais=" in AGENT_TEXT_JS and "Math.ceil(Number(base) * Number(dv) / 100)" in AGENT_TEXT_JS)
+check("prompt tells Beatriz to use sinal_reais verbatim",
+      "`sinal_reais`: valor EXATO do sinal em reais" in template
+      and "NUNCA faça a conta você mesma" in template)
 check("parse guard downgrades premature quote transitions",
       "!priceGateOpen && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(finalPipeline)" in parse_js)
 check("parse computes the price gate (open once quote stage reached)",
@@ -210,6 +242,9 @@ check("update query persists processo_explicado",
 check("upsert returns is_new",
       "true AS is_new" in nodes["Upsert Lead"]["parameters"]["query"]
       and "false AS is_new" in nodes["Upsert Lead"]["parameters"]["query"])
+check("upsert returns telefone (used by handoff/signal notifications)",
+      "SELECT id, telefone, pipeline_status" in nodes["Upsert Lead"]["parameters"]["query"]
+      and "RETURNING id, telefone, pipeline_status" in nodes["Upsert Lead"]["parameters"]["query"])
 
 # ── 3d. Rule 3: typing-aware debounce + humanized response time ──
 print("=== Typing debounce + humanize ===")
