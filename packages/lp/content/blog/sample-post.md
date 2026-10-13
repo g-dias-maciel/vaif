@@ -26,7 +26,7 @@ Você já se perguntou por que alguns estúdios faturam **R$ 50 mil por mês** e
 
 Anúncios segmentados no Meta Ads e Google Ads não são mais um luxo — são uma **necessidade competitiva**. Com um investimento médio de R$ 12 por lead qualificado, você pode:
 
-- Atrair clientes com orçamento acima de **R$ 3.000 por sessão**
+- Atrair clientes com orçamento acima de **R$ 4.000 por sessão**
 - Segmentar por bairro, renda e estilo artístico
 - Eliminar curiosos que nunca vão fechar
 

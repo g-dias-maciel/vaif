@@ -13,7 +13,7 @@ const faturamento = Number(lead.faturamento) || 0;
 const ticket = Number(lead.ticket) || 0;
 
 const sessoesImplicitas = ticket > 0 ? Math.round(faturamento / ticket) : 0;
-const BENCHMARK_TICKET = 3000;
+const BENCHMARK_TICKET = 4000;
 const ticketAbaixoBenchmark = ticket > 0 && ticket < BENCHMARK_TICKET;
 const gapTicket = ticketAbaixoBenchmark ? BENCHMARK_TICKET - ticket : 0;
 
@@ -32,14 +32,14 @@ const tgText = [
   '*Faturamento:* ' + brl(faturamento),
   '*Ticket médio:* ' + brl(ticket),
   '*Sessões/mês (implícitas):* ' + sessoesImplicitas,
-  ticketAbaixoBenchmark ? '*⚠️ Ticket abaixo do benchmark R$ 3.000+*' : '*✅ Ticket dentro do padrão alto*',
+  ticketAbaixoBenchmark ? '*⚠️ Ticket abaixo do benchmark R$ 4.000+*' : '*✅ Ticket dentro do padrão alto*',
   '',
   'Revisar e enviar diagnóstico por e-mail?'
 ].filter(Boolean).join('\n');
 
 const gapLinha = ticketAbaixoBenchmark
-  ? `Seu ticket médio de ${brl(ticket)} está <strong>${brl(gapTicket)} abaixo</strong> do padrão de alto valor (R$ 3.000+). Isso impacta diretamente sua receita por sessão e limita a margem de quem capta clientes premium.`
-  : 'Seu ticket médio está dentro do padrão de alto valor (R$ 3.000+). O foco agora é volume qualificado e recorrência de agenda.';
+  ? `Seu ticket médio de ${brl(ticket)} está <strong>${brl(gapTicket)} abaixo</strong> do padrão de alto valor (R$ 4.000+). Isso impacta diretamente sua receita por sessão e limita a margem de quem capta clientes premium.`
+  : 'Seu ticket médio está dentro do padrão de alto valor (R$ 4.000+). O foco agora é volume qualificado e recorrência de agenda.';
 
 const htmlEmail = `
 <!DOCTYPE html>

@@ -100,7 +100,7 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 
 ### Diagnostic delivery (n8n workflow "Diagnóstico Gratuito")
 1. Webhook receives lead → responds `{ success: true }` immediately (Respond Ok node)
-2. Code node auto-fills the diagnostic (sessões implícitas = faturamento ÷ ticket, benchmark vs R$ 3.000+, HTML email body, Telegram summary)
+2. Code node auto-fills the diagnostic (sessões implícitas = faturamento ÷ ticket, benchmark vs R$ 4.000+, HTML email body, Telegram summary)
 3. Telegram `sendAndWait` sends the draft to the ops group (`1062411741`, bot credential `Telegram account`) with Aprovar/Rejeitar buttons
 4. If approved → SMTP (`emailSend` with Titan 587 credential) sends the rich HTML email to the lead
 - The WhatsApp CTA in the form success screen uses `https://wa.me/5521999553136` (same number as calculadora)

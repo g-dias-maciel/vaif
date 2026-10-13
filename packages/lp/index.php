@@ -79,7 +79,7 @@
                     <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
                 </div>
                 <h3>Funil de Alto Padrão</h3>
-                <p>Um sistema que atrai, qualifica e fecha clientes com orçamento acima de R$ 3.000 por sessão, sem você precisar negociar descontos no Direct.</p>
+                <p>Um sistema que atrai, qualifica e fecha clientes com orçamento acima de R$ 4.000 por sessão, sem você precisar negociar descontos no Direct.</p>
                 <div class="value-stat">
                     <strong>2,4x</strong>
                     <span>Ticket Médio dos nossos clientes</span>

@@ -55,7 +55,7 @@ const ChatSimulator = (function() {
             next: 3
         },
         {
-            reply: 'Perfeito! Aqui está o método VAIF:<br><br>1️⃣ <strong>Tráfego Premium</strong> — Leads com orçamento R$ 3.000+<br>2️⃣ <strong>Atendente Virtual</strong> — Qualificamos e fechamos 78% dos leads<br>3️⃣ <strong>Agenda Cheia</strong> — Você só tatua, sem tocar no celular<br><br>Quer ver o diagnóstico do seu estúdio?',
+            reply: 'Perfeito! Aqui está o método VAIF:<br><br>1️⃣ <strong>Tráfego Premium</strong> — Leads com orçamento R$ 4.000+<br>2️⃣ <strong>Atendente Virtual</strong> — Qualificamos e fechamos 78% dos leads<br>3️⃣ <strong>Agenda Cheia</strong> — Você só tatua, sem tocar no celular<br><br>Quer ver o diagnóstico do seu estúdio?',
             next: 4
         },
         {
