@@ -1158,6 +1158,10 @@
             animation: fadeInUp 0.6s ease forwards;
         }
 
+        @media (max-width: 768px) {
+            #nativeCalendarBlock { padding: 28px 18px; }
+        }
+
         .calendar-grid {
             display: grid;
             grid-template-columns: 1fr 1fr;
@@ -1271,8 +1275,11 @@
             animation: fadeInUp 0.6s ease forwards;
         }
 
+        .funil-title {
+            font-size: clamp(1.5rem, 7vw, 2.5rem);
+        }
+
         .ebook-premium-box .funil-title {
-            font-size: 2.5rem;
             color: var(--text-main);
             margin-bottom: 5px;
         }
@@ -1642,7 +1649,7 @@
                 </div>
 
                 <div id="nativeCalendarBlock" style="display: none;">
-                    <h3 class="funil-title" style="font-size: 2.5rem; margin-bottom: 10px;">Seu estúdio de realismo está <span style="color: var(--gold); font-style: italic;">pronto para escalar.</span></h3>
+                    <h3 class="funil-title" style="margin-bottom: 10px;">Seu estúdio de realismo está <span style="color: var(--gold); font-style: italic;">pronto para escalar.</span></h3>
                     <p class="success-text" style="margin-bottom: 10px; max-width: 500px; margin-left: auto; margin-right: auto; font-size: 16px;">
                         Você tem a estrutura exata que escalamos. Abrimos um acesso direto à agenda do nosso especialista em captação de clientes para tatuadores.
                     </p>

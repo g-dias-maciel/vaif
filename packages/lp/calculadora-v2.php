@@ -333,7 +333,7 @@
                 </div>
 
                 <div id="nativeCalendarBlock" style="display: none;">
-                    <h3 class="funil-title" style="font-size: 2.5rem; margin-bottom: 10px;">Seu estúdio de realismo está <span style="color: var(--gold); font-style: italic;">pronto para escalar.</span></h3>
+                    <h3 class="funil-title" style="margin-bottom: 10px;">Seu estúdio de realismo está <span style="color: var(--gold); font-style: italic;">pronto para escalar.</span></h3>
                     <p class="success-text" style="margin-bottom: 10px; max-width: 500px; margin-left: auto; margin-right: auto; font-size: 16px;">
                         Você tem a estrutura exata que escalamos. Abrimos um acesso direto à agenda do nosso especialista em captação de clientes para tatuadores.
                     </p>

@@ -646,6 +646,10 @@
     animation: fadeInUp 0.6s ease forwards;
 }
 
+.funil-title {
+    font-size: clamp(1.5rem, 7vw, 2.5rem);
+}
+
 .progress-wrapper {
     padding-top: 80px;
 }
@@ -682,6 +686,7 @@
     .track-item { padding: 24px 10px; min-width: 0; }
     .track-number { font-size: clamp(1.5rem, 7vw, 3rem); }
     .track-label { font-size: 9px; letter-spacing: 1px; overflow-wrap: anywhere; }
+    #nativeCalendarBlock { padding: 28px 18px; }
     .carousel-viewport { max-width: 360px; }
     .carousel-slide { width: 280px; }
     .carousel-track { min-height: 480px; }

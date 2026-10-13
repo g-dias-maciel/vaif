@@ -2015,8 +2015,11 @@ strong {
     box-shadow: 0 10px 40px rgba(0,0,0,0.6);
 }
 
+.funil-title {
+    font-size: clamp(1.5rem, 7vw, 2.5rem);
+}
+
 .ebook-premium-box .funil-title {
-    font-size: 2.5rem;
     color: var(--text-main);
     margin-bottom: 5px;
 }
