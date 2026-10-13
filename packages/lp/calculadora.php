@@ -1383,10 +1383,9 @@
             </div>
 
             <p class="hero-subtitle fade-in-up delay-2">
-                Você já fatura 5 dígitos com realismo.<br>
-                Se sente pronto para dar o próximo passo e aumentar seu faturamento.<br>
+                Você já fatura 5 dígitos com realismo. Se sente pronto para dar o próximo passo e aumentar seu faturamento.<br>
                 Mas enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de <strong>R$ 2.000 cada</strong><br> 
-                Isso se chama processo, não com talento.
+                Isso se chama processo, não talento.
             </p>
 
             <div class="hero-links fade-in-up delay-3">
@@ -1588,7 +1587,7 @@
                 <!-- OTIMIZAÇÃO: Bloco de Convicção -->
                 <div class="conviction-block fade-in-up delay-1">
                     <p style="font-size: 13px; color: var(--text-main); max-width: 520px; margin: 0 auto 20px; line-height: 1.8;">
-                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica, é seu sistema de captação. Enquanto você negocia desconto no direct e batalha para ter clientes novos, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada.<br> <strong>A diferença não é talento. É processo.</strong>
+                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong> e tem um trabalho bom, o que está travando seu crescimento não é sua técnica, é seu sistema de captação. Enquanto você negocia desconto no direct e batalha para ter clientes novos, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada.<br> <strong>A diferença não é talento. É processo.</strong>
                     </p>
                 </div>
 
@@ -2224,7 +2223,7 @@
                 document.getElementById('confirmationTitle').textContent = 'Horário Confirmado!';
                 document.getElementById('confDateTimePlaceholder').textContent = horario;
                 document.getElementById('confirmationSubtitle').innerHTML =
-                    '<strong id="confNamePlaceholder">' + nome + '</strong>, sua reunião está marcada para <strong id="confDateTimePlaceholder">' + horario + '</strong>. Você já investiu 3 minutos no seu diagnóstico — essa call de <strong>30 minutos</strong> é o passo final para recuperar os <span class="highlight-gold" id="confLossPlaceholder">' + lossFmt + '</span> que estão escapando do seu estúdio <strong>este mês</strong>.';
+                    '<strong id="confNamePlaceholder">' + nome + '</strong>, sua reunião está marcada para <strong id="confDateTimePlaceholder">' + horario + '</strong>. Você já investiu 3 minutos no seu diagnóstico, essa call de <strong>30 minutos</strong> é o passo final para recuperar os <span class="highlight-gold" id="confLossPlaceholder">' + lossFmt + '</span> que estão escapando do seu estúdio <strong>este mês</strong>.';
             } else {
                 document.getElementById('confirmationTitle').textContent = 'Diagnóstico Salvo!';
                 document.getElementById('confDateTimePlaceholder').textContent = 'em breve';
