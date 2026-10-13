@@ -23,7 +23,7 @@ $host = getenv('DB_HOST');
 $dbname = getenv('DB_NAME');
 $user = getenv('DB_USER');
 $pass = getenv('DB_PASSWORD');
-// 👇 ADICIONE ESTA VARIÁVEL NO SEU COOLIFY (URL DO WEBHOOK DO N8N)
+// n8n webhook that registers the confirmed meeting (workflow "Cadastro Lead Calculadora")
 $n8nWebhookUrl = getenv('N8N_CALENDAR_WEBHOOK_URL');
 
 try {
@@ -31,26 +31,49 @@ try {
     $pdo = new PDO($dsn, $user, $pass);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
 
-    // Function to Update Lead
-    function updateLead($pdo, $data) {
-        $sql = "UPDATE leads SET data_agendamento = ? WHERE whatsapp = ? ORDER BY id DESC LIMIT 1";
-        $stmt = $pdo->prepare($sql);
-        return $stmt->execute([$data['data_agendamento'], $data['whatsapp']]);
-    }
-
-    // Attempt to update the lead
-    if (!updateLead($pdo, $data)) {
+    // 1. Save the chosen slot on the most recent lead for this WhatsApp number.
+    $sql = "UPDATE leads SET data_agendamento = ? WHERE whatsapp = ? ORDER BY id DESC LIMIT 1";
+    $stmt = $pdo->prepare($sql);
+    if (!$stmt->execute([$data['data_agendamento'], $data['whatsapp']])) {
         echo json_encode(['success' => false, 'error' => 'Erro ao atualizar os dados.']);
         error_log('Error: Failed to update lead with whatsapp: ' . $data['whatsapp']);
         exit;
     }
 
-    // Send to N8N Webhook (Asynchronous)
-    if ($n8nWebhookUrl) {
-        // Add your logic for sending to n8n after checking availability (if needed)
+    // 2. Fetch the lead's name + Instagram to enrich the n8n payload.
+    $stmtLead = $pdo->prepare("SELECT nome, instagram FROM leads WHERE whatsapp = ? ORDER BY id DESC LIMIT 1");
+    $stmtLead->execute([$data['whatsapp']]);
+    $leadInfo = $stmtLead->fetch(PDO::FETCH_ASSOC);
+
+    // 3. Forward the booking to n8n so it can create the Notion event.
+    if ($n8nWebhookUrl && $leadInfo) {
+        $payloadN8n = [
+            'nome' => $leadInfo['nome'],
+            'whatsapp' => $data['whatsapp'],
+            'instagram' => $leadInfo['instagram'],
+            'data_agendamento' => $data['data_agendamento'],
+        ];
+
+        $ch = curl_init($n8nWebhookUrl);
+        curl_setopt($ch, CURLOPT_POST, 1);
+        curl_setopt($ch, CURLOPT_POSTFIELDS, json_encode($payloadN8n));
+        curl_setopt($ch, CURLOPT_HTTPHEADER, ['Content-Type: application/json']);
+        curl_setopt($ch, CURLOPT_RETURNTRANSFER, true);
+        curl_setopt($ch, CURLOPT_TIMEOUT, 5);
+        $response = curl_exec($ch);
+        $curlError = curl_error($ch);
+        $httpCode = curl_getinfo($ch, CURLINFO_HTTP_CODE);
+        curl_close($ch);
+
+        if ($response === false || $httpCode >= 400) {
+            error_log("Error: n8n calendar webhook failed (http=$httpCode): " . ($curlError ?: $response));
+        }
+    } elseif ($n8nWebhookUrl && !$leadInfo) {
+        error_log('Warning: no lead found for whatsapp ' . $data['whatsapp'] . ' — skipping n8n calendar webhook.');
     }
+
+    echo json_encode(['success' => true]);
 
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'error' => 'Erro Real: ' . $e->getMessage()]);
 }
-?>
