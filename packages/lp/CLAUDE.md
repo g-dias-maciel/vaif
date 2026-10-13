@@ -94,8 +94,8 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 ### `POST /api/leads/diagnostico.php` (free diagnostic form)
 - Receives JSON from the final qualification form (`#qualification-form`): `nome, studio, whatsapp, email, instagram, faturamento, ticket, origem`
 - Validates `nome`, `whatsapp`, `email` are present
+- Inserts into the same `leads` table as the calculadora (`nome, whatsapp, instagram, email, studio, faturamento, ticket, sessoes, origem`; `sessoes = round(faturamento / ticket)`). Non-blocking — a DB failure is logged but does not break the flow
 - Forwards raw JSON to n8n (`N8N_DIAGNOSTICO_WEBHOOK_URL` = `https://n8n.vaif.com.br/webhook/diagnostico`) — non-blocking, 5s timeout
-- No MySQL insert (diagnostic is a separate lead magnet from the calculadora; n8n handles persistence/delivery)
 - Returns `{ success: true }` or `{ success: false, error: "..." }`
 
 ### Diagnostic delivery (n8n workflow "Diagnóstico Gratuito")
@@ -114,7 +114,15 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 ---
 
 ## Database (`leads` table columns)
-`id`, `nome`, `whatsapp`, `instagram`, `faturamento`, `ticket`, `sessoes`, `horas_admin`, `valor_hora`, `horas_secretario`, `prejuizo_mensal`, `potencial_lucro`, `data_agendamento`, `created_at`
+`id`, `nome`, `whatsapp`, `instagram`, `email`, `studio`, `origem`, `faturamento`, `ticket`, `sessoes`, `horas_admin`, `valor_hora`, `horas_secretario`, `prejuizo_mensal`, `potencial_lucro`, `data_agendamento`, `created_at`
+
+> The `email`, `studio` and `origem` columns were added to support the
+> diagnostic form. Existing databases need:
+> ```sql
+> ALTER TABLE leads ADD COLUMN email  VARCHAR(255) NULL AFTER instagram;
+> ALTER TABLE leads ADD COLUMN studio VARCHAR(255) NULL AFTER email;
+> ALTER TABLE leads ADD COLUMN origem VARCHAR(50)  NULL AFTER studio;
+> ```
 
 ---
 

@@ -66,6 +66,9 @@ CREATE TABLE IF NOT EXISTS leads (
     nome VARCHAR(255),
     whatsapp VARCHAR(20),
     instagram VARCHAR(255),
+    email VARCHAR(255),
+    studio VARCHAR(255),
+    origem VARCHAR(50),
     faturamento DECIMAL(12,2),
     ticket DECIMAL(12,2),
     sessoes INT,
@@ -77,6 +80,17 @@ CREATE TABLE IF NOT EXISTS leads (
     data_agendamento DATETIME NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
+```
+
+If the `leads` table already exists (it does for the calculadora), run this
+migration instead of recreating it — the diagnostic form
+(`api/leads/diagnostico.php`) now inserts into the same table and needs these
+three extra columns:
+
+```sql
+ALTER TABLE leads ADD COLUMN email  VARCHAR(255) NULL AFTER instagram;
+ALTER TABLE leads ADD COLUMN studio VARCHAR(255) NULL AFTER email;
+ALTER TABLE leads ADD COLUMN origem VARCHAR(50)  NULL AFTER studio;
 ```
 
 ---

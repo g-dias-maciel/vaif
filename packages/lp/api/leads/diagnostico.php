@@ -21,6 +21,44 @@ if ($nome === '' || $whatsapp === '' || $email === '') {
     exit;
 }
 
+// 1. Persistir o lead de diagnóstico na mesma tabela `leads` da calculadora.
+//    Não bloqueia o fluxo: se o banco falhar, o n8n ainda entrega o diagnóstico.
+$host = getenv('DB_HOST');
+$dbname = getenv('DB_NAME');
+$user = getenv('DB_USER');
+$pass = getenv('DB_PASSWORD');
+
+if ($host && $dbname && $user && $pass) {
+    try {
+        $dsn = "mysql:host=$host;dbname=$dbname;charset=utf8mb4";
+        $pdo = new PDO($dsn, $user, $pass);
+        $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
+
+        $faturamento = (isset($data['faturamento']) && is_numeric($data['faturamento'])) ? $data['faturamento'] : null;
+        $ticket      = (isset($data['ticket']) && is_numeric($data['ticket'])) ? $data['ticket'] : null;
+        $sessoes     = ($ticket && $ticket > 0 && $faturamento !== null) ? (int) round($faturamento / $ticket) : null;
+
+        $sql = "INSERT INTO leads (nome, whatsapp, instagram, email, studio, faturamento, ticket, sessoes, origem)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+        $stmt = $pdo->prepare($sql);
+        $stmt->execute([
+            $nome,
+            $whatsapp,
+            $data['instagram'] ?? null,
+            $email,
+            $data['studio'] ?? null,
+            $faturamento,
+            $ticket,
+            $sessoes,
+            $data['origem'] ?? 'diagnostico'
+        ]);
+    } catch (PDOException $e) {
+        error_log('Error: Failed to insert diagnostic lead: ' . $e->getMessage());
+    }
+} else {
+    error_log('Warning: DB env vars not set, diagnostic lead not persisted');
+}
+
 $n8nDiagnosticoWebhookUrl = getenv('N8N_DIAGNOSTICO_WEBHOOK_URL');
 
 if (!$n8nDiagnosticoWebhookUrl) {
