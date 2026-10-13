@@ -64,6 +64,24 @@
         });
     }
 
+    // Stop and remove any playing embeds. Hiding their container does not stop
+    // an iframe, so the funnel calls this before collapsing a section (e.g. on
+    // lead submit) to cut the audio immediately.
+    window.stopFacadeVideos = function () {
+        var facades = document.querySelectorAll('[data-video-id]');
+        Array.prototype.forEach.call(facades, function (facade) {
+            var frame = facade.querySelector('iframe');
+            if (frame) {
+                frame.src = 'about:blank';
+                if (frame.parentNode) {
+                    frame.parentNode.removeChild(frame);
+                }
+            }
+            facade.classList.remove('is-playing');
+            facade.removeAttribute('data-activated');
+        });
+    };
+
     if (document.readyState === 'loading') {
         document.addEventListener('DOMContentLoaded', init);
     } else {

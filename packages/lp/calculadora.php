@@ -2107,6 +2107,8 @@
                 return;
             }
 
+            if (typeof window.stopFacadeVideos === 'function') window.stopFacadeVideos();
+
             submitBtn.textContent = 'Analisando perfil...';
             submitBtn.disabled = true;
 
