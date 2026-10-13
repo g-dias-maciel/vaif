@@ -1383,7 +1383,10 @@
             </div>
 
             <p class="hero-subtitle fade-in-up delay-2">
-                Você já fatura 5 dígitos com realismo. Mas enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de <strong>R$ 2.000 cada</strong> — com processo, não com talento.
+                Você já fatura 5 dígitos com realismo.<br>
+                Se sente pronto para dar o próximo passo e aumentar seu faturamento.<br>
+                Mas enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de <strong>R$ 2.000 cada</strong><br> 
+                Isso se chama processo, não com talento.
             </p>
 
             <div class="hero-links fade-in-up delay-3">
@@ -1546,7 +1549,7 @@
 
                 <div class="promessa-box">
                     <span class="promessa-label">Sua Transformação</span>
-                    <p>Com um sistema de captação para realismo, você pode faturar <strong id="potencialValueText">R$ 0,00</strong> <strong>com a mesma agulha e as mesmas horas.</strong></p>
+                    <p>Com um sistema de captação profissional especializado, você pode faturar <strong id="potencialValueText">R$ 0,00</strong> <strong>focando no que realmente importa.</strong></p>
                 </div>
 
                 <div class="locked-action">
@@ -1555,7 +1558,7 @@
                             <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
                             <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
                         </svg>
-                        <span>Seu Plano de Captação High-Ticket está Bloqueado</span>
+                        <span>Seu Plano de Captação Profissional está Bloqueado</span>
                     </div>
                 </div>
 
@@ -1573,7 +1576,7 @@
                         </div>
                         <div class="track-item">
                             <div class="track-number">+110</div>
-                            <div class="track-label">Estúdios de Realismo e Preto & Cinza Escalados</div>
+                            <div class="track-label">Estúdios Escalados</div>
                         </div>
                         <div class="track-item">
                             <div class="track-number">+4.7M</div>
@@ -1585,13 +1588,13 @@
                 <!-- OTIMIZAÇÃO: Bloco de Convicção -->
                 <div class="conviction-block fade-in-up delay-1">
                     <p style="font-size: 13px; color: var(--text-main); max-width: 520px; margin: 0 auto 20px; line-height: 1.8;">
-                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica — é seu sistema de captação. Enquanto você negocia desconto no direct, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada. <strong>A diferença não é talento. É processo.</strong>
+                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong>, o que está travando seu crescimento não é sua técnica, é seu sistema de captação. Enquanto você negocia desconto no direct e batalha para ter clientes novos, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada.<br> <strong>A diferença não é talento. É processo.</strong>
                     </p>
                 </div>
 
                 <!-- Depoimento em Vídeo -->
                 <div class="depoimento-video-block fade-in-up">
-                    <p class="depoimento-video-title">Veja o que diz quem já escalou com a VAIF</p>
+                    <p class="depoimento-video-title">Ainda em dúvida? Veja o que diz quem já escalou com a VAIF</p>
                     <div class="depoimento-video" data-video-id="xERLTwPdnPk" data-video-title="Depoimento de Sergio Moraes" role="button" tabindex="0" aria-label="Assistir ao depoimento de Sergio Moraes">
                         <div class="depoimento-poster">
                             <span class="depoimento-poster-label">Depoimento — Sergio Moraes</span>
@@ -1636,7 +1639,7 @@
                     </p>
 
                     <button type="submit" class="btn-primary" id="submitBtn">Quero o Plano de Escala &rarr;</button>
-                    <p style="text-align: center; font-size: 11px; color: var(--text-muted); opacity: 0.7; margin-top: 20px;">Sem spam. Apenas conteúdo de alto valor para artistas sérios.</p>
+                    <p style="text-align: center; font-size: 11px; color: var(--text-muted); opacity: 0.7; margin-top: 20px;">Sem spam. Todos os dados são protegidos.</p>
                 </form>
 
                 <div id="analyzingOverlay" style="display: none;">
@@ -1711,15 +1714,15 @@
 
                         <!-- Texto Principal -->
                         <p class="confirmation-subtitle" id="confirmationSubtitle">
-                            <strong id="confNamePlaceholder">[Nome]</strong>, sua reunião está marcada para <strong id="confDateTimePlaceholder">[Data] às [Hora]</strong>. Você já investiu 3 minutos no seu diagnóstico — essa call de <strong>30 minutos</strong> é o passo final para recuperar os <span class="highlight-gold" id="confLossPlaceholder">R$ 9.750,00</span> que estão escapando do seu estúdio <strong>este mês</strong>.
+                            <strong id="confNamePlaceholder">[Nome]</strong>, sua reunião está marcada para <strong id="confDateTimePlaceholder">[Data] às [Hora]</strong>. Você já investiu 3 minutos no seu diagnóstico, essa call de <strong>30 minutos</strong> é o passo final para recuperar os <span class="highlight-gold" id="confLossPlaceholder">R$ 9.750,00</span> que estão escapando do seu estúdio <strong>este mês</strong>.
                         </p>
 
                         <!-- O que vai sair da call -->
                         <div class="call-outcomes">
                             <p class="outcomes-label">Esta reunião foi desenhada para te entregar:</p>
                             <ul class="outcomes-list">
-                                <li>Uma análise completa do seu estúdio — faturamento, ticket médio, gargalos de venda e pontos cegos que estão travando seu crescimento</li>
-                                <li>Cases reais de tatuadores com o mesmo perfil que o seu que escalaram o faturamento — e exatamente como chegaram lá</li>
+                                <li>Uma análise completa do seu estúdio: faturamento, ticket médio, gargalos de venda e pontos cegos que estão travando seu crescimento</li>
+                                <li>Cases reais de tatuadores com o mesmo perfil que o seu que escalaram o faturamento, e exatamente como chegaram lá</li>
                                 <li>Scripts de vendas validados por dezenas de tatuadores + direcionamento de marketing (orgânico ou pago) sob medida para o seu caso</li>
                             </ul>
                         </div>
