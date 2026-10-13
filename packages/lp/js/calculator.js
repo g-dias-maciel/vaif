@@ -6,6 +6,15 @@ let leadWhatsAppAtual = null;
 
 const TIMEZONE_AGENCIA = 'America/Sao_Paulo';
 
+function scrollToSection(element, extraOffset) {
+    if (!element) return;
+    const navbar = document.querySelector('.navbar');
+    const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+    const offset = navbarHeight + (extraOffset || 0) + 12;
+    const top = element.getBoundingClientRect().top + window.pageYOffset - offset;
+    window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+}
+
 function handleCalculate(event) {
     event.preventDefault();
 
@@ -46,7 +55,7 @@ function handleCalculate(event) {
     resultSec.classList.add('active');
 
     setTimeout(() => {
-        document.getElementById('progressWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+        scrollToSection(document.querySelector('#resultSection .calc-card'));
         animateValue(document.getElementById('prejuizoValue'), 0, prejuizo_mensal, 2500);
     }, 100);
 }
@@ -169,7 +178,9 @@ function selecionarSlot(elemento, valorDB, valorUI) {
     horarioSelecionadoDB = valorDB;
     horarioSelecionadoUI = valorUI;
 
-    document.getElementById('btnConfirmTime').style.display = 'block';
+    const confirmBtn = document.getElementById('btnConfirmTime');
+    confirmBtn.style.display = 'block';
+    confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 async function confirmarAgendamento() {
@@ -248,9 +259,11 @@ async function handleLeadSubmit(event) {
                     gerarDiasCalendario([], 0);
                 }
                 document.getElementById('nativeCalendarBlock').style.display = 'block';
+                scrollToSection(document.getElementById('nativeCalendarBlock'));
             } else {
                 document.getElementById('ebookLeadNome').textContent = nomePrimeiro;
                 document.getElementById('ebookBlock').style.display = 'block';
+                scrollToSection(document.getElementById('ebookBlock'));
 
                 document.getElementById('progressBar').style.width = '100%';
                 document.getElementById('progressLabel').textContent = 'Processo Concluído (100%)';
@@ -292,6 +305,8 @@ function mostrarTelaSucessoFinal(nome, horario) {
         titleElement.textContent = "Diagnóstico Salvo!";
         textElement.innerHTML = `Excelente, <strong>${nome}</strong>! Recebemos os seus dados.<br><br>Como você optou por não escolher um horário agora, nosso especialista vai te chamar no WhatsApp para combinarmos o melhor momento para conversarmos.`;
     }
+
+    scrollToSection(document.getElementById('successMessage'));
 }
 
 function trackEbookClick() {

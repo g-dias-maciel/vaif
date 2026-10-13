@@ -1,7 +1,18 @@
 /* VAIF Calculadora Page — Page-Specific Scripts */
 
 function scrollToCalculator() {
-    document.getElementById('progressWrapper').scrollIntoView({ behavior: 'smooth' });
+    scrollToSection(document.getElementById('progressWrapper'));
+}
+
+if (typeof window.scrollToSection !== 'function') {
+    window.scrollToSection = function (element, extraOffset) {
+        if (!element) return;
+        var navbar = document.querySelector('.navbar');
+        var navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+        var offset = navbarHeight + (extraOffset || 0) + 12;
+        var top = element.getBoundingClientRect().top + window.pageYOffset - offset;
+        window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+    };
 }
 
 async function handleLeadSubmit(event) {
@@ -53,6 +64,7 @@ async function handleLeadSubmit(event) {
             document.getElementById('analyzingPrejuizo').textContent = lossFmt;
             document.getElementById('analyzingOverlay').style.display = 'block';
             document.getElementById('analyzingStatus').style.opacity = '0';
+            scrollToSection(document.getElementById('analyzingOverlay'));
 
             await new Promise(function(r) { setTimeout(r, 2000); });
             document.getElementById('analyzingStatus').style.opacity = '1';
@@ -72,11 +84,13 @@ async function handleLeadSubmit(event) {
                     gerarDiasCalendario([], 0);
                 }
                 document.getElementById('nativeCalendarBlock').style.display = 'block';
+                scrollToSection(document.getElementById('nativeCalendarBlock'));
                 document.getElementById('progressBar').style.width = '80%';
                 document.getElementById('progressLabel').textContent = 'Passo 2 de 2: Escolha seu horário (80%)';
             } else {
                 document.getElementById('ebookLeadNome').textContent = nomePrimeiro;
                 document.getElementById('ebookBlock').style.display = 'block';
+                scrollToSection(document.getElementById('ebookBlock'));
 
                 document.getElementById('progressBar').style.width = '100%';
                 document.getElementById('progressLabel').textContent = 'Processo Concluído (100%)';
@@ -118,6 +132,8 @@ function mostrarTelaSucessoFinal(nome, horario) {
         document.getElementById('confirmationSubtitle').innerHTML =
             '<strong id="confNamePlaceholder">' + nome + '</strong>, seu diagnóstico está completo. Nosso especialista vai entrar em contato pelo WhatsApp para marcar sua call de <strong>30 minutos</strong> onde vamos estruturar o plano exato para recuperar os <span class="highlight-gold" id="confLossPlaceholder">' + lossFmt + '</span> que estão escapando do seu estúdio <strong>este mês</strong>.';
     }
+
+    scrollToSection(document.getElementById('successMessage'));
 }
 
 (function() {

@@ -1812,8 +1812,17 @@
     </footer>
 
     <script>
+        function scrollToSection(element, extraOffset) {
+            if (!element) return;
+            const navbar = document.querySelector('.navbar');
+            const navbarHeight = navbar ? navbar.getBoundingClientRect().height : 0;
+            const offset = navbarHeight + (extraOffset || 0) + 12;
+            const top = element.getBoundingClientRect().top + window.pageYOffset - offset;
+            window.scrollTo({ top: Math.max(top, 0), behavior: 'smooth' });
+        }
+
         function scrollToCalculator() {
-            document.getElementById('progressWrapper').scrollIntoView({ behavior: 'smooth' });
+            scrollToSection(document.getElementById('progressWrapper'));
         }
 
         function animateValue(element, start, end, duration) {
@@ -1884,7 +1893,7 @@
             resultSec.classList.add('active');
             
             setTimeout(() => {
-                document.getElementById('progressWrapper').scrollIntoView({ behavior: 'smooth', block: 'start' });
+                scrollToSection(document.querySelector('#resultSection .calc-card'));
                 animateValue(document.getElementById('prejuizoValue'), 0, prejuizo_mensal, 2500);
             }, 100);
         }
@@ -2041,7 +2050,9 @@
             horarioSelecionadoDB = valorDB; 
             horarioSelecionadoUI = valorUI; 
             
-            document.getElementById('btnConfirmTime').style.display = 'block';
+            const confirmBtn = document.getElementById('btnConfirmTime');
+            confirmBtn.style.display = 'block';
+            confirmBtn.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         }
 
         async function confirmarAgendamento() {
@@ -2121,6 +2132,7 @@
                     document.getElementById('analyzingPrejuizo').textContent = lossFmt;
                     document.getElementById('analyzingOverlay').style.display = 'block';
                     document.getElementById('analyzingStatus').style.opacity = '0';
+                    scrollToSection(document.getElementById('analyzingOverlay'));
 
                     // Micro-transição: spinner → "Perfil qualificado" → calendário/ebook
                     await new Promise(function(r) { setTimeout(r, 2000); });
@@ -2141,12 +2153,14 @@
                             gerarDiasCalendario([], 0);
                         }
                         document.getElementById('nativeCalendarBlock').style.display = 'block';
+                        scrollToSection(document.getElementById('nativeCalendarBlock'));
                         // Atualiza barra de progresso
                         document.getElementById('progressBar').style.width = '80%';
                         document.getElementById('progressLabel').textContent = 'Passo 2 de 2: Escolha seu horário (80%)';
                     } else {
                         document.getElementById('ebookLeadNome').textContent = nomePrimeiro;
                         document.getElementById('ebookBlock').style.display = 'block';
+                        scrollToSection(document.getElementById('ebookBlock'));
 
                         // Atualiza a Barra para 100% (Funil do E-book Finalizado)
                         document.getElementById('progressBar').style.width = '100%';
@@ -2198,6 +2212,8 @@
                 document.getElementById('confirmationSubtitle').innerHTML =
                     '<strong id="confNamePlaceholder">' + nome + '</strong>, seu diagnóstico está completo. Nosso especialista vai entrar em contato pelo WhatsApp para marcar sua call de <strong>30 minutos</strong> onde vamos estruturar o plano exato para recuperar os <span class="highlight-gold" id="confLossPlaceholder">' + lossFmt + '</span> que estão escapando do seu estúdio <strong>este mês</strong>.';
             }
+
+            scrollToSection(document.getElementById('successMessage'));
         }
 
         // ─── Carrossel Coverflow + Fade ───

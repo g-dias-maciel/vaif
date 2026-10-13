@@ -19,6 +19,25 @@ function test(label, ok, detail = '') {
   else    { failed++; console.log(`  ❌ ${label}${detail ? ' — ' + detail : ''}`); }
 }
 
+// Fills the calculator and asserts the loss amount is scrolled into view.
+async function assertResultFocused(page, label) {
+  await page.fill('input[name="faturamento"]', '15000');
+  await page.fill('input[name="ticket"]', '1500');
+  await page.fill('input[name="sessoes"]', '10');
+  await page.fill('input[name="horas_admin"]', '3');
+  await page.click('#calcForm button[type="submit"]');
+  await page.waitForTimeout(1800);
+  const r = await page.evaluate(() => {
+    const el = document.getElementById('prejuizoValue');
+    if (!el) return null;
+    const b = el.getBoundingClientRect();
+    return { top: b.top, bottom: b.bottom, vh: window.innerHeight, text: el.textContent.trim() };
+  });
+  test(`${label}: loss amount scrolls into view after calculate`,
+    !!r && r.top >= 0 && r.bottom <= r.vh + 2 && r.text !== 'R$ 0,00',
+    r ? `top=${Math.round(r.top)} bottom=${Math.round(r.bottom)} vh=${r.vh} text=${r.text}` : 'prejuizoValue missing');
+}
+
 (async () => {
   const browser = await chromium.launch({ headless: true });
   const ctx = await browser.newContext({ viewport: { width: 1920, height: 1080 } });
@@ -111,6 +130,9 @@ function test(label, ok, detail = '') {
     !!depSrc && depSrc.includes('youtube-nocookie.com/embed/xERLTwPdnPk'),
     `src=${depSrc}`);
 
+  // After calculating, the viewport should land on the loss amount
+  await assertResultFocused(calcPage, 'Calculadora desktop');
+
   // ── Calculadora v2 page ───────────────────────────────
   console.log('\n=== Calculadora v2 page ===');
   const calc2Page = await ctx.newPage();
@@ -134,6 +156,19 @@ function test(label, ok, detail = '') {
   test('Calculadora v2 has lead form', await leadForm2.count() > 0);
 
   test('Calculadora v2 has marquee-set wrapper', (await calc2Page.content()).includes('marquee-set'));
+
+  await assertResultFocused(calc2Page, 'Calculadora v2 desktop');
+
+  // ── Mobile viewport: same focus behaviour ─────────────
+  console.log('\n=== Calculadora mobile (390x844) ===');
+  const mobile = await browser.newContext({ viewport: { width: 390, height: 844 } });
+  const calcMobile = await mobile.newPage();
+  await calcMobile.goto(BASE + '/calculadora.php', { waitUntil: 'domcontentloaded' });
+  await assertResultFocused(calcMobile, 'Calculadora mobile');
+  const calc2Mobile = await mobile.newPage();
+  await calc2Mobile.goto(BASE + '/calculadora-v2.php', { waitUntil: 'domcontentloaded' });
+  await assertResultFocused(calc2Mobile, 'Calculadora v2 mobile');
+  await mobile.close();
 
   // ── Summary ──────────────────────────────────────────
   console.log(`\n${'═'.repeat(50)}`);
