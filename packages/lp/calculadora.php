@@ -1116,6 +1116,9 @@
             .hero-title { font-size: 2.5rem; }
             .track-grid { grid-template-columns: 1fr; gap: 15px; }
             .track-grid.track-grid-4 { grid-template-columns: repeat(2, 1fr); }
+            .track-item { padding: 24px 10px; min-width: 0; }
+            .track-number { font-size: clamp(1.5rem, 7vw, 3rem); }
+            .track-label { font-size: 9px; letter-spacing: 1px; overflow-wrap: anywhere; }
             .carousel-viewport { max-width: 360px; }
             .carousel-slide { width: 280px; }
             .carousel-track { min-height: 480px; }
@@ -1126,6 +1129,10 @@
             .marquee-logo { height: 26px; }
             .marquee-track { gap: 40px; }
             .confirmation-title { font-size: 2rem; }
+        }
+
+        @media (max-width: 360px) {
+            .track-item { padding: 20px 6px; }
         }
 
         /* ─── Estilos do Calendário Nativo ─── */
