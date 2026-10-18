@@ -1373,9 +1373,10 @@
         <div class="hero-content fade-in-up">
             <span class="hero-label">Exclusivo para tatuadores de realismo e preto & cinza</span>
             <h1 class="hero-title">
-                Quanto dinheiro você perde <br>
-                <span>negociando orçamento</span> <br>
-                no WhatsApp todo mês?
+                Quanto dinheiro você perde<br>
+                todo mês por nao ter<br>
+                <span>um processo de vendas estruturado?</span> 
+            
             </h1>
             
             <div class="hero-divider fade-in-up delay-1">

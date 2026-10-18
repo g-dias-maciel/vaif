@@ -18,6 +18,9 @@ const BASE_LEAD = {
   pipeline_status: 'novo',
   processo_explicado: false,
   preco_liberado: false,
+  duvidas_eliminadas: false,
+  aguardando_confirmacao_duvidas: false,
+  audio_count: 0,
   deposit_status: 'nao_solicitado',
 };
 
@@ -28,12 +31,21 @@ function applyTurnState(lead, parsed) {
     pipeline_status: parsed.pipeline_status || lead.pipeline_status,
     processo_explicado: lead.processo_explicado === true || parsed.processo_explicado_val === true,
     preco_liberado: lead.preco_liberado === true || parsed.preco_liberado_val === true,
+    duvidas_eliminadas: lead.duvidas_eliminadas === true || parsed.duvidas_eliminadas_val === true,
+    aguardando_confirmacao_duvidas: parsed.aguardando_confirmacao_duvidas_val === true,
+    audio_count: keep(parsed.audio_count_val, lead.audio_count),
     table_price: keep(parsed.table_price_cents, lead.table_price),
     negotiated_price: keep(parsed.negotiated_price_cents, lead.negotiated_price),
     deposit_status: keep(parsed.deposit_status_val, lead.deposit_status),
     deposit_amount: keep(parsed.deposit_amount_cents, lead.deposit_amount),
     booked_date: keep(parsed.booked_date_val, lead.booked_date),
     nome: keep(parsed.nome_val, lead.nome),
+    placement: keep(parsed.placement_val, lead.placement),
+    body_zone: keep(parsed.body_zone_val, lead.body_zone),
+    style: keep(parsed.style_val, lead.style),
+    primeira_tatuagem: keep(parsed.primeira_tatuagem_val, lead.primeira_tatuagem),
+    significado: keep(parsed.significado_val, lead.significado),
+    tipo_tatuagem: keep(parsed.tipo_tatuagem_val, lead.tipo_tatuagem),
   };
 }
 
@@ -101,6 +113,7 @@ async function runScenario(nodes, scenario, modelFn) {
       agentOutput: finalAgentOutput,
       classifier,
       combinedText: turn.lead,
+      pricingRows: scenario.pricing || [],
     });
     const finalReply = parsed.final_reply || '';
 

@@ -110,6 +110,16 @@ $resp = fetch("$base/calculadora.php");
 assert_true($resp['status'] === 200, "/calculadora.php status {$resp['status']} (expected 200)");
 assert_contains($resp['body'], 'Lucro Oculto', '/calculadora.php body');
 
+echo "Test: GET /calculadora/ returns 200 with calculator (clean URL)\n";
+$resp = fetch("$base/calculadora/");
+assert_true($resp['status'] === 200, "/calculadora/ status {$resp['status']} (expected 200)");
+assert_contains($resp['body'], 'Lucro Oculto', '/calculadora/ body');
+
+echo "Test: GET /calculadora (no slash) returns 200 with calculator (clean URL)\n";
+$resp = fetch("$base/calculadora");
+assert_true($resp['status'] === 200, "/calculadora status {$resp['status']} (expected 200)");
+assert_contains($resp['body'], 'Lucro Oculto', '/calculadora body');
+
 echo "Test: /onboard/nonexistent returns 200 (onboard handles its own routing)\n";
 $resp = fetch("$base/onboard/nonexistent");
 assert_true($resp['status'] === 200, "/onboard/nonexistent status {$resp['status']} (expected 200)");

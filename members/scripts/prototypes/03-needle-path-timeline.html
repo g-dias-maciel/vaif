@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Proposta 03: Needle Path (Linha do Tempo)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#D4B04C; --gold-light:#E5C35E;
+    --bg:#0A0A0A; --card:#121212; --input:#1A1A1A;
+    --text:rgb(242,237,228); --muted:#CCCCCC; --muted2:#8a867e;
+    --border:#222222; --red:#D44C4C; --green:#4CD4A0;
+    --gold-10:rgba(212,176,76,0.10); --gold-25:rgba(212,176,76,0.25);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg); color:var(--text); font-family:'Montserrat',sans-serif; line-height:1.62;
+    background-image:radial-gradient(circle at 50% 0%, rgba(212,176,76,0.06), transparent 42%);}
+
+  /* ── Sticky progress chrome ── */
+  .chrome{position:fixed; top:0; left:0; right:0; z-index:50; display:flex; align-items:center; gap:20px;
+    padding:20px 40px; background:rgba(10,10,10,0.86); backdrop-filter:blur(12px); border-bottom:1px solid var(--border)}
+  .chrome .brand{display:flex;align-items:center;gap:10px;font-size:11px;letter-spacing:3px;text-transform:uppercase;color:var(--muted2);font-weight:600;white-space:nowrap}
+  .chrome .brand .diamond{width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
+  .chrome .title{font-size:.85rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .chrome .bar{flex:1;height:2px;background:var(--border);overflow:hidden}
+  .chrome .bar i{display:block;height:100%;background:var(--gold);width:0%;transition:width .2s linear}
+  .chrome .pct{font-size:11px;letter-spacing:2px;color:var(--gold);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+  /* ── Hero ── */
+  .hero{min-height:100vh; display:flex; align-items:center; padding:0 8vw}
+  .hero .eyebrow{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--gold);font-weight:700;margin-bottom:26px;display:flex;align-items:center;gap:14px}
+  .hero .eyebrow::before{content:'';width:26px;height:1px;background:var(--gold-25)}
+  .hero h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(2.9rem,6vw,5.4rem);line-height:1.05;max-width:15ch}
+  .hero h1 em{font-style:italic;color:var(--gold)}
+  .hero .dek{color:var(--muted);font-size:1.18rem;max-width:60ch;margin-top:28px;font-weight:300}
+  .hero .scroll{position:absolute;bottom:40px;left:50%;transform:translateX(-50%);color:var(--gold);font-size:10px;letter-spacing:4px;text-transform:uppercase}
+
+  /* ── Timeline ── */
+  .path{position:relative; max-width:960px; margin:0 auto; padding:40px 40px 160px 88px}
+  .path::before{content:''; position:absolute; left:52px; top:0; bottom:0; width:1px; background:linear-gradient(180deg,var(--gold-25),var(--border) 12%,var(--border) 88%,var(--gold-25))}
+  .chapter{position:relative; padding:64px 0}
+  .marker{position:absolute; left:-41px; top:70px; width:13px; height:13px; background:var(--bg); border:1px solid var(--gold); transform:rotate(45deg); z-index:2}
+  .marker::after{content:''; position:absolute; inset:3px; background:var(--gold)}
+  .ch-num{font-family:'Cormorant Garamond',serif; font-size:1.1rem; color:var(--gold); letter-spacing:2px; font-weight:600}
+  .ch-time{font-size:10px; letter-spacing:3px; text-transform:uppercase; color:var(--muted2); margin-left:14px}
+  .chapter h2{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:clamp(1.9rem,3.4vw,2.8rem); line-height:1.1; margin:12px 0 26px}
+  .pts{display:grid; gap:12px}
+  .pt{display:flex; gap:16px; align-items:baseline; padding:16px 20px; border:1px solid var(--border); background:var(--card); border-left:2px solid var(--gold-25)}
+  .pt .d{font-family:'Cormorant Garamond',serif; color:var(--gold); font-size:1.3rem; min-width:28px}
+  .pt strong{font-weight:600}
+  .pt p{font-size:.9rem;color:var(--muted);margin-top:2px}
+  .sub{display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-top:18px}
+  .box{border:1px solid var(--border); background:var(--card); padding:22px 24px}
+  .box.demo{border-left:2px solid var(--gold-25)} .box.warn{border-left:2px solid var(--red)} .box.good{border-left:2px solid var(--green)}
+  .box .tag{font-size:10px;letter-spacing:3px;text-transform:uppercase;font-weight:700;display:block;margin-bottom:10px}
+  .box.demo .tag{color:var(--gold)} .box.warn .tag{color:var(--red)} .box.good .tag{color:var(--green)}
+  .box .who{font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);margin-bottom:4px}
+  .box p{font-size:.93rem;color:var(--muted)}
+  .box .q{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.1rem;color:var(--text);line-height:1.5}
+  .box .q::before{content:'“'} .box .q::after{content:'”'}
+
+  .finale{max-width:960px; margin:0 auto; padding:40px 40px 160px 88px}
+  .finale h2{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(1.9rem,3.4vw,2.8rem);margin:12px 0 26px}
+  .checks{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .check{display:flex;gap:14px;align-items:center;padding:16px 20px;background:var(--card);border:1px solid var(--border)}
+  .check .b{width:16px;height:16px;border:1px solid var(--gold);flex:0 0 16px;position:relative}
+  .check .b::after{content:'';position:absolute;inset:3px;background:var(--gold);transform:rotate(45deg)}
+  .check span{font-size:.95rem}
+
+  .reveal{opacity:0;transform:translateY(30px);transition:opacity .7s ease,transform .7s ease}
+  .reveal.in{opacity:1;transform:none}
+
+  @media (max-width:700px){
+    .path,.finale{padding-left:56px; padding-right:20px}
+    .path::before{left:28px}
+    .marker{left:-27px}
+    .sub{grid-template-columns:1fr}
+    .checks{grid-template-columns:1fr}
+    .chrome{padding:14px 18px;gap:12px}
+    .chrome .title{display:none}
+  }
+</style>
+</head>
+<body>
+
+<div class="chrome">
+  <div class="brand"><span class="diamond"></span>VAIF · Aula</div>
+  <div class="title">Como vender tatuagem no mais alto nível pelo WhatsApp</div>
+  <div class="bar"><i id="bar"></i></div>
+  <div class="pct" id="pct">0%</div>
+</div>
+
+<section class="hero">
+  <div>
+    <div class="eyebrow">Videoaula · Produto Low Ticket</div>
+    <h1>Como vender tatuagem no mais alto nível <em>pelo WhatsApp</em></h1>
+    <p class="dek">Um roteiro completo e testado, do primeiro “oi” até o fechamento. Role a página para acompanhar cada módulo.</p>
+  </div>
+  <div class="scroll">Role ↓</div>
+</section>
+
+<div class="path" id="path"></div>
+
+<div class="finale reveal" id="finale"></div>
+
+<script>
+const SLIDES = [
+  {n:'01', t:'2–7 min', title:'Início do Atendimento',
+   pts:[['Velocidade de resposta é venda','Cliente manda pra mais de um tatuador. Quem responde rápido sai na frente antes do preço.'],
+        ['Responda em até 1 minuto','Não conseguiu? Responda o quanto antes. O importante é não deixar esfriar.'],
+        ['Apresente-se e pergunte o nome','Se o nome não aparecer, pergunte logo.'],
+        ['Chame pelo nome sempre','A partir daqui, em toda mensagem.']],
+   demo:{who:'Você', q:'Oi! Tudo bem? Aqui é o [Nome], tatuador. Vi sua mensagem agora, que bom que você chegou até mim! Com quem eu falo?'},
+   note:{k:'warn',tag:'Erro comum',p:'Responder só “oi, pode falar” soa frio, como robô de SAC. Queremos parecer humanos.'}},
+  {n:'02', t:'7–14 min', title:'Entender o Cliente',
+   pts:[['É a primeira tatuagem?','Nível de familiaridade.'],['Onde vai ser feita?','Local no corpo muda tudo.'],['Qual o tamanho?','Define escopo e investimento.'],['Já tem referência?','Quase no fim, de propósito.'],['Significado ou estética?','Conecta à pessoa, não à imagem.']],
+   demo:{who:'Você', q:'[Nome], é sua primeira tatuagem ou você já tem outras? E já pensou em qual parte do corpo?'},
+   note:{k:'good',tag:'A ordem importa',p:'Se você pede a referência cedo demais, a conversa vira só sobre imagem e você perde o cliente como pessoa.'}},
+  {n:'03', t:'14–20 min', title:'Gerar Valor',
+   pts:[['Desejo antes do preço','Cliente compra a transformação.'],['Elogie a referência','Valorize o que ele trouxe.'],['É sua especialidade','O estilo que você domina.'],['Projete o resultado','Faça ele se imaginar com a tattoo.']],
+   demo:{who:'Você', q:'Cara, que referência boa! Esse estilo é exatamente o que eu mais gosto de fazer. Tenho certeza de que você vai amar o resultado final.'},
+   note:{k:'good',tag:'Guarde essa frase',p:'“Tenho certeza de que você vai amar.” Planta expectativa antes de falar de valores.'}},
+  {n:'04', t:'20–26 min', title:'Explicar o Processo',
+   pts:[['Processo criativo claro','Transparência tira o medo do permanente.'],['Arte construída junto','Nasce do que ele passou.'],['100% de aprovação','Antes da agulha, nunca depois.'],['Encaixe perfeito','No corpo dele, não genérico.']],
+   demo:{who:'Você', q:'Deixa eu explicar rapidinho. Eu crio a arte com base no que você me passou, e você só vai pra cadeira depois de aprovar o desenho.'},
+   note:{k:'good',tag:'Justifica o preço',p:'Você não vende uma hora de agulha. Você vende um processo.'}},
+  {n:'05', t:'26–29 min', title:'Eliminar Dúvidas',
+   pts:[['Feche as portas de dúvida','Antes de falar de dinheiro.'],['Dúvida vira desculpa','Na hora do preço, ela aparece.'],['A ponte ao orçamento','Sem pressa de falar de preço.']],
+   demo:{who:'Você', q:'Antes de te passar os valores, ficou alguma dúvida sobre como funciona o meu processo?'},
+   note:{k:'good',tag:'Por que funciona',p:'Fecha o assunto anterior e abre o caminho pro orçamento.'}},
+  {n:'06', t:'29–36 min', title:'Apresentar o Orçamento',
+   pts:[['Nunca antes dessa etapa','Ou compara sem entender seu valor.'],['Valor à vista','Informe primeiro.'],['Parcelado até 6x','Depois do à vista.'],['“Como fica pra você?”','E então: silêncio.']],
+   demo:{who:'Você', q:'Então, [Nome], o valor à vista fica R$ [valor]. Também dá pra parcelar em até 6x. Como fica pra você?'},
+   note:{k:'warn',tag:'Regra de ouro',p:'Depois dessa pergunta, você se cala. Quem fala primeiro depois do preço perde força.'}},
+  {n:'07', t:'36–40 min', title:'Se o Cliente Fechar',
+   pts:[['Solicite o sinal','Garante o compromisso.'],['Sinal descontado do total','Deixe claro.'],['Agende data e horário','Fechado, dia X às Y.'],['Endereço + agradecimento','Encerre redondo.']],
+   demo:{who:'Você', q:'Perfeito! Pra garantir sua vaga, peço um sinal de R$ [valor], descontado do total. Qual data funciona melhor pra você?'},
+   note:{k:'good',tag:'Não acabou ainda',p:'Fechou? Agora é garantir o compromisso e deixar tudo redondo.'}},
+  {n:'08', t:'40–47 min', title:'Se o Cliente Não Fechar',
+   pts:[['Descubra o motivo','Hesitação tem causa.'],['“Quanto imaginava investir?”','Tire a adivinhação.'],['Negocie só se necessário','E só naquele atendimento.'],['Desconto = contrapartida','Nunca de graça.']],
+   demo:{who:'Você', q:'Se fechar comigo agora, consigo fazer por R$ 1.990 em vez de R$ 2.490. Só te peço uma postagem me marcando. Topa?'},
+   note:{k:'good',tag:'A estrutura',p:'Elogio + justificativa + desconto + contrapartida + pergunta.'}},
+  {n:'09', t:'47–51 min', title:'O Que Evitar',
+   pts:[['Preço antes da hora','Desfaz o valor construído.'],['Insegurança','“Talvez”, “pode ser”, “depende”.'],['Texto gigante','Quando áudio resolveria.'],['Deixar esperando','Sem retorno, sem venda.']],
+   note:{k:'warn',tag:'Atenção',p:'Essas palavras plantam dúvida. Se você não tem certeza, o cliente também não vai ter.'}},
+  {n:'10', t:'51–55 min', title:'Boas Práticas',
+   pts:[['Priorize áudio','Humaniza.'],['Entusiasmo de verdade','Energia = confiança.'],['Imagine a tattoo pronta','A transformação na mente.'],['Conduza até a decisão','Nunca morra no “vou pensar”.']],
+   demo:{who:'Lembrete', q:'Chame o cliente pelo nome várias vezes. Atendimento leve, natural e acolhedor.'},
+   note:{k:'good',tag:'Do início ao fim',p:'Todo atendimento termina em uma decisão: fechar ou negociar. Não deixe a conversa morrer no vazio.'}}
+];
+
+const path = document.getElementById('path');
+SLIDES.forEach(s=>{
+  const ch = document.createElement('div'); ch.className='chapter reveal';
+  ch.innerHTML = '<span class="marker"></span><div><span class="ch-num">Módulo '+s.n+'</span><span class="ch-time">'+s.t+'</span>'+
+    '<h2>'+s.title+'</h2><div class="pts">'+
+    s.pts.map((p,i)=>'<div class="pt"><span class="d">'+String(i+1).padStart(2,'0')+'</span><div><strong>'+p[0]+'</strong><p>'+p[1]+'</p></div></div>').join('')+'</div>';
+  const sub='<div class="sub"><div class="box demo"><span class="tag">Demonstração</span><div class="who">'+(s.demo.who)+'</div><p class="q">'+s.demo.q+'</p></div>'+
+    '<div class="box '+s.note.k+'"><span class="tag">'+s.note.tag+'</span><p>'+s.note.p+'</p></div></div>';
+  ch.innerHTML += sub;
+  path.appendChild(ch);
+});
+
+const finale = document.getElementById('finale');
+finale.innerHTML = '<span class="ch-num">Encerramento</span><span class="ch-time">55–60 min</span><h2>Checklist Final</h2><div class="checks">'+
+  ['Entendi o que o cliente deseja?','Expliquei meu processo?','Tirei todas as dúvidas?','Apresentei o orçamento corretamente?','Fiz a pergunta de fechamento?','Negociei se necessário?','Agendei / deixei próxima ação?','Chamei pelo nome, acolhedor?'].map(c=>'<div class="check"><span class="b"></span><span>'+c+'</span></div>').join('')+'</div>';
+
+// reveal on scroll
+const io = new IntersectionObserver((es)=>{es.forEach(e=>{if(e.isIntersecting){e.target.classList.add('in'); io.unobserve(e.target);}})},{threshold:0.15});
+document.querySelectorAll('.reveal').forEach(el=>io.observe(el));
+
+// progress
+const bar=document.getElementById('bar'), pct=document.getElementById('pct');
+addEventListener('scroll',()=>{
+  const h=document.documentElement; const sc=h.scrollTop/(h.scrollHeight-h.clientHeight);
+  bar.style.width=(sc*100)+'%'; pct.textContent=Math.round(sc*100)+'%';
+},{passive:true});
+</script>
+</body>
+</html>

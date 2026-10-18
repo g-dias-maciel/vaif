@@ -1,0 +1,78 @@
+
+=== workflow units ===
+  units: 10/10 passed
+
+=== notifications (handoff / signal → Telegram) ===
+  notifications: 17/17 passed
+
+[PASS] intro-first  (6 passed, 0 failed)
+  · turn 1 | lead: "Oi, quero um fechamento de braço em realismo"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Me conta, essa seria sua primeira tatuagem?"
+
+[PASS] price-gate-blocks-early  (10 passed, 0 failed)
+  · turn 1 | lead: "Quanto custa uma tatuagem de leão no braço?"
+    reply: "Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?"
+    (reply rewritten by the price gate)
+
+[PASS] doubt-loop-two-questions  (19 passed, 0 failed)
+  · turn 1 | lead: "quanto tempo pra fazer a tatuagem?"
+    reply: "Depende do tamanho e dos detalhes, mas um fechamento de braço leva de 4 a 6 horas. Mais alguma dúvida?"
+  · turn 2 | lead: "doi muito?"
+    reply: "A dor varia de pessoa para pessoa. Se precisar de mais alguma informação, estou à disposição!\n\nMais alguma dúvida?"
+  · turn 3 | lead: "não"
+    reply: "Perfeito! Para fechamento no braço fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros. Como fica esse valor para você?"
+
+[PASS] negotiation-no-reask  (8 passed, 0 failed)
+  · turn 1 | lead: "achei um pouco fora do que eu consigo pagar"
+    reply: "Entendi, e é totalmente válido. Se você fechar agora consigo um desconto: fica R$ 1.200 à vista ou em até 6x de R$ 200 sem juros. O que acha?"
+
+[PASS] generic-placement-asks-region  (8 passed, 0 failed)
+  · turn 1 | lead: "quero fechar o braço"
+    reply: "Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?\n\nMais alguma dúvida?"
+
+[PASS] coverup-handoff  (6 passed, 0 failed)
+  · turn 1 | lead: "oi, quero cobrir uma tatuagem antiga"
+    reply: "Cover-ups são bem específicos. Vou te passar pro Bruno, ele vai avaliar sua referência."
+
+[PASS] below-floor-handoff  (5 passed, 0 failed)
+  · turn 1 | lead: "só pago R$ 100"
+    reply: "Entendi. Deixa eu te passar pro Bruno, ele vê o que consegue fazer."
+
+[PASS] premature-deposit-blocked  (8 passed, 0 failed)
+  · turn 1 | lead: "como faço pra pagar?"
+    reply: "Antes de falarmos de valores, ficou alguma dúvida?"
+    (reply rewritten by the price gate)
+
+[PASS] booking-flow  (20 passed, 0 failed)
+  · turn 1 | lead: "fechado, pode ser"
+    reply: "Perfeito! Posso te atender segunda, dia 5 ou quarta, dia 7. Qual fica melhor pra você?"
+  · turn 2 | lead: "segunda"
+    reply: "Na segunda, dia 5, tenho às 14 horas ou às 16 horas. Qual fica melhor pra você?"
+  · turn 3 | lead: "14 horas"
+    reply: "Fechado! Seu horário está pré-agendado para segunda, dia 5 às 14 horas. Trabalhamos com um sinal de R$ 450, que é descontado do total. O PIX é: bruno.tattoo@pix.com.br"
+
+[PASS] discount-within-floor  (7 passed, 0 failed)
+  · turn 1 | lead: "queria um desconto"
+    reply: "Consigo um desconto de 20%: fica R$ 1.200 à vista, com a contrapartida de um post no Instagram. Fecho pra você agora?"
+
+[PASS] signal-objections  (10 passed, 0 failed)
+  · turn 1 | lead: "por que preciso pagar sinal?"
+    reply: "O sinal garante e reserva o seu horário, e é descontado do valor total da tatuagem. Não é um custo extra."
+  · turn 2 | lead: "posso pagar tudo no dia?"
+    reply: "Sem o sinal o horário não fica reservado para você. Como ele é descontado do total, você não paga nada a mais."
+
+[PASS] doubts-cleared-deterministic  (11 passed, 0 failed)
+  · turn 1 | lead: "não"
+    reply: "Perfeito! Para fechamento no braço fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros. Como fica esse valor para você?"
+
+[PASS] audio-ask-then-handoff  (16 passed, 0 failed)
+  · turn 1 | lead: "[ÁUDIO RECEBIDO]"
+    reply: "Me manda por texto, por favor? Assim consigo te ajudar melhor."
+  · turn 2 | lead: "[ÁUDIO RECEBIDO]"
+    reply: "Deixa eu te passar pro artista, ele consegue te ouvir direitinho."
+
+[PASS] deterministic-extraction-fills-qualification  (9 passed, 0 failed)
+  · turn 1 | lead: "quero fechar o braço em realismo"
+    reply: "Que legal! Vou te ajudar com isso."
+
+=== deterministic: 170 passed, 0 failed, 0/14 scenarios with failures ===

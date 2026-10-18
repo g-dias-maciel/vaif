@@ -117,7 +117,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  prompt = prompt.split(k).join(v);\n"
     "}\n"
     "\n"
-    "return [{ json: { system_message: prompt } }];"
+    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.table_price) })) } }];"
 )
 
 # ── Agent text: per-turn context + the debounced lead message. Same shape as
@@ -135,6 +135,8 @@ AGENT_TEXT_EXPR = (
     "+ ' significado=' + ($('Upsert Lead').first().json.significado || '?') "
     "+ ' processo_explicado=' + ($('Upsert Lead').first().json.processo_explicado ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ($('Upsert Lead').first().json.preco_liberado ? 'sim' : 'nao') "
+    "+ ' duvidas_eliminadas=' + ($('Upsert Lead').first().json.duvidas_eliminadas ? 'sim' : 'nao') "
+    "+ ' aguardando_confirmacao_duvidas=' + ($('Upsert Lead').first().json.aguardando_confirmacao_duvidas ? 'sim' : 'nao') "
     "+ ' primeira_mensagem=' + ($('Upsert Lead').first().json.is_new ? 'sim' : 'nao') "
     "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
     "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
@@ -154,8 +156,9 @@ const type = payload.type || 'chat';
 
 let text = payload.body || '';
 if (!text) {
-  if (type === 'image' || type === 'sticker' || payload.hasMedia) text = '[FOTO RECEBIDA]';
-  else if (type === 'ptt' || type === 'audio' || type === 'video') text = '[ÁUDIO RECEBIDO]';
+  if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';
+  else if (type === 'video') text = '[VÍDEO RECEBIDO]';
+  else if (type === 'image' || type === 'sticker' || payload.hasMedia) text = '[FOTO RECEBIDA]';
   else text = '[MÍDIA RECEBIDA]';
 }
 
@@ -280,29 +283,116 @@ function detectTipo(text) {
 }
 const tipoDeterministic = detectTipo(rawLead);
 
-// ── Price gate signals ──
-// Creative process explained: deterministic detection of the Fase 4 text in
-// Beatriz's reply, the classifier flag, or the persisted flag. Dúvidas
-// eliminadas: only the classifier can tell whether the lead explicitly cleared
-// doubts this turn. A quote is only legitimate when both are true.
+// ── Deterministic qualification extraction (fills classifier gaps so the
+//    lead's answers are persisted reliably and never "forgotten"). ──
+function detectPlacement(t) {
+  const map = [
+    ['braço externo', 'braco_externo'], ['braco externo', 'braco_externo'],
+    ['braço interno', 'braco_interno'], ['braco interno', 'braco_interno'],
+    ['antebraço', 'antebraco'], ['antebraco', 'antebraco'],
+    ['panturrilha', 'panturrilha'], ['tornozelo', 'tornozelo'],
+    ['pescoço', 'pescoco'], ['pescoco', 'pescoco'],
+    ['costela', 'costela'], ['costas', 'costas'],
+    ['barriga', 'barriga'], ['abdomen', 'barriga'], ['abdômen', 'barriga'],
+    ['ombro', 'ombro'], ['pulso', 'pulso'],
+    ['braço', 'braco'], ['braco', 'braco'],
+    ['peito', 'peito'], ['perna', 'perna'], ['coxa', 'coxa'],
+    ['dedo', 'dedo'], ['mão', 'mao'], ['mao', 'mao'], ['pé', 'pe'], ['pe', 'pe'],
+  ];
+  for (const [k, v] of map) if (t.includes(k)) return v;
+  return null;
+}
+function detectZone(t) {
+  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo/.test(t)) return 'fechamento';
+  if (/quase tudo|a maior parte|maior parte|grande/.test(t)) return 'grande';
+  if (/área média|area media|metade|médi[oa]|medi[oa]/.test(t)) return 'medio';
+  if (/partinha|pedacinho|só um detalhe|so um detalhe|pequen[oa]/.test(t)) return 'pequeno';
+  return null;
+}
+function detectStyle(t) {
+  const map = [
+    ['neo tradicional', 'neo_tradicional'], ['neo trad', 'neo_tradicional'],
+    ['old school', 'old_school'], ['oldschool', 'old_school'],
+    ['fine line', 'fine_line'], ['fineline', 'fine_line'],
+    ['new school', 'new_school'],
+    ['geométrico', 'geometrico'], ['geométrica', 'geometrico'], ['geometrico', 'geometrico'],
+    ['pontilhismo', 'pontilhismo'], ['aquarela', 'aquarela'], ['aquarelado', 'aquarela'],
+    ['realismo', 'realismo'], ['blackwork', 'blackwork'], ['tradicional', 'tradicional'],
+    ['japonês', 'japones'], ['japones', 'japones'], ['oriental', 'oriental'],
+    ['tribal', 'tribal'], ['floral', 'floral'],
+  ];
+  for (const [k, v] of map) if (t.includes(k)) return v;
+  return null;
+}
+function detectFirstTattoo(t) {
+  if (/minha primeira|é minha 1ª|é a primeira|primeira tattoo|primeira tatu|nunca fiz|nunca tatuei|vai ser a primeira/.test(t)) return true;
+  if (/já tenho|já fiz|já tatuei|tenho várias|tenho algumas|não é a primeira|segunda tattoo|terceira tattoo/.test(t)) return false;
+  return null;
+}
+function detectDuvidasZeradas(t) {
+  if (!t) return false;
+  const messages = t.split(/\\n+/).map(s => s.trim().toLowerCase()).filter(Boolean);
+  if (!messages.length) return false;
+  const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
+  const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
+  const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
+  if (clearAnswer.test(messages[0]) && (messages.length === 1 || messages.slice(1).every(m => priceRequest.test(m)))) return true;
+  // WAHA debounce joins burst messages with newlines. A bare "não" followed
+  // only by a price request is an explicit checkpoint answer plus a request,
+  // not an unresolved doubt. Other follow-up questions do not qualify.
+  if (bareNo.test(messages[0]) && messages.length > 1 && messages.slice(1).every(m => priceRequest.test(m))) return true;
+  // Also accept the same two-part answer when sent as one WhatsApp message.
+  return /^(?:n[aã]o|n)[,;:]?\\s+(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i.test(messages.join(' '));
+}
+function discoveryFallback(lead) {
+  if (!lead.tipo_tatuagem) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
+  if (lead.primeira_tatuagem == null) return 'Essa seria a sua primeira tatuagem?';
+  if (!lead.placement) return 'E onde no corpo você quer fazer?';
+  if (!lead.body_zone) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
+  if (!lead.style) return 'E qual estilo você tem em mente?';
+  return 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
+}
+
+// ── Deterministic price-gate state ──
+// Only the persisted checkpoint state can authorize a first quote. The model
+// classifier is deliberately not trusted to clear doubts or open the gate.
 const agentLower = agentOutput.toLowerCase();
 const processoDeterministic = ['processo de criação', 'projeto exclusivo', 'sentar junto com você', 'tirar as medidas', 'encaixe perfeito'].some(frase => agentLower.includes(frase));
-const processoExplicado = processoDeterministic || g.processo_explicado === true || lead.processo_explicado === true;
-const duvidasEliminadas = g.duvidas_eliminadas === true;
+const processoExplicado = processoDeterministic || lead.processo_explicado === true;
+const checkpointWasPending = lead.aguardando_confirmacao_duvidas === true;
+const explicitClearThisTurn = checkpointWasPending && detectDuvidasZeradas(rawLead);
+const duvidasEliminadas = lead.duvidas_eliminadas === true || explicitClearThisTurn;
 
-// ── Transition guard — prevent invalid/repeated transitions ──
 const current = lead.pipeline_status || 'novo';
-let proposed = parsed.pipeline || current;
-
-// The price gate is a ONE-TIME checkpoint. Once it is open it stays open:
-// either the persisted flag was set, or the pipeline already reached the quote
-// stage, or it just opened this turn (process explained + doubts cleared).
-// The process/doubts condition is only required the FIRST time — after that a
-// negotiation turn ("está caro") must never be sent back to the doubts question.
-const precoLiberadoJa = lead.preco_liberado === true;
-const gateAlreadyOpen = precoLiberadoJa || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+const precoLiberadoJa = lead.preco_liberado === true || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+// Clearing doubts authorizes a quote, but the price is not considered
+// liberated until an actual quote has been sent.
 const gateJustOpened = processoExplicado && duvidasEliminadas;
-const priceGateOpen = gateAlreadyOpen || gateJustOpened;
+const priceGateOpen = precoLiberadoJa || gateJustOpened;
+
+function deterministicQuote(centsOverride = null) {
+  const rows = $('Build System Prompt').first().json.pricing_rows || [];
+  const row = rows.find(p => p.placement === lead.placement && p.body_zone === lead.body_zone);
+  const cents = Number(centsOverride || (row && row.table_price) || 0);
+  if (!cents) return null;
+  const fmt = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  const places = {
+    braco: 'no braço', braco_externo: 'na parte externa do braço', braco_interno: 'na parte interna do braço',
+    antebraco: 'no antebraço', peito: 'no peito', costas: 'nas costas', perna: 'na perna', coxa: 'na coxa',
+    panturrilha: 'na panturrilha', tornozelo: 'no tornozelo', pescoco: 'no pescoço', costela: 'na costela',
+    barriga: 'na barriga', ombro: 'no ombro', pulso: 'no pulso', dedo: 'no dedo', mao: 'na mão', pe: 'no pé',
+  };
+  const zones = { pequeno: 'uma tatuagem pequena', medio: 'uma tatuagem média', grande: 'uma tatuagem grande', fechamento: 'fechamento' };
+  const local = places[lead.placement] || `em ${lead.placement}`;
+  const zona = zones[lead.body_zone] || lead.body_zone;
+  const description = `${zona} ${local}`;
+  return {
+    cents,
+    reply: `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros. Como fica esse valor para você?`,
+  };
+}
+// ── Transition guard — prevent invalid/repeated transitions ──
+let proposed = parsed.pipeline || current;
 
 const saidCutoff = /não posso continuar essa conversa/.test(agentOutput.toLowerCase());
 const neverBlock = ['agendado', 'fechado', 'perdido'];
@@ -355,67 +445,157 @@ if (!priceGateOpen && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].i
   finalEvent = null;
 }
 
-const hasPrice = /R\$\s*\d/.test(agentOutput);
+const hasPrice = /R\\$\\s*\\d|\\b\\d+(?:[.,]\\d{2})?\\s*(?:reais|à vista|a vista)|\\b\\d+x\\s+de\\s+/i.test(agentOutput);
 const hasDeposit = /sinal|pix/i.test(agentOutput);
-
-// Deterministic quote state: the moment the gate is open and the reply carries
-// a price, a quote WAS sent — record it even if the classifier missed it.
-// (This is the bug that left the pipeline stuck at "qualificando" after the
-// first price, which then made every negotiation turn look pre-gate.)
-if (priceGateOpen && hasPrice && !finalHandoff
-    && ['novo', 'qualificando'].includes(finalPipeline)) {
-  finalPipeline = 'orcamento_enviado';
-  if (!finalEvent) finalEvent = 'quote_sent';
-}
-
 const priceGateViolation = (hasPrice || hasDeposit) && !priceGateOpen;
 let finalReply = priceGateViolation
-  ? 'Antes de falarmos de valores, ficou alguma dúvida?'
+  ? (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead))
   : agentOutput;
 
-// ── Doubt-loop enforcement ──
-// While the creative process is explained but the price gate is still closed
-// (no price yet), every reply must keep the door open by ending with
-// "Mais alguma dúvida?". The model sometimes replaces it with a generic
-// sign-off ("estou à disposição"); enforce it deterministically.
-const askedDoubts = /mais alguma d[uú]vida|ficou alguma d[uú]vida/i.test(agentOutput);
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
+const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist
+  ? deterministicQuote()
+  : null;
+const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
+const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist
+  ? deterministicQuote(lead.negotiated_price || lead.table_price)
+  : null;
+if (firstQuote) {
+  // The first quote comes from the artist's pricing table, not generated model
+  // output or classifier extraction. This prevents a cleared checkpoint from
+  // falling into negotiation or asking the checkpoint again.
+  finalReply = firstQuote.reply;
+  if (['novo', 'qualificando'].includes(finalPipeline)) {
+    finalPipeline = 'orcamento_enviado';
+    finalEvent = 'quote_sent';
+  }
+} else if (repeatedQuote) {
+  // If the first "não" and a follow-up price request were processed in two
+  // separate turns, repeat the current authoritative quote instead of treating
+  // the request as a negotiation objection.
+  finalReply = repeatedQuote.reply;
+} else if (!precoLiberadoJa && gateJustOpened && !goingToArtist) {
+  // Do not re-open doubts if the checkpoint was answered but there is no exact
+  // price row yet. Ask only for the missing placement detail or state that the
+  // artist will confirm the price.
+  const genericPlacement = ['braco', 'perna'].includes(lead.placement);
+  const artistName = $('Resolve Artist').first().json.nome || 'artista';
+  finalReply = genericPlacement
+    ? (lead.placement === 'braco'
+      ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
+      : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?')
+    : `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
+}
+
+// Before the checkpoint is cleared, no model/classifier response may leak a
+// quote. Even when the model only gives a generic sign-off, keep the checkpoint
+// as the final question. Once cleared, never ask it again.
 const preGateDoubtLoop = !priceGateOpen && processoExplicado && !duvidasEliminadas;
 if (preGateDoubtLoop && !priceGateViolation && !hasPrice
-    && !goingToArtist && !askedDoubts && finalReply.trim()) {
-  finalReply = finalReply.trim() + '\\n\\nMais alguma dúvida?';
+    && !goingToArtist && finalReply.trim()) {
+  let trimmed = finalReply.trim();
+  trimmed = trimmed.replace(
+    /(?:\\s*(?:se\\s+(?:voc[eê]\\s+)?(?:precisar|quiser|tiver\\s+(?:mais\\s+|qualquer\\s+)?alguma\\s+(?:d[uú]vida|pergunta|quest[aã]o|informa[cç][aã]o))\\s*,?\\s*(?:[eé]\\s*s[oó]|pode)\\s*(?:me\\s*)?(?:falar|fala|chamar|chama)|qualquer\\s+(?:coisa|d[uú]vida)\\s*[,.]?\\s*(?:[eé]\\s*s[oó]\\s*)?(?:me\\s*)?(?:falar|fala|chamar|chama)|(?:estou|estamos|tô|to)\\s*(?:sempre\\s*)?[àa]\\s*(?:sua\\s*)?disposi[cç][aã]o|fique?\\s*[àa]\\s*vontade)\\s*[.!]?\\s*)$/i,
+    ''
+  );
+  trimmed = trimmed.replace(/[,;:]\\s*$/, '').trim();
+  if (!/(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(trimmed)) {
+    // Don't append a second question when this turn is already asking the lead
+    // for missing information. The checkpoint is asked on a later turn.
+    if (!trimmed.includes('?')) trimmed = trimmed ? trimmed + '\\n\\nMais alguma dúvida?' : 'Mais alguma dúvida?';
+  } else {
+    const checkpointAt = trimmed.search(/(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i);
+    if (checkpointAt >= 0 && trimmed.slice(0, checkpointAt).includes('?')) {
+      trimmed = trimmed.slice(0, checkpointAt).trim().replace(/[.!?\\s]+$/, '?');
+    }
+  }
+  finalReply = trimmed;
+}
+
+const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());
+const hasEarlierQuestion = finalReply.slice(0, finalReply.lastIndexOf('?')).includes('?');
+const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
+  && !precoLiberadoJa
+  && !goingToArtist
+  && processoExplicado
+  && finalReplyAsksCheckpoint
+  && !hasEarlierQuestion;
+const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
+const isAudio = rawCombined === '[ÁUDIO RECEBIDO]';
+const quoteActuallySent = !isAudio && (!!firstQuote || !!repeatedQuote || (priceGateOpen && !priceGateViolation && /R\\$\\s*\\d/.test(finalReply)));
+
+// Pipeline state must reflect the message that will actually be sent, not a
+// classifier's prediction about a reply that was replaced by the hard gate.
+if (!quoteActuallySent && ['novo', 'qualificando'].includes(current)
+    && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(finalPipeline)) {
+  finalPipeline = current;
+  finalEvent = null;
+}
+if (!/sinal|pix/i.test(finalReply) && finalPipeline === 'aguardando_deposito'
+    && current !== 'aguardando_deposito') {
+  finalPipeline = current;
+  finalEvent = null;
+}
+
+// ── Audio handling (deterministic — the model never sees the raw placeholder
+//    matter; we answer every audio and hand off on the second). ──
+const audioCountNow = Number(lead.audio_count || 0);
+const audioCountNext = isAudio ? audioCountNow + 1 : audioCountNow;
+
+let audioFinalReply = finalReply;
+let audioPipeline = finalPipeline;
+let audioEvent = finalEvent;
+let audioHandoff = finalHandoff;
+if (isAudio) {
+  if (audioCountNow >= 1) {
+    audioFinalReply = 'Deixa eu te passar pro artista, ele consegue te ouvir direitinho.';
+    audioPipeline = ['fechado', 'perdido', 'agendado', 'bloqueado'].includes(finalPipeline)
+      ? finalPipeline
+      : 'aguardando_artista';
+    audioEvent = 'handoff_triggered';
+    audioHandoff = 'audio_2x';
+  } else {
+    audioFinalReply = 'Me manda por texto, por favor? Assim consigo te ajudar melhor.';
+    audioPipeline = finalPipeline;
+    audioEvent = null;
+    audioHandoff = null;
+  }
 }
 
 return [{ json: {
   lead_id: lead.id,
-  pipeline_status: finalPipeline,
-  event_type: finalEvent,
-  price_updated: !!(p.table_cents) && !priceGateViolation,
-  processo_explicado_val: processoDeterministic || g.processo_explicado === true,
-  preco_liberado_val: precoLiberadoJa || gateJustOpened,
+  pipeline_status: audioPipeline,
+  event_type: audioEvent,
+  price_updated: !!firstQuote || (!repeatedQuote && quoteActuallySent && !!p.table_cents),
+  processo_explicado_val: processoDeterministic || lead.processo_explicado === true,
+  preco_liberado_val: precoLiberadoJa || quoteActuallySent,
   duvidas_eliminadas_val: duvidasEliminadas,
+  aguardando_confirmacao_duvidas_val: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
   price_gate_violation: priceGateViolation,
-  final_reply: finalReply,
+  audio_count_val: audioCountNext,
+  final_reply: audioFinalReply,
 
-  placement_val: q.placement || null,
-  body_zone_val: q.body_zone || null,
-  style_val: q.style || null,
-  primeira_tatuagem_val: q.first_tattoo || null,
+  placement_val: q.placement || detectPlacement(rawLead) || null,
+  body_zone_val: q.body_zone || detectZone(rawLead) || null,
+  style_val: q.style || detectStyle(rawLead) || null,
+  primeira_tatuagem_val: (q.first_tattoo === true || q.first_tattoo === false)
+    ? q.first_tattoo
+    : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),
   significado_val: q.significado || null,
   tipo_tatuagem_val: tipoDeterministic || q.tipo_tatuagem || null,
 
-  table_price_cents: priceGateViolation ? null : (p.table_cents || null),
-  negotiated_price_cents: priceGateViolation ? null : (p.nego_cents || null),
+  table_price_cents: !quoteActuallySent || repeatedQuote ? null : (firstQuote ? firstQuote.cents : (p.table_cents || null)),
+  negotiated_price_cents: !quoteActuallySent || repeatedQuote ? null : (firstQuote ? firstQuote.cents : (p.nego_cents || null)),
 
-  deposit_status_val: priceGateViolation ? null : (d.amount_cents ? 'aguardando_confirmacao' : null),
-  deposit_amount_cents: priceGateViolation ? null : (d.amount_cents || null),
+  deposit_status_val: priceGateViolation || !/sinal|pix/i.test(audioFinalReply) ? null : (d.amount_cents ? 'aguardando_confirmacao' : null),
+  deposit_amount_cents: priceGateViolation || !/sinal|pix/i.test(audioFinalReply) ? null : (d.amount_cents || null),
   // booked_date is authoritative from the Book Slot tool only — the classifier
   // cannot reliably reconstruct the exact slot instant (timezone/year).
   booked_date_val: null,
   session_duration_min_val: null,
   buffer_min_val: null,
 
-  handoff_reason: finalHandoff,
+  handoff_reason: audioHandoff,
   nome_val: parsed.name || null,
 } }];"""
 
@@ -463,9 +643,20 @@ else if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false
 // Once the creative process has been explained, it stays explained.
 if (f.processo_explicado_val === true) sets.push(`processo_explicado = true`);
 
-// Once the price gate is open, it never closes again — this is what lets
-// negotiation turns skip the doubts checkpoint.
+// Price is liberated only after a quote is actually sent. Merely clearing the
+// doubts checkpoint is not enough to enter the negotiation phase.
 if (f.preco_liberado_val === true) sets.push(`preco_liberado = true`);
+
+// Doubts cleared is sticky, like the process flag.
+if (f.duvidas_eliminadas_val === true) sets.push(`duvidas_eliminadas = true`);
+
+// This state is set only after the assistant has actually asked the checkpoint,
+// and cleared only after a deterministic explicit confirmation.
+sets.push(`aguardando_confirmacao_duvidas = ${f.aguardando_confirmacao_duvidas_val === true ? 'true' : 'false'}`);
+
+// Audio count increments each time the lead sends an audio message.
+if (f.audio_count_val !== null && f.audio_count_val !== undefined && f.audio_count_val !== 'null')
+  sets.push(`audio_count = ${Number(f.audio_count_val) || 0}`);
 
 if (f.booked_date_val && f.booked_date_val !== 'null')
   sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);
@@ -971,6 +1162,9 @@ ORDER BY placement, body_zone;""",
   SELECT id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
          COALESCE(processo_explicado, false) AS processo_explicado,
          COALESCE(preco_liberado, false) AS preco_liberado,
+         COALESCE(duvidas_eliminadas, false) AS duvidas_eliminadas,
+         COALESCE(aguardando_confirmacao_duvidas, false) AS aguardando_confirmacao_duvidas,
+         COALESCE(audio_count, 0) AS audio_count,
          false AS is_new
   FROM public.leads
   WHERE artist_id = $3::uuid
@@ -988,6 +1182,9 @@ inserted AS (
   RETURNING id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
             COALESCE(processo_explicado, false) AS processo_explicado,
             COALESCE(preco_liberado, false) AS preco_liberado,
+            COALESCE(duvidas_eliminadas, false) AS duvidas_eliminadas,
+            COALESCE(aguardando_confirmacao_duvidas, false) AS aguardando_confirmacao_duvidas,
+            COALESCE(audio_count, 0) AS audio_count,
             true AS is_new
 )
 SELECT * FROM existing
@@ -1253,15 +1450,17 @@ return [{
             "name": "Build Humanize Delay",
         },
         # 32c. Send Typing — show "typing…" while the agent composes.
+        # WAHA presence endpoint: startTyping/stopTyping aliases 404 on the
+        # deployed version, so use the canonical POST /api/{session}/presence.
         {
             "parameters": {
                 "method": "POST",
-                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/startTyping' }}",
+                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/presence' }}",
                 "authentication": "predefinedCredentialType",
                 "nodeCredentialType": "wahaApi",
                 "sendBody": True,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from }) }}",
+                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from, presence: 'typing' }) }}",
                 "options": {"timeout": 15000},
             },
             "type": "n8n-nodes-base.httpRequest",
@@ -1325,12 +1524,12 @@ return [{
         {
             "parameters": {
                 "method": "POST",
-                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/stopTyping' }}",
+                "url": "={{ 'https://waha.vaif.com.br/api/' + $('Resolve Artist').first().json.wa_session_slug + '/presence' }}",
                 "authentication": "predefinedCredentialType",
                 "nodeCredentialType": "wahaApi",
                 "sendBody": True,
                 "specifyBody": "json",
-                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from }) }}",
+                "jsonBody": "={{ JSON.stringify({ chatId: $('WAHA Webhook').first().json.body.payload.from, presence: 'paused' }) }}",
                 "options": {"timeout": 15000},
             },
             "type": "n8n-nodes-base.httpRequest",

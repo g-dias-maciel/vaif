@@ -1,0 +1,99 @@
+live eval: model=openai/gpt-4o-mini base=https://openrouter.ai/api/v1 key=present
+workflow model: openai/gpt-4o-mini — parity: exact
+
+[PASS] intro-first  (6 passed, 0 failed)
+  · turn 1 | lead: "Oi, quero um fechamento de braço em realismo"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Como posso te ajudar? Você mencionou que quer um fechamento de braço em realismo. Essa tatuagem é nova, uma cobertura ou uma reforma de uma tatuagem que você já tem?"
+
+[FAIL] price-gate-blocks-early  (7 passed, 3 failed)
+  · turn 1 | lead: "Quanto custa uma tatuagem de leão no braço?"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Para te passar o valor certinho, só preciso saber: a tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?"
+    ✗ reply includes "nova, uma cobertura ou uma reforma" -> Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Para te passar o valor certinho, só preciso saber: a tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?
+    ✗ gate violation === true -> false
+    ✗ state pipeline_status === "qualificando" -> "novo"
+
+[FAIL] doubt-loop-two-questions  (16 passed, 3 failed)
+  · turn 1 | lead: "quanto tempo pra fazer a tatuagem?"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? \n\nSobre o tempo para fazer a tatuagem, isso pode variar bastante dependendo do tamanho e da complexidade do desenho. Você já tem uma ideia de como será a sua tatuagem?\n\nMais alguma dúvida?"
+  · turn 2 | lead: "doi muito?"
+    reply: "A dor é algo bem pessoal e pode variar de pessoa para pessoa. Geralmente, as áreas mais sensíveis do corpo podem doer um pouco mais, mas a maioria das pessoas consegue lidar bem. O importante é que o Bruno vai te deixar confortável durante todo o processo. \n\nVocê já decidiu qual tatuagem quer fazer?\n\nMais alguma dúvida?"
+    ✗ reply includes "A dor varia de pessoa para pessoa" -> A dor é algo bem pessoal e pode variar de pessoa para pessoa. Geralmente, as áreas mais sensíveis do corpo podem doer um pouco mais, mas a maioria das pessoas consegue lidar bem. O importante é que o Bruno vai te deixar confortável durante todo o processo. 
+
+Você já decidiu qual tatuagem quer fazer?
+
+Mais alguma dúvida?
+  · turn 3 | lead: "não"
+    reply: "Sem problemas! Vamos descobrir juntos. A tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?"
+    ✗ reply includes "R$ 1.500" -> Sem problemas! Vamos descobrir juntos. A tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?
+    ✗ state pipeline_status === "orcamento_enviado" -> "qualificando"
+
+[FAIL] negotiation-no-reask  (6 passed, 1 failed)
+  · turn 1 | lead: "achei um pouco fora do que eu consigo pagar"
+    reply: "Entendi. Posso te fazer uma pergunta? É pelo valor ou tem mais alguma coisa te deixando em dúvida?"
+    ✗ reply includes "R$ 1.200" -> Entendi. Posso te fazer uma pergunta? É pelo valor ou tem mais alguma coisa te deixando em dúvida?
+
+[FAIL] generic-placement-asks-region  (7 passed, 1 failed)
+  · turn 1 | lead: "quero fechar o braço"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Como posso te ajudar? Você mencionou que quer fazer uma tatuagem no braço, mas preciso saber: a tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?\n\nMais alguma dúvida?"
+    ✗ reply matches /antebra/i -> Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Como posso te ajudar? Você mencionou que quer fazer uma tatuagem no braço, mas preciso saber: a tatuagem que você quer é uma tatuagem nova, uma cobertura (cover-up) ou uma reforma de uma tatuagem que você já tem?
+
+Mais alguma dúvida?
+
+[PASS] coverup-handoff  (6 passed, 0 failed)
+  · turn 1 | lead: "oi, quero cobrir uma tatuagem antiga"
+    reply: "Coberturas são bem específicas. Vou te passar pro Bruno, ele vai avaliar sua referência. Um momento, por favor!"
+
+[FAIL] below-floor-handoff  (4 passed, 1 failed)
+  · turn 1 | lead: "só pago R$ 100"
+    reply: "Entendi. Posso te fazer uma pergunta? É pelo valor ou tem mais alguma coisa te deixando em dúvida?"
+    ✗ handoff === true -> orcamento_enviado
+
+[FAIL] premature-deposit-blocked  (6 passed, 2 failed)
+  · turn 1 | lead: "como faço pra pagar?"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Para te ajudar melhor, você já escolheu um horário para a sua tatuagem?\n\nMais alguma dúvida?"
+    ✗ reply includes "Antes de falarmos de valores" -> Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? Para te ajudar melhor, você já escolheu um horário para a sua tatuagem?
+
+Mais alguma dúvida?
+    ✗ gate violation === true -> false
+
+[FAIL] booking-flow  (17 passed, 2 failed)
+  · turn 1 | lead: "fechado, pode ser"
+    reply: "Perfeito! Posso te atender na sexta, dia 3 ou no sábado, dia 4. Qual fica melhor pra você?"
+    ✗ reply includes "dia 5" -> Perfeito! Posso te atender na sexta, dia 3 ou no sábado, dia 4. Qual fica melhor pra você?
+  · turn 2 | lead: "segunda"
+    reply: "Na segunda, dia 2, tenho às 14 horas ou na terça, dia 3, às 10 horas. Qual horário fica melhor pra você?"
+  · turn 3 | lead: "14 horas"
+    reply: "Fechado! Seu horário está pré-agendado para segunda, dia 2, às 14 horas. Para a gente confirmar o seu horário, trabalhamos com um sinal no valor de R$ 450. Ele é descontado do valor total da tatuagem, tá? O PIX é: (informe a chave PIX). Assim que o Bruno confirmar o recebimento, a gente confirma seu horário."
+    ✗ state pipeline_status === "aguardando_deposito" -> "aguardando_artista"
+
+[FAIL] discount-within-floor  (4 passed, 2 failed)
+  · turn 1 | lead: "queria um desconto"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? \n\nSó pra eu te ajudar melhor, você já viu o preço da tatuagem?"
+    ✗ reply includes "R$ 1.200" -> Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? 
+
+Só pra eu te ajudar melhor, você já viu o preço da tatuagem?
+    ✗ state negotiated_price === 120000
+
+[PASS] signal-objections  (10 passed, 0 failed)
+  · turn 1 | lead: "por que preciso pagar sinal?"
+    reply: "O sinal garante e reserva o horário com o Bruno, além de ser descontado do valor total da tatuagem. Assim, você não paga nada a mais, tá?"
+  · turn 2 | lead: "posso pagar tudo no dia?"
+    reply: "Sem o sinal, o horário não fica reservado. Lembrando que o sinal é descontado do total, então você não paga nada a mais."
+
+[FAIL] doubts-cleared-deterministic  (9 passed, 2 failed)
+  · turn 1 | lead: "não"
+    reply: "Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição."
+    ✗ reply includes "R$ 1.500" -> Infelizmente não posso continuar essa conversa. Se precisar de algo, estamos à disposição.
+    ✗ state pipeline_status === "orcamento_enviado" -> "bloqueado"
+
+[PASS] audio-ask-then-handoff  (16 passed, 0 failed)
+  · turn 1 | lead: "[ÁUDIO RECEBIDO]"
+    reply: "Me manda por texto, por favor? Assim consigo te ajudar melhor."
+  · turn 2 | lead: "[ÁUDIO RECEBIDO]"
+    reply: "Deixa eu te passar pro artista, ele consegue te ouvir direitinho."
+
+[PASS] deterministic-extraction-fills-qualification  (9 passed, 0 failed)
+  · turn 1 | lead: "quero fechar o braço em realismo"
+    reply: "Oi! Eu sou a Beatriz, assistente do Bruno aqui no estúdio. Tudo bem? \n\nSó pra eu entender melhor, essa tatuagem que você quer é uma tatuagem nova, uma cobertura ou uma reforma de uma tatuagem que você já tem?"
+
+=== live: 123 passed, 17 failed (1 run(s)) ===

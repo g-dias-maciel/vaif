@@ -50,12 +50,13 @@ function openRouterInput(classifier) {
  * Run the production "Parse Classification" node.
  * Returns the json it emits (final_reply, pipeline_status, gate flags, ...).
  */
-function runParse(nodes, { lead, agentOutput, classifier, combinedText } = {}) {
+function runParse(nodes, { lead, agentOutput, classifier, combinedText, pricingRows } = {}) {
   return evalNode(nodeJs(nodes, 'Parse Classification'), {
     refs: {
       'Upsert Lead': lead || {},
       'AI Agent': { output: agentOutput || '' },
       'Debounce Resolve': { combined_text: combinedText || 'quero uma tatuagem nova' },
+      'Build System Prompt': { pricing_rows: pricingRows || [] },
     },
     input: openRouterInput(classifier || {}),
   });

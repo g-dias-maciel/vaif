@@ -340,7 +340,7 @@
                 <p class="teaser-desc">
                     Desenvolvemos uma calculadora financeira exclusiva para tatuadores de alto padrão. Responda 4 perguntas rápidas e descubra o quanto <strong>Você poderia ganhar</strong> em tempo real.
                 </p>
-                <a href="calculadora.php" class="btn-gold-large">
+                <a href="/calculadora/" class="btn-gold-large">
                     <span>Acessar Calculadora de Lucro Oculto &rarr;</span>
                 </a>
             </div>
@@ -469,7 +469,7 @@
                 <a href="#value-prop-section">Pilares</a>
                 <a href="#demo-chat-section">Atendente Virtual</a>
                 <a href="#services-section">Serviços</a>
-                <a href="calculadora.php">Calculadora de Lucro</a>
+                <a href="/calculadora/">Calculadora de Lucro</a>
                 <a href="#aplicar">Aplicar</a>
             </div>
             <div class="footer-col">

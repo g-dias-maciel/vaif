@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aula · Remarketing para Tatuadores</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,600&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --gold:#D4B04C; --gold-light:#E5C35E;
+    --bg:#0A0A0A; --card:#121212; --input:#1A1A1A;
+    --text:rgb(242,237,228); --muted:#CCCCCC; --muted2:#8a867e;
+    --border:#222222; --red:#D44C4C; --green:#4CD4A0;
+    --gold-10:rgba(212,176,76,0.10); --gold-25:rgba(212,176,76,0.25);
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html,body{height:100%}
+  body{background:var(--bg); color:var(--text); font-family:'Montserrat',sans-serif; line-height:1.6; overflow:hidden;
+    background-image:radial-gradient(circle at 12% 8%, rgba(212,176,76,0.05), transparent 42%);}
+  .app{display:grid; grid-template-columns:300px 1fr; height:100vh}
+
+  /* Rail (ledger index: Proposta 02) */
+  .rail{border-right:1px solid var(--border); padding:38px 30px; display:flex; flex-direction:column; background:linear-gradient(180deg,var(--card),var(--bg))}
+  .rail .brand{display:flex;align-items:center;gap:10px; font-size:12px; letter-spacing:3px; text-transform:uppercase; color:var(--muted2); font-weight:600; margin-bottom:14px}
+  .rail .brand .diamond{width:5px;height:5px;background:var(--gold);transform:rotate(45deg)}
+  .rail .lesson{font-family:'Cormorant Garamond',serif; font-size:1.4rem; color:var(--text); line-height:1.3; margin-bottom:34px; font-weight:600}
+  .rail .label{font-size:11px; letter-spacing:3px; text-transform:uppercase; color:var(--muted2); margin-bottom:16px}
+  .toc{list-style:none; flex:1; overflow-y:auto}
+  .toc li{display:flex; align-items:center; gap:12px; padding:11px 12px; margin-bottom:2px; cursor:pointer; border-left:2px solid transparent; transition:.25s; font-size:.98rem; color:var(--muted)}
+  .toc li .n{font-family:'Cormorant Garamond',serif; font-size:1.15rem; color:var(--muted2); min-width:26px}
+  .toc li:hover{color:var(--text)}
+  .toc li.active{color:var(--text); border-left-color:var(--gold); background:var(--gold-10)}
+  .toc li.active .n{color:var(--gold)}
+  .rail .foot{margin-top:20px; font-size:10px; letter-spacing:2px; text-transform:uppercase; color:var(--muted2); line-height:1.8}
+
+  /* Main column */
+  .main{display:flex; flex-direction:column; position:relative; min-width:0}
+  .pipe{display:flex; gap:5px; padding:18px 40px 0}
+  .pipe .seg{flex:1; height:3px; background:var(--border); transition:.4s}
+  .pipe .seg.done{background:var(--gold-25)}
+  .pipe .seg.cur{background:var(--gold)}
+
+  .stage{position:relative; flex:1; overflow:hidden}
+  .slide{position:absolute; inset:0; padding:4vh 5vw; display:flex; flex-direction:column; overflow-y:auto;
+    opacity:0; visibility:hidden; transform:translateY(18px); transition:opacity .55s ease, transform .55s ease, visibility 0s .55s}
+  .slide::before{content:''; margin-top:auto}
+  .slide::after{content:''; margin-bottom:auto}
+  .slide.active{opacity:1; visibility:visible; transform:none; transition:opacity .55s ease, transform .55s ease}
+  .ghost{position:absolute; right:1vw; bottom:-0.2em; font-family:'Cormorant Garamond',serif; font-weight:700;
+    font-size:clamp(16rem,34vw,30rem); line-height:1; color:transparent; -webkit-text-stroke:1px var(--border); user-select:none; pointer-events:none}
+
+  .h1{font-family:'Cormorant Garamond',serif; font-weight:600; font-size:clamp(2.7rem,4.8vw,4.5rem); line-height:1.07; margin-bottom:20px; max-width:22ch}
+  .h1 em{font-style:italic; color:var(--gold)}
+  .dek{color:var(--muted); font-size:1.3rem; line-height:1.5; max-width:70ch; font-weight:300; margin-bottom:36px}
+  .dek.title{font-size:1.5rem}
+
+  /* cards (Proposta 04) */
+  .cards{display:flex; flex-direction:column; gap:12px; max-width:960px}
+  .card{position:relative; display:flex; gap:22px; align-items:flex-start; background:var(--card); border:1px solid var(--border); padding:18px 24px; transition:transform .3s, border-color .3s, box-shadow .3s; overflow:hidden}
+  .card::before{content:''; position:absolute; top:0; left:0; right:0; height:1px; background:linear-gradient(90deg,transparent,var(--gold),transparent); opacity:0; transition:opacity .3s}
+  .card:hover{transform:translateY(-4px); border-color:var(--gold-25); box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  .card:hover::before{opacity:1}
+  .card .num{font-family:'Cormorant Garamond',serif; font-size:2rem; font-weight:700; color:var(--gold); line-height:1; flex:0 0 46px; padding-top:3px; display:block}
+  .card-body{flex:1; min-width:0}
+  .card strong{display:block; font-weight:600; font-size:1.08rem; margin-bottom:4px; letter-spacing:.2px; line-height:1.3}
+  .card p{font-size:1rem; color:var(--muted); line-height:1.45}
+
+  /* demo / note side panels (Proposta 02) */
+  .sub{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:30px; align-items:stretch}
+  .sub.single{grid-template-columns:1fr}
+  .box{border:1px solid var(--border); background:var(--card); padding:28px 30px}
+  .box.demo{border-left:2px solid var(--gold-25)}
+  .box.warn{border-left:2px solid var(--red)}
+  .box.good{border-left:2px solid var(--green)}
+  .box .tag{font-size:11px;letter-spacing:3px;text-transform:uppercase;font-weight:700;display:block;margin-bottom:12px}
+  .box.demo .tag{color:var(--gold)} .box.warn .tag{color:var(--red)} .box.good .tag{color:var(--green)}
+  .box .who{font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--muted2);margin-bottom:8px}
+  .box p{font-size:1.08rem;color:var(--muted); line-height:1.5}
+  .box .q{font-family:'Cormorant Garamond',serif;font-style:italic;font-size:1.4rem;color:var(--text);line-height:1.45}
+  .box .q::before{content:'“'} .box .q::after{content:'”'}
+
+  /* chips on title slide */
+  .chips{display:flex; flex-wrap:wrap; gap:14px; margin-top:40px; max-width:860px}
+  .chip{border:1px solid var(--border); padding:14px 22px; font-size:13px; letter-spacing:2px; text-transform:uppercase; color:var(--muted)}
+  .chip b{color:var(--gold); font-weight:700}
+
+  /* checklist */
+  .checks{display:grid; grid-template-columns:1fr 1fr; gap:16px; max-width:980px}
+  .check{display:flex; gap:16px; align-items:center; padding:22px 26px; background:var(--card); border:1px solid var(--border)}
+  .check .b{width:18px;height:18px;border:1px solid var(--gold);flex:0 0 18px;position:relative}
+  .check .b::after{content:'';position:absolute;inset:4px;background:var(--gold);transform:rotate(45deg)}
+  .check span{font-size:1.12rem}
+
+  /* bottom chrome */
+  .chrome{display:flex; align-items:center; gap:20px; padding:18px 40px; border-top:1px solid var(--border)}
+  .count{font-size:13px; letter-spacing:2px; color:var(--muted); font-variant-numeric:tabular-nums; white-space:nowrap}
+  .bar{flex:1; height:2px; background:var(--border); overflow:hidden}
+  .bar i{display:block; height:100%; background:var(--gold); width:0%; transition:width .5s cubic-bezier(.165,.84,.44,1)}
+  .nav{display:flex; gap:10px}
+  .nav button{width:48px;height:48px; background:transparent; border:1px solid var(--border); color:var(--text); cursor:pointer; font-size:18px; transition:.3s; display:flex;align-items:center;justify-content:center}
+  .nav button:hover{border-color:var(--gold); color:var(--gold)}
+  .hint{font-size:11px; letter-spacing:2px; text-transform:uppercase; color:var(--muted2); white-space:nowrap}
+
+  @media (max-width:860px){
+    .app{grid-template-columns:1fr}
+    .rail{display:none}
+    .slide{overflow-y:auto; padding:3vh 6vw}
+    .cards{grid-template-columns:1fr}
+    .sub{grid-template-columns:1fr}
+    .checks{grid-template-columns:1fr}
+    .chrome{padding:12px 18px; gap:12px}
+    .hint{display:none}
+    .pipe{padding:12px 18px 0}
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside class="rail">
+    <div class="brand"><span class="diamond"></span>VAIF · Aula</div>
+    <div class="lesson" id="railLesson"></div>
+    <div class="label">Sumário da aula</div>
+    <ul class="toc" id="toc"></ul>
+    <div class="foot" id="railFoot"></div>
+  </aside>
+
+  <div class="main">
+    <div class="pipe" id="pipe"></div>
+    <div class="stage" id="stage"></div>
+    <div class="chrome">
+      <div class="count" id="count">01 / 01</div>
+      <div class="bar"><i id="bar"></i></div>
+      <span class="hint">← → para navegar</span>
+      <div class="nav">
+        <button onclick="go(-1)" aria-label="Anterior">←</button>
+        <button onclick="go(1)" aria-label="Próximo">→</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const LESSON = {"lesson":"Remarketing para Tatuadores","foot":"O script para reativar<br>leads que sumiram","kicker":"Videoaula · Produto Low Ticket","title":"Remarketing <em>para tatuadores</em>","dek":"O script para reativar leads que sumiram e transformar “sumiu” em “fechado”.","chips":["Janela de 12–24h","Mensagem de reabertura","Dois caminhos","Valor mínimo definido"],"modules":[{"time":"2–8 min","title":"Quando e Como Disparar","lead":"Não mande na hora que der vontade. Siga uma regra.","cards":[["Lead parou depois do orçamento","Use quando ele parou de responder após o envio do valor."],["Envie no dia seguinte","Nem na hora, nem depois de esfriar."],["Janela de 12 a 24 horas","O ponto ideal de silêncio antes do remarketing."]],"note":{"k":"good","tag":"Por que esperar","p":"Se mandar cedo demais, parece desespero. Se esperar mais de 24 horas, o interesse esfria e a pessoa pode fechar com outro tatuador."}},{"time":"8–14 min","title":"A Mensagem de Abertura","lead":"Saudação + contexto + uma pergunta que reabre a conversa.","cards":[["Saudação conforme o horário","Bom dia, boa tarde ou boa noite."],["Não cobre por ter sumido","Reabra com gentileza, não com acusação."],["Pergunta direta sobre o valor","Essa pergunta é o coração da estratégia. Ela faz o cliente se posicionar."]],"demo":{"who":"Você","text":"Bom dia, [Nome]! Vi que você estava interessado em fazer sua tatuagem, mas não finalizamos o papo. Quero te ajudar a realizar esse projeto. Qual o valor que você pretendia investir?"},"note":{"k":"good","tag":"Repare em três coisas","p":"A saudação muda pelo horário · você reabre o assunto com gentileza · termina com uma pergunta que devolve a decisão."}},{"time":"14–26 min","title":"Dois Caminhos Depois da Resposta","lead":"A conversa se divide em dois caminhos, dependendo do valor que o cliente responde.","cards":[["Caminho 1: acima do mínimo","Feche na hora, sem complicar. Reforce que gostou do cliente e da referência."],["Caminho 2: abaixo do mínimo","Justifique (margem, estrutura) e ofereça seu valor mínimo com urgência."]],"demo":{"who":"Caminho 1 · acima do mínimo","text":"Legal, [Nome]! Como te achei gente boa e gostei da referência, você fechando agora eu consigo fazer por [valor sugerido]."},"note":{"k":"good","tag":"Estrutura do Caminho 2","p":"Justificativa real → reafirma que quer ajudar → valor mínimo com urgência (“ainda hoje”) → pergunta de fechamento."}},{"time":"26–32 min","title":"Por Que Esse Script Funciona","lead":"Entenda o porquê para adaptar o script quando precisar.","cards":[["Nunca culpa o cliente","Evita que ele fique na defensiva e ignore de novo."],["Descobre o orçamento real","“Quanto pretendia investir?” tira a adivinhação."],["Valor mínimo definido antes","Sem isso, você negocia no impulso e trabalha no prejuízo."]],"note":{"k":"warn","tag":"Alerta importante","p":"Defina seu valor mínimo ANTES, com a cabeça fria (material, tempo, margem). Nunca decida na hora, com o cliente esperando."}}],"checklist":{"time":"32–35 min","title":"Resumo do Script","items":["Espere 12–24h após o silêncio","Mande a mensagem de reabertura","Pergunte o valor pretendido","Feche direto se estiver acima do mínimo","Ofereça o mínimo com justificativa se estiver abaixo"],"note":{"k":"good","tag":"Não deixe dinheiro na mesa","p":"Esse script pode recuperar boa parte dos leads que você considera perdidos. Não deixe dinheiro na mesa por falta de um follow-up bem feito."}}};
+</script>
+<script>
+(function(){
+  const railLesson=document.getElementById('railLesson');
+  const railFoot=document.getElementById('railFoot');
+  const toc=document.getElementById('toc');
+  const pipe=document.getElementById('pipe');
+  const stage=document.getElementById('stage');
+
+  railLesson.textContent=LESSON.lesson;
+  railFoot.innerHTML=LESSON.foot;
+
+  // build slides array (title + modules + checklist)
+  const slidesData=[];
+  slidesData.push({type:'title'});
+  LESSON.modules.forEach((m,i)=>slidesData.push({type:'module', m, i}));
+  slidesData.push({type:'checklist'});
+
+  // TOC + pipeline
+  slidesData.forEach((s,idx)=>{
+    const seg=document.createElement('div'); seg.className='seg'; pipe.appendChild(seg);
+    const li=document.createElement('li');
+    if(s.type==='title'){ li.innerHTML='<span class="n">00</span><span>Abertura</span>'; }
+    else if(s.type==='module'){ li.innerHTML='<span class="n">'+pad(s.i+1)+'</span><span>'+s.m.title+'</span>'; }
+    else { li.innerHTML='<span class="n">'+pad(LESSON.modules.length+1)+'</span><span>'+LESSON.checklist.title+'</span>'; }
+    li.onclick=()=>go(idx);
+    toc.appendChild(li);
+  });
+
+  function pad(n){return String(n).padStart(2,'0')}
+
+  const ghostEl=document.createElement('div'); ghostEl.className='ghost'; stage.appendChild(ghostEl);
+
+  function renderTitle(){
+    const sec=document.createElement('section'); sec.className='slide';
+    const h=document.createElement('h1'); h.className='h1'; h.innerHTML=LESSON.title; sec.appendChild(h);
+    if(LESSON.dek){ const d=document.createElement('p'); d.className='dek title'; d.textContent=LESSON.dek; sec.appendChild(d); }
+    if(LESSON.chips){ const c=document.createElement('div'); c.className='chips';
+      LESSON.chips.forEach(x=>c.appendChild((function(){const s=document.createElement('span');s.className='chip';s.innerHTML='<b>◆</b>&nbsp; '+x;return s;})()));
+      sec.appendChild(c);
+    }
+    return sec;
+  }
+
+  function renderModule(m, i){
+    const sec=document.createElement('section'); sec.className='slide';
+    const h=document.createElement('h1'); h.className='h1'; h.textContent=m.title; sec.appendChild(h);
+    if(m.lead){ const d=document.createElement('p'); d.className='dek'; d.textContent=m.lead; sec.appendChild(d); }
+    const cards=document.createElement('div'); cards.className='cards';
+    m.cards.forEach((c,j)=>cards.appendChild((function(){const el=document.createElement('div');el.className='card';
+      el.innerHTML='<span class="num">'+pad(j+1)+'</span><div class="card-body"><strong>'+c[0]+'</strong><p>'+c[1]+'</p></div>'; return el;})()));
+    sec.appendChild(cards);
+    const hasDemo=!!m.demo, hasNote=!!m.note;
+    if(hasDemo||hasNote){
+      const sub=document.createElement('div'); sub.className='sub'+(hasDemo&&hasNote?'':' single');
+      if(hasDemo){ const b=document.createElement('div'); b.className='box demo';
+        b.innerHTML='<span class="tag">Demonstração</span><div class="who">'+m.demo.who+'</div><p class="q">'+m.demo.text+'</p>'; sub.appendChild(b); }
+      if(hasNote){ const b=document.createElement('div'); b.className='box '+m.note.k;
+        b.innerHTML='<span class="tag">'+m.note.tag+'</span><p>'+m.note.p+'</p>'; sub.appendChild(b); }
+      sec.appendChild(sub);
+    }
+    return sec;
+  }
+
+  function renderChecklist(){
+    const sec=document.createElement('section'); sec.className='slide';
+    const c=LESSON.checklist;
+    const h=document.createElement('h1'); h.className='h1'; h.textContent=c.title; sec.appendChild(h);
+    const checks=document.createElement('div'); checks.className='checks';
+    c.items.forEach(x=>checks.appendChild((function(){const d=document.createElement('div');d.className='check';d.innerHTML='<span class="b"></span><span>'+x+'</span>';return d;})()));
+    sec.appendChild(checks);
+    if(c.note){ const n=document.createElement('div'); n.className='sub single'; n.style.marginTop='22px';
+      const b=document.createElement('div'); b.className='box '+c.note.k; b.innerHTML='<span class="tag">'+c.note.tag+'</span><p>'+c.note.p+'</p>'; n.appendChild(b); sec.appendChild(n); }
+    return sec;
+  }
+
+  slidesData.forEach(s=>{
+    if(s.type==='title') stage.appendChild(renderTitle());
+    else if(s.type==='module') stage.appendChild(renderModule(s.m, s.i));
+    else stage.appendChild(renderChecklist());
+  });
+
+  const slides=[...document.querySelectorAll('.slide')];
+  const segs=[...document.querySelectorAll('.pipe .seg')];
+  const tocItems=[...document.querySelectorAll('.toc li')];
+  let i=0;
+  window.go=function(n){ i=Math.max(0,Math.min(slides.length-1,n)); update(); };
+  function update(){
+    slides.forEach((s,idx)=>s.classList.toggle('active',idx===i));
+    segs.forEach((s,idx)=>{ s.classList.toggle('done',idx<i); s.classList.toggle('cur',idx===i); });
+    tocItems.forEach((t,idx)=>t.classList.toggle('active',idx===i));
+    if(tocItems[i]) tocItems[i].scrollIntoView({block:'nearest', behavior:'smooth'});
+    document.getElementById('bar').style.width=((i)/(slides.length-1)*100)+'%';
+    document.getElementById('count').textContent=pad(i+1)+' / '+pad(slides.length);
+    ghostEl.textContent = slidesData[i].type==='module' ? pad(slidesData[i].i+1) : '◆';
+  }
+  document.addEventListener('keydown',e=>{
+    if(['ArrowRight',' ','PageDown'].includes(e.key))go(i+1);
+    if(['ArrowLeft','PageUp'].includes(e.key))go(i-1);
+    if(e.key==='Home')go(0); if(e.key==='End')go(slides.length-1);
+  });
+  update();
+})();
+</script>
+</body>
+</html>

@@ -42,6 +42,11 @@ if ($path === '/agenda' || str_starts_with($path, '/agenda/')) {
     return;
 }
 
+if ($path === '/calculadora' || str_starts_with($path, '/calculadora/')) {
+    include __DIR__ . '/calculadora.php';
+    return;
+}
+
 http_response_code(404);
 echo '<!DOCTYPE html><html><head><title>404 Not Found</title></head><body><h1>404 Not Found</h1></body></html>';
 return;

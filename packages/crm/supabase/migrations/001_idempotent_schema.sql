@@ -75,6 +75,9 @@ CREATE TABLE IF NOT EXISTS leads (
   handoff_reason      TEXT,
   processo_explicado  BOOLEAN DEFAULT false,
   preco_liberado      BOOLEAN DEFAULT false,
+  duvidas_eliminadas  BOOLEAN DEFAULT false,
+  aguardando_confirmacao_duvidas BOOLEAN DEFAULT false,
+  audio_count         INTEGER DEFAULT 0,
   conversation_started TIMESTAMPTZ NOT NULL DEFAULT now(),
   last_message_at      TIMESTAMPTZ,
   notion_sync_status   TEXT DEFAULT 'pending'
@@ -106,6 +109,17 @@ ALTER TABLE leads ADD COLUMN IF NOT EXISTS pipeline_status       TEXT NOT NULL D
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS handoff_reason        TEXT;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS processo_explicado    BOOLEAN DEFAULT false;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS preco_liberado        BOOLEAN DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS duvidas_eliminadas    BOOLEAN DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS aguardando_confirmacao_duvidas BOOLEAN DEFAULT false;
+ALTER TABLE leads ADD COLUMN IF NOT EXISTS audio_count           INTEGER DEFAULT 0;
+
+-- Previous versions could let the classifier mark doubts as cleared before
+-- the assistant actually asked the checkpoint. Fail closed for pre-quote leads.
+UPDATE leads
+SET duvidas_eliminadas = false,
+    aguardando_confirmacao_duvidas = false
+WHERE pipeline_status IN ('novo', 'qualificando')
+  AND COALESCE(preco_liberado, false) = false;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS conversation_started  TIMESTAMPTZ NOT NULL DEFAULT now();
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS last_message_at       TIMESTAMPTZ;
 ALTER TABLE leads ADD COLUMN IF NOT EXISTS notion_sync_status    TEXT DEFAULT 'pending';

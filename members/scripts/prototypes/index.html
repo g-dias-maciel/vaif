@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Propostas de Design. Apresentações das Aulas</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;0,700;1,400&family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{--gold:#D4B04C;--bg:#0A0A0A;--card:#121212;--text:rgb(242,237,228);--muted:#CCCCCC;--border:#222222;--gold-10:rgba(212,176,76,.1);--gold-25:rgba(212,176,76,.25)}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:var(--bg);color:var(--text);font-family:'Montserrat',sans-serif;line-height:1.6;background-image:radial-gradient(circle at 50% -10%,rgba(212,176,76,.06),transparent 45%);min-height:100vh}
+  .wrap{max-width:1080px;margin:0 auto;padding:80px 24px}
+  .eyebrow{font-size:11px;letter-spacing:4px;text-transform:uppercase;color:var(--gold);font-weight:700;display:flex;align-items:center;gap:14px;margin-bottom:20px}
+  .eyebrow::before{content:'';width:26px;height:1px;background:var(--gold-25)}
+  h1{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:clamp(2.4rem,5vw,4rem);line-height:1.08;margin-bottom:16px}
+  h1 em{font-style:italic;color:var(--gold)}
+  .dek{color:var(--muted);font-size:1.1rem;max-width:60ch;margin-bottom:50px;font-weight:300}
+  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+  a.card{display:block;text-decoration:none;color:var(--text);background:var(--card);border:1px solid var(--border);padding:30px 30px 26px;transition:transform .3s,border-color .3s,box-shadow .3s;position:relative;overflow:hidden}
+  a.card::before{content:'';position:absolute;top:0;left:0;right:0;height:1px;background:linear-gradient(90deg,transparent,var(--gold),transparent);opacity:0;transition:.3s}
+  a.card:hover{transform:translateY(-4px);border-color:var(--gold-25);box-shadow:0 14px 40px rgba(0,0,0,.5)}
+  a.card:hover::before{opacity:1}
+  .num{font-family:'Cormorant Garamond',serif;font-size:2.2rem;font-weight:700;color:var(--gold);line-height:1;display:block;margin-bottom:14px}
+  a.card h2{font-family:'Cormorant Garamond',serif;font-weight:600;font-size:1.5rem;margin-bottom:8px}
+  a.card p{font-size:.9rem;color:var(--muted)}
+  .open{margin-top:16px;font-size:11px;letter-spacing:2px;text-transform:uppercase;color:var(--gold);font-weight:700}
+  .foot{margin-top:60px;padding-top:30px;border-top:1px solid var(--border);font-size:.85rem;color:var(--muted)}
+  .foot .diamond{width:6px;height:6px;background:var(--gold);transform:rotate(45deg);display:inline-block;margin:0 8px 0 2px}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="eyebrow">VAIF · Aulas para tatuadores</div>
+  <h1>5 propostas de design para as <em>apresentações</em></h1>
+  <p class="dek">Todas seguem o design do site: dourado sobre preto, Cormorant + Montserrat e o losango ◆. Abra cada proposta e navegue com as setas ← →.</p>
+
+  <div class="grid">
+    <a class="card" href="01-golden-needle-classic.html">
+      <span class="num">01</span>
+      <h2>Golden Needle: Deck Clássico</h2>
+      <p>Slides em tela cheia, títulos grandes e divisores de losango. Um estilo elegante, direto e sem excessos.</p>
+      <span class="open">Abrir →</span>
+    </a>
+    <a class="card" href="02-atelier-ledger-editorial.html">
+      <span class="num">02</span>
+      <h2>Atelier Ledger: Editorial</h2>
+      <p>Sumário lateral fixo + spread de revista com numeral gigante "fantasma". Sensação de livro de luxo, colunas assimétricas.</p>
+      <span class="open">Abrir →</span>
+    </a>
+    <a class="card" href="03-needle-path-timeline.html">
+      <span class="num">03</span>
+      <h2>Needle Path: Linha do Tempo</h2>
+      <p>Página única em rolagem vertical com trilho dourado e marcadores de losango. Um "caminho" módulo a módulo, com barra de progresso.</p>
+      <span class="open">Abrir →</span>
+    </a>
+    <a class="card" href="04-studio-framework-cards.html">
+      <span class="num">04</span>
+      <h2>Studio Framework: Cards</h2>
+      <p>Grade de cards com elevação no hover e pipeline de progresso no topo. Foco operacional, em etapas e checklists.</p>
+      <span class="open">Abrir →</span>
+    </a>
+    <a class="card" href="05-split-rehearsal-chat.html">
+      <span class="num">05</span>
+      <h2>Split Rehearsal: Chat WhatsApp</h2>
+      <p>Conceito à esquerda e conversa de WhatsApp à direita. Bom para acompanhar o roteiro enquanto você explica cada etapa.</p>
+      <span class="open">Abrir →</span>
+    </a>
+  </div>
+
+  <div class="foot">
+    <span class="diamond"></span>Conteúdo de demonstração: aula "Como Vender Tatuagem no WhatsApp". Navegação por teclado em todos (setas, espaço, Home/End).
+  </div>
+</div>
+</body>
+</html>

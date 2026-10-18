@@ -38,7 +38,7 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 ## Gate de preço (extraia da conversa)
 
 - `processo_explicado`: true se a resposta da BEATRIZ contém a explicação do processo de criação do artista (ex: "processo de criação", "vai sentar junto com você", "projeto exclusivo", "tirar as medidas do local", "encaixe perfeito no seu corpo"). false se ela ainda não explicou.
-- `duvidas_eliminadas`: true SOMENTE quando a mensagem do LEAD é uma resposta explícita de que não tem mais dúvidas, logo após a Beatriz perguntar "Antes de falarmos de valores, ficou alguma dúvida?" ou "Mais alguma dúvida?". Exemplos válidos: "não", "não tenho", "sem dúvidas", "pode mandar", "manda o valor", "pode falar", "é isso", "tranquilo". NÃO conta: "ok", "beleza", "entendi", silêncio, ou qualquer resposta que ainda contenha uma pergunta.
+- `duvidas_eliminadas`: campo legado, retorne false. O sistema decide isso deterministicamente usando o estado persistido do checkpoint e as mensagens do lead; a classificação do modelo nunca pode abrir o gate.
 
 ## Motivos de handoff
 

@@ -16,7 +16,7 @@
     },
     {
       "name": "price-gate-blocks-early",
-      "description": "Lead asks price too early and the model misbehaves; the gate must replace the quote and not advance the pipeline.",
+      "description": "Lead asks price too early and the model misbehaves; the gate must replace the quote with a discovery question (never a price, never the doubts question) and not advance the pipeline.",
       "artist": { "nome": "Bruno" },
       "initial": { "pipeline_status": "novo", "processo_explicado": false, "preco_liberado": false },
       "turns": [
@@ -25,8 +25,8 @@
           "model": "Fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros.",
           "classify": { "pipeline": "qualificando", "pricing": { "table_cents": 150000, "nego_cents": 150000 } },
           "expect": {
-            "finalReplyIncludes": ["Antes de falarmos de valores"],
-            "finalReplyExcludes": ["R$"],
+            "finalReplyIncludes": ["nova, uma cobertura ou uma reforma"],
+            "finalReplyExcludes": ["R$", "dúvida", "duvida"],
             "gateViolation": true,
             "state": { "pipeline_status": "qualificando" }
           }
@@ -37,22 +37,28 @@
       "name": "doubt-loop-two-questions",
       "description": "Regression: after the process explanation the lead asks two questions; the second answer ends with a generic sign-off and must still keep the doubt loop open.",
       "artist": { "nome": "Bruno" },
-      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false },
+      "pricing": [{ "placement": "braco", "body_zone": "fechamento", "table_price": 150000 }],
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false, "placement": "braco", "body_zone": "fechamento" },
       "turns": [
         {
           "lead": "quanto tempo pra fazer a tatuagem?",
           "model": "Depende do tamanho e dos detalhes, mas um fechamento de braço leva de 4 a 6 horas. Mais alguma dúvida?",
           "classify": { "pipeline": "qualificando" },
-          "expect": { "finalReplyMatches": ["Mais alguma d[uú]vida\\?"] }
+          "expect": {
+            "finalReplyMatches": ["Mais alguma d[uú]vida\\?"],
+            "state": { "aguardando_confirmacao_duvidas": true }
+          }
         },
         {
           "lead": "doi muito?",
-          "model": "A dor varia de pessoa para pessoa. Se precisar de mais alguma informação, estou à disposição!",
+          "model": "A dor varia de pessoa para pessoa. Se você tiver mais alguma dúvida, é só falar!",
           "classify": { "pipeline": "qualificando" },
           "expect": {
             "finalReplyMatches": ["Mais alguma d[uú]vida\\?\\s*$"],
             "finalReplyIncludes": ["A dor varia de pessoa para pessoa"],
-            "gateViolation": false
+            "finalReplyExcludes": ["é só falar", "Se você tiver mais alguma dúvida"],
+            "gateViolation": false,
+            "state": { "aguardando_confirmacao_duvidas": true }
           }
         },
         {
@@ -60,7 +66,7 @@
           "model": "Perfeito! Para fechamento no braço fica R$ 1.500 à vista ou em até 6x de R$ 250 sem juros. Como fica esse valor para você?",
           "classify": { "pipeline": "orcamento_enviado", "price_gate": { "duvidas_eliminadas": true }, "pricing": { "table_cents": 150000, "nego_cents": 150000 } },
           "expect": {
-            "finalReplyIncludes": ["R$ 1.500"],
+            "finalReplyMatches": ["R\\$\\s*1\\.500"],
             "state": { "pipeline_status": "orcamento_enviado", "preco_liberado": true }
           }
         }
@@ -96,7 +102,8 @@
           "classify": { "pipeline": "qualificando", "qualification": { "placement": "braco", "body_zone": "fechamento" } },
           "expect": {
             "finalReplyMatches": ["antebra"],
-            "finalReplyExcludes": ["R$", "passar pro Bruno"],
+            "finalReplyExcludes": ["R$", "passar pro Bruno", "Mais alguma dúvida"],
+            "state": { "aguardando_confirmacao_duvidas": false },
             "handoff": false
           }
         }
@@ -214,6 +221,81 @@
           "model": "Sem o sinal o horário não fica reservado para você. Como ele é descontado do total, você não paga nada a mais.",
           "classify": { "pipeline": "aguardando_deposito" },
           "expect": { "finalReplyMatches": ["(reserv|descont)"] }
+        }
+      ]
+    },
+    {
+      "name": "doubts-cleared-deterministic",
+      "description": "A pending checkpoint plus a batched no-and-price request opens the deterministic gate and produces the table quote, even if the classifier tries to negotiate.",
+      "artist": { "nome": "Bruno" },
+      "pricing": [{ "placement": "braco", "body_zone": "fechamento", "table_price": 150000 }],
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false, "duvidas_eliminadas": false, "aguardando_confirmacao_duvidas": true, "placement": "braco", "body_zone": "fechamento" },
+      "turns": [
+        {
+          "lead": "não\nquanto que fica?",
+          "model": "Entendi. Posso te fazer uma pergunta? É pelo valor ou tem mais alguma coisa te deixando em dúvida?",
+          "classify": { "pipeline": "qualificando", "price_gate": { "duvidas_eliminadas": false } },
+          "expect": {
+            "finalReplyMatches": ["R\\$\\s*1\\.500"],
+            "finalReplyExcludes": ["Mais alguma dúvida", "Antes de falarmos de valores", "Posso te fazer uma pergunta"],
+            "gateViolation": false,
+            "state": { "pipeline_status": "orcamento_enviado", "preco_liberado": true, "duvidas_eliminadas": true }
+          }
+        },
+        {
+          "lead": "quanto que fica?",
+          "model": "Entendi. Posso te fazer uma pergunta? É pelo valor ou tem mais alguma coisa te deixando em dúvida?",
+          "classify": { "pipeline": "orcamento_enviado" },
+          "expect": {
+            "finalReplyMatches": ["R\\$\\s*1\\.500"],
+            "finalReplyExcludes": ["Posso te fazer uma pergunta", "Mais alguma dúvida"],
+            "state": { "pipeline_status": "orcamento_enviado", "preco_liberado": true }
+          }
+        }
+      ]
+    },
+    {
+      "name": "audio-ask-then-handoff",
+      "description": "Audio messages are answered deterministically: first asks to write, second hands off to the artist.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "qualificando", "processo_explicado": true, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "[ÁUDIO RECEBIDO]",
+          "model": "",
+          "classify": {},
+          "expect": {
+            "finalReplyIncludes": ["Me manda por texto"],
+            "finalReplyExcludes": ["R$"],
+            "state": { "audio_count": 1, "pipeline_status": "qualificando" }
+          }
+        },
+        {
+          "lead": "[ÁUDIO RECEBIDO]",
+          "model": "",
+          "classify": {},
+          "expect": {
+            "finalReplyIncludes": ["passar pro artista"],
+            "handoff": true,
+            "state": { "audio_count": 2, "pipeline_status": "aguardando_artista" }
+          }
+        }
+      ]
+    },
+    {
+      "name": "deterministic-extraction-fills-qualification",
+      "description": "Even when the classifier omits qualification, deterministic extraction persists placement/zone/style from the lead's message.",
+      "artist": { "nome": "Bruno" },
+      "initial": { "pipeline_status": "novo", "processo_explicado": false, "preco_liberado": false },
+      "turns": [
+        {
+          "lead": "quero fechar o braço em realismo",
+          "model": "Que legal! Vou te ajudar com isso.",
+          "classify": { "pipeline": "qualificando" },
+          "expect": {
+            "finalReplyExcludes": ["R$"],
+            "state": { "pipeline_status": "qualificando", "placement": "braco", "body_zone": "fechamento", "style": "realismo" }
+          }
         }
       ]
     }
