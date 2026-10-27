@@ -71,6 +71,25 @@ app/
 
 Password is `password` for both (local dev only).
 
+## Creating a staff login
+
+`crm:make-staff` is the only supported way to create a staff (admin) login —
+locally and in production. It never uses a default password:
+
+```bash
+# interactive: prompts for the password twice, hidden
+php artisan crm:make-staff you@vaif.com.br --name="Your Name"
+
+# non-interactive
+php artisan crm:make-staff you@vaif.com.br --name="Your Name" --password='…'
+```
+
+- Re-running is safe: an existing login keeps its password. Use
+  `--reset-password` (hidden prompt) or `--password` to change it.
+- `--force` promotes an existing *artist* login to staff and unlinks its artist.
+- Do **not** use `php artisan db:seed` to bootstrap production — it creates the
+  demo users above with the password `password`.
+
 ## Notes on shared data
 
 - `leads.pipeline_status` values are written by the agent; the CRM only maps them to

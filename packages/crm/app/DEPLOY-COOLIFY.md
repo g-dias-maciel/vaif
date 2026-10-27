@@ -188,12 +188,17 @@ each redeploy and logs vanish with the container.
    ```
 3. Create the first **staff** login from *Coolify → Terminal*:
    ```bash
-   php artisan tinker --execute="
-   App\Models\User::updateOrCreate(
-       ['email' => 'you@vaif.com.br'],
-       ['name' => 'Your Name', 'password' => bcrypt('CHANGE-ME'), 'role' => 'staff']
-   );"
+   php artisan crm:make-staff you@vaif.com.br --name="Your Name"
    ```
+   It asks for the password twice (input hidden). Non-interactive variant, for
+   when the terminal has no TTY:
+   ```bash
+   php artisan crm:make-staff you@vaif.com.br --name="Your Name" --password='…'
+   ```
+   Re-running is safe: an existing login keeps its password unless you pass
+   `--reset-password` (hidden prompt) or `--password`. `--force` promotes an
+   existing *artist* login to staff and unlinks its artist.
+
    > Do **not** run `php artisan db:seed` in production: the seeder creates
    > `admin@vaif.com.br` / `bruno@vaif.com.br` with the password `password`.
 4. Log in at `https://crm.vaif.com.br/login`. Staff users land on `/artists`
@@ -216,7 +221,8 @@ curl -s   https://crm.vaif.com.br/.env              # must be 403/404, never con
 
 Then in the browser:
 
-- [ ] Login works and the URL stays `https://` (no mixed-content warnings).
+- [ ] Login works with the staff account and the URL stays `https://` (no mixed-content warnings).
+- [ ] `/artists` lists the artists in the shared database (staff-only view).
 - [ ] Dashboard shows leads/bookings for the artist (proves DB connectivity).
 - [ ] `/config` shows the WhatsApp connection state (proves WAHA reachability).
 - [ ] Logging out and back in works after a redeploy (proves the volume, if mounted).
