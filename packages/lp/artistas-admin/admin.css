@@ -1,0 +1,292 @@
+/* =============================================================================
+   Artist admin panel — list, edit, publish
+   ============================================================================= */
+
+:root {
+    --gold: #D4B04C;
+    --gold-dim: #a8873a;
+    --bg: #0A0A0A;
+    --panel: #121212;
+    --panel-2: #1a1a1a;
+    --line: #222222;
+    --ink: rgb(242, 237, 228);
+    --muted: rgb(160, 154, 142);
+    --danger: #f87171;
+    --success: #4ade80;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: radial-gradient(ellipse at top, #1a1a1a 0%, var(--bg) 70%);
+    color: var(--ink);
+    font-family: 'Montserrat', sans-serif;
+    line-height: 1.6;
+    min-height: 100vh;
+}
+
+.admin-shell {
+    max-width: 880px;
+    margin: 0 auto;
+    padding: 24px 16px 80px;
+}
+
+/* ---- Top bar ---- */
+
+.admin-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    padding: 8px 0 28px;
+    flex-wrap: wrap;
+}
+
+.admin-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.7rem;
+    font-weight: 600;
+}
+
+.admin-title small {
+    display: block;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: var(--gold);
+}
+
+.btn {
+    display: inline-block;
+    background: var(--gold);
+    color: var(--bg);
+    border: none;
+    border-radius: 8px;
+    padding: 10px 20px;
+    cursor: pointer;
+    font-family: 'Montserrat', sans-serif;
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    text-decoration: none;
+}
+
+.btn:hover { background: var(--gold-dim); }
+
+.btn--ghost {
+    background: transparent;
+    color: var(--ink);
+    border: 1px solid var(--gold);
+}
+
+.btn--ghost:hover { background: var(--gold); color: var(--bg); }
+
+.btn--danger {
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid var(--danger);
+}
+
+.btn--danger:hover { background: var(--danger); color: var(--bg); }
+
+.btn--small { padding: 6px 12px; font-size: 0.7rem; }
+
+/* ---- Status badges ---- */
+
+.badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+}
+
+.badge--draft { background: #1a1a1a; color: var(--gold); border: 1px solid var(--gold); }
+.badge--published { background: #0a2a0a; color: var(--success); border: 1px solid var(--success); }
+.badge--muted { background: #1a1a1a; color: var(--muted); border: 1px solid var(--line); }
+
+/* ---- List ---- */
+
+.admin-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.artist-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 18px 20px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    flex-wrap: wrap;
+}
+
+.artist-card-main { min-width: 0; }
+
+.artist-card-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.25rem;
+    font-weight: 600;
+}
+
+.artist-card-slug {
+    color: var(--muted);
+    font-size: 0.8rem;
+}
+
+.artist-card-meta {
+    color: var(--muted);
+    font-size: 0.78rem;
+    margin-top: 4px;
+}
+
+.artist-card-actions {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* ---- Forms (admin-only bits) ---- */
+
+.inline-form { display: inline; }
+
+/* ---- Token management ---- */
+
+.admin-inline-form {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+.admin-inline-form input[type="text"] {
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    color: var(--ink);
+    padding: 10px 14px;
+    font-family: 'Montserrat', sans-serif;
+    font-size: 0.9rem;
+    flex: 1;
+    min-width: 200px;
+}
+
+.admin-inline-form input[type="text"]:focus {
+    outline: none;
+    border-color: var(--gold);
+}
+
+.token-link {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 8px;
+    padding: 12px 14px;
+    margin-top: 10px;
+}
+
+.token-link code {
+    color: var(--gold);
+    word-break: break-all;
+    flex: 1;
+    font-size: 0.85rem;
+}
+
+.admin-back {
+    display: inline-block;
+    margin-bottom: 20px;
+    color: var(--muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.admin-back:hover { color: var(--gold); }
+
+.admin-section {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 12px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.admin-section h2 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    margin-bottom: 12px;
+}
+
+.admin-section .meta-line {
+    color: var(--muted);
+    font-size: 0.85rem;
+    margin-bottom: 6px;
+}
+
+.admin-section .meta-line code {
+    color: var(--gold);
+    background: var(--panel-2);
+    padding: 1px 6px;
+    border-radius: 4px;
+    font-size: 0.8rem;
+}
+
+.admin-actions {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-top: 14px;
+}
+
+.flash {
+    border-radius: 12px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+.flash--success { background: #0a2a0a; border: 1px solid var(--success); color: var(--success); }
+.flash--error { background: #2a0a0a; border: 1px solid var(--danger); color: var(--danger); }
+
+.empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--muted);
+}
+
+.empty-state .btn { margin-top: 16px; }
+
+/* ---- Invalid-link card (shared with agenda/onboard look) ---- */
+
+.card-center {
+    max-width: 520px;
+    margin: 40px auto;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 16px;
+    padding: 40px 32px;
+    text-align: center;
+}
+
+.card-center h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 2rem;
+    font-weight: 600;
+    margin-bottom: 12px;
+}
+
+.card-center p {
+    color: var(--muted);
+    margin-bottom: 20px;
+}

@@ -25,17 +25,38 @@ if ($slug === null) {
 
 $configPath = __DIR__ . "/config/{$slug}.php";
 
-if (!file_exists($configPath)) {
+$artist = null;
+
+if (file_exists($configPath)) {
+    // Legacy config-file artist.
+    $artist = include $configPath;
+} else {
+    // DB-backed artist (created via the intake form).
+    require_once __DIR__ . '/../lib/artists/store.php';
+    $pdo = artist_db();
+    if ($pdo !== null) {
+        $db_row = artist_db_load_by_slug($pdo, $slug);
+        if ($db_row !== null) {
+            // Drafts are only visible through the admin preview link.
+            if (($db_row['status'] ?? '') !== 'published' && !artist_preview_authorized($db_row)) {
+                http_response_code(404);
+                render_404();
+                exit;
+            }
+            $artist = $db_row['data'];
+        }
+    }
+}
+
+if ($artist === null) {
     http_response_code(404);
     render_404();
     exit;
 }
 
-$artist = include $configPath;
-
 if (!is_array($artist) || empty($artist['slug']) || empty($artist['display_name']) || empty($artist['whatsapp_number'])) {
     http_response_code(500);
-    echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Erro — VAIF</title></head><body style="background:#0A0A0A;color:rgb(242,237,228);font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;"><div><h1>Erro de Configuração</h1><p>Campos obrigatórios ausentes no arquivo de configuração do artista.</p></div></body></html>';
+    echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Erro — VAIF</title></head><body style="background:#0A0A0A;color:rgb(242,237,228);font-family:sans-serif;display:flex;align-items:center;justify-content:center;height:100vh;text-align:center;"><div><h1>Erro de Configuração</h1><p>Campos obrigatórios ausentes nos dados do artista.</p></div></body></html>';
     exit;
 }
 

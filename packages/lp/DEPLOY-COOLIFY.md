@@ -38,6 +38,7 @@ runtime via `getenv()` in the PHP API files.
 | `N8N_AGENDA_WEBHOOK_URL` | n8n webhook for artist agenda availability + block/unblock (webhook path `calendar`) | optional |
 | `N8N_ONBOARD_WEBHOOK_URL` | n8n webhook for artist onboarding — validate/status/consume QR connect (webhook path `onboard-api`). Set to `https://n8n.vaif.com.br/webhook/onboard-api`. Without it `/onboard/*` shows "Em manutenção" | required for `/onboard/*` |
 | `N8N_DIAGNOSTICO_WEBHOOK_URL` | n8n webhook for the free diagnostic form (`/api/leads/diagnostico.php`) — leads are sent to Telegram approval then emailed. Set to `https://n8n.vaif.com.br/webhook/diagnostico` | optional |
+| `ARTISTS_ADMIN_TOKEN` | Secret token that unlocks the artist review panel at `/artistas-admin/<token>`. Falls back to `API_CREATE_KEY` if unset. Generate something long and random. | required for the review panel |
 
 Use Coolify's **`@` secret/database linking** if you attach a Coolify-managed
 MySQL database so credentials are injected automatically.
@@ -46,9 +47,9 @@ MySQL database so credentials are injected automatically.
 
 ## 3. Routing
 
-Routing for `/blog`, `/artists`, `/onboard` and `/agenda` is handled by the bundled
-`deploy/nginx.conf` **inside the container** — no Custom Nginx Config is needed
-for the Docker deployment.
+Routing for `/blog`, `/artists`, `/onboard`, `/agenda`, `/novo-artista` and
+`/artistas-admin` is handled by the bundled `deploy/nginx.conf` **inside the
+container** — no Custom Nginx Config is needed for the Docker deployment.
 
 > The legacy `nginx-routing.conf` file is only for the old manual
 > (non-Docker) Coolify setup. It is not used by this Docker build.
@@ -92,6 +93,16 @@ ALTER TABLE leads ADD COLUMN email  VARCHAR(255) NULL AFTER instagram;
 ALTER TABLE leads ADD COLUMN studio VARCHAR(255) NULL AFTER email;
 ALTER TABLE leads ADD COLUMN origem VARCHAR(50)  NULL AFTER studio;
 ```
+
+The artist intake workflow uses a separate `artists` table, which the app
+auto-creates on first use (`CREATE TABLE IF NOT EXISTS` in
+`lib/artists/store.php`). A copy of the schema lives in
+`migrations/001_artists.sql` if you prefer to run it manually.
+
+Artist photo uploads need a raised request-size limit; `deploy/nginx.conf`
+sets `client_max_body_size 25M`. Also ensure the PHP-FPM pool allows it —
+`upload_max_filesize = 20M` and `post_max_size = 25M` (or higher) in `php.ini`.
+
 
 ---
 

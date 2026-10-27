@@ -91,5 +91,34 @@ if (is_dir($artistsDir)) {
 <?php
     }
 }
+
+// DB-backed artists (intake form) — only published pages are indexable.
+require_once __DIR__ . '/lib/artists/store.php';
+$sitemapPdo = artist_db();
+if ($sitemapPdo !== null) {
+    foreach (artist_db_list($sitemapPdo) as $dbArtist) {
+        if (($dbArtist['status'] ?? '') !== 'published') {
+            continue;
+        }
+        $slug = (string) $dbArtist['slug'];
+        if ($slug === '' || file_exists(artist_config_path($slug))) {
+            continue;
+        }
+        $lastmod = (string) ($dbArtist['updated_at'] ?? '');
+        if ($lastmod !== '') {
+            $lastmod = formatDate($lastmod);
+        } else {
+            $lastmod = date('Y-m-d');
+        }
+?>
+    <url>
+        <loc><?php echo $baseUrl; ?>/artists/<?php echo htmlspecialchars($slug, ENT_XML1, 'UTF-8'); ?></loc>
+        <lastmod><?php echo $lastmod; ?></lastmod>
+        <changefreq>monthly</changefreq>
+        <priority>0.6</priority>
+    </url>
+<?php
+    }
+}
 ?>
 </urlset>

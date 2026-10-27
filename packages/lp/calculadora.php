@@ -1374,7 +1374,7 @@
             <span class="hero-label">Exclusivo para tatuadores de realismo e preto & cinza</span>
             <h1 class="hero-title">
                 Quanto dinheiro você perde<br>
-                todo mês por nao ter<br>
+                todo mês por não ter<br>
                 <span>um processo de vendas estruturado?</span> 
             
             </h1>
@@ -1588,7 +1588,7 @@
                 <!-- OTIMIZAÇÃO: Bloco de Convicção -->
                 <div class="conviction-block fade-in-up delay-1">
                     <p style="font-size: 13px; color: var(--text-main); max-width: 520px; margin: 0 auto 20px; line-height: 1.8;">
-                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong> e tem um trabalho bom, o que está travando seu crescimento não é sua técnica, é seu sistema de captação. Enquanto você negocia desconto no direct e batalha para ter clientes novos, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada.<br> <strong>A diferença não é talento. É processo.</strong>
+                        Se você fatura acima de <strong style="color: var(--gold);">R$ 4.000 com realismo</strong> e tem um trabalho bom, o que está travando seu crescimento não é sua técnica, é seu sistema de captação. Enquanto você negocia desconto no direct e batalha para ter novos clientes, outro tatuador do seu nível está fechando 3 sessões de R$ 2.000 cada.<br> <strong>A diferença não é talento. É processo.</strong>
                     </p>
                 </div>
 
@@ -1608,7 +1608,7 @@
 
                 <!-- OTIMIZAÇÃO: Gatilho de Curiosidade no Texto -->
                 <p id="instrucaoForm" style="text-align: center; font-size: 15px; color: var(--text-muted); margin: 40px auto; max-width: 550px; line-height: 1.6;">
-                    Nosso especialista analisou seu prejuízo de <strong style="color: var(--gold);" id="prejuizoCopyValue">R$ 0,00</strong>. Preencha para destravar o plano exato de como recuperar esse valor em <strong style="color: var(--text-main);">30 dias</strong>.
+                    Nosso especialista analisou seu prejuízo de <strong style="color: var(--gold);" id="prejuizoCopyValue">R$ 0,00</strong>. Preencha para destravar o plano exato para recuperar esse valor em <strong style="color: var(--text-main);">30 dias</strong>.
                 </p>
 
                 <form id="leadForm" onsubmit="handleLeadSubmit(event)" style="text-align: left;">
@@ -1654,7 +1654,7 @@
                 <div id="nativeCalendarBlock" style="display: none;">
                     <h3 class="funil-title" style="margin-bottom: 10px;">Seu estúdio de realismo está <span style="color: var(--gold); font-style: italic;">pronto para escalar.</span></h3>
                     <p class="success-text" style="margin-bottom: 10px; max-width: 500px; margin-left: auto; margin-right: auto; font-size: 16px;">
-                        Você tem a estrutura exata que escalamos. Abrimos um acesso direto à agenda do nosso especialista em captação de clientes para tatuadores.
+                        Você tem a estrutura exata dos nossos melhores clientes. Abrimos um acesso direto à agenda do nosso especialista em captação de clientes para tatuadores.
                     </p>
                     
                     <div class="calendar-grid" id="calendarContainer">
@@ -1790,7 +1790,7 @@
                         <img class="carousel-photo" src="/img/guitattoo_resultado.webp" alt="Gui Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/Guitattoobh" target="_blank" rel="noopener noreferrer">@Guitattoobh</a></p>
                         <div class="carousel-result">De <span>R$ 7k</span> para <span>R$ 20k</span> em 60 dias, com a agenda sempre lotada</div>
-                        <p class="carousel-quote">Conheci o trabalho da VAIF em um momento onde a agenda estava vazia, não conseguia subir o preço das minhas tatuagens, estava sem perspectiva. Hoje, quase 2 anos depois, continuo o trabalho com eles e graças a Deus com a agenda lotada.</p>
+                        <p class="carousel-quote">Conheci o trabalho da VAIF em um momento em que a agenda estava vazia, não conseguia subir o preço das minhas tatuagens, estava sem perspectiva. Hoje, quase 2 anos depois, continuo o trabalho com eles e graças a Deus com a agenda lotada.</p>
                     </div>
 
                     <!-- Slide 2 (card do meio → inicial) -->
@@ -1798,7 +1798,7 @@
                         <img class="carousel-photo" src="/img/rsilva_resultado.webp" alt="Rodrigo Silva" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/rsilvatattoo" target="_blank" rel="noopener noreferrer">@rsilvatattoo</a></p>
                         <div class="carousel-result">De <span>R$ 9k</span> para <span>R$ 38k</span> em 30 dias</div>
-                        <p class="carousel-quote">A VAIF assumiu quando abri meu estúdio. Na época, tinha acabado de me mudar para uma cidade nova, sem clientes e precisava de capital. No primeiro mês já vi o meu faturamento sair de 9 mil reais para 38 mil reais. Desde então a agenda fica lotada com pelo menos um mês de antecedência.</p>
+                        <p class="carousel-quote">A VAIF assumiu quando abri meu estúdio. Na época, tinha acabado de me mudar para uma cidade nova, sem clientes, e precisava de capital. No primeiro mês já vi o meu faturamento sair de 9 mil reais para 38 mil reais. Desde então a agenda fica lotada com pelo menos um mês de antecedência.</p>
                     </div>
 
                     <!-- Slide 3 -->
@@ -1806,7 +1806,7 @@
                         <img class="carousel-photo" src="/img/dinho_resultado.webp" alt="Dinho Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer">@dinho_tattoo091</a></p>
                         <div class="carousel-result">De <span>R$ 15k</span> para <span>R$ 48k</span> em 75 dias</div>
-                        <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio, já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
+                        <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio. Já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
                     </div>
 
                 </div>

@@ -42,6 +42,16 @@ if ($path === '/agenda' || str_starts_with($path, '/agenda/')) {
     return;
 }
 
+if ($path === '/novo-artista' || str_starts_with($path, '/novo-artista/')) {
+    include __DIR__ . '/novo-artista/index.php';
+    return;
+}
+
+if ($path === '/artistas-admin' || str_starts_with($path, '/artistas-admin/')) {
+    include __DIR__ . '/artistas-admin/index.php';
+    return;
+}
+
 if ($path === '/calculadora' || str_starts_with($path, '/calculadora/')) {
     include __DIR__ . '/calculadora.php';
     return;

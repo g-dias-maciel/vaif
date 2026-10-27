@@ -9,7 +9,7 @@
 # Environment variables (DB_*, N8N_*) are injected at runtime by Coolify.
 # =============================================================================
 
-FROM php:8.2-fpm-alpine AS base
+FROM php:8.2.35-fpm-alpine AS base
 
 # System deps + PHP extensions used by the app:
 #   pdo_mysql  -> DB access (leads table)

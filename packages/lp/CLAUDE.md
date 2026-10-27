@@ -147,6 +147,7 @@ potencial_lucro = faturamento + (prejuizo_mensal * 0.7)  // 70% recovery
 | `N8N_LEAD_WEBHOOK_URL` | n8n webhook for new leads (calculadora funnel) |
 | `N8N_CALENDAR_WEBHOOK_URL` | n8n webhook for calendar booking confirmations |
 | `N8N_DIAGNOSTICO_WEBHOOK_URL` | n8n webhook for the free diagnostic form (workflow `Diagnóstico Gratuito`, path `diagnostico`) |
+| `ARTISTS_ADMIN_TOKEN` | Secret token for the artist review panel at `/artistas-admin/<token>` (falls back to `API_CREATE_KEY`) |
 
 ---
 
