@@ -17,7 +17,6 @@ class Event extends Model
 
     protected $fillable = [
         'lead_id',
-        'tattoo_id',
         'artist_id',
         'event_type',
         'payload',

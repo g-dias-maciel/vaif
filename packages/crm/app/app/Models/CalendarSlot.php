@@ -26,7 +26,6 @@ class CalendarSlot extends Model
         'end_at',
         'type',
         'lead_id',
-        'tattoo_id',
     ];
 
     protected $casts = [
@@ -42,10 +41,5 @@ class CalendarSlot extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class, 'lead_id');
-    }
-
-    public function tattoo(): BelongsTo
-    {
-        return $this->belongsTo(Tattoo::class, 'tattoo_id');
     }
 }

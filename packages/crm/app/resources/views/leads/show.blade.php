@@ -2,25 +2,105 @@
 
 @section('title', $lead->nome ?: 'Cliente')
 
+@php
+    $tipo = $lead->tipo_tatuagem;
+    $coverUpLabel = $tipo === 'cobertura'
+        ? 'Sim (cobertura)'
+        : ($tipo === 'nova' ? 'Não (tatuagem nova)' : ($tipo ?: '—'));
+    $promoQuote = $lead->quoteFor($lead->placement, $lead->body_zone);
+@endphp
+
 @section('content')
 <a href="{{ route('dashboard') }}" class="back">&larr; Voltar</a>
-<h1 class="page-title">{{ $lead->nome ?: 'Sem nome' }} @if ($lead->is_returning) <span class="tag">Recorrente</span> @endif</h1>
+<h1 class="page-title">
+    {{ $lead->nome ?: 'Sem nome' }}
+    @if ($lead->is_returning) <span class="tag">Recorrente</span> @endif
+</h1>
 
-<div class="panel" style="margin-bottom: 20px;">
+<div class="panel">
+    <div class="stat-grid" style="margin-bottom: 20px;">
+        <div class="stat-card">
+            <div class="stat-label">Status</div>
+            <div class="stat-value" style="font-size: 1.2rem;">{{ $pipeline[$lead->pipeline_status] ?? ($lead->pipeline_status ?: '—') }}</div>
+        </div>
+        @if ($lead->charged_price_cents !== null)
+            <div class="stat-card">
+                <div class="stat-label">Preço</div>
+                <div class="stat-value" style="font-size: 1.2rem;">R$ {{ number_format($lead->charged_price_cents / 100, 2, ',', '.') }}</div>
+            </div>
+        @endif
+        @if ($lead->deposit_amount)
+            <div class="stat-card">
+                <div class="stat-label">Sinal</div>
+                <div class="stat-value" style="font-size: 1.2rem;">R$ {{ number_format($lead->deposit_amount / 100, 2, ',', '.') }}</div>
+            </div>
+        @endif
+        @if ($lead->booked_date)
+            <div class="stat-card">
+                <div class="stat-label">Agendado</div>
+                <div class="stat-value" style="font-size: 1.2rem;">{{ $lead->booked_date->format('d/m/Y H:i') }}</div>
+            </div>
+        @endif
+    </div>
+
+    <h2 class="section-title" style="margin-top: 0;">Detalhes do projeto</h2>
     <div class="detail-grid">
+        <div><span class="meta">Primeira tatuagem</span><div>{{ $lead->primeira_tatuagem === null ? '—' : ($lead->primeira_tatuagem ? 'Sim' : 'Não') }}</div></div>
+        <div><span class="meta">Cobertura</span><div>{{ $coverUpLabel }}</div></div>
+        <div><span class="meta">Local</span><div>{{ $lead->placement ?: '—' }}</div></div>
+        <div><span class="meta">Tamanho / zona</span><div>{{ $lead->body_zone ?: '—' }}</div></div>
+        <div><span class="meta">Estilo</span><div>{{ $lead->style ?: '—' }}</div></div>
         <div><span class="meta">Telefone</span><div>{{ $lead->telefone }}</div></div>
         <div><span class="meta">Origem</span><div>{{ $lead->lead_source ?: '—' }}</div></div>
+        <div><span class="meta">Depósito</span><div>{{ $lead->deposit_status ?: '—' }}</div></div>
     </div>
-    <div style="margin-top: 16px;">
+
+    @if ($promoQuote)
+        <div class="promo-row {{ $promoQuote->isOpen() ? 'is-active' : '' }}" style="margin-top: 16px;">
+            <div class="promo-main">
+                <strong>Promoção: {{ $promoQuote->promotion?->name ?: 'oferta' }}</strong>
+                <span class="meta">
+                    1ª tatuagem {{ $promoQuote->firstPriceLabel() }}
+                    · 2ª até {{ $promoQuote->secondCapLabel() }}
+                    @if ($promoQuote->valid_until) · válida até {{ $promoQuote->valid_until->format('d/m/Y') }} @endif
+                </span>
+            </div>
+            <span class="tag {{ $promoQuote->isOpen() ? 'tag-success' : 'tag-muted' }}">{{ $promoQuote->statusLabel() }}</span>
+        </div>
+    @endif
+
+    @if ($lead->significado)
+        <div style="margin-top: 16px;">
+            <span class="meta">Significado</span>
+            <p style="margin-top: 4px;">{{ $lead->significado }}</p>
+        </div>
+    @endif
+
+    @if ($lead->reference_pics)
+        <h2 class="section-title">Fotos de referência</h2>
+        <div class="ref-grid">
+            @foreach ($lead->reference_pics as $img)
+                <a href="{{ $img }}" target="_blank" rel="noopener"><img src="{{ $img }}" alt="Referência"></a>
+            @endforeach
+        </div>
+    @endif
+
+    <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap;">
         @if ($lead->whatsapp_url)
-            <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
+            <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp">WhatsApp</a>
+        @endif
+        @if ($lead->pipeline_status !== 'perdido')
+            <form method="post" action="{{ route('leads.mark-lost', $lead) }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--danger" onclick="return confirm('Marcar este projeto como perdido?');">Marcar perdido</button>
+            </form>
         @endif
     </div>
 </div>
 
 @if ($lead->promotionQuotes->isNotEmpty())
 <div class="panel" style="margin-bottom: 20px;">
-    <h2 class="section-title" style="margin-top:0;">Promoções</h2>
+    <h2 class="section-title" style="margin-top:0;">Cotações de promoção</h2>
     @foreach ($lead->promotionQuotes->sortByDesc('quoted_at') as $quote)
         <div class="promo-row {{ $quote->isOpen() ? 'is-active' : '' }}">
             <div class="promo-main">
@@ -45,29 +125,26 @@
 @endif
 
 <div class="panel" style="margin-bottom: 20px;">
-    <h2 class="section-title" style="margin-top:0;">Tatuagens ({{ $lead->tattoos->count() }})</h2>    <ul class="slot-list">
-        @forelse ($lead->tattoos as $tattoo)
+    <h2 class="section-title" style="margin-top:0;">Agendamentos e eventos</h2>
+    <ul class="slot-list">
+        @forelse ($lead->calendar->sortBy('start_at') as $slot)
             <li>
                 <div class="slot-main">
-                    <a href="{{ route('tattoos.show', $tattoo) }}">
-                        <strong>{{ collect([$tattoo->placement, $tattoo->body_zone, $tattoo->style])->filter()->implode(' · ') ?: 'Tatuagem' }}</strong>
-                    </a>
-                    <span class="meta">
-                        {{ $pipeline[$tattoo->pipeline_status] ?? $tattoo->pipeline_status }}
-                        @if ($tattoo->charged_price_cents !== null) · R$ {{ number_format($tattoo->charged_price_cents / 100, 2, ',', '.') }} @endif
-                        @if ($tattoo->booked_date) · {{ $tattoo->booked_date->format('d/m/Y H:i') }} @endif
-                    </span>
+                    <strong>{{ $slot->start_at->format('d/m/Y H:i') }} – {{ $slot->end_at->format('H:i') }}</strong>
+                    <span class="meta">{{ $slot->type === 'blocked' ? 'Bloqueado' : 'Agendado' }}</span>
                 </div>
-                @if ($tattoo->pipeline_status !== 'perdido')
-                    <form method="post" action="{{ route('tattoos.mark-lost', $tattoo) }}" class="inline">
-                        @csrf
-                        <button type="submit" class="btn btn--danger btn--small" onclick="return confirm('Marcar este projeto como perdido?');">Marcar perdido</button>
-                    </form>
-                @endif
             </li>
         @empty
-            <li class="empty">Nenhuma tatuagem registrada.</li>
+            <li class="empty">Nenhum agendamento.</li>
         @endforelse
+        @foreach ($lead->events->sortByDesc('created_at') as $event)
+            <li>
+                <div class="slot-main">
+                    <strong>{{ $event->event_type }}</strong>
+                    <span class="meta">{{ $event->created_at?->format('d/m/Y H:i') }}</span>
+                </div>
+            </li>
+        @endforeach
     </ul>
 </div>
 

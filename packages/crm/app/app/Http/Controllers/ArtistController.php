@@ -4,7 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Artist;
 use App\Models\CalendarSlot;
-use App\Models\Tattoo;
+use App\Models\Lead;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
@@ -24,18 +24,18 @@ class ArtistController extends Controller
     }
 
     /**
-     * Staff: full-access view of a single Artist's tattoo pipeline + bookings.
+     * Staff: full-access view of a single Artist's pipeline + bookings.
      */
     public function show(Artist $artist)
     {
         session(['staff_artist_id' => $artist->id]);
 
-        $tattoos = Tattoo::with('lead')
+        $leads = Lead::query()
             ->where('artist_id', $artist->id)
             ->orderByDesc('updated_at')
             ->get();
 
-        $bookings = CalendarSlot::with(['lead', 'tattoo'])
+        $bookings = CalendarSlot::with('lead')
             ->where('artist_id', $artist->id)
             ->where('type', 'booked')
             ->where('start_at', '>=', now())
@@ -44,7 +44,7 @@ class ArtistController extends Controller
 
         return view('artists.show', [
             'artist' => $artist,
-            'tattoos' => $tattoos,
+            'leads' => $leads,
             'bookings' => $bookings,
             'pipeline' => config('crm.pipeline_statuses'),
         ]);

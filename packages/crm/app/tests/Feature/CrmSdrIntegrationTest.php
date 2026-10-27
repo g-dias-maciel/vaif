@@ -8,7 +8,6 @@ use App\Models\Lead;
 use App\Models\Promotion;
 use App\Models\PromotionQuote;
 use App\Models\PromotionType;
-use App\Models\Tattoo;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -91,23 +90,13 @@ class CrmSdrIntegrationTest extends TestCase
         ], $attrs));
     }
 
-    private function sdrTattoo(Lead $lead, array $attrs = []): Tattoo
-    {
-        return Tattoo::create(array_merge([
-            'lead_id' => $lead->id,
-            'artist_id' => self::ARTIST_ID,
-            'pipeline_status' => 'novo',
-        ], $attrs));
-    }
-
-    private function sdrBooking(Tattoo $tattoo, $start = null): CalendarSlot
+    private function sdrBooking(Lead $lead, $start = null): CalendarSlot
     {
         $start = $start ?? now()->addDay();
 
         return CalendarSlot::create([
             'artist_id' => self::ARTIST_ID,
-            'lead_id' => $tattoo->lead_id,
-            'tattoo_id' => $tattoo->id,
+            'lead_id' => $lead->id,
             'type' => 'booked',
             'start_at' => $start,
             'end_at' => $start->copy()->addMinutes(120),
@@ -161,14 +150,9 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $l1 = $this->sdrLead(['nome' => 'Ana']);
-        $this->sdrTattoo($l1, ['pipeline_status' => 'novo']);
-
-        $l2 = $this->sdrLead(['nome' => 'Carlos']);
-        $this->sdrTattoo($l2, ['pipeline_status' => 'qualificando', 'placement' => 'antebraco']);
-
-        $l3 = $this->sdrLead(['nome' => 'Fernanda']);
-        $this->sdrTattoo($l3, ['pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
+        $this->sdrLead(['nome' => 'Ana', 'pipeline_status' => 'novo']);
+        $this->sdrLead(['nome' => 'Carlos', 'pipeline_status' => 'qualificando', 'placement' => 'antebraco']);
+        $this->sdrLead(['nome' => 'Fernanda', 'pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
 
         $response = $this->actingAs($user)->get('/');
 
@@ -186,14 +170,14 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Rafael']);
-        $tattoo = $this->sdrTattoo($lead, [
+        $lead = $this->sdrLead([
+            'nome' => 'Rafael',
             'pipeline_status' => 'agendado',
             'placement' => 'peito',
             'deposit_status' => 'confirmado',
             'booked_date' => now()->addDay()->setTime(10, 0),
         ]);
-        $this->sdrBooking($tattoo, now()->addDay()->setTime(10, 0));
+        $this->sdrBooking($lead, now()->addDay()->setTime(10, 0));
 
         $agenda = $this->actingAs($user)->get('/bookings');
         $agenda->assertOk();
@@ -205,18 +189,17 @@ class CrmSdrIntegrationTest extends TestCase
         $dashboard->assertSee('Rafael');
     }
 
-    public function test_artist_marks_tattoo_lost()
+    public function test_artist_marks_lead_lost()
     {
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Pedro']);
-        $tattoo = $this->sdrTattoo($lead, ['pipeline_status' => 'novo']);
+        $lead = $this->sdrLead(['nome' => 'Pedro', 'pipeline_status' => 'novo']);
 
-        $this->actingAs($user)->post("/tattoos/{$tattoo->id}/lost")->assertRedirect();
+        $this->actingAs($user)->post("/leads/{$lead->id}/lost")->assertRedirect();
 
-        $this->assertSame('perdido', $tattoo->fresh()->pipeline_status);
-        $this->assertDatabaseHas('events', ['tattoo_id' => $tattoo->id, 'event_type' => 'tattoo_lost']);
+        $this->assertSame('perdido', $lead->fresh()->pipeline_status);
+        $this->assertDatabaseHas('events', ['lead_id' => $lead->id, 'event_type' => 'lead_lost']);
     }
 
     public function test_artist_confirms_deposit()
@@ -224,17 +207,17 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Gustavo']);
-        $tattoo = $this->sdrTattoo($lead, [
+        $lead = $this->sdrLead([
+            'nome' => 'Gustavo',
             'pipeline_status' => 'agendado',
             'deposit_status' => 'aguardando_confirmacao',
         ]);
-        $slot = $this->sdrBooking($tattoo);
+        $slot = $this->sdrBooking($lead);
 
         $this->actingAs($user)->post("/bookings/{$slot->id}/confirm-deposit")->assertRedirect();
 
-        $this->assertSame('confirmado', $tattoo->fresh()->deposit_status);
-        $this->assertDatabaseHas('events', ['tattoo_id' => $tattoo->id, 'event_type' => 'deposit_confirmed']);
+        $this->assertSame('confirmado', $lead->fresh()->deposit_status);
+        $this->assertDatabaseHas('events', ['lead_id' => $lead->id, 'event_type' => 'deposit_confirmed']);
     }
 
     public function test_artist_cancels_booking()
@@ -242,15 +225,14 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Fernanda']);
-        $tattoo = $this->sdrTattoo($lead, ['pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
-        $slot = $this->sdrBooking($tattoo);
+        $lead = $this->sdrLead(['nome' => 'Fernanda', 'pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
+        $slot = $this->sdrBooking($lead);
 
         $this->actingAs($user)->post("/bookings/{$slot->id}/cancel")->assertRedirect();
 
         $this->assertNull(CalendarSlot::find($slot->id));
-        $this->assertSame('aguardando_deposito', $tattoo->fresh()->pipeline_status);
-        $this->assertNull($tattoo->fresh()->booked_date);
+        $this->assertSame('aguardando_deposito', $lead->fresh()->pipeline_status);
+        $this->assertNull($lead->fresh()->booked_date);
     }
 
     public function test_artist_blocks_and_unblocks_time()
@@ -271,19 +253,43 @@ class CrmSdrIntegrationTest extends TestCase
         $this->assertNull(CalendarSlot::find($blocked->id));
     }
 
-    public function test_lead_can_have_multiple_tattoos()
+    public function test_lead_detail_shows_project_and_contact()
     {
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Ana']);
-        $this->sdrTattoo($lead, ['pipeline_status' => 'fechado', 'placement' => 'costas', 'table_price' => 40000]);
-        $this->sdrTattoo($lead, ['pipeline_status' => 'novo']);
+        $lead = $this->sdrLead([
+            'nome' => 'Ana',
+            'telefone' => '5511988880001',
+            'pipeline_status' => 'fechado',
+            'placement' => 'costas',
+            'body_zone' => 'medio',
+            'style' => 'realismo',
+            'table_price' => 40000,
+            'tipo_tatuagem' => 'cobertura',
+            'significado' => 'Homenagem à mãe',
+        ]);
 
         $response = $this->actingAs($user)->get("/leads/{$lead->id}");
 
         $response->assertOk();
-        $response->assertSee('Tatuagens (2)');
+        $response->assertSee('Detalhes do projeto');
+        $response->assertSee('costas');
+        $response->assertSee('realismo');
+        $response->assertSee('Sim (cobertura)');
+        $response->assertSee('Homenagem à mãe');
+        $response->assertSee('R$ 400,00');
+    }
+
+    public function test_legacy_tattoo_url_redirects_to_lead()
+    {
+        $this->seedArtist();
+        $user = $this->artistUser();
+        $lead = $this->sdrLead(['nome' => 'Ana']);
+
+        $this->actingAs($user)->get("/tattoos/{$lead->id}")
+            ->assertStatus(301)
+            ->assertRedirect(route('leads.show', $lead));
     }
 
     public function test_analytics_counts_leads_not_tattoos()
@@ -291,18 +297,15 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead1 = $this->sdrLead(['nome' => 'Ana']);
-        $this->sdrTattoo($lead1, ['pipeline_status' => 'fechado', 'table_price' => 40000]);
-        $this->sdrTattoo($lead1, ['pipeline_status' => 'novo']);
-
-        $lead2 = $this->sdrLead(['nome' => 'Carlos']);
-        $this->sdrTattoo($lead2, ['pipeline_status' => 'novo']);
+        $this->sdrLead(['nome' => 'Ana', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
+        $this->sdrLead(['nome' => 'Carlos', 'pipeline_status' => 'novo']);
 
         $response = $this->actingAs($user)->get('/analytics?period=all');
 
         $response->assertOk();
-        $response->assertViewHas('total', 2); // 2 leads, not 3 tattoos
-        $response->assertViewHas('won', 1);   // only Ana has a won tattoo
+        $response->assertViewHas('total', 2);
+        $response->assertViewHas('won', 1);   // only Ana converted
+        $response->assertViewHas('revenueCents', 40000);
     }
 
     public function test_faturamento_split()
@@ -310,9 +313,9 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $this->sdrTattoo($this->sdrLead(['nome' => 'A']), ['pipeline_status' => 'fechado', 'table_price' => 60000]);
-        $this->sdrTattoo($this->sdrLead(['nome' => 'B']), ['pipeline_status' => 'agendado', 'table_price' => 50000]);
-        $this->sdrTattoo($this->sdrLead(['nome' => 'C']), ['pipeline_status' => 'aguardando_deposito', 'table_price' => 90000]);
+        $this->sdrLead(['nome' => 'A', 'pipeline_status' => 'fechado', 'table_price' => 60000]);
+        $this->sdrLead(['nome' => 'B', 'pipeline_status' => 'agendado', 'table_price' => 50000]);
+        $this->sdrLead(['nome' => 'C', 'pipeline_status' => 'aguardando_deposito', 'table_price' => 90000]);
 
         $response = $this->actingAs($user)->get('/');
 
@@ -327,22 +330,21 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $oldClosed = $this->sdrTattoo($this->sdrLead(['nome' => 'Antigo']), [
+        $oldClosed = $this->sdrLead([
+            'nome' => 'Antigo',
             'pipeline_status' => 'perdido',
             'table_price' => 50000,
         ]);
-        Tattoo::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
 
-        $oldOpen = $this->sdrTattoo($this->sdrLead(['nome' => 'Aberto']), [
+        $oldOpen = $this->sdrLead([
+            'nome' => 'Aberto',
             'pipeline_status' => 'qualificando',
             'table_price' => 30000,
         ]);
-        Tattoo::whereKey($oldOpen->id)->update(['updated_at' => now()->subMonths(10)]);
+        Lead::whereKey($oldOpen->id)->update(['updated_at' => now()->subMonths(10)]);
 
-        $this->sdrTattoo($this->sdrLead(['nome' => 'Recente']), [
-            'pipeline_status' => 'fechado',
-            'table_price' => 40000,
-        ]);
+        $this->sdrLead(['nome' => 'Recente', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
 
         $response = $this->actingAs($user)->get('/');
 
@@ -357,11 +359,12 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $oldClosed = $this->sdrTattoo($this->sdrLead(['nome' => 'Historico']), [
+        $oldClosed = $this->sdrLead([
+            'nome' => 'Historico',
             'pipeline_status' => 'fechado',
             'table_price' => 50000,
         ]);
-        Tattoo::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
 
         $this->actingAs($user)->get('/')->assertDontSee('Historico');
         $this->actingAs($user)->get('/?period=all')->assertOk()->assertSee('Historico');
@@ -372,16 +375,14 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $oldClosed = $this->sdrTattoo($this->sdrLead(['nome' => 'Velho']), [
+        $oldClosed = $this->sdrLead([
+            'nome' => 'Velho',
             'pipeline_status' => 'fechado',
             'table_price' => 60000,
         ]);
-        Tattoo::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
 
-        $this->sdrTattoo($this->sdrLead(['nome' => 'Novo']), [
-            'pipeline_status' => 'fechado',
-            'table_price' => 40000,
-        ]);
+        $this->sdrLead(['nome' => 'Novo', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
 
         $this->actingAs($user)->get('/')
             ->assertViewHas('realizadoCents', 40000);
@@ -437,7 +438,7 @@ class CrmSdrIntegrationTest extends TestCase
 
         $this->actingAs($user)->get(route('leads.show', $lead))
             ->assertOk()
-            ->assertSee('Promoções')
+            ->assertSee('Cotações de promoção')
             ->assertSee('Leve 2 de Inverno')
             ->assertSee('R$ 3.000,00')
             ->assertSee('R$ 1.500,00')
@@ -485,33 +486,32 @@ class CrmSdrIntegrationTest extends TestCase
             ->assertSee('Anulada');
     }
 
-    public function test_tattoo_detail_shows_only_the_matching_promotion_quote()
+    public function test_lead_detail_shows_only_the_matching_promotion_quote()
     {
         $this->seedArtist();
         $user = $this->artistUser();
         $promotion = $this->seedPromotion(['name' => 'Leve 2 de Inverno']);
-        $lead = $this->sdrLead();
 
-        $matching = $this->sdrTattoo($lead, [
+        $matching = $this->sdrLead([
             'placement' => 'braco_externo',
             'body_zone' => 'fechamento',
             'pipeline_status' => 'orcamento_enviado',
         ]);
-        $other = $this->sdrTattoo($lead, [
+        $other = $this->sdrLead([
             'placement' => 'costas',
             'body_zone' => 'medio',
             'pipeline_status' => 'novo',
         ]);
 
-        $this->seedQuote($lead, $promotion);
+        $this->seedQuote($matching, $promotion);
 
-        $this->actingAs($user)->get(route('tattoos.show', $matching))
+        $this->actingAs($user)->get(route('leads.show', $matching))
             ->assertOk()
             ->assertSee('Promoção: Leve 2 de Inverno')
             ->assertSee('R$ 3.000,00')
             ->assertSee('R$ 1.500,00');
 
-        $this->actingAs($user)->get(route('tattoos.show', $other))
+        $this->actingAs($user)->get(route('leads.show', $other))
             ->assertOk()
             ->assertDontSee('Promoção: Leve 2 de Inverno');
     }
@@ -557,17 +557,16 @@ class CrmSdrIntegrationTest extends TestCase
         $response->assertSee('Tronco');
     }
 
-    public function test_staff_can_mark_tattoo_lost_on_any_artist()
+    public function test_staff_can_mark_lead_lost_on_any_artist()
     {
         $this->seedArtist();
         $staff = $this->staffUser();
 
-        $lead = $this->sdrLead(['nome' => 'Pedro']);
-        $tattoo = $this->sdrTattoo($lead, ['pipeline_status' => 'novo']);
+        $lead = $this->sdrLead(['nome' => 'Pedro', 'pipeline_status' => 'novo']);
 
-        $this->actingAs($staff)->post("/tattoos/{$tattoo->id}/lost")->assertRedirect();
+        $this->actingAs($staff)->post("/leads/{$lead->id}/lost")->assertRedirect();
 
-        $this->assertSame('perdido', $tattoo->fresh()->pipeline_status);
+        $this->assertSame('perdido', $lead->fresh()->pipeline_status);
     }
 
     public function test_staff_can_create_artist_with_login()

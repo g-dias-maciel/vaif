@@ -19,7 +19,7 @@ app/
 │   ├── Policies/{LeadPolicy,BookingPolicy}.php
 │   └── Services/BookingService.php
 ├── config/crm.php                 # pipeline_status → PT label map
-├── database/migrations/           # users (role, artist_id) + notes
+├── database/migrations/           # users (role, artist_id), notes, promotion_quotes
 ├── resources/views/               # Blade UI (pt-BR)
 └── routes/web.php
 ```
@@ -32,8 +32,13 @@ app/
   Postgres through a service-role connection, so the existing RLS policies (which the
   agent path relies on) are **bypassed, not removed**. See
   `docs/adr/0001-auth-model.md`.
-- **Existing tables** (`artists`, `leads`, `calendar`, `events`) are created by
-  `packages/crm/supabase`, not by Laravel. Laravel only migrates `users` + `notes`.
+- **Existing tables** (`artists`, `leads`, `calendar`, `events`, promotions) are
+  created by `packages/crm/supabase`, not by Laravel. Laravel only migrates
+  `users`, `notes` and `promotion_quotes`.
+- **`leads` is the pipeline entity.** A Lead row holds both the contact and the
+  tattoo project (placement, style, prices, deposit, `pipeline_status`,
+  `booked_date`, …). There is no `tattoos` table; `/tattoos/{id}` permanently
+  redirects to `/leads/{id}`.
 
 ## Setup
 

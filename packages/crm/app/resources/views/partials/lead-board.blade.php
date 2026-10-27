@@ -1,5 +1,5 @@
 @php
-    $grouped = $tattoos->groupBy('pipeline_status');
+    $grouped = $leads->groupBy('pipeline_status');
 @endphp
 
 <div class="board">
@@ -10,47 +10,47 @@
                 <span class="count">{{ $grouped->get($key)?->count() ?? 0 }}</span>
             </h2>
             <div class="cards">
-                @forelse ($grouped->get($key) ?? collect() as $tattoo)
+                @forelse ($grouped->get($key) ?? collect() as $lead)
                     <div class="card">
                         <div class="card-head">
                             <strong>
                                 @if (! $readonly)
-                                    <a href="{{ route('tattoos.show', $tattoo) }}">{{ $tattoo->lead?->nome ?: 'Sem nome' }}</a>
+                                    <a href="{{ route('leads.show', $lead) }}">{{ $lead->nome ?: 'Sem nome' }}</a>
                                 @else
-                                    {{ $tattoo->lead?->nome ?: 'Sem nome' }}
+                                    {{ $lead->nome ?: 'Sem nome' }}
                                 @endif
-                                @if ($tattoo->lead?->is_returning)
+                                @if ($lead->is_returning)
                                     <span class="tag">Recorrente</span>
                                 @endif
                             </strong>
-                            <span class="phone">{{ $tattoo->lead?->telefone }}</span>
+                            <span class="phone">{{ $lead->telefone }}</span>
                         </div>
 
-                        @if ($tattoo->placement || $tattoo->body_zone || $tattoo->style)
+                        @if ($lead->placement || $lead->body_zone || $lead->style)
                             <div class="meta">
-                                {{ collect([$tattoo->placement, $tattoo->body_zone, $tattoo->style])->filter()->implode(' · ') }}
+                                {{ collect([$lead->placement, $lead->body_zone, $lead->style])->filter()->implode(' · ') }}
                             </div>
                         @endif
 
-                        @if ($tattoo->charged_price_cents !== null)
-                            <div class="meta price">R$ {{ number_format($tattoo->charged_price_cents / 100, 2, ',', '.') }}</div>
+                        @if ($lead->charged_price_cents !== null)
+                            <div class="meta price">R$ {{ number_format($lead->charged_price_cents / 100, 2, ',', '.') }}</div>
                         @endif
 
-                        @if ($tattoo->deposit_amount)
-                            <div class="meta">Sinal: R$ {{ number_format($tattoo->deposit_amount / 100, 2, ',', '.') }}</div>
+                        @if ($lead->deposit_amount)
+                            <div class="meta">Sinal: R$ {{ number_format($lead->deposit_amount / 100, 2, ',', '.') }}</div>
                         @endif
 
-                        @if ($tattoo->booked_date)
-                            <div class="meta gold">{{ $tattoo->booked_date->format('d/m/Y H:i') }}</div>
+                        @if ($lead->booked_date)
+                            <div class="meta gold">{{ $lead->booked_date->format('d/m/Y H:i') }}</div>
                         @endif
 
                         @unless ($readonly)
                             <div class="actions">
-                                @if ($tattoo->lead?->whatsapp_url)
-                                    <a href="{{ $tattoo->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
+                                @if ($lead->whatsapp_url)
+                                    <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
                                 @endif
-                                @if ($tattoo->pipeline_status !== 'perdido')
-                                    <form method="post" action="{{ route('tattoos.mark-lost', $tattoo) }}" class="inline">
+                                @if ($lead->pipeline_status !== 'perdido')
+                                    <form method="post" action="{{ route('leads.mark-lost', $lead) }}" class="inline">
                                         @csrf
                                         <button type="submit" class="btn btn--danger btn--small"
                                             onclick="return confirm('Marcar este projeto como perdido?');">Marcar perdido</button>

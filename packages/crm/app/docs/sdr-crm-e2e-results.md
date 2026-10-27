@@ -3,6 +3,16 @@
 **Date:** 2026-10-27
 **Result:** ✅ **50 SDR checks + 30 CRM tests passed, 0 failed**
 
+> **Correction (same day, after the schema fix).** The *SDR* layer below did run
+> against the live stack. The *CRM* layer did **not**: `php artisan test` runs on
+> SQLite against a local fixture, so it never touched the shared Postgres. That
+> fixture invented a `tattoos` table which no Postgres migration creates, which
+> is why the first real deploy 500'd on `relation "tattoos" does not exist`. The
+> app has since been refactored so `leads` is the single pipeline entity (no
+> `tattoos` table, `events`/`calendar` use `lead_id`), and the fixture now mirrors
+> the Postgres schema. The SDR results and field list below still stand.
+
+
 Two complementary suites were run against the **live stack**:
 
 | Layer | Suite | Result |

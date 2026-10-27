@@ -3,7 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CalendarSlot;
-use App\Models\Tattoo;
+use App\Models\Lead;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -12,7 +12,7 @@ class DashboardController extends Controller
 {
     /**
      * Artist home (or the selected artist for staff): the agent toggle, a week
-     * view of scheduled appointments, the faturamento summary, and the Tattoo
+     * view of scheduled appointments, the faturamento summary, and the Lead
      * pipeline — all in one dashboard. Staff without a selected artist go to
      * the Artists list.
      *
@@ -32,7 +32,7 @@ class DashboardController extends Controller
         $from = Periods::start($period);
         $closedStatuses = config('crm.closed_pipeline_statuses');
 
-        $tattoos = Tattoo::with('lead')
+        $leads = Lead::query()
             ->where('artist_id', $artist->id)
             ->where(function ($query) use ($from, $closedStatuses) {
                 // Open stages are always visible — a live deal must never
@@ -59,17 +59,17 @@ class DashboardController extends Controller
         $agendadoCents = 0;  // agendado — booked, upcoming
         $esperadoCents = 0;  // active, sinal not paid — floating
 
-        foreach ($tattoos as $tattoo) {
-            $price = $tattoo->charged_price_cents;
+        foreach ($leads as $lead) {
+            $price = $lead->charged_price_cents;
             if ($price === null) {
                 continue;
             }
 
-            if ($tattoo->pipeline_status === 'fechado') {
+            if ($lead->pipeline_status === 'fechado') {
                 $realizadoCents += $price;
-            } elseif ($tattoo->pipeline_status === 'agendado') {
+            } elseif ($lead->pipeline_status === 'agendado') {
                 $agendadoCents += $price;
-            } elseif ($tattoo->pipeline_status !== 'perdido' && $tattoo->deposit_status !== 'confirmado') {
+            } elseif ($lead->pipeline_status !== 'perdido' && $lead->deposit_status !== 'confirmado') {
                 $esperadoCents += $price;
             }
         }
@@ -85,7 +85,7 @@ class DashboardController extends Controller
 
         $weekStart = $ref->startOfWeek(CarbonImmutable::MONDAY);
 
-        $slots = CalendarSlot::with(['lead', 'tattoo'])
+        $slots = CalendarSlot::with('lead')
             ->where('artist_id', $artist->id)
             ->whereIn('type', ['booked', 'blocked'])
             ->where('start_at', '>=', $weekStart)
@@ -113,7 +113,7 @@ class DashboardController extends Controller
         return view('dashboard.index', [
             'artist' => $artist,
             'activePromotion' => $artist->activePromotion,
-            'tattoos' => $tattoos,
+            'leads' => $leads,
             'pipeline' => config('crm.pipeline_statuses'),
             'period' => $period,
             'periodOptions' => Periods::options(),

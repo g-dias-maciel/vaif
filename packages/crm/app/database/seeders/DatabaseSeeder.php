@@ -5,7 +5,6 @@ namespace Database\Seeders;
 use App\Models\Artist;
 use App\Models\CalendarSlot;
 use App\Models\Lead;
-use App\Models\Tattoo;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
@@ -47,7 +46,6 @@ class DatabaseSeeder extends Seeder
         // Demo data only makes sense on a fresh local (sqlite) DB.
         if ($isSqlite) {
             $this->seedDemoLeads();
-            $this->seedDemoTattoos();
             $this->seedDemoBookings();
             $this->seedDemoPricing();
             $this->seedDemoReturningCustomers();
@@ -224,22 +222,13 @@ class DatabaseSeeder extends Seeder
         );
     }
 
-    private function tattoo(string $id, string $leadId, array $attrs): void
-    {
-        Tattoo::firstOrCreate(
-            ['id' => $id],
-            array_merge(['lead_id' => $leadId, 'artist_id' => self::BRUNO_ID], $attrs),
-        );
-    }
-
-    private function booking(string $id, string $leadId, string $tattooId, $start, int $durationMin): void
+    private function booking(string $id, string $leadId, $start, int $durationMin): void
     {
         CalendarSlot::firstOrCreate(
             ['id' => $id],
             [
                 'artist_id' => self::BRUNO_ID,
                 'lead_id' => $leadId,
-                'tattoo_id' => $tattooId,
                 'type' => 'booked',
                 'start_at' => $start,
                 'end_at' => $start->copy()->addMinutes($durationMin),
@@ -249,53 +238,9 @@ class DatabaseSeeder extends Seeder
 
     private function seedDemoLeads(): void
     {
+        // One Lead = one pipeline card: contact + project + money.
         $this->lead('11111111-0000-0000-0000-000000000001', [
             'nome' => 'Ana', 'telefone' => '5511988880001', 'lead_source' => 'instagram',
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000002', [
-            'nome' => 'Carlos', 'telefone' => '5511988880002', 'lead_source' => 'whatsapp',
-            'created_at' => now()->subDays(5),
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000003', [
-            'nome' => 'Mariana', 'telefone' => '5511988880003', 'lead_source' => 'ads',
-            'created_at' => now()->subMonths(1),
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000004', [
-            'nome' => 'João', 'telefone' => '5511988880004', 'lead_source' => 'whatsapp',
-            'created_at' => now()->subMonths(2),
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000005', [
-            'nome' => 'Fernanda', 'telefone' => '5511988880005', 'lead_source' => 'instagram',
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000006', [
-            'nome' => 'Rafael', 'telefone' => '5511988880006', 'lead_source' => 'ads',
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000007', [
-            'nome' => 'Pedro', 'telefone' => '5511988880007', 'lead_source' => 'whatsapp',
-            'created_at' => now()->subMonths(3),
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000008', [
-            'nome' => 'Carla', 'telefone' => '5511988880008', 'lead_source' => 'instagram',
-            'created_at' => now()->subMonths(2),
-        ]);
-
-        $this->lead('11111111-0000-0000-0000-000000000009', [
-            'nome' => 'Gustavo', 'telefone' => '5511988880009', 'lead_source' => 'ads',
-            'created_at' => now()->subDay(),
-        ]);
-    }
-
-    private function seedDemoTattoos(): void
-    {
-        // Ana — returning client with a past tattoo + a new inquiry.
-        $this->tattoo('33333333-0000-0000-0000-000000000011', '11111111-0000-0000-0000-000000000001', [
             'placement' => 'costas', 'body_zone' => 'medio', 'style' => 'realismo',
             'pipeline_status' => 'fechado',
             'table_price' => 40000, 'deposit_amount' => 12000, 'deposit_status' => 'confirmado',
@@ -304,19 +249,16 @@ class DatabaseSeeder extends Seeder
             'created_at' => now()->subMonths(6),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000001', '11111111-0000-0000-0000-000000000001', [
-            'pipeline_status' => 'novo',
-            'created_at' => now(),
-        ]);
-
-        $this->tattoo('33333333-0000-0000-0000-000000000002', '11111111-0000-0000-0000-000000000002', [
+        $this->lead('11111111-0000-0000-0000-000000000002', [
+            'nome' => 'Carlos', 'telefone' => '5511988880002', 'lead_source' => 'whatsapp',
             'placement' => 'antebraco', 'body_zone' => 'pequeno', 'style' => 'realismo',
             'primeira_tatuagem' => true,
             'pipeline_status' => 'qualificando',
             'created_at' => now()->subDays(5),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000003', '11111111-0000-0000-0000-000000000003', [
+        $this->lead('11111111-0000-0000-0000-000000000003', [
+            'nome' => 'Mariana', 'telefone' => '5511988880003', 'lead_source' => 'ads',
             'placement' => 'costas', 'body_zone' => 'medio', 'style' => 'blackwork',
             'tipo_tatuagem' => 'nova', 'significado' => 'Fênix representando recomeço',
             'table_price' => 70000, 'negotiated_price' => 65000,
@@ -324,25 +266,29 @@ class DatabaseSeeder extends Seeder
             'created_at' => now()->subMonths(1),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000004', '11111111-0000-0000-0000-000000000004', [
+        $this->lead('11111111-0000-0000-0000-000000000004', [
+            'nome' => 'João', 'telefone' => '5511988880004', 'lead_source' => 'whatsapp',
             'placement' => 'braco_externo', 'body_zone' => 'grande', 'style' => 'old_school',
             'table_price' => 90000, 'deposit_amount' => 27000, 'deposit_status' => 'aguardando_confirmacao',
             'pipeline_status' => 'aguardando_deposito',
             'created_at' => now()->subMonths(2),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000005', '11111111-0000-0000-0000-000000000005', [
+        $this->lead('11111111-0000-0000-0000-000000000005', [
+            'nome' => 'Fernanda', 'telefone' => '5511988880005', 'lead_source' => 'instagram',
             'placement' => 'panturrilha', 'body_zone' => 'medio', 'style' => 'realismo',
             'primeira_tatuagem' => false, 'tipo_tatuagem' => 'cobertura',
             'significado' => 'Homenagem à mãe',
-            'reference_pics' => ['https://placehold.co/300x300?text=Ref+1', 'https://placehold.co/300x300?text=Ref+2'],
+            // SQLite column is JSON; Postgres stores TEXT[] (the model reads both).
+            'reference_pics' => json_encode(['https://placehold.co/300x300?text=Ref+1', 'https://placehold.co/300x300?text=Ref+2']),
             'table_price' => 50000, 'deposit_amount' => 15000, 'deposit_status' => 'confirmado',
             'pipeline_status' => 'agendado',
             'booked_date' => now()->addDays(1)->setTime(14, 0),
             'session_duration_min' => 120, 'buffer_min' => 30,
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000006', '11111111-0000-0000-0000-000000000006', [
+        $this->lead('11111111-0000-0000-0000-000000000006', [
+            'nome' => 'Rafael', 'telefone' => '5511988880006', 'lead_source' => 'ads',
             'placement' => 'peito', 'body_zone' => 'grande', 'style' => 'blackwork',
             'table_price' => 100000, 'deposit_status' => 'confirmado',
             'pipeline_status' => 'agendado',
@@ -350,13 +296,15 @@ class DatabaseSeeder extends Seeder
             'session_duration_min' => 180, 'buffer_min' => 30,
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000007', '11111111-0000-0000-0000-000000000007', [
+        $this->lead('11111111-0000-0000-0000-000000000007', [
+            'nome' => 'Pedro', 'telefone' => '5511988880007', 'lead_source' => 'whatsapp',
             'placement' => 'perna', 'body_zone' => 'grande', 'style' => 'old_school',
             'pipeline_status' => 'perdido',
             'created_at' => now()->subMonths(3),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000008', '11111111-0000-0000-0000-000000000008', [
+        $this->lead('11111111-0000-0000-0000-000000000008', [
+            'nome' => 'Carla', 'telefone' => '5511988880008', 'lead_source' => 'instagram',
             'placement' => 'costas', 'body_zone' => 'grande', 'style' => 'blackwork',
             'tipo_tatuagem' => 'cobertura', 'primeira_tatuagem' => false,
             'table_price' => 60000, 'deposit_amount' => 18000, 'deposit_status' => 'confirmado',
@@ -366,13 +314,19 @@ class DatabaseSeeder extends Seeder
             'created_at' => now()->subMonths(2),
         ]);
 
-        $this->tattoo('33333333-0000-0000-0000-000000000009', '11111111-0000-0000-0000-000000000009', [
+        $this->lead('11111111-0000-0000-0000-000000000009', [
+            'nome' => 'Gustavo', 'telefone' => '5511988880009', 'lead_source' => 'ads',
             'placement' => 'costas', 'body_zone' => 'medio', 'style' => 'blackwork',
             'table_price' => 70000, 'deposit_amount' => 21000, 'deposit_status' => 'aguardando_confirmacao',
             'pipeline_status' => 'agendado',
             'booked_date' => now()->addDays(3)->setTime(10, 0),
             'session_duration_min' => 150, 'buffer_min' => 30,
             'created_at' => now()->subDay(),
+        ]);
+
+        $this->lead('11111111-0000-0000-0000-000000000010', [
+            'nome' => 'Lucas', 'telefone' => '5511988880010', 'lead_source' => 'instagram',
+            'pipeline_status' => 'novo',
         ]);
     }
 
@@ -381,7 +335,6 @@ class DatabaseSeeder extends Seeder
         $this->booking(
             '22222222-0000-0000-0000-000000000001',
             '11111111-0000-0000-0000-000000000005',
-            '33333333-0000-0000-0000-000000000005',
             now()->addDays(1)->setTime(14, 0),
             120,
         );
@@ -389,7 +342,6 @@ class DatabaseSeeder extends Seeder
         $this->booking(
             '22222222-0000-0000-0000-000000000002',
             '11111111-0000-0000-0000-000000000006',
-            '33333333-0000-0000-0000-000000000006',
             now()->addDays(2)->setTime(10, 0),
             180,
         );
@@ -397,7 +349,6 @@ class DatabaseSeeder extends Seeder
         $this->booking(
             '22222222-0000-0000-0000-000000000003',
             '11111111-0000-0000-0000-000000000009',
-            '33333333-0000-0000-0000-000000000009',
             now()->addDays(3)->setTime(10, 0),
             150,
         );

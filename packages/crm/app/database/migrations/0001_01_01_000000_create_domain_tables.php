@@ -43,47 +43,46 @@ return new class extends Migration
             $table->timestamp('created_at')->nullable();
         });
 
+        // Mirrors the shared Postgres `leads` table (packages/crm/supabase):
+        // contact AND project/pipeline fields live on the same row. There is no
+        // `tattoos` table — one Lead is one pipeline card.
         Schema::create('leads', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('artist_id');
             $table->string('nome')->nullable();
             $table->string('telefone');
             $table->string('lead_source')->nullable();
-            $table->dateTime('conversation_started')->nullable();
-            $table->dateTime('last_message_at')->nullable();
-            $table->timestamps();
-
-            $table->index('artist_id');
-            $table->foreign('artist_id')->references('id')->on('artists')->cascadeOnDelete();
-        });
-
-        Schema::create('tattoos', function (Blueprint $table) {
-            $table->uuid('id')->primary();
-            $table->uuid('lead_id');
-            $table->uuid('artist_id');
             $table->string('placement')->nullable();
             $table->string('body_zone')->nullable();
             $table->string('style')->nullable();
             $table->boolean('primeira_tatuagem')->nullable();
-            $table->string('significado')->nullable();
+            $table->text('significado')->nullable();
             $table->string('tipo_tatuagem')->nullable();
             $table->json('reference_pics')->nullable();
             $table->integer('table_price')->nullable();
             $table->integer('negotiated_price')->nullable();
             $table->decimal('discount_percent', 5, 2)->nullable();
-            $table->string('contrapartida')->nullable();
+            $table->text('contrapartida')->nullable();
+            $table->dateTime('booked_date')->nullable();
+            $table->integer('session_duration_min')->nullable();
+            $table->integer('buffer_min')->nullable();
             $table->integer('deposit_amount')->nullable();
             $table->string('deposit_status')->default('nao_solicitado');
             $table->string('pipeline_status')->default('novo');
             $table->string('handoff_reason')->nullable();
-            $table->dateTime('booked_date')->nullable();
-            $table->integer('session_duration_min')->nullable();
-            $table->integer('buffer_min')->nullable();
+            $table->boolean('processo_explicado')->default(false);
+            $table->boolean('preco_liberado')->default(false);
+            $table->boolean('duvidas_eliminadas')->default(false);
+            $table->boolean('aguardando_confirmacao_duvidas')->default(false);
+            $table->integer('audio_count')->default(0);
+            $table->dateTime('conversation_started')->nullable();
+            $table->dateTime('last_message_at')->nullable();
+            $table->string('notion_sync_status')->default('pending');
+            $table->dateTime('notion_synced_at')->nullable();
             $table->timestamps();
 
-            $table->index('lead_id');
+            $table->index('artist_id');
             $table->index(['artist_id', 'pipeline_status']);
-            $table->foreign('lead_id')->references('id')->on('leads')->cascadeOnDelete();
             $table->foreign('artist_id')->references('id')->on('artists')->cascadeOnDelete();
         });
 
@@ -94,19 +93,16 @@ return new class extends Migration
             $table->dateTime('end_at');
             $table->string('type')->default('available');
             $table->uuid('lead_id')->nullable();
-            $table->uuid('tattoo_id')->nullable();
             $table->timestamp('created_at')->nullable();
 
             $table->index('artist_id');
             $table->foreign('artist_id')->references('id')->on('artists')->cascadeOnDelete();
             $table->foreign('lead_id')->references('id')->on('leads')->nullOnDelete();
-            $table->foreign('tattoo_id')->references('id')->on('tattoos')->nullOnDelete();
         });
 
         Schema::create('events', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->uuid('lead_id')->nullable();
-            $table->uuid('tattoo_id')->nullable();
             $table->uuid('artist_id');
             $table->string('event_type');
             $table->json('payload')->nullable();
@@ -114,7 +110,6 @@ return new class extends Migration
 
             $table->index('lead_id');
             $table->foreign('lead_id')->references('id')->on('leads')->cascadeOnDelete();
-            $table->foreign('tattoo_id')->references('id')->on('tattoos')->cascadeOnDelete();
             $table->foreign('artist_id')->references('id')->on('artists')->cascadeOnDelete();
         });
 
@@ -211,7 +206,6 @@ return new class extends Migration
         Schema::dropIfExists('pricing');
         Schema::dropIfExists('events');
         Schema::dropIfExists('calendar');
-        Schema::dropIfExists('tattoos');
         Schema::dropIfExists('leads');
         Schema::dropIfExists('artists');
     }

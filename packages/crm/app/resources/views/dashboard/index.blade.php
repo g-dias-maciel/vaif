@@ -67,11 +67,11 @@
 
                 @forelse ($day['slots'] as $slot)
                     @if ($slot->type === 'booked')
-                        <a class="week-slot" href="{{ $slot->tattoo ? route('tattoos.show', $slot->tattoo) : ($slot->lead ? route('leads.show', $slot->lead) : '#') }}">
+                        <a class="week-slot" href="{{ $slot->lead ? route('leads.show', $slot->lead) : '#' }}">
                             <div class="time">{{ $slot->start_at->format('H:i') }}–{{ $slot->end_at->format('H:i') }}</div>
                             <div class="name">{{ $slot->lead?->nome ?: 'Cliente' }}</div>
-                            @if ($slot->tattoo?->placement)
-                                <div class="place">{{ $slot->tattoo->placement }}</div>
+                            @if ($slot->lead?->placement)
+                                <div class="place">{{ $slot->lead->placement }}</div>
                             @endif
                         </a>
                     @else
@@ -99,5 +99,5 @@
         @endif
     </form>
 </div>
-@include('partials.tattoo-board', ['tattoos' => $tattoos, 'pipeline' => $pipeline, 'readonly' => false])
+@include('partials.lead-board', ['leads' => $leads, 'pipeline' => $pipeline, 'readonly' => false])
 @endsection

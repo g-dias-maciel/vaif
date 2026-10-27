@@ -27,7 +27,7 @@ class BookingController extends Controller
             ? $request->query('filter')
             : 'upcoming';
 
-        $bookingsQuery = CalendarSlot::with(['lead', 'tattoo'])
+        $bookingsQuery = CalendarSlot::with('lead')
             ->where('artist_id', $artist->id)
             ->where('type', 'booked');
 
@@ -41,7 +41,7 @@ class BookingController extends Controller
 
         $bookings = $bookingsQuery->get();
 
-        $blocked = CalendarSlot::with(['lead', 'tattoo'])
+        $blocked = CalendarSlot::with('lead')
             ->where('artist_id', $artist->id)
             ->where('type', 'blocked')
             ->where('end_at', '>=', now())
@@ -116,14 +116,13 @@ class BookingController extends Controller
     {
         $this->authorize('reschedule', $slot);
 
-        $tattoo = $slot->tattoo;
+        $lead = $slot->lead;
 
-        if ($tattoo && $tattoo->deposit_status !== 'confirmado') {
-            $tattoo->update(['deposit_status' => 'confirmado']);
+        if ($lead && $lead->deposit_status !== 'confirmado') {
+            $lead->update(['deposit_status' => 'confirmado']);
 
             Event::create([
                 'lead_id' => $slot->lead_id,
-                'tattoo_id' => $tattoo->id,
                 'artist_id' => $slot->artist_id,
                 'event_type' => 'deposit_confirmed',
                 'payload' => ['actor' => 'artist'],
@@ -140,19 +139,18 @@ class BookingController extends Controller
     {
         $this->authorize('reschedule', $slot);
 
-        $tattoo = $slot->tattoo;
+        $lead = $slot->lead;
 
         $slot->delete();
 
-        if ($tattoo) {
-            $tattoo->update([
+        if ($lead) {
+            $lead->update([
                 'pipeline_status' => 'aguardando_deposito',
                 'booked_date' => null,
             ]);
 
             Event::create([
                 'lead_id' => $slot->lead_id,
-                'tattoo_id' => $tattoo->id,
                 'artist_id' => $slot->artist_id,
                 'event_type' => 'booking_cancelled',
                 'payload' => ['actor' => 'artist'],

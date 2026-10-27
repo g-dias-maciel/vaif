@@ -8,7 +8,7 @@ use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\SettingsController;
-use App\Http\Controllers\TattooController;
+use App\Models\Lead;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -42,13 +42,16 @@ Route::middleware('auth')->group(function () {
         Route::post('/pricing/add-size', [SettingsController::class, 'addSize'])->name('pricing.add-size');
     });
 
-    // ---- Shared (artist + staff): lead/tattoo detail + booking/tattoo actions ----
+    // ---- Shared (artist + staff): lead detail + booking actions ----
     Route::middleware('role:artist,staff')->group(function () {
         Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
+        Route::post('/leads/{lead}/lost', [LeadController::class, 'markLost'])->name('leads.mark-lost');
 
-        Route::get('/tattoos/{tattoo}', [TattooController::class, 'show'])->name('tattoos.show');
-        Route::post('/tattoos/{tattoo}/lost', [TattooController::class, 'markLost'])->name('tattoos.mark-lost');
+        // Tattoos used to be a separate entity; a Lead is now the project.
+        // Keep old links working with a permanent redirect.
+        Route::get('/tattoos/{lead}', fn (Lead $lead) => redirect()
+            ->route('leads.show', $lead, 301))->name('tattoos.show');
 
         Route::post('/bookings/{slot}/unblock', [BookingController::class, 'unblock'])->name('bookings.unblock');
         Route::post('/bookings/{slot}/confirm-deposit', [BookingController::class, 'confirmDeposit'])->name('bookings.confirm-deposit');

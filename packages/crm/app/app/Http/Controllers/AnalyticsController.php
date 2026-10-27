@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
-use App\Models\Tattoo;
 use App\Support\Periods;
 use Illuminate\Http\Request;
 
@@ -23,25 +22,16 @@ class AnalyticsController extends Controller
         $period = Periods::fromRequest($request->query('period'));
         $from = Periods::start($period);
 
-        // ---- Lead-level (people) funnel ----
-        $leads = Lead::with('tattoos')
+        // A Lead IS the pipeline card: contact + project + money all live on
+        // the same row, so one query feeds the funnel, the money and the board.
+        $leads = Lead::query()
             ->where('artist_id', $artist->id)
             ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
             ->get();
 
         $total = $leads->count();
-        $won = 0;
-        $lost = 0;
-
-        foreach ($leads as $lead) {
-            $statuses = $lead->tattoos->pluck('pipeline_status');
-
-            if ($statuses->contains(fn ($s) => in_array($s, self::WON_STATUSES, true))) {
-                $won++;
-            } elseif ($statuses->isNotEmpty() && $statuses->every(fn ($s) => $s === 'perdido')) {
-                $lost++;
-            }
-        }
+        $won = $leads->whereIn('pipeline_status', self::WON_STATUSES)->count();
+        $lost = $leads->where('pipeline_status', 'perdido')->count();
 
         $conversionRate = $total > 0 ? round($won / $total * 100, 1) : 0.0;
         $lostRate = $total > 0 ? round($lost / $total * 100, 1) : 0.0;
@@ -50,22 +40,16 @@ class AnalyticsController extends Controller
             ->map->count()
             ->filter(fn ($count, $source) => $source !== null && $source !== '');
 
-        // ---- Tattoo-level (money + pipeline) ----
-        $tattoos = Tattoo::with('lead')
-            ->where('artist_id', $artist->id)
-            ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
-            ->get();
+        $wonLeads = $leads->whereIn('pipeline_status', self::WON_STATUSES)
+            ->filter(fn (Lead $lead) => $lead->charged_price_cents !== null);
 
-        $wonTattoos = $tattoos->whereIn('pipeline_status', self::WON_STATUSES)
-            ->filter(fn (Tattoo $tattoo) => $tattoo->charged_price_cents !== null);
-
-        $avgTicket = $wonTattoos->isNotEmpty()
-            ? (int) round($wonTattoos->avg(fn (Tattoo $tattoo) => $tattoo->charged_price_cents))
+        $avgTicket = $wonLeads->isNotEmpty()
+            ? (int) round($wonLeads->avg(fn (Lead $lead) => $lead->charged_price_cents))
             : 0;
 
-        $revenue = (int) $wonTattoos->sum(fn (Tattoo $tattoo) => $tattoo->charged_price_cents);
+        $revenue = (int) $wonLeads->sum(fn (Lead $lead) => $lead->charged_price_cents);
 
-        $byStage = $tattoos->groupBy('pipeline_status')->map->count();
+        $byStage = $leads->groupBy('pipeline_status')->map->count();
 
         $pipelineStatuses = config('crm.pipeline_statuses');
         $monthly = $this->monthlyTrend($artist->id);
@@ -92,9 +76,8 @@ class AnalyticsController extends Controller
     }
 
     /**
-     * Last 12 months trend. Conversions are lead-level (won leads bucketed by
-     * the month the lead was created); revenue is tattoo-level (won tattoos
-     * bucketed by the month the tattoo was created).
+     * Last 12 months trend. Conversions and revenue are both lead-level: a won
+     * Lead is bucketed by the month the conversation started.
      *
      * @return array{labels: array, won: array, rate: array, revenue: array}
      */
@@ -115,7 +98,7 @@ class AnalyticsController extends Controller
             ];
         }
 
-        foreach (Lead::with('tattoos')->where('artist_id', $artistId)->get() as $lead) {
+        foreach (Lead::where('artist_id', $artistId)->get() as $lead) {
             $key = $lead->created_at?->format('Y-m');
             if ($key === null || ! isset($buckets[$key])) {
                 continue;
@@ -123,26 +106,15 @@ class AnalyticsController extends Controller
 
             $buckets[$key]['leadTotal']++;
 
-            $statuses = $lead->tattoos->pluck('pipeline_status');
-            if ($statuses->contains(fn ($s) => in_array($s, self::WON_STATUSES, true))) {
-                $buckets[$key]['leadWon']++;
-            }
-        }
-
-        foreach (Tattoo::where('artist_id', $artistId)->get() as $tattoo) {
-            if (! in_array($tattoo->pipeline_status, self::WON_STATUSES, true)) {
-                continue;
-            }
-            if ($tattoo->charged_price_cents === null) {
+            if (! in_array($lead->pipeline_status, self::WON_STATUSES, true)) {
                 continue;
             }
 
-            $key = $tattoo->created_at?->format('Y-m');
-            if ($key === null || ! isset($buckets[$key])) {
-                continue;
-            }
+            $buckets[$key]['leadWon']++;
 
-            $buckets[$key]['revenue'] += $tattoo->charged_price_cents;
+            if ($lead->charged_price_cents !== null) {
+                $buckets[$key]['revenue'] += $lead->charged_price_cents;
+            }
         }
 
         $labels = [];

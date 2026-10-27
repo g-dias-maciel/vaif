@@ -53,8 +53,10 @@ This is important when debugging:
    Calculator and diagnostic leads are inserted into its `leads` table and
    forwarded to n8n webhooks.
 2. **SDR + CRM data** lives in a **Supabase/Postgres** database. Beatriz writes
-   `leads`, `tattoos`, `calendar`, `events`, `pricing`, promotions and chat
-   ownership there; the Laravel CRM reads and mutates the same tables.
+   `leads`, `calendar`, `events`, `pricing`, promotions and chat ownership
+   there; the Laravel CRM reads and mutates the same tables. A `leads` row is
+   both the person and their tattoo project — there is no separate `tattoos`
+   table.
 
 The two `leads` tables are different schemas in different databases. A
 calculator lead is not automatically an SDR lead.
@@ -67,7 +69,7 @@ calculator lead is not automatically an SDR lead.
 Meta / Google Ads
 Instagram / WhatsApp ──► WAHA ──► n8n "Beatriz WhatsApp Agent"
                                       │
-                                      ├─► Postgres: leads, tattoos, calendar, events
+                                      ├─► Postgres: leads, calendar, events
                                       ├─► Telegram: handoff + deposit alerts
                                       └─► Notion sync outbox
                                       │
@@ -139,10 +141,10 @@ n8n "Artist Onboarding Form" ──► Postgres artists + pricing + WAHA session
 | `POST` | `/pricing/bulk` | artist/staff + artist context | Save a region's price matrix |
 | `POST` | `/pricing/add-location` | artist/staff + artist context | Add a custom sub-location |
 | `POST` | `/pricing/add-size` | artist/staff + artist context | Add a custom size |
-| `GET` | `/leads/{lead}` | artist/staff | Lead detail + notes + tattoos |
+| `GET` | `/leads/{lead}` | artist/staff | Lead + project detail, bookings, notes |
 | `POST` | `/leads/{lead}/notes` | artist/staff | Add an internal note |
-| `GET` | `/tattoos/{tattoo}` | artist/staff | Tattoo project detail |
-| `POST` | `/tattoos/{tattoo}/lost` | artist/staff | Mark a project lost |
+| `POST` | `/leads/{lead}/lost` | artist/staff | Mark a project lost |
+| `GET` | `/tattoos/{tattoo}` | artist/staff | 301 → `/leads/{tattoo}` (legacy link) |
 | `POST` | `/bookings/{slot}/unblock` | artist/staff | Remove a blocked period |
 | `POST` | `/bookings/{slot}/confirm-deposit` | artist/staff | Mark the sinal as received |
 | `POST` | `/bookings/{slot}/cancel` | artist/staff | Cancel booking and return to pipeline |
@@ -503,8 +505,7 @@ The Postgres schema is owned by `packages/crm/supabase/migrations` and
 | Table | Purpose |
 |---|---|
 | `artists` | Tenant config: timezone, working hours, deposit, PIX, floor, session slug |
-| `leads` | One person per artist (name, phone, source, pipeline status) |
-| `tattoos` | One project per lead (placement, style, price, deposit, pipeline) |
+| `leads` | One person **and** their project per artist (name, phone, source, placement, style, price, deposit, pipeline status) |
 | `calendar` | Booked and blocked slots |
 | `events` | Audit log of every transition |
 | `pricing` | Price matrix (placement × body zone × duration) |
@@ -587,7 +588,7 @@ Beatriz, so the CRM is the system of record for the artist.
 - Month revenue split into **Realizado** (fechado), **Agendado** (agendado) and
   **Esperado** (active, deposit not confirmed).
 - Week calendar (Mon–Sun) with booked and blocked slots; previous/next week.
-- Tattoo pipeline kanban by `pipeline_status`, with lead name, phone, placement,
+- Lead pipeline kanban by `pipeline_status`, with lead name, phone, placement,
   style, price, deposit and booked date.
 - Quick WhatsApp link and "Marcar perdido" action.
 
@@ -605,8 +606,8 @@ Beatriz, so the CRM is the system of record for the artist.
 **Analytics (`/analytics`)**
 
 - Period filter: last 30 days, this month, last 90 days, all.
-- Lead-level funnel: total leads, new clients, conversion rate, loss rate.
-- Tattoo-level money: average ticket and revenue.
+- Lead funnel: total leads, new clients, conversion rate, loss rate.
+- Money from won leads: average ticket and revenue.
 - Pipeline distribution.
 - Lead source distribution.
 - 12-month charts for conversions, conversion rate and revenue.
@@ -614,17 +615,14 @@ Beatriz, so the CRM is the system of record for the artist.
 **Lead detail (`/leads/{lead}`)**
 
 - Contact data, WhatsApp deep link, returning-client badge.
-- All tattoos for that lead.
-- Internal notes with author.
-- Add note.
-
-**Tattoo detail (`/tattoos/{tattoo}`)**
-
 - Project details: placement, body zone, style, first tattoo, meaning, type,
   reference photos.
 - Table price, negotiated price, discount, deposit amount/status.
-- Linked calendar slots and event history.
+- Promotion quotes, linked calendar slots and event history.
+- Internal notes with author; add note.
 - Mark lost.
+
+`/tattoos/{id}` permanently redirects (301) to `/leads/{id}` for old links.
 
 **Settings (`/config`)**
 
@@ -781,8 +779,7 @@ The CRM links to the external member area through `MEMBER_AREA_URL`
 | Table | Owner | Notes |
 |---|---|---|
 | `artists` | LP MySQL + SDR Postgres | Two different tables: LP stores landing-page content; Postgres stores tenant config |
-| `leads` | LP MySQL + SDR Postgres | Two different schemas |
-| `tattoos` | SDR Postgres | One project per lead |
+| `leads` | LP MySQL + SDR Postgres | Two different schemas; in Postgres one row is a person + their project |
 | `calendar` | SDR Postgres | `booked` and `blocked` slots |
 | `events` | SDR Postgres | Audit log |
 | `pricing` | SDR Postgres | Placement × body zone × duration |

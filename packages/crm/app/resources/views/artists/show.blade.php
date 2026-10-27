@@ -10,5 +10,5 @@
 @include('partials.bookings-list', ['bookings' => $bookings, 'readonly' => false])
 
 <h2 class="section-title">Pipeline</h2>
-@include('partials.tattoo-board', ['tattoos' => $tattoos, 'pipeline' => $pipeline, 'readonly' => false])
+@include('partials.lead-board', ['leads' => $leads, 'pipeline' => $pipeline, 'readonly' => false])
 @endsection
