@@ -14,6 +14,9 @@
 \echo '=== Applying CRUD functions ==='
 \i 20240602000000_crud_functions.sql
 
+\echo '=== Applying offers + chat control ==='
+\i 20261022000000_offers_and_chat_control.sql
+
 \echo '=== Applying seed data ==='
 \i ../seed.sql
 

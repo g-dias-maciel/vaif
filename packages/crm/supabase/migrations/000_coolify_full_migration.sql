@@ -450,6 +450,10 @@ BEGIN
 
   v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;
 
+  -- Serialize bookings per artist so two concurrent book_slot calls for the
+  -- same/overlapping window can't both pass the overlap check and double-book.
+  PERFORM pg_advisory_xact_lock(hashtext(v_lead.artist_id::text)::bigint);
+
   -- Reject (don't insert) when the chosen window overlaps an existing
   -- 'booked' or 'blocked' period for the same artist — no double-booking.
   IF EXISTS (
@@ -496,6 +500,10 @@ CREATE OR REPLACE FUNCTION block_slot(
 DECLARE
   v_block calendar;
 BEGIN
+  -- Serialize with book_slot on the same artist key so a block can't race a
+  -- concurrent booking into an overlapping window.
+  PERFORM pg_advisory_xact_lock(hashtext(p_artist_id::text)::bigint);
+
   INSERT INTO calendar (artist_id, start_at, end_at, type)
   VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')
   RETURNING * INTO v_block;
