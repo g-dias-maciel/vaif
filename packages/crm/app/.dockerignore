@@ -1,0 +1,29 @@
+# Build context is packages/crm/app. Keep secrets, dependencies and local
+# artifacts out of the image.
+.git
+.gitignore
+.dockerignore
+Dockerfile
+
+.env
+.env.*
+!.env.example
+
+vendor
+node_modules
+
+# Rebuilt by Composer / artisan inside the image
+bootstrap/cache/*.php
+
+# Runtime state (the image creates these at boot)
+storage/logs/*
+storage/framework/cache/data/*
+storage/framework/sessions/*
+storage/framework/views/*
+
+database/*.sqlite
+.phpunit.result.cache
+
+# Not needed at runtime (deploy/ must stay: the Dockerfile copies it in)
+tests
+docs

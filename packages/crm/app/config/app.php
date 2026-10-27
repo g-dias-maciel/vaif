@@ -61,6 +61,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Trusted Proxies
+    |--------------------------------------------------------------------------
+    |
+    | Coolify's Traefik proxy terminates TLS and forwards X-Forwarded-*.
+    | Defaults to trusting every proxy because the app is only reachable
+    | through it; narrow this to a comma-separated list if needed.
+    |
+    */
+
+    'trusted_proxies' => env('TRUSTED_PROXIES', '*'),
+
+    /*
+    |--------------------------------------------------------------------------
     | Application Timezone
     |--------------------------------------------------------------------------
     |

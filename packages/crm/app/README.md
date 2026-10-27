@@ -80,3 +80,12 @@ Password is `password` for both (local dev only).
 - Mark-lost / reschedule / note append to the `events` log (and `notes`), preserving
   the audit trail the rest of the system relies on.
 - Notion sync on these app-side edits is **out of MVP scope** (see the plan).
+
+## Deployment
+
+Production runs as a single Nginx + PHP-FPM container on Coolify. See
+[`DEPLOY-COOLIFY.md`](DEPLOY-COOLIFY.md) for the Coolify application settings,
+the full environment-variable list, Supabase connectivity caveats and a
+troubleshooting table.
+
+Quick health check once deployed: `GET /api/up` → `{"status":"ok"}`.

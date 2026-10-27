@@ -818,7 +818,7 @@ debounce/typing, humanized delay and notification text.
 |---|---|
 | LP | Dockerfile at `packages/lp/Dockerfile`; Coolify base `/packages/lp`; Nginx + PHP-FPM; port 80 |
 | sdr-admin | Dockerfile at `packages/sdr-admin/Dockerfile`; PHP-FPM on port 9000 behind Nginx |
-| CRM | Laravel app at `packages/crm/app`; run with PHP-FPM/Nginx or `php artisan serve`; needs shared Postgres |
+| CRM | Dockerfile at `packages/crm/app/Dockerfile`; Coolify base `/packages/crm/app`; Nginx + PHP-FPM; port 80; needs shared Postgres |
 | Flows | Import/deploy JSON to n8n with `packages/flows/scripts/deploy.py` |
 | Members | Static files; serve separately or upload to the member area |
 
@@ -858,6 +858,7 @@ debounce/typing, humanized delay and notification text.
 | LP deep dive | `packages/lp/CLAUDE.md` |
 | LP deployment | `packages/lp/DEPLOY-COOLIFY.md` |
 | CRM app notes | `packages/crm/app/README.md` |
+| CRM deployment | `packages/crm/app/DEPLOY-COOLIFY.md` |
 | Beatriz testbed | `packages/flows/beatriz-telegram/README.md` |
 | Beatriz prompt | `packages/flows/prompts/beatriz-system.md` |
 | Conversation tests | `packages/flows/tests/conversation/README.md` |
