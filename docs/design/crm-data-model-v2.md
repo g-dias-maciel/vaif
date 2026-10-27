@@ -1,10 +1,11 @@
 # CRM data model v2 — designed for 1,000+ Artists
 
-**Status:** proposed · **Date:** 2026-10-27 · **Owner:** CRM/SDR
+**Status:** accepted · **Date:** 2026-10-27 · **Owner:** CRM/SDR
+**Decisions resolved:** 2026-10-27 (see §13)
 **Scope:** the shared Postgres used by the Laravel CRM and the n8n/Beatriz agent.
 The LP MySQL database is out of scope.
 
-This document proposes a clean-slate schema for the CRM/SDR database. There are
+This document specifies a clean-slate schema for the CRM/SDR database. There are
 no live Artists today, so we can cut over without a data migration. The goal is a
 model that stays correct and fast at **1,000+ Artists**, which is the unit VAIF
 sells (see `CONTEXT.md`: *Artist* is the client, *Lead* is the tattoo customer).
@@ -22,18 +23,20 @@ That gives:
 | Projects (tattoo jobs) | ~2,200–4,400 | **2.2M–4.4M** |
 | Events (audit/timeline) | ~5–10 per Lead | **11M–44M** |
 | Bookings | ~300–800 | **0.3M–0.8M** |
-| Outbox rows (if Notion kept) | ~1–1.5 per Lead | **3M–6M** |
 
 Rough storage: 3–8 KB of heap+index per Lead across tables, ~0.3–0.8 KB per
 Event. **Year one lands around 15–40 GB**, growing 15–40 GB/year. That is a
 single well-indexed Postgres instance plus monthly partitions — not a sharding
 problem yet. The design should avoid choices that make it one later.
 
-Two assumptions to validate (see §13):
+Assumptions:
 
-- 1,000+ means **1,000+ Artists**, not 1,000 Leads.
+- 1,000+ means **1,000+ Artists**, not 1,000 Leads (confirmed 2026-10-27).
+- Notion is no longer a product surface, so the outbox volume in the original
+  estimate disappears (confirmed 2026-10-27; see §5.8).
 - Traffic is concentrated in Brazilian working hours (10:00–19:00 BRT), so the
-  write peak is roughly 10–20× the average, not 1,000×.
+  write peak is roughly 10–20× the average, not 1,000×. To validate with the
+  Phase 1 load test.
 
 ---
 
@@ -86,6 +89,8 @@ are the underlying causes.
    largest object and the slowest to vacuum.
 8. **`notion_sync_outbox` is a global queue with no archival.**
    Done rows accumulate forever; `idx_outbox_pending` only helps the hot path.
+   v2 removes Notion entirely (decision 2026-10-27), so this table and its
+   consumer are deleted rather than redesigned.
 9. **Chat buffer writes are row upserts in Postgres.**
    Every inbound WhatsApp message upserts `message_buffer`; at 1,000 Artists that
    is tens of millions of writes/year for ephemeral state that a TTL store should
@@ -97,7 +102,8 @@ are the underlying causes.
 11. **Config and secrets share a row.**
     `artists.notion_token` sits next to display name and working hours
     (`001_idempotent_schema.sql:49`). Rotating a token touches the tenant row;
-    a tenant dump leaks credentials.
+    a tenant dump leaks credentials. v2 drops the Notion token; the remaining
+    WAHA session mapping is infrastructure config, not a tenant secret.
 
 ### 2.3 Operational problems
 
@@ -120,7 +126,7 @@ are the underlying causes.
 | Tenant integrity | **Composite foreign keys** `(artist_id, parent_id) → parent(artist_id, id)` | A child row cannot point at another tenant's parent even if application code is wrong. |
 | Lead vs job | **Split `leads` (person) and `projects` (tattoo job)** | Returning customers and multi-tattoo deals are first-class. The board stays Lead-centric by showing each Lead's active Project. |
 | Calendar | **One `calendar_entries` table** (booking + block) with a GiST exclusion constraint | Overlap protection in the database, including blocks vs bookings. |
-| Events | **Monthly range partitions, `bigint` identity, append-only** | Retention = `DROP PARTITION`; inserts stay local. |
+| Events | **Monthly range partitions, `bigint` sequence, append-only** | Retention = `DROP PARTITION`; inserts stay local. |
 | PKs | **UUIDv7 for domain rows, `bigint` for append-only logs** | Time-ordered UUIDs avoid random-index bloat while keeping opaque URLs. |
 | Money | **integer cents, BRL, no floats** | Exact sums for revenue/deposits. |
 | Time | **`timestamptz` in UTC; Artist timezone only for availability** | No ambiguous local timestamps in storage. |
@@ -128,7 +134,10 @@ are the underlying causes.
 | Agent API | **RPCs take explicit `artist_id`**; no session GUC | PgBouncer transaction pooling makes `set_config(..., true)` session state unsafe. |
 | Migrations | **SQL-first, versioned, one baseline**; Laravel migrations only for app-owned tables | The schema must be reproducible without Laravel. |
 | DB access | **Least-privilege roles** (`crm_app`, `agent_rw`, `analytics_ro`, `migrator`) | RPC-only for the agent; no broad `public` write grants. |
-| RLS | **Defense-in-depth only, not the tenancy boundary** | See §7; revisit if Artists ever connect to Postgres directly. |
+| RLS | **Not used**; app-only access | Artists never connect to Postgres directly (decision 2026-10-27); composite FKs + roles are the boundary. Supersedes the RLS clause of ADR-0001. |
+| Notion | **Removed**; the CRM is the only surface | 1,000 per-Artist Notion tokens were an operational burden and the CRM replaces the workflow. |
+| Payments | **Manual confirmation only** for now | Deposit is requested and confirmed by the Artist; no provider integration yet. See the signal-confirmation platform idea. |
+| Analytics DB | **One primary now, read replica when needed** | Rollups first; revisit at ~50M events or when charts contend with writes. |
 
 The corresponding ADR is `docs/adr/0002-crm-schema-v2.md`.
 
@@ -139,7 +148,6 @@ The corresponding ADR is `docs/adr/0002-crm-schema-v2.md`.
 ```
 artists 1─1 artist_settings
     │
-    ├─1─N artist_integrations        (notion / waha / telegram credentials)
     ├─1─N price_book                (versioned price matrix)
     ├─1─N promotions ─1─N promotion_prices
     ├─1─N leads                     (person; unique per phone)
@@ -151,7 +159,6 @@ artists 1─1 artist_settings
     │      └─1─1 chat_sessions      (per artist+chat ownership/buffer)
     ├─1─N calendar_entries          (blocks have no project/lead)
     ├─1─N events                    (append-only timeline)
-    ├─1─N integration_outbox
     └─1─N returning_customers       (imported or confirmed)
 ```
 
@@ -179,25 +186,29 @@ Project), so the artist-facing UX does not change.
 
 ## 5. Schema
 
-The DDL below is the core. Extensions: `btree_gist` (for the calendar exclusion
-constraint); `gen_random_uuid()` is built into Postgres 13+. UUIDv7 values are
-generated by the application (`Symfony\Component\Uid\UuidV7`, already available
-through Laravel 10's `symfony/uid` dependency). Note: `generated always as
-identity` on a **partitioned** table requires PostgreSQL 17; on PG15/16 (the
-likely Supabase/Coolify versions) use a sequence default as shown for `events`.
+The DDL below is the core. Target is the **self-hosted Coolify Postgres**
+(decision 2026-10-27); confirm the running major version in Phase 0 before
+applying. Extensions: `btree_gist` (for the calendar exclusion constraint);
+`gen_random_uuid()` is built into Postgres 13+. UUIDv7 values are generated by
+the application (`Symfony\Component\Uid\UuidV7`, already available through
+Laravel 10's `symfony/uid` dependency). Note: `generated always as identity` on
+a **partitioned** table requires PostgreSQL 17; on PG15/16 use a sequence default
+as shown for `events`.
 
 ### 5.1 Tenants and configuration
 
 ```sql
 create table artists (
-  id          uuid primary key,                 -- UUIDv7 from the app
-  slug        text not null unique,             -- wa_session_slug / URLs
-  name        text not null,
-  status      text not null default 'stub'
-              check (status in ('stub','onboarding','live','suspended','offboarded')),
-  timezone    text not null default 'America/Sao_Paulo',
-  created_at  timestamptz not null default now(),
-  updated_at  timestamptz not null default now()
+  id              uuid primary key,             -- UUIDv7 from the app
+  name            text not null,
+  status          text not null default 'stub'
+                  check (status in ('stub','onboarding','live','suspended','offboarded')),
+  timezone        text not null default 'America/Sao_Paulo',
+  wa_session_slug text not null unique,          -- WAHA session; infra config
+  onboarding_token text unique,                  -- consumed when onboarding completes
+  onboarded_at    timestamptz,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
 );
 
 create table artist_settings (
@@ -212,27 +223,23 @@ create table artist_settings (
   pix_key         text,
   instagram_handle text,
   whatsapp_number text,
+  telegram_group_id text,                         -- agent notifications
   working_hours   jsonb not null default '{}'::jsonb,
   ai_active_hours jsonb not null default '{}'::jsonb,
   currency        text not null default 'BRL' check (char_length(currency) = 3),
+  created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),
   check (jsonb_typeof(working_hours) = 'object'),
   check (jsonb_typeof(ai_active_hours) = 'object')
 );
 
--- One row per external integration. Secrets are encrypted at the application
--- layer (Laravel encrypter) or with pgcrypto; never returned by the API.
-create table artist_integrations (
-  artist_id    uuid not null references artists(id) on delete cascade,
-  kind         text not null check (kind in ('notion','waha','telegram')),
-  credentials  jsonb not null default '{}'::jsonb,
-  external_id  text,
-  status       text not null default 'disconnected'
-               check (status in ('disconnected','connected','error')),
-  updated_at   timestamptz not null default now(),
-  primary key (artist_id, kind)
-);
 ```
+
+No `artist_integrations` table: Notion is removed and the only remaining
+external services are WAHA (session slug) and Telegram (group id), both
+infrastructure config rather than tenant secrets. If a future integration needs
+per-tenant credentials, add a dedicated table then — do not store tokens in
+`artists`.
 
 `users` stays Laravel-owned (`role`, `artist_id`). Add
 `foreign key (artist_id) references artists(id)` so a login cannot outlive its
@@ -454,8 +461,15 @@ create index payments_project_history
   on payments (artist_id, project_id, requested_at desc);
 ```
 
-If payments stay manual for now, the table still gives an audit trail; the
-Project's `deposit_status` becomes a derived value, not a source of truth.
+**Payments are manual in v2** (decision 2026-10-27): the agent/Artist records a
+requested deposit, and the Artist confirms receipt in the CRM. The table still
+gives a full audit trail, and the Project's deposit state is derived from the
+latest `payments` row rather than stored twice.
+
+Automatic Pix confirmation (send a link, validate payment, optionally charge a
+fee for the service) is deliberately out of scope for v2 and captured as a
+separate product idea in `docs/ideas/signal-confirmation-platform.md`. The
+`external_ref` and `method` columns are the seam for that integration.
 
 ### 5.5 Calendar: bookings and blocks in one table
 
@@ -463,7 +477,7 @@ A single table is what makes database-enforced overlap protection possible
 across bookings *and* blocks.
 
 ```sql
--- Run as a superuser/migrator role; on Supabase this is available by default.
+-- Run as the database owner/migrator role (self-hosted Coolify Postgres).
 create extension if not exists btree_gist;
 
 create table calendar_entries (
@@ -571,7 +585,10 @@ fixes:
 
 Promotion quotes now live in `quotes` (`kind='promotion'`,
 `promotion_id = ...`); `second_cap_cents` replaces `second_cap_price`. Drop the
-separate `promotion_quotes` table.
+separate `promotion_quotes` table. `promotions` must expose
+`unique (artist_id, id)` so `quotes` can use a composite FK
+`(artist_id, promotion_id) references promotions (artist_id, id)` — a quote may
+not reference another Artist's promotion.
 
 `returning_customers` stays as a cheap lookup/import registry, keyed by
 `(artist_id, phone_e164)`, and is also written when a Booking is completed:
@@ -592,36 +609,17 @@ create table returning_customers (
 For correctness, the source of truth is "has a completed booking with this
 Artist"; the table is a cache/import surface, not a second truth.
 
-### 5.8 Outbox
+### 5.8 No async integration queue in v2
 
-```sql
-create table integration_outbox (
-  id             bigint generated always as identity primary key,  -- not partitioned, PG10+
-  artist_id      uuid not null references artists(id) on delete cascade,
-  integration    text not null check (integration in ('notion','telegram','other')),
-  entity_type    text not null,
-  entity_id      uuid not null,
-  payload        jsonb not null,
-  dedupe_key     text,
-  unique (artist_id, dedupe_key),
-  status         text not null default 'pending'
-                 check (status in ('pending','processing','done','failed')),
-  attempts       integer not null default 0,
-  next_attempt_at timestamptz not null default now(),
-  last_error     text,
-  locked_by      text,
-  locked_at      timestamptz,
-  created_at     timestamptz not null default now(),
-  processed_at   timestamptz
-);
+Notion is removed (decision 2026-10-27), so `notion_sync_outbox`, the
+`notion_*` columns on `artists`, and the `notion-sync-consumer` workflow are
+deleted rather than migrated. Telegram notifications are fire-and-forget HTTP
+calls from n8n and need no durable queue. The CRM is the only surface where an
+Artist reads or edits Leads, Projects and Bookings.
 
-create index outbox_ready
-  on integration_outbox (next_attempt_at)
-  where status in ('pending','failed');
-```
-
-Purge `done` rows older than 30 days (or partition by month if outbox volume
-grows). `dedupe_key` makes retries idempotent.
+If a future integration genuinely needs at-least-once delivery, reintroduce a
+generic outbox then; the previously designed shape is kept in Appendix C so the
+pattern is not lost.
 
 ### 5.9 Analytics rollup (optional, add when needed)
 
@@ -645,6 +643,11 @@ Populated by a nightly job from `leads`, `quotes`, `calendar_entries` and
 `payments`. The CRM reads this for charts; live pipeline counts still come from
 indexed domain queries.
 
+The rollup runs on the primary at first. A streaming read replica (Coolify
+Postgres, manual setup) is the next step if chart queries start competing with
+the agent's writes; revisit at ~50M events or when p95 dashboard latency
+regresses.
+
 ---
 
 ## 6. Index plan
@@ -667,8 +670,6 @@ indexed domain queries.
 | `calendar_entries` | `(artist_id, lead_id) where active and lead_id not null` | bookings on a Lead |
 | `events` | `(artist_id, created_at desc)` per partition | dashboard/audit |
 | `events` | `(project_id, created_at desc)` where project_id not null | Lead timeline |
-| `integration_outbox` | `(next_attempt_at) where status in ('pending','failed')` | worker claim |
-| `integration_outbox` | `unique (artist_id, dedupe_key)` | idempotent enqueue per tenant |
 | `returning_customers` | `pk (artist_id, phone_e164)` | returning lookup |
 
 Guidelines:
@@ -676,15 +677,15 @@ Guidelines:
 - Every FK gets an index on the child side (Postgres does not create one). The
   composite FK to `leads (artist_id, id)` needs one column list per child table
   (`lead_id`), not one index per referenced column.
-- Partial indexes for hot subsets (open projects, pending outbox) keep the
-  indexes small.
+- Partial indexes for hot subsets (open projects, active calendar entries) keep
+  the indexes small.
 - Do not add GIN indexes on `payload`/`conditions` until a query needs them.
 - Re-check `pg_stat_user_indexes` after load tests; unused indexes are write
   cost at 1,000 tenants.
 
 ---
 
-## 7. Tenancy, roles, and RLS
+## 7. Tenancy and roles
 
 **Tenant boundary:** `artist_id` on every tenant-owned row plus composite FKs.
 This is enforced by the database even if the app has a bug:
@@ -706,13 +707,15 @@ foreign key (artist_id, lead_id) references leads (artist_id, id)
 Also `revoke create on schema public from public;` and pin `search_path` on every
 `SECURITY DEFINER` function (`set search_path = public, pg_temp`).
 
-**RLS:** keep the existing policies only if an Artist will ever query Postgres
-directly (e.g. a future Supabase client). Today only Laravel and n8n connect, so
-RLS is not the tenancy boundary and the `app.artist_id` session GUC is unsafe
-under transaction pooling. Recommended: remove RLS from the critical path, rely
-on roles + composite FKs, and re-introduce RLS with a per-transaction
-`set_config` if direct access becomes a requirement. This supersedes the RLS
-clause of ADR-0001; see ADR-0002.
+**RLS is not part of v2** (decision 2026-10-27: Artists only access data through
+the CRM, never through a direct database or Supabase client). Drop the existing
+policies and the `app.artist_id` session GUC. Tenant isolation is enforced by
+`artist_id` + composite FKs plus the role split above, which is stronger here
+and does not depend on session state that PgBouncer can scramble.
+
+This supersedes the RLS clause of ADR-0001. If direct Artist access ever becomes
+a requirement, reintroduce RLS with a per-transaction `set_config` and treat it
+as a new ADR, not a silent change.
 
 ---
 
@@ -732,14 +735,14 @@ to that Artist (the composite FKs make this cheap).
 | `write_quote(p_artist_id, p_project_id, ...)` | `write_quote` | inserts into `quotes`, moves stage |
 | `write_promotion_quote(p_artist_id, p_project_id, p_promotion_id, ...)` | `write_promotion_quote` | inserts `kind='promotion'` |
 | `request_deposit(p_artist_id, p_project_id, p_amount)` | `request_deposit` | inserts `payments` + stage |
-| `confirm_deposit(p_artist_id, p_project_id)` | `confirm_deposit` | confirms payment, adds returning customer |
+| `confirm_deposit(p_artist_id, p_project_id)` | `confirm_deposit` | manual confirmation by the Artist; adds returning customer |
 | `check_availability(p_artist_id, p_from, p_to, p_duration)` | same | reads `calendar_entries` |
 | `book_slot(p_artist_id, p_project_id, p_start, p_duration)` | `book_slot_checked` | inserts booking; exclusion constraint is the guard |
 | `reschedule_booking(p_artist_id, p_booking_id, p_start)` | app-local logic | one RPC used by app and agent |
 | `block_time` / `unblock_time` | same | `calendar_entries` kind='block' |
 | `take_chat_control` / `return_chat_control` | same | `chat_sessions.owner` |
 | `activate/pause/end_promotion` | same | unchanged semantics |
-| `enqueue_outbox` / `claim_outbox` / `complete_outbox` / `fail_outbox` | notion outbox | generic integration queue |
+| `anonymize_lead(p_artist_id, p_lead_id)` | none (new) | LGPD erasure: null PII, keep Project/Event history |
 
 Rules:
 
@@ -780,6 +783,9 @@ Because there are no live Artists, this is a cutover, not a data migration.
 Still do it in verifiable phases.
 
 **Phase 0 — make the current schema knowable (1 day).**
+- Record the deployed Postgres version (`select version()`), confirm
+  `btree_gist` can be installed, and decide the backup mechanism (WAL-G vs
+  nightly dump).
 - `pg_dump --schema-only` the deployed DB; commit it as
   `packages/crm/db/baseline/0001_production.sql`.
 - Add a CI job that applies the baseline + v2 migrations to a throwaway
@@ -802,22 +808,27 @@ Still do it in verifiable phases.
 **Phase 2 — port the write paths (2–3 days).**
 - Rewrite the ~20 n8n Postgres nodes to the new RPC names/tables; update
   `packages/flows/definitions/*.json` and the migration workflow.
+- Delete the Notion workflows (`notion-sync.json`, `notion-sync-consumer.json`)
+  and the `notion_*` columns/tables; no compatibility layer.
 - Port the Laravel models/controllers (Lead, Project, Quote, CalendarEntry,
   Payment) and the Blade views.
 - SQL contract tests for every RPC: happy path, cross-tenant denial, invalid
-  transition, double booking, quote expiry.
+  transition, double booking, quote expiry, manual deposit confirmation.
 
 **Phase 3 — cutover (1 day).**
-- Deploy schema, functions, n8n workflows and app together.
+- Deploy schema, functions, n8n workflows and app together; remove the Notion
+  workflows and their schedules in the same window.
 - Re-seed demo data.
 - Run the end-to-end checklist: login, board, lead detail, book, reschedule,
   cancel, deposit, promotion quote, analytics, onboarding.
 
 **Phase 4 — operations.**
 - Partition maintenance job (create next 2 months, detach > 24 months).
-- Outbox purge job.
+- Retention jobs: anonymize Leads older than 5 years; drop Event partitions
+  older than 24 months after exporting them to object storage.
 - Daily metrics rollup (when analytics needs it).
-- PITR backup + quarterly restore test.
+- PITR backup + quarterly restore test (WAL-G/pgBackRest sidecar on Coolify, or
+  scheduled `pg_dump` until PITR is in place).
 
 Rollback before cutover is trivial: the v1 tables are untouched until Phase 3.
 After cutover, keep a `pg_dump` of the pre-cutover database.
@@ -832,12 +843,12 @@ After cutover, keep a `pg_dump` of the pre-cutover database.
 | Connections | PgBouncer in transaction mode for n8n; Laravel uses a small pool (10–20). Keep `max_connections` ≤ 200 and pool in front. |
 | Autovacuum | Lower `autovacuum_vacuum_scale_factor` for `events` partitions (0.02) and `leads` (0.05); monitor `pg_stat_user_tables`. |
 | Partitioning | `events` monthly. If `leads` crosses ~50M rows, partition by `created_at` range; do not hash-partition by Artist yet. |
-| Analytics | Daily rollups; optional read replica if charts compete with writes. |
-| Backups | PITR (WAL-G/pgBackRest) + daily logical dump; test restore quarterly. |
-| Monitoring | `pg_stat_statements`, slow query log (>200 ms), outbox lag, partition count, disk. |
-| Secrets | Integration credentials encrypted in `artist_integrations`; never in `artists`. |
-| LGPD | Retention policy per table; `anonymized_at` on Leads; export/delete runbook; do not log phone numbers in app logs. |
-| Notion | 1,000 per-Artist Notion tokens is an operational burden. Decide whether Notion remains a product surface or the CRM replaces it. |
+| Analytics | Daily rollups on the primary; add a streaming read replica when charts compete with writes. |
+| Backups | Coolify does not provide managed PITR: run WAL-G/pgBackRest, or start with daily `pg_dump` + WAL archiving; test restore quarterly. |
+| Monitoring | `pg_stat_statements`, slow query log (>200 ms), partition count/age, replication lag, disk. |
+| Secrets | No tenant tokens in the database. WAHA session mapping is infra config; secrets stay in Coolify env vars. |
+| LGPD | 24 months hot Events, 5 years Lead records, then anonymize (`anonymized_at`, `anonymize_lead`); export/delete runbook; do not log phone numbers in app logs. |
+| Notion | Removed. The CRM is the only surface; no per-Artist tokens, no outbox. |
 
 A note on WAHA: 1,000 Artists also means 1,000 WhatsApp sessions. That is an
 infrastructure concern (one WAHA per N sessions, or the official Cloud API), not
@@ -862,31 +873,38 @@ a schema one, but it should be sized in the same plan.
   conditions only.
 - **A compatibility view named `tattoos`.** It hides the model and repeats the
   mistake that caused the outage.
+- **Keeping Notion sync.** It duplicated the CRM, required a per-Artist token,
+  and was the source of a large share of the write volume and failure modes.
+- **Automatic payment confirmation now.** It adds a provider, webhooks, a fee
+  model and reconciliation before there is a single live Artist. Manual
+  confirmation is correct for v2; the Pix idea is recorded separately.
 
 ---
 
-## 13. Decisions needed before implementation
+## 13. Resolved decisions (2026-10-27)
 
-1. **Accept the Lead/Project split?** It changes the app's models and the board
-   query, but it is the only way to model returning customers and multi-tattoo
-   deals correctly. Recommendation: yes.
-2. **Is Notion still a product surface at 1,000 Artists?** If not, drop
-   `artist_integrations.kind='notion'` and the outbox consumer, saving ~3–6M
-   rows/year.
-3. **Payments:** manual confirmation only, or a real provider (Pix/card)? The
-   `payments` table works for both; a provider adds `external_ref` and webhooks.
-4. **Retention:** how long do we keep Leads/Events? LGPD and the Artist contract
-   should set it (suggest 24 months hot events, 5 years Lead records, then
-   anonymize).
-5. **Direct DB access:** will Artists ever query Postgres/Supabase directly? If
-   yes, RLS moves back into scope.
-6. **Deployment target:** self-hosted Coolify Postgres or managed Supabase? This
-   determines PITR, extensions (`btree_gist`, `pg_partman`) and connection
-   pooling.
-7. **One Postgres or separate analytics DB?** At year one, one instance + read
-   replica is enough; revisit at ~50M events.
+| # | Decision | Answer | Consequence |
+|---|---|---|---|
+| 1 | Lead/Project split | **Accepted** | `leads` = person, `projects` = tattoo job; app models and board query change in Phase 2. |
+| 2 | Notion | **Removed**; CRM is the only surface | Delete `notion_sync_outbox`, `notion_*` columns, and both Notion workflows. No outbox in v2. |
+| 3 | Payments | **Manual confirmation only** | `payments` stays as an audit trail; Artist confirms deposits in the CRM. Pix automation is a separate idea. |
+| 4 | Retention | **24 months hot Events, 5 years Leads, then anonymize** | Partition drop + `anonymize_lead`; encode in the LGPD runbook. |
+| 5 | Direct DB access | **No**; CRM only | RLS is out of scope. Composite FKs + least-privilege roles are the boundary. ADR-0001's RLS clause is superseded. |
+| 6 | Deployment target | **Self-hosted Coolify Postgres** | `btree_gist` installable; PITR must be added (WAL-G/pgBackRest or dumps); no `pg_partman` dependency (helper function in Appendix B). |
+| 7 | Analytics DB | **One primary, read replica later** | Rollups on the primary; revisit at ~50M events or when chart latency regresses. |
 
----
+### Remaining unknowns (resolve in Phase 0/1)
+
+- **Postgres major version on Coolify** — decides identity-vs-sequence for new
+  partitioned tables and confirms `btree_gist` availability.
+- **Coolify backup story** — pick WAL-G vs nightly dump before cutover; "no
+  backup" is not acceptable once real Leads exist.
+- **WAHA session capacity** — 1,000 Artists means ~1,000 WhatsApp sessions; size
+  the WAHA fleet (or move to the official Cloud API) alongside the DB plan.
+- **LGPD retention enforcement** — the numbers above need to match the Artist
+  contract and the deletion runbook, not just the schema.
+- **Signal confirmation platform** — product idea captured in
+  `docs/ideas/signal-confirmation-platform.md`; not part of v2.
 
 ## Appendix A — `created_at` triggers
 
@@ -913,7 +931,7 @@ returns void as $$
 declare
   v_start timestamptz := date_trunc('month', p_month)::date::timestamp at time zone 'UTC';
   v_end   timestamptz := v_start + interval '1 month';
-  v_name  text := 'events_' || to_char(v_start, 'YYYY_MM');
+  v_name  text := 'events_' || to_char(v_start at time zone 'UTC', 'YYYY_MM');
 begin
   if to_regclass('public.' || v_name) is null then
     execute format(
@@ -927,3 +945,36 @@ $$ language plpgsql;
 
 Call it for the current and next two months from a scheduled task (n8n cron or
 Laravel scheduler).
+
+## Appendix C — future outbox (only if an async integration returns)
+
+Kept as a reference, not part of the v2 schema. Adding it back is a migration,
+not a redesign.
+
+```sql
+create table integration_outbox (
+  id              bigint generated always as identity primary key,
+  artist_id       uuid not null references artists(id) on delete cascade,
+  integration     text not null,                  -- e.g. 'billing', 'email'
+  entity_type     text not null,
+  entity_id       uuid not null,
+  payload         jsonb not null,
+  dedupe_key      text,
+  status          text not null default 'pending'
+                  check (status in ('pending','processing','done','failed')),
+  attempts        integer not null default 0,
+  next_attempt_at timestamptz not null default now(),
+  last_error      text,
+  locked_by       text,
+  locked_at       timestamptz,
+  created_at      timestamptz not null default now(),
+  processed_at    timestamptz,
+  unique (artist_id, dedupe_key)
+);
+
+create index outbox_ready
+  on integration_outbox (next_attempt_at)
+  where status in ('pending','failed');
+```
+
+Purge `done` rows after 30 days, or partition by month if volume grows.
