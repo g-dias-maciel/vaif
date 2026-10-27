@@ -1463,7 +1463,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION book_slot(\n  p_lead_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_duration_min INTEGER,\n  p_buffer_min INTEGER DEFAULT 30\n) RETURNS SETOF leads AS $$\nDECLARE\n  v_lead leads;\n  v_end_at TIMESTAMPTZ;\nBEGIN\n  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;\n  IF NOT FOUND THEN RETURN; END IF;\n  v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;\n\n  -- Reject (don't insert) when the chosen window overlaps an existing\n  -- 'booked' or 'blocked' period for the same artist — no double-booking.\n  IF EXISTS (\n    SELECT 1 FROM calendar c\n    WHERE c.artist_id = v_lead.artist_id\n      AND c.type IN ('booked', 'blocked')\n      AND c.start_at < v_end_at\n      AND c.end_at > p_start_at\n  ) THEN\n    RETURN;\n  END IF;\n\n  INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)\n  VALUES (v_lead.artist_id, p_start_at, v_end_at, 'booked', p_lead_id);\n  UPDATE leads SET\n    booked_date = p_start_at,\n    session_duration_min = p_duration_min,\n    buffer_min = p_buffer_min,\n    pipeline_status = 'agendado',\n    updated_at = now()\n  WHERE id = p_lead_id\n  RETURNING * INTO v_lead;\n  IF FOUND THEN\n    INSERT INTO events (lead_id, artist_id, event_type, payload)\n    VALUES (p_lead_id, v_lead.artist_id, 'slot_booked',\n            jsonb_build_object('start_at', p_start_at, 'end_at', v_end_at, 'duration_min', p_duration_min, 'buffer_min', p_buffer_min));\n    RETURN NEXT v_lead;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql;"
+        "query": "CREATE OR REPLACE FUNCTION book_slot(\n  p_lead_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_duration_min INTEGER,\n  p_buffer_min INTEGER DEFAULT 30\n) RETURNS SETOF leads AS $$\nDECLARE\n  v_lead leads;\n  v_end_at TIMESTAMPTZ;\nBEGIN\n  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;\n  IF NOT FOUND THEN RETURN; END IF;\n  v_end_at := p_start_at + (p_duration_min || ' minutes')::INTERVAL;\n\n  -- Serialize bookings per artist so two concurrent book_slot calls for the\n  -- same/overlapping window can't both pass the overlap check and double-book.\n  PERFORM pg_advisory_xact_lock(hashtext(v_lead.artist_id::text)::bigint);\n\n  -- Reject (don't insert) when the chosen window overlaps an existing\n  -- 'booked' or 'blocked' period for the same artist — no double-booking.\n  IF EXISTS (\n    SELECT 1 FROM calendar c\n    WHERE c.artist_id = v_lead.artist_id\n      AND c.type IN ('booked', 'blocked')\n      AND c.start_at < v_end_at\n      AND c.end_at > p_start_at\n  ) THEN\n    RETURN;\n  END IF;\n\n  INSERT INTO calendar (artist_id, start_at, end_at, type, lead_id)\n  VALUES (v_lead.artist_id, p_start_at, v_end_at, 'booked', p_lead_id);\n  UPDATE leads SET\n    booked_date = p_start_at,\n    session_duration_min = p_duration_min,\n    buffer_min = p_buffer_min,\n    pipeline_status = 'agendado',\n    updated_at = now()\n  WHERE id = p_lead_id\n  RETURNING * INTO v_lead;\n  IF FOUND THEN\n    INSERT INTO events (lead_id, artist_id, event_type, payload)\n    VALUES (p_lead_id, v_lead.artist_id, 'slot_booked',\n            jsonb_build_object('start_at', p_start_at, 'end_at', v_end_at, 'duration_min', p_duration_min, 'buffer_min', p_buffer_min));\n    RETURN NEXT v_lead;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -1501,7 +1501,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION block_slot(\n  p_artist_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_end_at TIMESTAMPTZ\n) RETURNS SETOF calendar AS $$\nDECLARE\n  v_block calendar;\nBEGIN\n  INSERT INTO calendar (artist_id, start_at, end_at, type)\n  VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')\n  RETURNING * INTO v_block;\n  RETURN NEXT v_block;\nEND;\n$$ LANGUAGE plpgsql;"
+        "query": "CREATE OR REPLACE FUNCTION block_slot(\n  p_artist_id UUID,\n  p_start_at TIMESTAMPTZ,\n  p_end_at TIMESTAMPTZ\n) RETURNS SETOF calendar AS $$\nDECLARE\n  v_block calendar;\nBEGIN\n  -- Serialize with book_slot on the same artist key so a block can't race a\n  -- concurrent booking into an overlapping window.\n  PERFORM pg_advisory_xact_lock(hashtext(p_artist_id::text)::bigint);\n\n  INSERT INTO calendar (artist_id, start_at, end_at, type)\n  VALUES (p_artist_id, p_start_at, p_end_at, 'blocked')\n  RETURNING * INTO v_block;\n  RETURN NEXT v_block;\nEND;\n$$ LANGUAGE plpgsql;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -1653,7 +1653,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "CREATE OR REPLACE FUNCTION reset_leads(p_artist_slug TEXT DEFAULT NULL)\nRETURNS JSONB AS $$\nDECLARE\n  v_artist_id  UUID;\n  v_events     INTEGER := 0;\n  v_outbox     INTEGER := 0;\n  v_calendar   INTEGER := 0;\n  v_memory     INTEGER := 0;\n  v_leads      INTEGER := 0;\n  v_buffer     INTEGER := 0;\n  v_has_memory BOOLEAN := to_regclass('public.chat_memory') IS NOT NULL;\nBEGIN\n  IF p_artist_slug IS NULL THEN\n    DELETE FROM events;\n    GET DIAGNOSTICS v_events = ROW_COUNT;\n\n    DELETE FROM notion_sync_outbox;\n    GET DIAGNOSTICS v_outbox = ROW_COUNT;\n\n    DELETE FROM calendar WHERE lead_id IS NOT NULL;\n    GET DIAGNOSTICS v_calendar = ROW_COUNT;\n\n    IF v_has_memory THEN\n      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads)';\n      GET DIAGNOSTICS v_memory = ROW_COUNT;\n    END IF;\n\n    DELETE FROM leads;\n    GET DIAGNOSTICS v_leads = ROW_COUNT;\n\n    DELETE FROM message_buffer;\n    GET DIAGNOSTICS v_buffer = ROW_COUNT;\n  ELSE\n    SELECT id INTO v_artist_id FROM artists WHERE wa_session_slug = p_artist_slug;\n    IF v_artist_id IS NULL THEN\n      RAISE EXCEPTION 'reset_leads: no artist with wa_session_slug=%', p_artist_slug;\n    END IF;\n\n    DELETE FROM events WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_events = ROW_COUNT;\n\n    DELETE FROM notion_sync_outbox WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_outbox = ROW_COUNT;\n\n    DELETE FROM calendar WHERE artist_id = v_artist_id AND lead_id IS NOT NULL;\n    GET DIAGNOSTICS v_calendar = ROW_COUNT;\n\n    IF v_has_memory THEN\n      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads WHERE artist_id = $1)' USING v_artist_id;\n      GET DIAGNOSTICS v_memory = ROW_COUNT;\n    END IF;\n\n    DELETE FROM leads WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_leads = ROW_COUNT;\n\n    DELETE FROM message_buffer WHERE chat_id LIKE p_artist_slug || ':%';\n    GET DIAGNOSTICS v_buffer = ROW_COUNT;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'artist_slug', p_artist_slug,\n    'leads', v_leads,\n    'events', v_events,\n    'calendar', v_calendar,\n    'notion_outbox', v_outbox,\n    'chat_memory', v_memory,\n    'message_buffer', v_buffer\n  );\nEND;\n$$ LANGUAGE plpgsql;"
+        "query": "CREATE OR REPLACE FUNCTION reset_leads(p_artist_slug TEXT DEFAULT NULL)\nRETURNS JSONB AS $$\nDECLARE\n  v_artist_id  UUID;\n  v_events     INTEGER := 0;\n  v_outbox     INTEGER := 0;\n  v_calendar   INTEGER := 0;\n  v_memory     INTEGER := 0;\n  v_leads      INTEGER := 0;\n  v_buffer     INTEGER := 0;\n  v_has_memory BOOLEAN := to_regclass('public.chat_memory') IS NOT NULL;\nBEGIN\n  IF p_artist_slug IS NULL THEN\n    DELETE FROM events;\n    GET DIAGNOSTICS v_events = ROW_COUNT;\n\n    DELETE FROM notion_sync_outbox;\n    GET DIAGNOSTICS v_outbox = ROW_COUNT;\n\n    DELETE FROM calendar WHERE lead_id IS NOT NULL;\n    GET DIAGNOSTICS v_calendar = ROW_COUNT;\n\n    IF v_has_memory THEN\n      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads)';\n      GET DIAGNOSTICS v_memory = ROW_COUNT;\n    END IF;\n\n    DELETE FROM leads;\n    GET DIAGNOSTICS v_leads = ROW_COUNT;\n\n    DELETE FROM message_buffer;\n    GET DIAGNOSTICS v_buffer = ROW_COUNT;\n\n    DELETE FROM chat_control;\n  ELSE\n    SELECT id INTO v_artist_id FROM artists WHERE wa_session_slug = p_artist_slug;\n    IF v_artist_id IS NULL THEN\n      RAISE EXCEPTION 'reset_leads: no artist with wa_session_slug=%', p_artist_slug;\n    END IF;\n\n    DELETE FROM events WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_events = ROW_COUNT;\n\n    DELETE FROM notion_sync_outbox WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_outbox = ROW_COUNT;\n\n    DELETE FROM calendar WHERE artist_id = v_artist_id AND lead_id IS NOT NULL;\n    GET DIAGNOSTICS v_calendar = ROW_COUNT;\n\n    IF v_has_memory THEN\n      EXECUTE 'DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads WHERE artist_id = $1)' USING v_artist_id;\n      GET DIAGNOSTICS v_memory = ROW_COUNT;\n    END IF;\n\n    DELETE FROM leads WHERE artist_id = v_artist_id;\n    GET DIAGNOSTICS v_leads = ROW_COUNT;\n\n    DELETE FROM message_buffer WHERE chat_id LIKE p_artist_slug || ':%';\n    GET DIAGNOSTICS v_buffer = ROW_COUNT;\n\n    DELETE FROM chat_control WHERE artist_id = v_artist_id;\n  END IF;\n\n  RETURN jsonb_build_object(\n    'artist_slug', p_artist_slug,\n    'leads', v_leads,\n    'events', v_events,\n    'calendar', v_calendar,\n    'notion_outbox', v_outbox,\n    'chat_memory', v_memory,\n    'message_buffer', v_buffer\n  );\nEND;\n$$ LANGUAGE plpgsql;"
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
@@ -1662,6 +1662,424 @@
         1700
       ],
       "name": "Mig_86_FN_reset_leads",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS promotion_types (\n  key         TEXT PRIMARY KEY,\n  name        TEXT NOT NULL,\n  description TEXT,\n  config_spec JSONB NOT NULL DEFAULT '{}'::jsonb,\n  active      BOOLEAN NOT NULL DEFAULT true,\n  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        1700
+      ],
+      "name": "Mig_87_TBL_promotion_types",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO promotion_types (key, name, description, config_spec)\nVALUES (\n  'bogo_same_value',\n  'Leve 2 pelo valor de {multiplier}x',\n  'Compre 1 tatuagem e leve outra de mesmo valor ou menor. Segunda tatuagem pode ser de outra pessoa e em outro local do corpo; o artista agenda a segunda depois. Excecoes vao para o artista.',\n  '{\"multiplier\": 2.0, \"quote_valid_days\": 7, \"second_recipient_allowed\": true, \"second_placement_free\": true}'::jsonb\n)\nON CONFLICT (key) DO NOTHING;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        1700
+      ],
+      "name": "Mig_88_SEED_promotion_types",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS promotions (\n  id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  artist_id         UUID NOT NULL REFERENCES artists(id),\n  type_key          TEXT NOT NULL REFERENCES promotion_types(key),\n  name              TEXT NOT NULL,\n  multiplier        NUMERIC(4,2) NOT NULL DEFAULT 2.0,\n  audience          TEXT NOT NULL DEFAULT 'all'\n    CHECK (audience IN ('all','new','returning')),\n  conditions        JSONB NOT NULL DEFAULT '{}'::jsonb,\n  quote_valid_days  INTEGER NOT NULL DEFAULT 7,\n  status            TEXT NOT NULL DEFAULT 'draft'\n    CHECK (status IN ('draft','active','paused','ended')),\n  activated_at      TIMESTAMPTZ,\n  paused_at         TIMESTAMPTZ,\n  ended_at          TIMESTAMPTZ,\n  created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),\n  updated_at        TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        1700
+      ],
+      "name": "Mig_89_TBL_promotions",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE UNIQUE INDEX IF NOT EXISTS one_active_promotion_per_artist\n  ON promotions (artist_id) WHERE status = 'active';"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        1800
+      ],
+      "name": "Mig_90_CREATE",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE INDEX IF NOT EXISTS idx_promotions_artist ON promotions (artist_id, status);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        1800
+      ],
+      "name": "Mig_91_IDX_idx_promotions_artist",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS promotion_prices (\n  promotion_id  UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,\n  placement     TEXT NOT NULL,\n  body_zone     TEXT NOT NULL,\n  base_price    INTEGER NOT NULL,\n  offer_price   INTEGER NOT NULL,\n  PRIMARY KEY (promotion_id, placement, body_zone)\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        1800
+      ],
+      "name": "Mig_92_TBL_promotion_prices",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS promotion_quotes (\n  id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n  promotion_id     UUID NOT NULL REFERENCES promotions(id) ON DELETE CASCADE,\n  lead_id          UUID NOT NULL REFERENCES leads(id) ON DELETE CASCADE,\n  artist_id        UUID NOT NULL REFERENCES artists(id),\n  placement        TEXT NOT NULL,\n  body_zone        TEXT NOT NULL,\n  first_price      INTEGER NOT NULL,\n  second_cap_price INTEGER NOT NULL,\n  quoted_at        TIMESTAMPTZ NOT NULL DEFAULT now(),\n  valid_until      TIMESTAMPTZ NOT NULL,\n  status           TEXT NOT NULL DEFAULT 'open'\n    CHECK (status IN ('open','secured','lapsed','void')),\n  secured_at       TIMESTAMPTZ,\n  created_at       TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        1800
+      ],
+      "name": "Mig_93_TBL_promotion_quotes",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE INDEX IF NOT EXISTS idx_promo_quotes_lead ON promotion_quotes (lead_id, status);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        1800
+      ],
+      "name": "Mig_94_IDX_idx_promo_quotes_lead",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE INDEX IF NOT EXISTS idx_promo_quotes_promo ON promotion_quotes (promotion_id, status);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        1900
+      ],
+      "name": "Mig_95_IDX_idx_promo_quotes_prom",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS returning_customers (\n  artist_id    UUID NOT NULL REFERENCES artists(id),\n  telefone     TEXT NOT NULL,\n  nome         TEXT,\n  source       TEXT NOT NULL DEFAULT 'imported'\n    CHECK (source IN ('imported','deposit_confirmed')),\n  confirmed_at TIMESTAMPTZ,\n  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),\n  PRIMARY KEY (artist_id, telefone)\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        1900
+      ],
+      "name": "Mig_96_TBL_returning_customers",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE TABLE IF NOT EXISTS chat_control (\n  chat_id    TEXT PRIMARY KEY,\n  artist_id  UUID NOT NULL REFERENCES artists(id),\n  owner      TEXT NOT NULL DEFAULT 'beatriz'\n    CHECK (owner IN ('beatriz','artist')),\n  taken_at   TIMESTAMPTZ,\n  returned_at TIMESTAMPTZ,\n  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()\n);"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        1900
+      ],
+      "name": "Mig_97_TBL_chat_control",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION activate_promotion(\n  p_promotion_id UUID\n) RETURNS SETOF promotions AS $$\nDECLARE\n  v_promo promotions;\nBEGIN\n  SELECT * INTO v_promo FROM promotions WHERE id = p_promotion_id;\n  IF NOT FOUND THEN RETURN; END IF;\n  IF v_promo.status NOT IN ('draft','paused') THEN RETURN; END IF;\n\n  DELETE FROM promotion_prices WHERE promotion_id = p_promotion_id;\n  INSERT INTO promotion_prices (promotion_id, placement, body_zone, base_price, offer_price)\n  SELECT p_promotion_id, p.placement, p.body_zone, p.table_price,\n         CEIL(p.table_price * v_promo.multiplier)::integer\n  FROM pricing p\n  WHERE p.artist_id = v_promo.artist_id AND p.active = true;\n\n  UPDATE promotions SET\n    status = 'active', activated_at = now(), paused_at = NULL, updated_at = now()\n  WHERE id = p_promotion_id\n  RETURNING * INTO v_promo;\n\n  RETURN NEXT v_promo;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        1900
+      ],
+      "name": "Mig_98_FN_activate_promotion",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION pause_promotion(\n  p_promotion_id UUID\n) RETURNS SETOF promotions AS $$\nDECLARE\n  v_promo promotions;\nBEGIN\n  UPDATE promotions SET\n    status = 'paused', paused_at = now(), updated_at = now()\n  WHERE id = p_promotion_id AND status = 'active'\n  RETURNING * INTO v_promo;\n  IF v_promo.id IS NOT NULL THEN RETURN NEXT v_promo; END IF;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        1900
+      ],
+      "name": "Mig_99_FN_pause_promotion",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION end_promotion(\n  p_promotion_id UUID\n) RETURNS SETOF promotions AS $$\nDECLARE\n  v_promo promotions;\nBEGIN\n  UPDATE promotions SET\n    status = 'ended', ended_at = now(), updated_at = now()\n  WHERE id = p_promotion_id AND status IN ('active','paused')\n  RETURNING * INTO v_promo;\n  IF v_promo.id IS NOT NULL THEN\n    UPDATE promotion_quotes SET status = 'void'\n    WHERE promotion_id = p_promotion_id AND status = 'open';\n    RETURN NEXT v_promo;\n  END IF;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        2000
+      ],
+      "name": "Mig_100_FN_end_promotion",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION is_returning_customer(\n  p_artist_id UUID,\n  p_telefone TEXT\n) RETURNS BOOLEAN AS $$\nBEGIN\n  IF p_telefone IS NULL THEN RETURN false; END IF;\n  RETURN EXISTS (\n    SELECT 1 FROM returning_customers\n    WHERE artist_id = p_artist_id AND telefone = p_telefone\n  ) OR EXISTS (\n    SELECT 1 FROM leads\n    WHERE artist_id = p_artist_id\n      AND telefone = p_telefone\n      AND deposit_status = 'confirmado'\n  );\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        2000
+      ],
+      "name": "Mig_101_FN_is_returning_customer",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION active_offer_for_lead(\n  p_artist_id UUID,\n  p_lead_id UUID\n) RETURNS TABLE(\n  promotion_id UUID,\n  name TEXT,\n  description TEXT,\n  multiplier NUMERIC,\n  quote_valid_days INTEGER,\n  conditions JSONB,\n  promo_active BOOLEAN,\n  open_quote_id UUID,\n  open_quote_valid_until TIMESTAMPTZ,\n  open_quote_placement TEXT,\n  open_quote_body_zone TEXT,\n  open_quote_first_price INTEGER,\n  open_quote_second_cap INTEGER,\n  open_quote_valid BOOLEAN\n) AS $$\nDECLARE\n  v_segment TEXT;\nBEGIN\n  v_segment := CASE WHEN is_returning_customer(p_artist_id, (SELECT telefone FROM leads WHERE id = p_lead_id))\n                    THEN 'returning' ELSE 'new' END;\n\n  RETURN QUERY\n  SELECT\n    p.id, p.name,\n    (SELECT t.description FROM promotion_types t WHERE t.key = p.type_key),\n    p.multiplier, p.quote_valid_days, p.conditions,\n    p.id IS NOT NULL,\n    q.id, q.valid_until, q.placement, q.body_zone, q.first_price, q.second_cap_price,\n    q.id IS NOT NULL\n  FROM\n    (SELECT * FROM promotions\n     WHERE artist_id = p_artist_id\n       AND status = 'active'\n       AND (audience = 'all' OR audience = v_segment)\n     LIMIT 1) p\n  FULL OUTER JOIN\n    (SELECT * FROM promotion_quotes\n     WHERE lead_id = p_lead_id\n       AND status = 'open'\n       AND valid_until > now()\n     ORDER BY quoted_at DESC\n     LIMIT 1) q\n    ON true\n  UNION ALL\n  SELECT\n    NULL::uuid, NULL::text, NULL::text, NULL::numeric, NULL::integer, NULL::jsonb,\n    false, NULL::uuid, NULL::timestamptz, NULL::text, NULL::text,\n    NULL::integer, NULL::integer, false\n  WHERE NOT EXISTS (\n    SELECT 1 FROM promotions\n    WHERE artist_id = p_artist_id AND status = 'active'\n      AND (audience = 'all' OR audience = v_segment)\n  )\n  AND NOT EXISTS (\n    SELECT 1 FROM promotion_quotes\n    WHERE lead_id = p_lead_id AND status = 'open' AND valid_until > now()\n  )\n  LIMIT 1;\nEND;\n$$ LANGUAGE plpgsql STABLE SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        2000
+      ],
+      "name": "Mig_102_FN_active_offer_for_lead",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION write_promotion_quote(\n  p_lead_id UUID,\n  p_promotion_id UUID,\n  p_placement TEXT,\n  p_body_zone TEXT\n) RETURNS SETOF promotion_quotes AS $$\nDECLARE\n  v_promo promotions;\n  v_price promotion_prices;\n  v_quote promotion_quotes;\nBEGIN\n  SELECT * INTO v_promo FROM promotions WHERE id = p_promotion_id;\n  IF NOT FOUND THEN RETURN; END IF;\n\n  SELECT * INTO v_quote FROM promotion_quotes\n  WHERE lead_id = p_lead_id\n    AND promotion_id = p_promotion_id\n    AND status IN ('open', 'secured')\n  ORDER BY quoted_at DESC\n  LIMIT 1;\n  IF FOUND THEN\n    RETURN NEXT v_quote;\n    RETURN;\n  END IF;\n\n  SELECT * INTO v_price FROM promotion_prices\n  WHERE promotion_id = p_promotion_id\n    AND placement = p_placement AND body_zone = p_body_zone;\n  IF NOT FOUND THEN RETURN; END IF;\n\n  INSERT INTO promotion_quotes (\n    promotion_id, lead_id, artist_id, placement, body_zone,\n    first_price, second_cap_price, valid_until\n  ) VALUES (\n    p_promotion_id, p_lead_id, v_promo.artist_id, p_placement, p_body_zone,\n    v_price.offer_price, v_price.base_price,\n    now() + make_interval(days => GREATEST(v_promo.quote_valid_days, 1))\n  ) RETURNING * INTO v_quote;\n\n  INSERT INTO events (lead_id, artist_id, event_type, payload)\n  VALUES (p_lead_id, v_promo.artist_id, 'promotion_quote_sent',\n          jsonb_build_object(\n            'promotion_id', p_promotion_id,\n            'promotion', v_promo.name,\n            'placement', p_placement,\n            'body_zone', p_body_zone,\n            'first_price', v_price.offer_price,\n            'second_cap_price', v_price.base_price,\n            'valid_until', v_quote.valid_until\n          ));\n\n  RETURN NEXT v_quote;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        2000
+      ],
+      "name": "Mig_103_FN_write_promotion_quote",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION import_returning_customer(\n  p_artist_id UUID,\n  p_telefone TEXT,\n  p_nome TEXT DEFAULT NULL,\n  p_confirmed_at TIMESTAMPTZ DEFAULT NULL\n) RETURNS SETOF returning_customers AS $$\nDECLARE\n  v_row returning_customers;\nBEGIN\n  INSERT INTO returning_customers (artist_id, telefone, nome, source, confirmed_at)\n  VALUES (p_artist_id, p_telefone, p_nome, 'imported', COALESCE(p_confirmed_at, now()))\n  ON CONFLICT (artist_id, telefone) DO UPDATE SET\n    nome = COALESCE(EXCLUDED.nome, returning_customers.nome),\n    confirmed_at = COALESCE(EXCLUDED.confirmed_at, returning_customers.confirmed_at)\n  RETURNING * INTO v_row;\n  RETURN NEXT v_row;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        2000
+      ],
+      "name": "Mig_104_FN_import_returning_cust",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION take_chat_control(\n  p_chat_id TEXT,\n  p_artist_id UUID\n) RETURNS SETOF chat_control AS $$\nDECLARE\n  v_row chat_control;\nBEGIN\n  INSERT INTO chat_control (chat_id, artist_id, owner, taken_at, returned_at)\n  VALUES (p_chat_id, p_artist_id, 'artist', now(), NULL)\n  ON CONFLICT (chat_id) DO UPDATE SET\n    owner = 'artist', taken_at = now(), returned_at = NULL, updated_at = now()\n  RETURNING * INTO v_row;\n\n  UPDATE leads SET updated_at = now()\n  WHERE artist_id = p_artist_id\n    AND telefone = split_part(p_chat_id, ':', 2);\n\n  RETURN NEXT v_row;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        2100
+      ],
+      "name": "Mig_105_FN_take_chat_control",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION return_chat_control(\n  p_chat_id TEXT,\n  p_artist_id UUID\n) RETURNS SETOF chat_control AS $$\nDECLARE\n  v_row chat_control;\nBEGIN\n  UPDATE chat_control SET\n    owner = 'beatriz', returned_at = now(), updated_at = now()\n  WHERE chat_id = p_chat_id AND artist_id = p_artist_id\n  RETURNING * INTO v_row;\n  IF v_row.chat_id IS NOT NULL THEN RETURN NEXT v_row; END IF;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        520,
+        2100
+      ],
+      "name": "Mig_106_FN_return_chat_control",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION chat_owner(\n  p_chat_id TEXT\n) RETURNS TEXT AS $$\n  SELECT COALESCE((SELECT owner FROM chat_control WHERE chat_id = p_chat_id), 'beatriz');\n$$ LANGUAGE sql STABLE SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        780,
+        2100
+      ],
+      "name": "Mig_107_FN_chat_owner",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "CREATE OR REPLACE FUNCTION confirm_deposit(\n  p_lead_id UUID\n) RETURNS SETOF leads AS $$\nDECLARE\n  v_lead leads;\n  v_artist_id UUID;\nBEGIN\n  SELECT artist_id INTO v_artist_id FROM leads WHERE id = p_lead_id;\n\n  UPDATE leads SET\n    deposit_status = 'confirmado',\n    updated_at = now()\n  WHERE id = p_lead_id;\n\n  INSERT INTO events (lead_id, artist_id, event_type, payload)\n  VALUES (p_lead_id, v_artist_id, 'deposit_confirmed', '{}'::jsonb);\n\n  INSERT INTO returning_customers (artist_id, telefone, nome, source, confirmed_at)\n  SELECT v_artist_id, l.telefone, l.nome, 'deposit_confirmed', now()\n  FROM leads l WHERE l.id = p_lead_id AND l.telefone IS NOT NULL\n  ON CONFLICT (artist_id, telefone) DO UPDATE SET\n    confirmed_at = EXCLUDED.confirmed_at,\n    source = CASE\n      WHEN returning_customers.source = 'imported' THEN returning_customers.source\n      ELSE 'deposit_confirmed'\n    END;\n\n  UPDATE promotion_quotes SET status = 'secured', secured_at = now()\n  WHERE lead_id = p_lead_id AND status = 'open';\n\n  SELECT * INTO v_lead FROM leads WHERE id = p_lead_id;\n  RETURN NEXT v_lead;\nEND;\n$$ LANGUAGE plpgsql SECURITY DEFINER;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        2100
+      ],
+      "name": "Mig_108_FN_confirm_deposit",
       "credentials": {
         "postgres": {
           "id": "nngaQDfXHYQ1Q43P",
@@ -2622,6 +3040,248 @@
         [
           {
             "node": "Mig_86_FN_reset_leads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_86_FN_reset_leads": {
+      "main": [
+        [
+          {
+            "node": "Mig_87_TBL_promotion_types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_87_TBL_promotion_types": {
+      "main": [
+        [
+          {
+            "node": "Mig_88_SEED_promotion_types",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_88_SEED_promotion_types": {
+      "main": [
+        [
+          {
+            "node": "Mig_89_TBL_promotions",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_89_TBL_promotions": {
+      "main": [
+        [
+          {
+            "node": "Mig_90_CREATE",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_90_CREATE": {
+      "main": [
+        [
+          {
+            "node": "Mig_91_IDX_idx_promotions_artist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_91_IDX_idx_promotions_artist": {
+      "main": [
+        [
+          {
+            "node": "Mig_92_TBL_promotion_prices",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_92_TBL_promotion_prices": {
+      "main": [
+        [
+          {
+            "node": "Mig_93_TBL_promotion_quotes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_93_TBL_promotion_quotes": {
+      "main": [
+        [
+          {
+            "node": "Mig_94_IDX_idx_promo_quotes_lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_94_IDX_idx_promo_quotes_lead": {
+      "main": [
+        [
+          {
+            "node": "Mig_95_IDX_idx_promo_quotes_prom",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_95_IDX_idx_promo_quotes_prom": {
+      "main": [
+        [
+          {
+            "node": "Mig_96_TBL_returning_customers",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_96_TBL_returning_customers": {
+      "main": [
+        [
+          {
+            "node": "Mig_97_TBL_chat_control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_97_TBL_chat_control": {
+      "main": [
+        [
+          {
+            "node": "Mig_98_FN_activate_promotion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_98_FN_activate_promotion": {
+      "main": [
+        [
+          {
+            "node": "Mig_99_FN_pause_promotion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_99_FN_pause_promotion": {
+      "main": [
+        [
+          {
+            "node": "Mig_100_FN_end_promotion",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_100_FN_end_promotion": {
+      "main": [
+        [
+          {
+            "node": "Mig_101_FN_is_returning_customer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_101_FN_is_returning_customer": {
+      "main": [
+        [
+          {
+            "node": "Mig_102_FN_active_offer_for_lead",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_102_FN_active_offer_for_lead": {
+      "main": [
+        [
+          {
+            "node": "Mig_103_FN_write_promotion_quote",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_103_FN_write_promotion_quote": {
+      "main": [
+        [
+          {
+            "node": "Mig_104_FN_import_returning_cust",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_104_FN_import_returning_cust": {
+      "main": [
+        [
+          {
+            "node": "Mig_105_FN_take_chat_control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_105_FN_take_chat_control": {
+      "main": [
+        [
+          {
+            "node": "Mig_106_FN_return_chat_control",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_106_FN_return_chat_control": {
+      "main": [
+        [
+          {
+            "node": "Mig_107_FN_chat_owner",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_107_FN_chat_owner": {
+      "main": [
+        [
+          {
+            "node": "Mig_108_FN_confirm_deposit",
             "type": "main",
             "index": 0
           }

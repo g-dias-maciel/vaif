@@ -65,20 +65,24 @@ MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
 # row must be gated on the boolean, not on id presence.
 RESOLVE_ARTIST_QUERY = """\
 SELECT
-  a.id, a.nome, a.timezone, a.status,
+  a.id, a.nome, a.timezone, a.status, a.wa_session_slug AS slug,
   $1::text     AS token,
   $2::text     AS action,
   $3::text     AS start_at,
   $4::text     AS end_at,
   $5::text     AS block_id,
   $6::integer  AS duration_min,
+  $7::text     AS telefone,
+  $8::text     AS nome,
+  $9::text     AS chat_id,
   (a.id IS NOT NULL) AS found
 FROM artists a
 WHERE a.onboarding_token = $1
 UNION ALL
 SELECT
-  NULL::uuid, NULL::text, NULL::text, NULL::text,
+  NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::text,
   $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,
+  $7::text, $8::text, $9::text,
   false AS found
 WHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)
 LIMIT 1;"""
@@ -140,6 +144,31 @@ SELECT id, status FROM suspend_artist($1::uuid);"""
 
 RESUME_ARTIST_QUERY = """\
 SELECT id, status FROM resume_artist($1::uuid);"""
+
+CUSTOMERS_QUERY = """\
+SELECT
+  l.telefone, l.nome, l.pipeline_status,
+  is_returning_customer($1::uuid, l.telefone) AS is_returning,
+  COALESCE(chat_owner($2::text || ':' || l.telefone), 'beatriz') AS owner,
+  $2::text || ':' || l.telefone AS chat_id
+FROM leads l
+WHERE l.artist_id = $1::uuid
+  AND l.telefone IS NOT NULL
+ORDER BY COALESCE(l.last_message_at, l.created_at) DESC
+LIMIT 200
+UNION ALL
+SELECT NULL::text, NULL::text, NULL::text, false, 'beatriz'::text, NULL::text
+WHERE NOT EXISTS (SELECT 1 FROM leads WHERE artist_id = $1::uuid);"""
+
+IMPORT_CUSTOMER_QUERY = """\
+SELECT telefone, nome, source
+FROM import_returning_customer($1::uuid, $2::text, NULLIF($3::text, ''), NULL);"""
+
+RETURN_CHAT_QUERY = """\
+WITH r AS (SELECT * FROM return_chat_control($1::text, $2::uuid))
+SELECT chat_id, owner FROM r
+UNION ALL
+SELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);"""
 
 BLOCK_SLOT_QUERY = """\
 SELECT id, artist_id, start_at, end_at, type
@@ -243,10 +272,48 @@ return [{
   }
 }];"""
 
+CUSTOMERS_RESPONSE_JS = r"""const items = $input.all();
+const artist = $('Resolve Artist by Token').first().json;
+const customers = [];
+for (const item of items) {
+  const r = item.json;
+  if (!r.telefone) continue; // sentinel row
+  customers.push({
+    telefone: r.telefone,
+    nome: r.nome || null,
+    pipeline_status: r.pipeline_status,
+    is_returning: r.is_returning === true,
+    owner: r.owner,
+    chat_id: r.chat_id,
+  });
+}
+return [{
+  json: { success: true, action: 'customers', artist_name: artist.nome, customers }
+}];"""
+
+IMPORT_CUSTOMER_RESPONSE_JS = r"""const r = $input.first().json;
+return [{
+  json: {
+    success: true,
+    action: 'import_customer',
+    customer: { telefone: r.telefone, nome: r.nome, source: r.source },
+  }
+}];"""
+
+RETURN_CHAT_RESPONSE_JS = r"""const r = $input.first().json;
+return [{
+  json: {
+    success: true,
+    action: 'return_chat',
+    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'beatriz' },
+  }
+}];"""
+
 SWITCH_OUTPUT_EXPR = (
     "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : "
     "$json.action === 'unblock' ? 2 : $json.action === 'suspend' ? 3 : "
-    "$json.action === 'resume' ? 4 : 5 }}"
+    "$json.action === 'resume' ? 4 : $json.action === 'customers' ? 5 : "
+    "$json.action === 'import_customer' ? 6 : $json.action === 'return_chat' ? 7 : 8 }}"
 )
 
 WF = {
@@ -274,7 +341,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": RESOLVE_ARTIST_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min] }}"
+                    "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min, $json.body.telefone, $json.body.nome, $json.body.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -332,7 +399,7 @@ WF = {
         {
             "parameters": {
                 "mode": "expression",
-                "numberOutputs": 6,
+                "numberOutputs": 9,
                 "output": SWITCH_OUTPUT_EXPR,
                 "options": {},
             },
@@ -495,11 +562,11 @@ WF = {
             "id": "cal-resp-ok-0000-0000-0000-000000000001",
             "name": "Calendar Response",
         },
-        # 13. Invalid action response (switch output 5)
+        # 13. Invalid action response (switch output 8)
         {
             "parameters": {
                 "respondWith": "json",
-                "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend ou resume.' }) }}",
+                "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend, resume, customers, import_customer ou return_chat.' }) }}",
                 "options": {"responseCode": 400},
             },
             "type": "n8n-nodes-base.respondToWebhook",
@@ -507,6 +574,90 @@ WF = {
             "position": [1040, -500],
             "id": "cal-resp-bad-action-0000-0000-0000-000000000001",
             "name": "Invalid Action Response",
+        },
+        # 14. List Customers (switch output 5)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": CUSTOMERS_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.id, $json.slug] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 600],
+            "id": "cal-customers-0000-0000-0000-000000000001",
+            "name": "List Customers",
+            "credentials": MAIN_DB,
+        },
+        # 15. Build Customers Response
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": CUSTOMERS_RESPONSE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1300, 600],
+            "id": "cal-customers-resp-0000-0000-0000-000000000001",
+            "name": "Build Customers Response",
+        },
+        # 16. Import Customer (switch output 6)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": IMPORT_CUSTOMER_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 800],
+            "id": "cal-import-0000-0000-0000-000000000001",
+            "name": "Import Customer",
+            "credentials": MAIN_DB,
+        },
+        # 17. Build Import Response
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": IMPORT_CUSTOMER_RESPONSE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1300, 800],
+            "id": "cal-import-resp-0000-0000-0000-000000000001",
+            "name": "Build Import Response",
+        },
+        # 18. Return Chat (switch output 7)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": RETURN_CHAT_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$json.chat_id, $json.id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 1000],
+            "id": "cal-returnchat-0000-0000-0000-000000000001",
+            "name": "Return Chat",
+            "credentials": MAIN_DB,
+        },
+        # 19. Build Return Chat Response
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": RETURN_CHAT_RESPONSE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [1300, 1000],
+            "id": "cal-returnchat-resp-0000-0000-0000-000000000001",
+            "name": "Build Return Chat Response",
         },
     ],
     "connections": {
@@ -529,6 +680,9 @@ WF = {
                 [{"node": "Unblock Slot", "type": "main", "index": 0}],
                 [{"node": "Suspend Artist", "type": "main", "index": 0}],
                 [{"node": "Resume Artist", "type": "main", "index": 0}],
+                [{"node": "List Customers", "type": "main", "index": 0}],
+                [{"node": "Import Customer", "type": "main", "index": 0}],
+                [{"node": "Return Chat", "type": "main", "index": 0}],
                 [{"node": "Invalid Action Response", "type": "main", "index": 0}],
             ]
         },
@@ -560,6 +714,24 @@ WF = {
             "main": [[{"node": "Build Resume Response", "type": "main", "index": 0}]]
         },
         "Build Resume Response": {
+            "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
+        },
+        "List Customers": {
+            "main": [[{"node": "Build Customers Response", "type": "main", "index": 0}]]
+        },
+        "Build Customers Response": {
+            "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
+        },
+        "Import Customer": {
+            "main": [[{"node": "Build Import Response", "type": "main", "index": 0}]]
+        },
+        "Build Import Response": {
+            "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
+        },
+        "Return Chat": {
+            "main": [[{"node": "Build Return Chat Response", "type": "main", "index": 0}]]
+        },
+        "Build Return Chat Response": {
             "main": [[{"node": "Calendar Response", "type": "main", "index": 0}]]
         },
     },

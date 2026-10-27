@@ -67,8 +67,31 @@ Scenarios:
    Beatriz must explain it reserves the slot and is discounted from the total.
 3. `coverup-handoff` — a cover-up request; asserts the handoff reply and the
    Telegram **handoff alert** with the reason.
+4. `promotion-bogo` — activates a real "Leve 2" promotion through
+   `activate_promotion()`, then asserts the whole offer path: the 2x price in the
+   reply, the second-tattoo sentence, the `promotion_quotes` row (open, 2x first
+   price, second-tattoo cap, ~7-day window), the price staying put when the lead
+   asks again, the quote still being honoured after `pause_promotion()`, and a
+   brand-new lead getting the regular price while paused. Cleans the promotion
+   up afterwards.
 
-Optionally `--full` adds a best-effort from-scratch conversation.
+`--only=<name[,name]>` runs a subset (e.g. `--only=promotion-bogo`).
+`--full` adds a best-effort from-scratch conversation.
+
+### Promotion prerequisites
+
+`promotion-bogo` drives code that ships separately from this repo, so it
+preflights both and refuses to send anything if they are missing:
+
+1. **Schema:** `packages/crm/supabase/migrations/20261022000000_offers_and_chat_control.sql`
+   must be applied to the live DB (`promotions`, `promotion_prices`,
+   `promotion_quotes`, `returning_customers`, `chat_control` + functions).
+2. **Workflow:** the deployed Beatriz workflow must contain `Load Offer` and
+   `Write Promotion Quote`
+   (`python3 scripts/deploy.py update SFfHtbGLkscEk47n definitions/beatriz-whatsapp-agent.json`).
+
+When either is missing the run exits with code 2 and prints the exact missing
+piece, so a broken deploy is never mistaken for a failing agent.
 
 Turns are adaptive (the model sometimes offers day+time together), and each
 turn can be retried (`TURN_RETRIES`). Results are written to
@@ -95,6 +118,7 @@ that with a number you control.
 ```bash
 node packages/flows/tests/integration/full-workflow.js
 node packages/flows/tests/integration/full-workflow.js --full
+node packages/flows/tests/integration/full-workflow.js --only=promotion-bogo
 ARTIST_SLUG=default node packages/flows/tests/integration/full-workflow.js   # not recommended
 ```
 

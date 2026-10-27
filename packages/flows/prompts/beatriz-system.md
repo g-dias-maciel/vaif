@@ -282,6 +282,10 @@ A mensagem de corte ("Infelizmente não posso continuar essa conversa. Se precis
 
 {{TABELA_PRECOS}}
 
+## Promoção Atual
+
+{{OFFER}}
+
 ## Dados
 
 - PIX: {{PIX}}

@@ -22,9 +22,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,\n  false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status, a.wa_session_slug AS slug,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min,\n  $7::text     AS telefone,\n  $8::text     AS nome,\n  $9::text     AS chat_id,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,\n  $7::text, $8::text, $9::text,\n  false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
         "options": {
-          "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min] }}"
+          "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min, $json.body.telefone, $json.body.nome, $json.body.chat_id] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -95,8 +95,8 @@
     {
       "parameters": {
         "mode": "expression",
-        "numberOutputs": 6,
-        "output": "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : $json.action === 'unblock' ? 2 : $json.action === 'suspend' ? 3 : $json.action === 'resume' ? 4 : 5 }}",
+        "numberOutputs": 9,
+        "output": "={{ $json.action === 'list' ? 0 : $json.action === 'block' ? 1 : $json.action === 'unblock' ? 2 : $json.action === 'suspend' ? 3 : $json.action === 'resume' ? 4 : $json.action === 'customers' ? 5 : $json.action === 'import_customer' ? 6 : $json.action === 'return_chat' ? 7 : 8 }}",
         "options": {}
       },
       "type": "n8n-nodes-base.switch",
@@ -313,7 +313,7 @@
     {
       "parameters": {
         "respondWith": "json",
-        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend ou resume.' }) }}",
+        "responseBody": "={{ JSON.stringify({ success: false, error: 'invalid_action', message: 'Ação desconhecida. Use list, block, unblock, suspend, resume, customers, import_customer ou return_chat.' }) }}",
         "options": {
           "responseCode": 400
         }
@@ -326,6 +326,117 @@
       ],
       "id": "cal-resp-bad-action-0000-0000-0000-000000000001",
       "name": "Invalid Action Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  l.telefone, l.nome, l.pipeline_status,\n  is_returning_customer($1::uuid, l.telefone) AS is_returning,\n  COALESCE(chat_owner($2::text || ':' || l.telefone), 'beatriz') AS owner,\n  $2::text || ':' || l.telefone AS chat_id\nFROM leads l\nWHERE l.artist_id = $1::uuid\n  AND l.telefone IS NOT NULL\nORDER BY COALESCE(l.last_message_at, l.created_at) DESC\nLIMIT 200\nUNION ALL\nSELECT NULL::text, NULL::text, NULL::text, false, 'beatriz'::text, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM leads WHERE artist_id = $1::uuid);",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.slug] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        600
+      ],
+      "id": "cal-customers-0000-0000-0000-000000000001",
+      "name": "List Customers",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const items = $input.all();\nconst artist = $('Resolve Artist by Token').first().json;\nconst customers = [];\nfor (const item of items) {\n  const r = item.json;\n  if (!r.telefone) continue; // sentinel row\n  customers.push({\n    telefone: r.telefone,\n    nome: r.nome || null,\n    pipeline_status: r.pipeline_status,\n    is_returning: r.is_returning === true,\n    owner: r.owner,\n    chat_id: r.chat_id,\n  });\n}\nreturn [{\n  json: { success: true, action: 'customers', artist_name: artist.nome, customers }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        600
+      ],
+      "id": "cal-customers-resp-0000-0000-0000-000000000001",
+      "name": "Build Customers Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT telefone, nome, source\nFROM import_returning_customer($1::uuid, $2::text, NULLIF($3::text, ''), NULL);",
+        "options": {
+          "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        800
+      ],
+      "id": "cal-import-0000-0000-0000-000000000001",
+      "name": "Import Customer",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const r = $input.first().json;\nreturn [{\n  json: {\n    success: true,\n    action: 'import_customer',\n    customer: { telefone: r.telefone, nome: r.nome, source: r.source },\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        800
+      ],
+      "id": "cal-import-resp-0000-0000-0000-000000000001",
+      "name": "Build Import Response"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH r AS (SELECT * FROM return_chat_control($1::text, $2::uuid))\nSELECT chat_id, owner FROM r\nUNION ALL\nSELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);",
+        "options": {
+          "queryReplacement": "={{ [$json.chat_id, $json.id] }}"
+        }
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1040,
+        1000
+      ],
+      "id": "cal-returnchat-0000-0000-0000-000000000001",
+      "name": "Return Chat",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const r = $input.first().json;\nreturn [{\n  json: {\n    success: true,\n    action: 'return_chat',\n    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'beatriz' },\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1300,
+        1000
+      ],
+      "id": "cal-returnchat-resp-0000-0000-0000-000000000001",
+      "name": "Build Return Chat Response"
     }
   ],
   "connections": {
@@ -402,6 +513,27 @@
         [
           {
             "node": "Resume Artist",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "List Customers",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Import Customer",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Return Chat",
             "type": "main",
             "index": 0
           }
@@ -515,6 +647,72 @@
       ]
     },
     "Build Resume Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Customers": {
+      "main": [
+        [
+          {
+            "node": "Build Customers Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Customers Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Import Customer": {
+      "main": [
+        [
+          {
+            "node": "Build Import Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Import Response": {
+      "main": [
+        [
+          {
+            "node": "Calendar Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Return Chat": {
+      "main": [
+        [
+          {
+            "node": "Build Return Chat Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Return Chat Response": {
       "main": [
         [
           {

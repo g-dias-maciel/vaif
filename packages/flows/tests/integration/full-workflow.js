@@ -24,10 +24,11 @@
  * Run:
  *   node packages/flows/tests/integration/full-workflow.js
  *   node packages/flows/tests/integration/full-workflow.js --full   # + from-scratch run
+ *   node packages/flows/tests/integration/full-workflow.js --only=promotion-bogo
  */
 const fs = require('fs');
 const path = require('path');
-const { N8N_BASE, apiKey, runSql, postJson, getExecution, listExecutions } = require('./lib/stack');
+const { N8N_BASE, apiKey, runSql, postJson, getExecution, listExecutions, n8n } = require('./lib/stack');
 
 const WEBHOOK = process.env.WAHA_WEBHOOK_URL || `${N8N_BASE}/webhook/waha-webhook`;
 const WORKFLOW_ID = process.env.BEATRIZ_WORKFLOW_ID || 'SFfHtbGLkscEk47n';
@@ -40,15 +41,35 @@ const RETRIES = Number(process.env.TURN_RETRIES || 2);
 const TIMEOUT_MS = Number(process.env.TURN_TIMEOUT_MS || 90000);
 const RESULTS_DIR = path.join(__dirname, 'results');
 const INCLUDE_FULL = process.argv.includes('--full');
+// --only=promotion-bogo[,other] — run a subset while iterating.
+const ONLY = (process.argv.find((a) => a.startsWith('--only=')) || '').slice('--only='.length)
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const TABLE_PRICE = 150000;   // seeded R$ 1.500
 const DEPOSIT_PCT = 30;       // Bruno's sinal
 const EXPECTED_DEPOSIT_CENTS = Math.round(TABLE_PRICE * DEPOSIT_PCT / 100); // 45000
 const EXPECTED_DEPOSIT_TEXT = 'R$ ' + (EXPECTED_DEPOSIT_CENTS / 100).toFixed(2).replace('.', ',');
 
+// Promotion scenario: the isolated test artist gets a real "Leve 2" offer,
+// activated through the same SQL function the VAIF admin panel uses.
+const TEST_ARTIST_ID = 'a0000000-0000-4000-8000-000000000001';
+const PROMO_NAME = 'Leve 2 E2E';
+const PROMO_MULTIPLIER = 2;
+const PROMO_BASE_CENTS = TABLE_PRICE;                                   // braco_externo/fechamento
+const PROMO_FIRST_CENTS = Math.ceil(PROMO_BASE_CENTS * PROMO_MULTIPLIER); // 300000
+const PROMO_SECOND_CAP_CENTS = PROMO_BASE_CENTS;                       // 150000
+
+const brl = (cents) => 'R$ ' + (cents / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const brlRegex = (cents) => new RegExp(brl(cents).replace(/[.$]/g, '\\$&'));
+
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const phoneFilter = (p) => `telefone = '${p}'`;
-const has = (s, re) => typeof s === 'string' && re.test(s);
+// pt-BR currency formatting uses a non-breaking space after "R$"; normalise it
+// so reply assertions can use ordinary spaces.
+const norm = (s) => (typeof s === 'string' ? s.replace(/[\u00A0\u202F]/g, ' ') : s);
+const has = (s, re) => typeof s === 'string' && re.test(norm(s));
 
 // ── SQL helpers ──
 async function resetLead(phone) {
@@ -72,6 +93,123 @@ async function seedNearDeposit(phone) {
     FROM artists WHERE wa_session_slug = '${SLUG}'
     RETURNING id::text AS lead_id;`);
   return row.lead_id;
+}
+
+/**
+ * Seed a lead standing exactly at the price gate with the doubts checkpoint
+ * already cleared. That is the only state where the deterministic first quote
+ * fires — which is also the code path that injects the promotion.
+ *
+ * `preco_liberado = false` is deliberate: once it is true the workflow takes
+ * the "repeat the quote" path instead of quoting for the first time.
+ */
+async function seedNearQuote(phone) {
+  await resetLead(phone);
+  const row = await runSql(`
+    INSERT INTO leads (artist_id, nome, telefone, placement, body_zone, pipeline_status,
+                       processo_explicado, duvidas_eliminadas, preco_liberado,
+                       table_price, negotiated_price)
+    SELECT id, 'Teste Promo', '${phone}', 'braco_externo', 'fechamento', 'qualificando',
+           true, true, false, ${TABLE_PRICE}, ${TABLE_PRICE}
+    FROM artists WHERE wa_session_slug = '${SLUG}'
+    RETURNING id::text AS lead_id;`);
+  return row.lead_id;
+}
+
+// ── promotion helpers (real SQL functions used by the VAIF /promo admin) ──
+
+/**
+ * Promotions need two things that are deployed separately from this repo's
+ * code: the offers schema in the live database and the promotion nodes in the
+ * live workflow. Check both before driving traffic, so a missing deploy reads
+ * as a clear infrastructure problem instead of a confusing test failure.
+ */
+async function promotionPreflight() {
+  const issues = [];
+  try {
+    await runSql('SELECT count(*)::int AS n FROM promotions');
+  } catch (e) {
+    issues.push('DB: `promotions` table/function not found — apply packages/crm/supabase/migrations/20261022000000_offers_and_chat_control.sql');
+  }
+  try {
+    const wf = await n8n('GET', `/workflows/${WORKFLOW_ID}`);
+    const names = (wf.nodes || []).map((n) => n.name);
+    for (const node of ['Load Offer', 'Write Promotion Quote']) {
+      if (!names.includes(node)) {
+        issues.push(`workflow: node "${node}" is not deployed — run scripts/deploy.py update ${WORKFLOW_ID} definitions/beatriz-whatsapp-agent.json`);
+      }
+    }
+  } catch (e) {
+    issues.push(`workflow: could not inspect live workflow (${e.message})`);
+  }
+  return issues;
+}
+
+async function clearTestPromotion() {
+  // Deleting cascades to promotion_prices + promotion_quotes, so the test
+  // leaves no offer state behind.
+  await runSql(`DELETE FROM promotions WHERE artist_id = '${TEST_ARTIST_ID}' AND name = '${PROMO_NAME}';`);
+}
+
+async function activateTestPromotion() {
+  await clearTestPromotion();
+  const inserted = await runSql(`
+    WITH ins AS (
+      INSERT INTO promotions (artist_id, type_key, name, multiplier, audience, conditions, quote_valid_days, status)
+      VALUES ('${TEST_ARTIST_ID}', 'bogo_same_value', '${PROMO_NAME}', ${PROMO_MULTIPLIER}, 'all', '{}'::jsonb, 7, 'draft')
+      RETURNING id
+    )
+    SELECT id::text AS promotion_id FROM ins;`);
+  const id = inserted.promotion_id;
+
+  // Same activation function the admin panel calls: snapshots the pricing
+  // matrix into promotion_prices at `multiplier` and flips status to active.
+  await runSql(`SELECT 1 AS ok FROM activate_promotion('${id}');`);
+
+  const state = await runSql(`
+    SELECT jsonb_build_object(
+      'status', p.status,
+      'multiplier', p.multiplier,
+      'snapshot_count', (SELECT count(*) FROM promotion_prices WHERE promotion_id = p.id),
+      'first_price', (SELECT offer_price FROM promotion_prices
+                      WHERE promotion_id = p.id AND placement = 'braco_externo' AND body_zone = 'fechamento'),
+      'second_cap', (SELECT base_price FROM promotion_prices
+                     WHERE promotion_id = p.id AND placement = 'braco_externo' AND body_zone = 'fechamento')
+    )::text AS state
+    FROM promotions p WHERE p.id = '${id}';`);
+
+  return { id, ...JSON.parse(state.state) };
+}
+
+async function pauseTestPromotion(promotionId) {
+  await runSql(`SELECT 1 AS ok FROM pause_promotion('${promotionId}');`);
+  const row = await runSql(`SELECT status::text AS status FROM promotions WHERE id = '${promotionId}';`);
+  return row.status;
+}
+
+/** The lead's latest promotion quote (price-protection row), if any. */
+async function promoQuoteFor(phone) {
+  const row = await runSql(`
+    SELECT jsonb_build_object(
+      'count', (SELECT count(*) FROM promotion_quotes q2 JOIN leads l2 ON l2.id = q2.lead_id
+                WHERE l2.telefone = '${phone}'),
+      'promotion_id', q.promotion_id,
+      'status', q.status,
+      'placement', q.placement,
+      'body_zone', q.body_zone,
+      'first_price', q.first_price,
+      'second_cap_price', q.second_cap_price,
+      'valid_until', q.valid_until::text,
+      'valid_days', round(extract(epoch from (q.valid_until - now())) / 86400.0, 1)
+    )::text AS q
+    FROM leads l
+    LEFT JOIN LATERAL (
+      SELECT * FROM promotion_quotes WHERE lead_id = l.id ORDER BY quoted_at DESC LIMIT 1
+    ) q ON true
+    WHERE l.telefone = '${phone}'
+    ORDER BY l.created_at DESC
+    LIMIT 1;`);
+  return row.q ? JSON.parse(row.q) : null;
 }
 
 async function leadState(phone) {
@@ -200,10 +338,15 @@ function extractTurn(exec) {
     aiOutput: (firstNode(run, 'AI Agent') || {}).output || '',
     pipeline: pc.pipeline_status || null,
     depositStatus: pc.deposit_status_val || null,
+    offerQuoted: pc.offer_quoted === true,
     gateViolation: pc.price_gate_violation === true,
     notification: notif,
     telegramSent: tg ? !tg.error : false,
     availability: allItems(run, 'Check Availability'),
+    // Promotion path: what the workflow loaded for this turn, and what the
+    // deterministic quote-recording node wrote.
+    loadOffer: firstNode(run, 'Load Offer') || null,
+    promoQuoteWritten: allItems(run, 'Write Promotion Quote'),
   };
 }
 
@@ -265,7 +408,10 @@ function recordTurn(index, leadText, res) {
     notification: t ? t.notification : null,
     telegramSent: t ? t.telegramSent : null,
     gateViolation: t ? t.gateViolation : null,
+    offerQuoted: t ? t.offerQuoted : null,
     availability: t ? t.availability : [],
+    loadOffer: t ? t.loadOffer : null,
+    promoQuoteWritten: t ? t.promoQuoteWritten : [],
     executionId: t ? t.id : null,
     attempts: res.attempt,
     checks: res.checks,
@@ -367,6 +513,98 @@ const SCENARIOS = [
       ] },
     ],
   },
+  {
+    name: 'promotion-bogo',
+    description: 'Activate a real "Leve 2" promotion → Beatriz quotes the promoted price (2x) plus the second tattoo, records a 7-day promotion quote, repeats the same price on a second ask, then pause → the open quote is honoured but a new lead gets the regular price.',
+    setup: async (phone) => { await seedNearQuote(phone); },
+    driver: async (phone, runTurn) => {
+      const out = {
+        turns: [],
+        promo: null,
+        quoteAfterFirst: null,
+        statusAfterPause: null,
+        quoteAfterPause: null,
+        freshQuote: null,
+      };
+
+      // Activate through the admin SQL function (snapshots pricing at 2x).
+      out.promo = await activateTestPromotion();
+
+      const quoteText = 'quero fechar, é no braço externo fechamento';
+
+      // 1. Promotion live → the first deterministic quote must carry the offer.
+      const r1 = await runTurn(phone, quoteText, (t) => [
+        { label: 'Load Offer saw the active promotion', ok: !!(t.loadOffer && t.loadOffer.promo_active === true), detail: t.loadOffer },
+        { label: `reply quotes the promoted price (${brl(PROMO_FIRST_CENTS)})`, ok: has(t.reply, brlRegex(PROMO_FIRST_CENTS)), detail: t.reply },
+        { label: 'reply offers the second tattoo', ok: has(t.reply, /segunda tatuagem|segunda tattoo/i), detail: t.reply },
+        { label: 'reply does not quote the regular single-tattoo price', ok: !has(t.reply, brlRegex(PROMO_BASE_CENTS)), detail: t.reply },
+      ]);
+      out.turns.push(recordTurn(0, quoteText, r1));
+      out.quoteAfterFirst = await promoQuoteFor(phone);
+
+      // 2. The lead asks the price again while the promotion is still live.
+      //    This is the "repeat the quote" path: the multiplier must NOT be
+      //    applied a second time on top of the price already sent.
+      const repeatText = 'e quanto fica mesmo?';
+      const r2 = await runTurn(phone, repeatText, (t) => [
+        { label: `repeat ask repeats the quoted price (${brl(PROMO_FIRST_CENTS)})`, ok: has(t.reply, brlRegex(PROMO_FIRST_CENTS)), detail: t.reply },
+        { label: 'repeat ask does not apply the multiplier twice', ok: !has(t.reply, brlRegex(PROMO_FIRST_CENTS * PROMO_MULTIPLIER)), detail: t.reply },
+      ]);
+      out.turns.push(recordTurn(1, repeatText, r2));
+
+      // 3. Pause → the quote's 7-day price protection must keep the price.
+      out.statusAfterPause = await pauseTestPromotion(out.promo.id);
+      const afterPauseText = 'e quanto fica agora?';
+      const r3 = await runTurn(phone, afterPauseText, (t) => [
+        { label: 'Load Offer: promotion paused but the open quote is still valid', ok: !!(t.loadOffer && t.loadOffer.promo_active !== true && t.loadOffer.open_quote_valid === true), detail: t.loadOffer },
+        { label: 'open quote price is honoured after the pause', ok: has(t.reply, brlRegex(PROMO_FIRST_CENTS)), detail: t.reply },
+      ]);
+      out.turns.push(recordTurn(2, afterPauseText, r3));
+      out.quoteAfterPause = await promoQuoteFor(phone);
+
+      // 4. A brand-new lead while the promotion is paused: regular price, no offer.
+      await seedNearQuote(phone);
+      const r4 = await runTurn(phone, quoteText, (t) => [
+        { label: 'fresh lead: no promotion and no open quote in context', ok: !!(t.loadOffer && t.loadOffer.promo_active !== true && t.loadOffer.open_quote_valid !== true), detail: t.loadOffer },
+        { label: `fresh lead is quoted the regular price (${brl(PROMO_BASE_CENTS)})`, ok: has(t.reply, brlRegex(PROMO_BASE_CENTS)), detail: t.reply },
+        { label: 'fresh lead is not offered a second tattoo', ok: !has(t.reply, /segunda tatuagem|segunda tattoo/i), detail: t.reply },
+      ]);
+      out.turns.push(recordTurn(3, quoteText, r4));
+      out.freshQuote = await promoQuoteFor(phone);
+
+      return out;
+    },
+    assess: (out) => {
+      const promo = out.promo || {};
+      const t1 = out.turns[0] || {};
+      const t2 = out.turns[1] || {};
+      const t3 = out.turns[2] || {};
+      const t4 = out.turns[3] || {};
+      const q1 = out.quoteAfterFirst || {};
+      const q2 = out.quoteAfterPause || {};
+      const q4 = out.freshQuote || {};
+      const written = (t1.promoQuoteWritten || [])[0] || null;
+
+      return [
+        { label: 'promotion activated and priced from the table', ok: promo.status === 'active' && promo.snapshot_count > 0, detail: promo },
+        { label: `activation snapshot is ${brl(PROMO_FIRST_CENTS)} (cap ${brl(PROMO_SECOND_CAP_CENTS)})`, ok: promo.first_price === PROMO_FIRST_CENTS && promo.second_cap === PROMO_SECOND_CAP_CENTS, detail: promo },
+        { label: 'Load Offer names the promotion + multiplier', ok: !!(t1.loadOffer && t1.loadOffer.name === PROMO_NAME && Number(t1.loadOffer.multiplier) === PROMO_MULTIPLIER), detail: t1.loadOffer },
+        { label: 'classifier flagged the turn as an offer quote', ok: t1.offerQuoted === true, detail: t1.offerQuoted },
+        { label: 'Write Promotion Quote node returned a quote row', ok: !!written && Number(written.first_price) === PROMO_FIRST_CENTS, detail: written },
+        { label: 'DB: exactly one promotion quote for the lead', ok: q1.count === 1, detail: q1 },
+        { label: 'DB: quote is open with the 2x price and the second-tattoo cap', ok: q1.status === 'open' && q1.first_price === PROMO_FIRST_CENTS && q1.second_cap_price === PROMO_SECOND_CAP_CENTS, detail: q1 },
+        { label: 'DB: quote is bound to the quoted placement', ok: q1.placement === 'braco_externo' && q1.body_zone === 'fechamento', detail: q1 },
+        { label: 'DB: quote carries the 7-day protection window', ok: typeof q1.valid_days === 'number' && q1.valid_days > 6.5 && q1.valid_days <= 7.1, detail: q1 },
+        { label: 'repeat ask still saw the active promotion', ok: !!(t2.loadOffer && t2.loadOffer.promo_active === true), detail: t2.loadOffer },
+        { label: 'pause flipped the promotion to paused', ok: out.statusAfterPause === 'paused', detail: out.statusAfterPause },
+        { label: 'DB: pausing keeps the quote open (no void)', ok: q2.status === 'open', detail: q2 },
+        { label: 'fresh lead sees neither the promotion nor a quote', ok: !!(t4.loadOffer && t4.loadOffer.promo_active !== true && t4.loadOffer.open_quote_valid !== true), detail: t4.loadOffer },
+        { label: 'DB: fresh lead has no promotion quote', ok: q4.count === 0, detail: q4 },
+        { label: 'open-quote turn was served by the workflow (no price-gate violation)', ok: t3.gateViolation === false, detail: t3.gateViolation },
+      ];
+    },
+    teardown: async () => { await clearTestPromotion(); },
+  },
 ];
 
 if (INCLUDE_FULL) {
@@ -426,6 +664,7 @@ async function runScenario(scenario, phone) {
 
   console.log('  teardown...');
   await resetLead(phone).catch((e) => console.error('  teardown error:', e.message));
+  if (scenario.teardown) await scenario.teardown().catch((e) => console.error('  teardown error:', e.message));
 
   const all = [...turns.flatMap((t) => t.checks), ...assessChecks, ...finalizeChecks];
   return {
@@ -454,6 +693,9 @@ function saveResults(results, config) {
       lines.push(`- **Lead:** ${t.leadText}`);
       lines.push(`- **Reply:** ${t.reply === null ? '_(no reply execution)_' : t.reply.replace(/\n/g, ' ')}`);
       if (t.notification && t.notification.send) lines.push(`- **Telegram:** ${(t.notification.text || '').replace(/\n/g, ' | ')}  _(sent: ${t.telegramSent})_`);
+      if (t.loadOffer && (t.loadOffer.promo_active || t.loadOffer.open_quote_valid)) {
+        lines.push(`- **Offer context:** \`${JSON.stringify(t.loadOffer)}\``);
+      }
       for (const c of t.checks) lines.push(`- ${c.ok ? '✅' : '❌'} ${c.label}${c.ok ? '' : ` — \`${JSON.stringify(c.detail)}\``}`);
       lines.push('');
     }
@@ -467,6 +709,15 @@ function saveResults(results, config) {
 
 async function main() {
   if (!apiKey()) { console.error('No N8N_API_KEY (or ~/.n8n-api-key). Aborting.'); return 1; }
+  if (ONLY.length) {
+    const unknown = ONLY.filter((n) => !SCENARIOS.some((s) => s.name === n));
+    if (unknown.length) {
+      console.error(`unknown scenario(s): ${unknown.join(', ')}. Known: ${SCENARIOS.map((s) => s.name).join(', ')}`);
+      return 1;
+    }
+  }
+  const selected = ONLY.length ? SCENARIOS.filter((s) => ONLY.includes(s.name)) : SCENARIOS;
+
   console.log(`full-workflow test: webhook=${WEBHOOK} workflow=${WORKFLOW_ID} slug=${SLUG}`);
   console.log('ensuring isolated test artist (no connected WhatsApp session)...');
   await ensureTestArtist();
@@ -476,11 +727,29 @@ async function main() {
   if (artist.ai_active_hours) console.warn('WARNING: artist has ai_active_hours set; messages may be dropped outside the window.');
   console.log(`isolation: outbound WhatsApp sends for "${SLUG}" have no connected session (nothing is delivered to real people).`);
 
+  // Promotions are deployed separately from this test. Fail loudly and early
+  // with the exact missing piece instead of driving a broken workflow.
+  if (selected.some((s) => s.name === 'promotion-bogo')) {
+    const issues = await promotionPreflight();
+    if (issues.length) {
+      console.error('\npromotion-bogo preflight failed:');
+      for (const issue of issues) console.error(`  - ${issue}`);
+      console.error('\nNothing was sent. Deploy the two items above, then re-run with --only=promotion-bogo.\n');
+      return 2;
+    }
+    console.log('promotion preflight: offers schema + promotion nodes are live.');
+  }
+
+  // Never let a stale test promotion leak into the other scenarios (it would
+  // change every quoted price).
+  await clearTestPromotion().catch((e) => console.warn('promo pre-clean:', e.message));
+
   const phone = `5511900000${String(Math.floor(Math.random() * 900) + 100)}`;
   console.log(`fake lead phone: ${phone}  retries=${RETRIES} timeout=${TIMEOUT_MS}ms`);
+  if (ONLY.length) console.log(`scenarios: ${selected.map((s) => s.name).join(', ')}`);
 
   const results = [];
-  for (const scenario of SCENARIOS) {
+  for (const scenario of selected) {
     try {
       results.push(await runScenario(scenario, phone));
     } catch (e) {
@@ -490,6 +759,7 @@ async function main() {
   }
 
   await resetLead(phone).catch(() => {});
+  await clearTestPromotion().catch((e) => console.warn('promo post-clean:', e.message));
 
   const { jsonPath, mdPath } = saveResults(results, { webhook: WEBHOOK, workflowId: WORKFLOW_ID, slug: SLUG, phone, retries: RETRIES, when: new Date().toISOString() });
   const passed = results.reduce((s, r) => s + r.passed, 0);

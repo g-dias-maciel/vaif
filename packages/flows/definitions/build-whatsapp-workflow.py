@@ -102,6 +102,20 @@ BUILD_SYSTEM_PROMPT_JS = (
     "const piso = artist.floor_pct != null ? Number(artist.floor_pct) + '%' : '80%';\n"
     "const descontoMax = artist.floor_pct != null ? (100 - Number(artist.floor_pct)) + '%' : '20%';\n"
     "\n"
+    "// ── Active promotion + open-quote price protection (from Load Offer) ──\n"
+    "const offer = $('Load Offer').first().json || {};\n"
+    "const promoActive = offer.promo_active === true;\n"
+    "const openQuote = offer.open_quote_valid === true;\n"
+    "const fmtOfferBRL = (cents) => (Number(cents || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });\n"
+    "let offerBlock = '_Nenhuma promoção ativa no momento. Apresente apenas o preço normal da tabela._';\n"
+    "if (promoActive) {\n"
+    "  offerBlock = 'PROMOÇÃO ATIVA: \"' + (offer.name || 'promoção') + '\". ' + (offer.description || '') + '\\n'\n"
+    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL. A segunda é agendada depois, com o artista. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
+    "}\n"
+    "if (openQuote) {\n"
+    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_first_price) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada.';\n"
+    "}\n"
+    "\n"
     "const replacements = {\n"
     "  '{{NOME}}': artist.nome || 'Artista',\n"
     "  '{{INSTAGRAM}}': artist.instagram_handle || '@artista',\n"
@@ -110,6 +124,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  '{{PISO}}': piso,\n"
     "  '{{DESCONTO_MAX}}': descontoMax,\n"
     "  '{{TABELA_PRECOS}}': table,\n"
+    "  '{{OFFER}}': offerBlock,\n"
     "};\n"
     "\n"
     "let prompt = " + json.dumps(SYSTEM_PROMPT_TEMPLATE) + ";\n"
@@ -117,7 +132,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  prompt = prompt.split(k).join(v);\n"
     "}\n"
     "\n"
-    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.table_price) })) } }];"
+    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.table_price) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_first_price) || null, open_quote_second_cap: Number(offer.open_quote_second_cap) || null } } }];"
 )
 
 # ── Agent text: per-turn context + the debounced lead message. Same shape as
@@ -141,6 +156,7 @@ AGENT_TEXT_EXPR = (
     "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
     "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
     "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Upsert Lead').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.negotiated_price || l.table_price; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
+    "+ ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_first_price || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() "
     "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) "
     "+ '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' "
     "+ ($('Debounce Resolve').first().json.combined_text || '') }}"
@@ -373,8 +389,15 @@ const priceGateOpen = precoLiberadoJa || gateJustOpened;
 function deterministicQuote(centsOverride = null) {
   const rows = $('Build System Prompt').first().json.pricing_rows || [];
   const row = rows.find(p => p.placement === lead.placement && p.body_zone === lead.body_zone);
-  const cents = Number(centsOverride || (row && row.table_price) || 0);
-  if (!cents) return null;
+  const baseCents = Number(centsOverride || (row && row.table_price) || 0);
+  if (!baseCents) return null;
+  const offer = $('Build System Prompt').first().json.offer || {};
+  const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
+  // `centsOverride` is a price that was already agreed with the lead (they are
+  // asking again). Applying the promotion multiplier on top of it would double
+  // the price, so the offer price is only derived when there is no override.
+  const offerCents = offerLive && centsOverride == null ? Math.ceil(baseCents * Number(offer.multiplier)) : null;
+  const cents = offerCents || baseCents;
   const fmt = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const places = {
     braco: 'no braço', braco_externo: 'na parte externa do braço', braco_interno: 'na parte interna do braço',
@@ -386,10 +409,13 @@ function deterministicQuote(centsOverride = null) {
   const local = places[lead.placement] || `em ${lead.placement}`;
   const zona = zones[lead.body_zone] || lead.body_zone;
   const description = `${zona} ${local}`;
-  return {
-    cents,
-    reply: `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros. Como fica esse valor para você?`,
-  };
+  const artistName = $('Resolve Artist').first().json.nome || 'artista';
+  let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
+  if (offerLive) {
+    reply += ` E com a promoção "${offer.name || 'leve 2'}", nesse mesmo valor você leva uma segunda tatuagem de valor igual ou menor, que pode até ser para outra pessoa ou outro local. A segunda a gente agenda depois com o ${artistName}.`;
+  }
+  reply += ` Como fica esse valor para você?`;
+  return { cents, reply, offer_active: offerLive, base_cents: baseCents };
 }
 // ── Transition guard — prevent invalid/repeated transitions ──
 let proposed = parsed.pipeline || current;
@@ -564,6 +590,7 @@ if (isAudio) {
 
 return [{ json: {
   lead_id: lead.id,
+  offer_quoted: !!(firstQuote && firstQuote.offer_active),
   pipeline_status: audioPipeline,
   event_type: audioEvent,
   price_updated: !!firstQuote || (!repeatedQuote && quoteActuallySent && !!p.table_cents),
@@ -925,21 +952,28 @@ return [{ json: { error: true, reason: 'session_not_found', session_slug: slug }
             "id": "d4e5f6a7-8b9c-0d1e-2f3b-4a5b6c7d8e9f",
             "name": "Missing Session Log",
         },
-        # 5. Check AI Window — silent outside the artist's AI active window
+        # 5. Check AI Window — silent outside the artist's AI active window.
+        #    Also flags from_me (the ARTIST replying in WhatsApp) so a separate
+        #    branch can record the per-chat takeover instead of answering.
         {
             "parameters": {
                 "mode": "runOnceForAllItems",
                 "jsCode": """const wa = $('WAHA Webhook').first().json.body || {};
-// Ignore the agent's own outgoing messages (message.any safety net).
-if (wa.payload && wa.payload.fromMe === true) {
-  return [{ json: { in_window: false } }];
+const fromMe = !!(wa.payload && wa.payload.fromMe === true);
+const session = wa.session || 'unknown';
+const from = String(wa.payload && wa.payload.from || '').replace('@c.us', '');
+const chatId = session + ':' + from;
+
+// The artist replying in WhatsApp is the takeover signal — never answer it.
+if (fromMe) {
+  return [{ json: { in_window: false, from_me: true, chat_id: chatId } }];
 }
 
 const artist = $('Resolve Artist').first().json;
 const hours = artist.ai_active_hours;
 
 if (!hours || !hours.start || !hours.end) {
-  return [{ json: { in_window: true } }];
+  return [{ json: { in_window: true, from_me: false, chat_id: chatId } }];
 }
 
 const toMin = (t) => {
@@ -957,13 +991,62 @@ const inWindow = start < end
   ? (nowTotal >= start && nowTotal < end)
   : (nowTotal >= start || nowTotal < end);
 
-return [{ json: { in_window: inWindow } }];""",
+return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             },
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [780, -240],
             "id": "wa-gate-code-0000-0000-0000-000000000001",
             "name": "Check AI Window",
+        },
+        # 5b. Artist Replied? — an outgoing message from the artist's own number
+        #     (from_me) means the artist is taking over this chat by hand.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "wa-artist-replied-cond-0000",
+                            "leftValue": "={{ $json.from_me }}",
+                            "rightValue": True,
+                            "operator": {
+                                "type": "boolean",
+                                "operation": "equals",
+                            },
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [1040, -420],
+            "id": "wa-artist-replied-0000-0000-0000-000000000001",
+            "name": "Artist Replied?",
+        },
+        # 5c. Take Chat Control — persist owner='artist' for this chat so
+        #     Beatriz stays silent until the artist returns it (dashboard).
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM take_chat_control($1::text, $2::uuid);",
+                "options": {
+                    "queryReplacement": "={{ [$json.chat_id, $('Resolve Artist').first().json.id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1300, -420],
+            "id": "wa-take-chat-0000-0000-0000-000000000001",
+            "name": "Take Chat Control",
+            "credentials": POSTGRES,
         },
         # 6. In AI Window?
         {
@@ -1118,6 +1201,73 @@ RETURNING pending;""",
             "position": [2600, 0],
             "id": "db-clear-0000-0000-0000-000000000001",
             "name": "Clear Buffer",
+            "credentials": POSTGRES,
+        },
+        # 13b. Check Chat Owner — is the artist currently handling this chat?
+        #      (persistent per-chat ownership; the artist takes over by replying
+        #      in WhatsApp and returns it from the dashboard.)
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT chat_owner($1::text) AS owner;",
+                "options": {
+                    "queryReplacement": "={{ [$('Debounce Start').first().json.chat_id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [2860, 120],
+            "id": "co-check-0000-0000-0000-000000000001",
+            "name": "Check Chat Owner",
+            "credentials": POSTGRES,
+        },
+        # 13c. Chat Owned by Artist? — if the artist owns this chat, Beatriz
+        #      stays silent (no AI, no reply) until the artist returns it.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "co-if-cond-0000",
+                            "leftValue": "={{ $json.owner }}",
+                            "rightValue": "artist",
+                            "operator": {
+                                "type": "string",
+                                "operation": "equals",
+                            },
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3120, 120],
+            "id": "co-if-0000-0000-0000-000000000001",
+            "name": "Chat Owned by Artist?",
+        },
+        # 13d. Load Offer — active promotion + open-quote price protection for
+        #      this lead (always returns one sentinel row).
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM active_offer_for_lead($1::uuid, $2::uuid);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Upsert Lead').first().json.id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [3120, 360],
+            "id": "of-load-0000-0000-0000-000000000001",
+            "name": "Load Offer",
             "credentials": POSTGRES,
         },
         # 14. Load Pricing — artist price table for the dynamic prompt
@@ -1364,6 +1514,25 @@ SELECT * FROM inserted;""",
             "position": [4160, 260],
             "id": "uq-update-0000-0000-0000-000000000001",
             "name": "Update Lead",
+            "credentials": POSTGRES,
+        },
+        # 29b. Write Promotion Quote — record the offer quote for 7-day price
+        #      protection. Fires only when an offer was actually quoted this turn
+        #      (deterministic offer_quoted flag) and the lead is qualified.
+        #      Idempotent: reuses an existing open quote for the same lead+promo.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM write_promotion_quote($1::uuid, $2::uuid, $3::text, $4::text) WHERE $2 IS NOT NULL AND $3 IS NOT NULL AND $4 IS NOT NULL AND $5 = true;",
+                "options": {
+                    "queryReplacement": "={{ [$('Parse Classification').first().json.lead_id, $('Load Offer').first().json.promotion_id, $('Parse Classification').first().json.placement_val, $('Parse Classification').first().json.body_zone_val, $('Parse Classification').first().json.offer_quoted] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [4420, 480],
+            "id": "pq-write-0000-0000-0000-000000000001",
+            "name": "Write Promotion Quote",
             "credentials": POSTGRES,
         },
         # 30. Log Event — reads the parse output (Build Update Query carries it)
@@ -1651,7 +1820,13 @@ return [{
             "main": [[{"node": "Presence Upsert", "type": "main", "index": 0}]]
         },
         "Check AI Window": {
-            "main": [[{"node": "In AI Window?", "type": "main", "index": 0}]]
+            "main": [[{"node": "Artist Replied?", "type": "main", "index": 0}]]
+        },
+        "Artist Replied?": {
+            "main": [
+                [{"node": "Take Chat Control", "type": "main", "index": 0}],
+                [{"node": "In AI Window?", "type": "main", "index": 0}],
+            ]
         },
         "In AI Window?": {
             "main": [
@@ -1685,9 +1860,21 @@ return [{
             ]
         },
         "Clear Buffer": {
-            "main": [[{"node": "Upsert Lead", "type": "main", "index": 0}]]
+            "main": [[{"node": "Check Chat Owner", "type": "main", "index": 0}]]
+        },
+        "Check Chat Owner": {
+            "main": [[{"node": "Chat Owned by Artist?", "type": "main", "index": 0}]]
+        },
+        "Chat Owned by Artist?": {
+            "main": [
+                [],
+                [{"node": "Upsert Lead", "type": "main", "index": 0}],
+            ]
         },
         "Upsert Lead": {
+            "main": [[{"node": "Load Offer", "type": "main", "index": 0}]]
+        },
+        "Load Offer": {
             "main": [[{"node": "Load Pricing", "type": "main", "index": 0}]]
         },
         "Load Pricing": {
@@ -1730,7 +1917,10 @@ return [{
             "main": [[{"node": "Update Lead", "type": "main", "index": 0}]]
         },
         "Update Lead": {
-            "main": [[{"node": "Log Event", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "Log Event", "type": "main", "index": 0},
+                {"node": "Write Promotion Quote", "type": "main", "index": 0},
+            ]]
         },
         "Log Event": {
             "main": [[{"node": "Build Notion Sync Payload", "type": "main", "index": 0}]]
