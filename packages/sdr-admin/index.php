@@ -18,6 +18,11 @@ if ($path === '/agenda' || str_starts_with($path, '/agenda/')) {
     return;
 }
 
+if ($path === '/promo' || str_starts_with($path, '/promo/')) {
+    include __DIR__ . '/promotions/index.php';
+    return;
+}
+
 http_response_code(404);
 echo '<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>404</title></head><body><h1>Não encontrado</h1></body></html>';
 return;

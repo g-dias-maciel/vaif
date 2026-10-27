@@ -140,6 +140,10 @@ function render_html(string $title, string $body, string $extra_head = ''): stri
         .status-waiting { background: #1a1a1a; color: #D4B04C; border: 1px solid #D4B04C; }
         .icon-large { font-size: 3rem; margin-bottom: 16px; text-align: center; }
         .inline-form { display: inline; }
+        .cust-badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 0.7rem; font-weight: 600; letter-spacing: 0.5px; }
+        .cust-returning { background: #1a1a1a; color: #D4B04C; border: 1px solid #D4B04C; }
+        .cust-new { background: #1a1a1a; color: rgb(160, 154, 142); border: 1px solid #333333; }
+        .cust-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; width: 100%; }
         .footer-link { display: block; text-align: center; margin-top: 28px; font-size: 0.85rem; color: rgb(160, 154, 142); }
         .footer-link a { color: #D4B04C; text-decoration: none; }
     </style>
@@ -234,6 +238,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? 'GET') === 'POST') {
         $payload['block_id'] = (string) ($_POST['block_id'] ?? '');
     } elseif ($action === 'suspend' || $action === 'resume') {
         // no extra params needed — the webhook resolves the artist by token
+    } elseif ($action === 'import_customer') {
+        $payload['telefone'] = (string) ($_POST['telefone'] ?? '');
+        $payload['nome'] = (string) ($_POST['nome'] ?? '');
+    } elseif ($action === 'return_chat') {
+        $payload['chat_id'] = (string) ($_POST['chat_id'] ?? '');
     }
 
     $result = call_n8n($webhook_url, $payload);
@@ -268,6 +277,14 @@ HTML;
         $flash = ($result['success'] ?? false)
             ? ['type' => 'success', 'text' => 'Atendimento reativado. A Beatriz já volta a responder seus contatos.']
             : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível reativar o atendimento.')];
+    } elseif ($action === 'import_customer') {
+        $flash = ($result['success'] ?? false)
+            ? ['type' => 'success', 'text' => 'Cliente marcado como recorrente com sucesso.']
+            : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível marcar o cliente.')];
+    } elseif ($action === 'return_chat') {
+        $flash = ($result['success'] ?? false)
+            ? ['type' => 'success', 'text' => 'Conversa devolvida para a Beatriz. Ela volta a responder esse contato.']
+            : ['type' => 'error',   'text' => htmlspecialchars($result['message'] ?? 'Não foi possível devolver a conversa.')];
     }
 }
 
@@ -298,6 +315,10 @@ HTML;
 $artist_name = htmlspecialchars($data['artist_name'] ?? 'Artista');
 $tz = (string) ($data['timezone'] ?? 'UTC');
 $tz = $tz !== '' ? $tz : 'UTC';
+
+// Customers (new vs returning) + per-chat ownership, for the Clientes section.
+$customers_data = call_n8n($webhook_url, ['token' => $token, 'action' => 'customers']);
+$customers = is_array($customers_data['customers'] ?? null) ? $customers_data['customers'] : [];
 
 $blocks    = is_array($data['blocks'] ?? null) ? $data['blocks'] : [];
 $blocks_count    = count($blocks);
@@ -383,6 +404,41 @@ if ($flash !== null) {
     $flash_html = '<div class="status-badge ' . $badge_class . '" style="display:block;">' . $flash['text'] . '</div>';
 }
 
+// Customers (new vs returning) + per-chat ownership
+$customers_html = '';
+if (count($customers) === 0) {
+    $customers_html = '<p class="slot-empty">Nenhum cliente ainda.</p>';
+} else {
+    $items = '';
+    foreach ($customers as $c) {
+        $tel       = htmlspecialchars((string) ($c['telefone'] ?? ''));
+        $chatId    = htmlspecialchars((string) ($c['chat_id'] ?? ''));
+        $nome      = htmlspecialchars((string) ($c['nome'] ?? ''));
+        $returning = !empty($c['is_returning']);
+        $owner     = (string) ($c['owner'] ?? 'beatriz');
+        $label     = $nome !== '' ? $nome : 'Sem nome';
+        $badge = $returning
+            ? '<span class="cust-badge cust-returning">Recorrente</span>'
+            : '<span class="cust-badge cust-new">Novo</span>';
+        $owner_ctrl = $owner === 'artist'
+            ? '<form method="post" class="inline-form"><input type="hidden" name="action" value="return_chat"><input type="hidden" name="chat_id" value="' . $chatId . '"><button type="submit" class="btn btn--ghost">Devolver à Beatriz</button></form>'
+            : '<span class="booked-detail">Beatriz responde</span>';
+        $items .= <<<LI
+        <li class="block-item">
+            <div class="cust-row">
+                <div class="booked-main">
+                    <span class="slot-time">$label</span>
+                    <span class="booked-detail">$tel</span>
+                </div>
+                $badge
+                $owner_ctrl
+            </div>
+        </li>
+LI;
+    }
+    $customers_html = '<ul class="slot-list">' . $items . '</ul>';
+}
+
 $body = <<<HTML
 <div class="card">
     <h1>Agenda de $artist_name</h1>
@@ -435,6 +491,33 @@ $body = <<<HTML
     <section class="agenda-section blocks-section" data-block-count="$blocks_count">
         <h3 class="section-title">Horários bloqueados</h3>
         $blocks_html
+    </section>
+
+    <div class="divider">&#x25C6;</div>
+
+    <section class="agenda-section customers-section">
+        <h3 class="section-title">Clientes</h3>
+        <p class="section-sub">Veja quem é recorrente ou novo. Se você assumiu uma conversa pelo WhatsApp, devolva-a aqui para a Beatriz voltar a responder.</p>
+        $customers_html
+    </section>
+
+    <div class="divider">&#x25C6;</div>
+
+    <section class="agenda-section">
+        <h3 class="section-title">Marcar cliente recorrente</h3>
+        <p class="section-sub">Cliente que já fez tatuagem com você antes da Beatriz? Marque aqui para ele não ser tratado como novo.</p>
+        <form method="post" class="block-form">
+            <input type="hidden" name="action" value="import_customer">
+            <div class="field">
+                <label for="imp_telefone">WhatsApp (com DDI, ex: 5511999990001)</label>
+                <input type="text" id="imp_telefone" name="telefone" required>
+            </div>
+            <div class="field">
+                <label for="imp_nome">Nome (opcional)</label>
+                <input type="text" id="imp_nome" name="nome">
+            </div>
+            <button type="submit" class="btn">Marcar</button>
+        </form>
     </section>
 
     <a href="/" class="footer-link">Voltar ao site</a>

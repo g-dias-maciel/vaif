@@ -5,7 +5,8 @@ the production landing page (which isn't ready yet). It contains just the two
 pages the artist needs:
 
 - `/onboard/<token>` — scan the WAHA QR to connect the artist's WhatsApp Business
-- `/agenda/<token>` — see scheduled tattoos, pause/reactivate the SDR, and block/unblock days off
+- `/agenda/<token>` — see scheduled tattoos, pause/reactivate the SDR, block/unblock days off, and manage customers (new vs returning) + return chats to Beatriz
+- `/promo/<admin_token>` — VAIF-partner only: create/activate/pause/end an artist's promotion
 
 ## Layout
 
@@ -16,7 +17,7 @@ sdr-admin/
 ├── agenda/index.php   # agenda admin page (calls n8n /calendar)
 ├── img/favicon.ico
 ├── nginx.conf         # nginx + PHP-FPM server block
-└── Dockerfile         # php:8.3-fpm-alpine
+└── Dockerfile         # php:8.3.36-fpm-alpine
 ```
 
 ## Environment variables (Coolify / staging)
@@ -24,7 +25,9 @@ sdr-admin/
 | Variable | Description |
 |---|---|
 | `N8N_ONBOARD_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/onboard-api` — validate/status/consume QR connect |
-| `N8N_AGENDA_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/calendar` — list scheduled/blocked + block/unblock + suspend/resume |
+| `N8N_AGENDA_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/calendar` — list scheduled/blocked + block/unblock + suspend/resume + customers/import/return-chat |
+| `N8N_PROMOTIONS_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/promotions` — admin promotions (create/activate/pause/end) |
+| `VAIF_ADMIN_TOKEN` | Shared secret for the `/promo/<token>` admin page (must match n8n's `VAIF_ADMIN_TOKEN`) |
 
 ## Backing n8n workflows (already deployed on staging)
 
