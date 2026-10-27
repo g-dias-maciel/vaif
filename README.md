@@ -515,6 +515,10 @@ The Postgres schema is owned by `packages/crm/supabase/migrations` and
 | `message_buffer` | Debounce state |
 | `notion_sync_outbox` | Reliable Notion sync queue |
 
+A proposed schema for 1,000+ Artists is in
+[`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)
+(decision draft: [`docs/adr/0002-crm-schema-v2.md`](docs/adr/0002-crm-schema-v2.md)).
+
 Key Postgres functions used by n8n: `set_artist_context`,
 `resolve_artist_from_session`, `validate_onboarding_token`,
 `consume_onboarding_token`, `complete_artist_onboarding`, `suspend_artist`,
