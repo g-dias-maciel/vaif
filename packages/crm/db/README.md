@@ -6,6 +6,38 @@ The schema-only dump of the **deployed v1 database** (2026-10-28,
 PostgreSQL 17.7). It is evidence, not a desired state. See
 [`docs/design/crm-v1-production-drift.md`](../../../docs/design/crm-v1-production-drift.md).
 
+## `migrations/` — v2
+
+The accepted target schema (`docs/design/crm-data-model-v2.md`, ADR-0002). It is
+a **cutover**, not a layered migration: apply it to an empty `public` schema.
+
+| File | Contents |
+|---|---|
+| `0001_schema_v2.sql` | Tables, composite FKs, exclusion constraint, monthly `events` partitions, `updated_at` triggers |
+| `0002_functions_v2.sql` | The RPC surface the agent and the CRM call; no direct table writes |
+| `0003_roles_v2.sql` | `migrator` / `crm_app` / `agent_rw` / `analytics_ro` and grants |
+
+Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
+passwords from Coolify env) are created per environment, outside the repo.
+
+## `tests/v2_contract.sql`
+
+One transaction, rolled back at the end, that fails loudly. It covers tenant
+isolation, phone normalisation, one-open-quote, manual deposit confirmation,
+double-booking refusal by the exclusion constraint, availability windows,
+promotion snapshotting and LGPD anonymisation.
+
+```bash
+createdb vaif_v2_test
+psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0001_schema_v2.sql
+psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0002_functions_v2.sql
+psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0003_roles_v2.sql
+psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f tests/v2_contract.sql
+```
+
+CI runs exactly this on `postgres:17-alpine` (`.github/workflows/crm-db.yml`), and
+also restores the production baseline dump to prove it is still restorable.
+
 ## `rebuild-v1.sh`
 
 Drops `schema public` and rebuilds the database from

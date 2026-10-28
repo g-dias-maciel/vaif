@@ -846,14 +846,21 @@ Still do it in verifiable phases.
   `001_idempotent_schema.sql` (`pricing.region`, `artists.pricing_extras`) and
   the generated migration workflow was rebuilt. They apply on the next run of
   the DB Migration workflow.
-- Remaining: add a CI job that applies the baseline + v2 migrations to a
-  throwaway Postgres container and runs SQL contract tests. No more SQLite-only
-  proof.
+- Done 2026-10-28: `v1` rebuilt clean from the repo migrations on the Coolify
+  host (6 tenant FKs restored, `pricing.region` / `artists.pricing_extras`
+  present, app healthy).
+- Done 2026-10-28: `.github/workflows/crm-db.yml` restores the production dump
+  and applies the v2 migrations to a throwaway Postgres 17 container, then runs
+  `packages/crm/db/tests/v2_contract.sql`. No more SQLite-only proof.
 - Remaining: decide the backup mechanism (WAL-G/pgBackRest vs nightly dump).
 
 **Phase 1 — build and load-test v2 (2–3 days).**
-- Write `packages/crm/db/migrations/0001_schema_v2.sql` (the DDL above) and
-  `0002_functions_v2.sql` (RPCs).
+- Done 2026-10-28: `packages/crm/db/migrations/0001_schema_v2.sql` (DDL),
+  `0002_functions_v2.sql` (RPCs) and `0003_roles_v2.sql` (roles/grants) written
+  and applied to a scratch database on the Coolify host. `tests/v2_contract.sql`
+  passes: tenant isolation, phone normalisation, one open quote, manual deposit
+  confirmation, exclusion-constraint double-booking refusal, availability
+  windows, promotion snapshot, LGPD anonymisation.
 - Generate a synthetic dataset: 1,000 Artists, 3M Leads, 3M Projects, 15M Events,
   500k Calendar entries. Use `generate_series` + a deterministic
   `random()` seed so benchmarks are repeatable.

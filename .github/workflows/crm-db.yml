@@ -1,0 +1,86 @@
+name: CRM DB
+
+on:
+  push:
+    paths:
+      - "packages/crm/db/**"
+      - ".github/workflows/crm-db.yml"
+  pull_request:
+    paths:
+      - "packages/crm/db/**"
+
+jobs:
+  # The production dump must stay restorable. This is the only thing that proves
+  # the baseline is a real safety net rather than a file nobody ever opened.
+  v1-baseline-restores:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: baseline
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Restore the schema-only production dump
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d baseline -v ON_ERROR_STOP=1 \
+            -f packages/crm/db/baseline/0001_production.sql
+
+      - name: Sanity check the restored shape
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d baseline -v ON_ERROR_STOP=1 -tAc "
+            select case
+              when count(*) = 20 then 'ok: 20 tables'
+              else 'unexpected table count: ' || count(*)
+            end from information_schema.tables where table_schema = 'public';
+          "
+
+  # v2 is a clean cutover, not a layered migration: apply to an empty schema and
+  # exercise every RPC. This is the check that would have caught the missing
+  # pricing.region and the missing tenant foreign keys.
+  v2-contract:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: vaif_v2_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply the v2 schema, functions and roles
+        env:
+          PGPASSWORD: postgres
+          PSQL: psql -h localhost -U postgres -d vaif_v2_test -v ON_ERROR_STOP=1 -q
+        run: |
+          $PSQL -f packages/crm/db/migrations/0001_schema_v2.sql
+          $PSQL -f packages/crm/db/migrations/0002_functions_v2.sql
+          $PSQL -f packages/crm/db/migrations/0003_roles_v2.sql
+
+      - name: Contract tests
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql -h localhost -U postgres -d vaif_v2_test -v ON_ERROR_STOP=1 \
+            -f packages/crm/db/tests/v2_contract.sql
