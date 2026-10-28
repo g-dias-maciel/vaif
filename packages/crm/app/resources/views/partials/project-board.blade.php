@@ -57,18 +57,19 @@
                                 @endif
                                 @if ($agentAction && $project->lead)
                                     @can('flagAgent', $project->lead)
-                                        @if ($project->lead->agent_blocked)
-                                            <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
-                                                @csrf
-                                                <button type="submit" class="btn btn--ghost btn--small">Reativar agente</button>
-                                            </form>
-                                        @else
-                                            <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
-                                                @csrf
-                                                <button type="submit" class="btn btn--danger btn--small"
-                                                    onclick="return confirm('Silenciar a Beatriz para este cliente? Ela deixará de responder automaticamente.');">Silenciar agente</button>
-                                            </form>
-                                        @endif
+                                        <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
+                                            @csrf
+                                            @if ($project->lead->agent_blocked)
+                                                <button type="submit" class="btn btn--icon is-active" title="Reativar agente" aria-label="Reativar agente">
+                                                    <x-icon name="bell" />
+                                                </button>
+                                            @else
+                                                <button type="submit" class="btn btn--icon" title="Silenciar agente" aria-label="Silenciar agente"
+                                                    onclick="return confirm('Silenciar a Beatriz para este cliente? Ela deixará de responder automaticamente.');">
+                                                    <x-icon name="bell-off" />
+                                                </button>
+                                            @endif
+                                        </form>
                                     @endcan
                                 @elseif ($project->stage_key !== 'perdido')
                                     <form method="post" action="{{ route('projects.mark-lost', $project) }}" class="inline">

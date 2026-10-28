@@ -98,7 +98,8 @@ class LeadAgentFlagTest extends TestCase
 
         $this->actingAs($user)->get('/')
             ->assertOk()
-            ->assertSee('Silenciar agente')
+            ->assertSee('btn--icon', false)
+            ->assertSee('aria-label="Silenciar agente"', false)
             ->assertDontSee('Marcar perdido');
 
         $this->actingAs($user)->post("/leads/{$lead->id}/agent")->assertRedirect();
@@ -106,7 +107,7 @@ class LeadAgentFlagTest extends TestCase
         $this->actingAs($user)->get('/')
             ->assertOk()
             ->assertSee('Agente silenciado')
-            ->assertSee('Reativar agente')
+            ->assertSee('aria-label="Reativar agente"', false)
             ->assertDontSee('Marcar perdido');
     }
 }

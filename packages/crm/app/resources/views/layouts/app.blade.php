@@ -219,7 +219,7 @@
         .note { font-size: 0.8rem; color: var(--ink); margin-bottom: 6px; }
         .note-by { color: var(--muted); font-size: 0.68rem; }
 
-        .actions { margin-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+        .actions { margin-top: 10px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
         .note-form { display: flex; gap: 8px; }
         .note-form input {
             flex: 1; background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
@@ -318,6 +318,18 @@
         .btn--danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 7px 14px; }
         .btn--danger:hover { background: var(--danger); color: #0A0A0A; opacity: 1; }
         .btn--small { padding: 6px 12px; font-size: 0.68rem; }
+        .btn--icon {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 34px; height: 34px; padding: 0; border-radius: 8px;
+            background: transparent; color: var(--muted); border: 1px solid var(--border);
+        }
+        .btn--icon svg {
+            width: 16px; height: 16px; fill: none; stroke: currentColor;
+            stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+        }
+        .btn--icon:hover { color: var(--danger); border-color: var(--danger); background: transparent; opacity: 1; }
+        .btn--icon.is-active { color: var(--gold); border-color: var(--gold); }
+        .btn--icon.is-active:hover { color: var(--gold); border-color: var(--gold); background: rgba(212,176,76,0.10); }
         .btn--whatsapp { background: #25D366; color: #0A0A0A; border: none; text-align: center; }
         .btn--whatsapp:hover { background: #1fb855; opacity: 1; }
         .inline { display: inline; }
