@@ -1,5 +1,9 @@
 @extends('layouts.app')
 
+@push('styles')
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/flatpickr.min.css">
+@endpush
+
 @section('title', 'Agenda')
 
 @section('content')
@@ -21,7 +25,7 @@
 
     <form method="post" action="{{ route('bookings.block') }}" class="pricing-add">
         @csrf
-        <input type="date" name="date" required>
+        <input type="text" name="date" id="block-date" placeholder="dd/mm/aaaa" autocomplete="off" inputmode="numeric" required>
         <input type="time" name="start_time" title="Início (opcional)">
         <input type="time" name="end_time" title="Fim (opcional)">
         <button type="submit" class="btn btn--small">Bloquear</button>
@@ -48,3 +52,21 @@
     @endforelse
 </ul>
 @endsection
+
+@push('scripts')
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13"></script>
+<script src="https://cdn.jsdelivr.net/npm/flatpickr@4.6.13/dist/l10n/pt.js"></script>
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    if (!window.flatpickr) return;
+
+    flatpickr('#block-date', {
+        locale: 'pt',
+        dateFormat: 'Y-m-d',
+        altInput: true,
+        altFormat: 'd/m/Y',
+        disableMobile: true
+    });
+});
+</script>
+@endpush

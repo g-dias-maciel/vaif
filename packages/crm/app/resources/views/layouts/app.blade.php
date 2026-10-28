@@ -409,6 +409,7 @@
             }
         } catch (e) {}
     </script>
+    @stack('styles')
 </head>
 <body>
     @auth

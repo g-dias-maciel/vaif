@@ -69,19 +69,36 @@ class BookingController extends Controller
         }
 
         $data = $request->validate([
-            'date' => ['required', 'date'],
+            'date' => ['required', 'string', 'max:10'],
             'start_time' => ['nullable', 'date_format:H:i'],
             'end_time' => ['nullable', 'date_format:H:i'],
         ]);
 
+        // The form shows dd/mm/yyyy (pt-BR); flatpickr submits Y-m-d. Accept
+        // both so the page still works if the date picker script is blocked.
+        $rawDate = trim((string) $data['date']);
+        $date = null;
+        foreach (['!d/m/Y', '!Y-m-d'] as $format) {
+            $parsed = \DateTimeImmutable::createFromFormat($format, $rawDate);
+            if ($parsed && $parsed->format($format === '!d/m/Y' ? 'd/m/Y' : 'Y-m-d') === $rawDate) {
+                $date = $parsed;
+                break;
+            }
+        }
+
+        if (! $date) {
+            return back()->withInput()->withErrors(['date' => 'Data inválida. Use dd/mm/aaaa.']);
+        }
+
+        $dateString = $date->format('Y-m-d');
         $tz = $artist->timezone ?: 'America/Sao_Paulo';
 
         if (! empty($data['start_time']) && ! empty($data['end_time'])) {
-            $start = CarbonImmutable::parse($data['date'].' '.$data['start_time'], $tz);
-            $end = CarbonImmutable::parse($data['date'].' '.$data['end_time'], $tz);
+            $start = CarbonImmutable::parse($dateString.' '.$data['start_time'], $tz);
+            $end = CarbonImmutable::parse($dateString.' '.$data['end_time'], $tz);
         } else {
-            $start = CarbonImmutable::parse($data['date'].' 00:00', $tz);
-            $end = CarbonImmutable::parse($data['date'].' 23:59:59', $tz);
+            $start = CarbonImmutable::parse($dateString.' 00:00', $tz);
+            $end = CarbonImmutable::parse($dateString.' 23:59:59', $tz);
         }
 
         if ($end->lessThanOrEqualTo($start)) {
