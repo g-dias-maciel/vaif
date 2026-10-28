@@ -483,17 +483,23 @@ create table returning_customers (
 -- use and inserts with an explicit column list, so an extra column with a
 -- default is safe. `created_at` is what makes retention possible at all: the
 -- node stores no timestamp.
-create table if not exists chat_memory (
+-- n8n's Postgres Chat Memory node (@langchain/community
+-- PostgresChatMessageHistory) runs `CREATE TABLE IF NOT EXISTS` on every boot,
+-- which needs CREATE on the schema even when the table exists. Give it a
+-- dedicated schema owned by the agent role instead of widening `public`.
+create schema if not exists agent_memory;
+
+create table if not exists agent_memory.chat_memory (
   id         serial primary key,
   session_id varchar(255) not null,
   message    jsonb not null
 );
 
-alter table chat_memory
+alter table agent_memory.chat_memory
   add column if not exists created_at timestamptz not null default now();
 
-create index if not exists chat_memory_session on chat_memory (session_id, id);
-create index if not exists chat_memory_created on chat_memory (created_at);
+create index if not exists chat_memory_session on agent_memory.chat_memory (session_id, id);
+create index if not exists chat_memory_created on agent_memory.chat_memory (created_at);
 
 
 -- =============================================================================

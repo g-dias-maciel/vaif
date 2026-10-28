@@ -55,7 +55,7 @@ import json, os
 BASE = os.path.dirname(os.path.abspath(__file__))
 
 WEBHOOK_PATH = "calendar"
-MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
+MAIN_DB = {"postgres": {"id": "vboyB1OhLNIXIBWt", "name": "admin-db"}}
 
 # Resolve the artist from the incoming token and carry the request params so
 # the Switch and downstream Postgres nodes can read them from $json.

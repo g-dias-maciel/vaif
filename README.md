@@ -527,7 +527,7 @@ The main tables:
 | `promotions`, `promotion_prices` | Pre-approved offers |
 | `returning_customers` | Old clients per artist |
 | `events` | Monthly-partitioned audit log |
-| `chat_memory` | n8n Postgres Chat Memory (30-day purge) |
+| `agent_memory.chat_memory` | n8n Postgres Chat Memory (agent-owned schema, 30-day purge) |
 
 The accepted schema for 1,000+ Artists is in
 [`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)
@@ -536,8 +536,8 @@ The contract tests live in `packages/crm/db/tests/v2_contract.sql` and run in CI
 on `postgres:17-alpine`.
 
 The agent connects as `agent_rw`, which has **no domain table grants** — only
-`EXECUTE` on the RPCs (and DML on `chat_memory`, which the n8n memory node
-writes directly). The CRM app connects as `crm_app`.
+`EXECUTE` on the RPCs, plus ownership of the `agent_memory` schema where the n8n
+memory node keeps `chat_memory`. The CRM app connects as `crm_app`.
 
 Key RPCs used by n8n: `resolve_artist`, `chat_buffer_accumulate/_typing/_state/
 _clear`, `chat_owner`, `take_chat_control`, `return_chat_control`, `start_turn`,

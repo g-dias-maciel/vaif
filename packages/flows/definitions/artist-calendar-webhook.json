@@ -37,8 +37,8 @@
       "name": "Resolve Artist by Token",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -126,8 +126,8 @@
       "name": "List Availability",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -163,8 +163,8 @@
       "name": "Block Slot",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -200,8 +200,8 @@
       "name": "Unblock Slot",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -237,8 +237,8 @@
       "name": "Suspend Artist",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -274,8 +274,8 @@
       "name": "Resume Artist",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -345,8 +345,8 @@
       "name": "List Customers",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -382,8 +382,8 @@
       "name": "Import Customer",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -419,8 +419,8 @@
       "name": "Return Chat",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },

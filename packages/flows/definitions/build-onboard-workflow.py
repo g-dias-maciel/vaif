@@ -24,7 +24,7 @@ import json, os
 
 BASE = os.path.dirname(os.path.abspath(__file__))
 WEBHOOK_PATH = "onboard-api"
-MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
+MAIN_DB = {"postgres": {"id": "vboyB1OhLNIXIBWt", "name": "admin-db"}}
 WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
 
 RESOLVE_QUERY = """\

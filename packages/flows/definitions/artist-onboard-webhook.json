@@ -37,8 +37,8 @@
       "name": "Resolve Artist by Token",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -294,8 +294,8 @@
       "name": "Consume Token",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },

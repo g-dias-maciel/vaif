@@ -185,8 +185,8 @@
       "name": "INSERT Artist",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -222,8 +222,8 @@
       "name": "INSERT Pricing",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },

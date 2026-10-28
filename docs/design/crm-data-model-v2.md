@@ -710,19 +710,22 @@ regresses.
 
 The n8n Postgres Chat Memory node creates `chat_memory (id integer, session_id
 varchar, message jsonb)` at runtime. It is one row per message, has **no index
-on `session_id`**, no retention, no `artist_id`, and no migration. At 1,000
+on `session_id`** in v1, no retention, no `artist_id`, and no migration. At 1,000
 Artists it is the largest table in the database and the agent reads it unindexed
 on every turn.
 
 Two options:
 
-- **A. Keep it, make it safe (v2 default).** Add
-  `create index chat_memory_session on chat_memory (session_id, id);` and a
-  nightly job deleting rows older than 30 days (or older than the Lead's last
-  activity). It is ephemeral agent context, not a system of record, so a short
-  retention is acceptable. Cheapest and does not touch the agent workflow.
-  Because the node writes the table directly, `agent_rw` gets DML on
-  `chat_memory` (and its sequence) — the only table grant it has.
+- **A. Keep it, make it safe (v2 default).** The table lives in a dedicated
+  `agent_memory` schema owned by `agent_rw`, with `(session_id, id)` and
+  `created_at` indexes and a nightly 30-day purge (`purge_chat_memory`). It is
+  ephemeral agent context, not a system of record, so a short retention is
+  acceptable. The dedicated schema exists because the node runs
+  `CREATE TABLE IF NOT EXISTS` on every boot, which needs `CREATE` on the schema
+  even when the table exists; giving that to `agent_rw` in `public` would be
+  broader than necessary. `agent_login` gets
+  `search_path = agent_memory, public`, so the unqualified `chat_memory` in the
+  node resolves there. This is the only object the agent owns.
 - **B. Replace it with a CRM-owned `messages` table.** Only if the CRM needs to
   display conversation history: `(id bigint, artist_id, lead_id, direction,
   body, created_at)` partitioned monthly, retention 24 months, tenant index.
@@ -784,7 +787,7 @@ foreign key (artist_id, lead_id) references leads (artist_id, id)
 |---|---|
 | `migrator` | owns the schema, runs DDL (deploy job only) |
 | `crm_app` | `select/insert/update` on domain tables; no DDL |
-| `agent_rw` | `execute` on the RPCs; `chat_memory` DML only (n8n memory node); no domain table grants |
+| `agent_rw` | `execute` on the RPCs; owns the `agent_memory` schema (n8n memory node); no domain table grants |
 | `analytics_ro` | `select` on domain tables + rollups |
 
 Also `revoke create on schema public from public;` and pin `search_path` on every
@@ -925,41 +928,29 @@ until cutover.
   cross-tenant denial, invalid transition, double booking, quote expiry, manual
   deposit confirmation and the optimistic stage guard.
 
-**Phase 3 — cutover (1 day).**
+**Phase 3 — cutover (1 day). — DONE 2026-10-28**
 
-- Done 2026-10-28: `vaif_crm` rebuilt from the migrations, the v1 tenant
-  (Bruno + 24 price rows) and the staff user migrated, login roles created, and
-  the contract tests pass. The v1 `postgres` database is untouched and a full
-  dump was taken (`/tmp/crm-v1-pre-cutover-*.dump`).
-- Done 2026-10-28: the v2 image was built from this commit and smoke-tested
-  against `vaif_crm` (health, login, dashboard, agenda, config, artist detail,
-  lead detail after a real `start_turn`/`patch_project`/`write_quote`/
-  `request_deposit` sequence). The smoke data was wiped afterwards.
-- Remaining: deploy that image in Coolify with `DB_DATABASE=vaif_crm` and
-  `DB_USERNAME=crm_app_login`; run `STAGE=app` for users/notes; point n8n at
-  `agent_login` / `crm_app_login` and deploy the workflow JSONs; run the smoke
-  checklist on production.
+- `vaif_crm` rebuilt from the migrations; v1 tenant (Bruno + 24 price rows) and
+  the staff user migrated; login roles created; contract tests pass. The v1
+  `postgres` database is untouched and a full dump was taken
+  (`/tmp/crm-v1-pre-cutover-*.dump`).
+- The v2 image builds and runs against `vaif_crm`. Production was repointed in
+  Coolify (`DB_DATABASE=vaif_crm`, `DB_USERNAME=crm_app_login`), and the smoke
+  checklist passed: health, login, dashboard, agenda, config, artist detail.
+- n8n: new `agent-db` (`agent_login`) and `admin-db` (`crm_app_login`)
+  credentials; the agent, ops callback and admin workflows were redeployed.
+  The v1 DB Migration workflow and the Telegram testbed were deleted.
+- The agent ran a real WhatsApp turn on v2: `start_turn` created the Lead and
+  Project, `chat_memory` lived in the agent-owned `agent_memory` schema, the
+  reply was generated, and `patch_project` advanced the stage. Smoke data was
+  removed.
 
-1. Freeze writes: stop the n8n workflows and the CRM container.
-2. `pg_dump` the v1 database (rollback artifact):
-   `docker exec <pg> pg_dump -U postgres -d postgres -Fc > /tmp/vaif-v1.dump`.
-3. Rebuild `vaif_crm` from `0001_schema_v2.sql`, `0002_functions_v2.sql`,
-   `0003_roles_v2.sql`.
-4. Apply Laravel migrations as `migrator` (`users`, `notes`), then run
-   `packages/crm/db/migrate/v1_to_v2_tenants.sql` and `v1_to_v2_users.sql`.
-5. Create the NOLOGIN group roles (done by `0003`) and the login roles with
-   passwords from Coolify: `crm_app_login IN ROLE crm_app`,
-   `agent_login IN ROLE agent_rw`, `analytics_login IN ROLE analytics_ro`.
-6. Repoint `DATABASE_URL`:
-   - CRM container → `crm_app_login`
-   - n8n agent workflow → `agent_login`
-   - admin workflows (calendar/onboarding/promotions/reset) → `crm_app_login`
-   Set `RUN_MIGRATIONS=false` on the CRM container.
-7. Deploy the workflow JSONs and activate the agent.
-8. Smoke test: `/api/up`, login, board, lead detail, new WhatsApp turn,
-   availability, booking, deposit request, promotion quote, onboarding form.
-9. Delete the old `postgres` schema only after the smoke test and the backup
-   are verified.
+Remaining operational follow-ups:
+
+1. Rotate the `crm_app_login` / `agent_login` passwords (generated during the
+   cutover) and update the Coolify env + n8n credentials.
+2. Decide and enable the backup mechanism (WAL-G/pgBackRest or nightly dump).
+3. Run the synthetic load test (1,000 Artists / 3M Leads / 15M Events).
 
 **Phase 4 — operations.**
 - Partition maintenance job (create next 2 months, detach > 24 months).

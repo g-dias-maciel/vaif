@@ -621,12 +621,14 @@ begin
 
   select count(distinct table_name) into n from information_schema.role_table_grants
    where grantee = 'agent_rw' and table_schema = 'public';
-  perform pg_temp.ok(n = 1, 'agent_rw has exactly one table (chat_memory), got ' || n);
+  perform pg_temp.ok(n = 0, 'agent_rw has no public table grants, got ' || n);
 
-  select count(distinct table_name) into n from information_schema.role_table_grants
-   where grantee = 'agent_rw' and table_schema = 'public'
-     and table_name <> 'chat_memory';
-  perform pg_temp.ok(n = 0, 'agent_rw has no domain table grants');
+  perform pg_temp.ok(
+    has_table_privilege('agent_rw', 'agent_memory.chat_memory', 'select')
+    and has_table_privilege('agent_rw', 'agent_memory.chat_memory', 'insert')
+    and has_table_privilege('agent_rw', 'agent_memory.chat_memory', 'update')
+    and has_table_privilege('agent_rw', 'agent_memory.chat_memory', 'delete'),
+    'agent_rw has DML on its memory table');
 
   select count(*) into n from information_schema.role_table_grants
    where grantee = 'crm_app' and table_schema = 'public';

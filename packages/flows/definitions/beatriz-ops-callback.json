@@ -54,8 +54,8 @@
       "name": "Update Lead (Callback)",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "Fw3dgkcXV7Bblry5",
+          "name": "agent-db"
         }
       }
     },

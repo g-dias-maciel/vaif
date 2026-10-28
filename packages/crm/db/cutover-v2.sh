@@ -150,6 +150,11 @@ for role in crm_app_login agent_login analytics_login; do
     \$\$;"
 done
 
+# n8n's memory node uses the unqualified `chat_memory`; resolve it to the
+# agent-owned schema, not `public`.
+psql_target -v ON_ERROR_STOP=1 -q -c "
+  alter role agent_login set search_path = agent_memory, public;"
+
 say "6/6 verify"
 psql_target -Atc "
   select 'artists=' || (select count(*) from artists)

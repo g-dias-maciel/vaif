@@ -11,7 +11,10 @@
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
-      "position": [0, 0],
+      "position": [
+        0,
+        0
+      ],
       "id": "arl-webhook-0000-0000-0000-000000000001",
       "name": "Reset Webhook",
       "webhookId": "arl-webhook-0000-0000-0000-000000000001"
@@ -42,7 +45,10 @@
       },
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
-      "position": [260, 0],
+      "position": [
+        260,
+        0
+      ],
       "id": "arl-if-0000-0000-0000-000000000001",
       "name": "Confirm?"
     },
@@ -56,13 +62,16 @@
       },
       "type": "n8n-nodes-base.postgres",
       "typeVersion": 2.6,
-      "position": [560, -120],
+      "position": [
+        560,
+        -120
+      ],
       "id": "arl-reset-0000-0000-0000-000000000001",
       "name": "Reset Leads",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -73,19 +82,42 @@
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [560, 120],
+      "position": [
+        560,
+        120
+      ],
       "id": "arl-refuse-0000-0000-0000-000000000001",
       "name": "Refuse"
     }
   ],
   "connections": {
     "Reset Webhook": {
-      "main": [[{"node": "Confirm?", "type": "main", "index": 0}]]
+      "main": [
+        [
+          {
+            "node": "Confirm?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Confirm?": {
       "main": [
-        [{"node": "Reset Leads", "type": "main", "index": 0}],
-        [{"node": "Refuse", "type": "main", "index": 0}]
+        [
+          {
+            "node": "Reset Leads",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Refuse",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     }
   },

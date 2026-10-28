@@ -115,8 +115,8 @@
       "name": "List Artists",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -152,8 +152,8 @@
       "name": "List Promotions",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -189,8 +189,8 @@
       "name": "Create Promotion",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -226,8 +226,8 @@
       "name": "Activate Promotion",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -263,8 +263,8 @@
       "name": "Pause Promotion",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },
@@ -300,8 +300,8 @@
       "name": "End Promotion",
       "credentials": {
         "postgres": {
-          "id": "nngaQDfXHYQ1Q43P",
-          "name": "main-db"
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
         }
       }
     },

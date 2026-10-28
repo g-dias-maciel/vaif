@@ -48,7 +48,7 @@ SYSTEM_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/beatriz-system.m
 CLASSIFY_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/classify-conversation.md")).read()
 
 # ── Credentials (n8n instance) ──
-POSTGRES = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
+POSTGRES = {"postgres": {"id": "Fw3dgkcXV7Bblry5", "name": "agent-db"}}
 OPENROUTER = {"openRouterApi": {"id": "ow26hPDMir1dMfz0", "name": "OpenRouter account"}}
 WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
 # Dedicated ops bot — receives the deposit/handoff confirm buttons (callback_query)

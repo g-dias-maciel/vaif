@@ -54,12 +54,19 @@ grant select on all tables in schema public to analytics_ro;
 -- agent_rw: no domain table access at all; only the RPC surface.
 -- (Every RPC is SECURITY DEFINER, so it runs with the owner's privileges.)
 --
--- The one exception is `chat_memory`: it is n8n's Postgres Chat Memory table,
--- not domain data, and the memory node cannot use an RPC. It is the transcript
--- of a conversation, already scoped by session_id = lead_id.
+-- The one exception is the agent's own memory schema: n8n's Postgres Chat
+-- Memory node creates its table at runtime, so it needs CREATE on that schema.
+-- It is not domain data and lives outside `public`.
 -- ---------------------------------------------------------------------------
-grant select, insert, update, delete on chat_memory to agent_rw;
-grant usage, select on sequence chat_memory_id_seq to agent_rw;
+grant usage, create on schema agent_memory to agent_rw;
+alter table agent_memory.chat_memory owner to agent_rw;
+alter sequence agent_memory.chat_memory_id_seq owner to agent_rw;
+grant select, insert, update, delete on agent_memory.chat_memory to agent_rw;
+grant usage, select on sequence agent_memory.chat_memory_id_seq to agent_rw;
+
+-- The memory node uses the unqualified name `chat_memory`.
+alter role agent_rw set search_path = agent_memory, public;
+
 do $$
 declare
   v_fn text;

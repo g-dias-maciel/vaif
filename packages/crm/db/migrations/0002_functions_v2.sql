@@ -1737,7 +1737,7 @@ as $$
 declare
   v_deleted integer;
 begin
-  delete from chat_memory where created_at < now() - p_older_than;
+  delete from agent_memory.chat_memory where created_at < now() - p_older_than;
   get diagnostics v_deleted = row_count;
   return v_deleted;
 end;
@@ -1854,7 +1854,8 @@ as $$
     select coalesce(p_from, date_trunc('day', now())) as from_at,
            coalesce(p_to, now() + interval '60 days')     as to_at
   )
-  select null::uuid, s.start_at, s.end_at, 'available'::text,
+  select md5(p_artist_id::text || s.start_at::text || p_duration_min::text)::uuid,
+         s.start_at, s.end_at, 'available'::text,
          null::text, null::text, null::text
   from bounds b
   cross join lateral check_availability(p_artist_id, b.from_at, b.to_at, p_duration_min) s
@@ -1908,7 +1909,7 @@ begin
     delete from events;
     get diagnostics v_events = row_count;
 
-    delete from chat_memory where session_id in (select id::text from leads);
+    delete from agent_memory.chat_memory where session_id in (select id::text from leads);
     get diagnostics v_memory = row_count;
 
     delete from calendar_entries where lead_id is not null;
@@ -1930,7 +1931,7 @@ begin
     delete from events where artist_id = v_artist_id;
     get diagnostics v_events = row_count;
 
-    delete from chat_memory
+    delete from agent_memory.chat_memory
      where session_id in (
        select id::text from leads where artist_id = v_artist_id
      );

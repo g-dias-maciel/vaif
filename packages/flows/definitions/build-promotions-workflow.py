@@ -23,7 +23,7 @@ N8N_PROMOTIONS_WEBHOOK_URL = https://n8n.vaif.com.br/webhook/promotions
 import json, os
 
 BASE = os.path.dirname(os.path.abspath(__file__))
-MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
+MAIN_DB = {"postgres": {"id": "vboyB1OhLNIXIBWt", "name": "admin-db"}}
 WEBHOOK_PATH = "promotions"
 
 AUTH_JS = r"""const body = $json.body || {};
