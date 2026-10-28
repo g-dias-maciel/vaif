@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * An entry on the Artist's calendar: either a `booking` (a Project occupying a
@@ -39,6 +40,20 @@ class CalendarEntry extends Model
         'end_at' => 'datetime',
         'active' => 'boolean',
     ];
+
+    /**
+     * The PDO driver hands timestamptz back with its UTC offset. Show it in the
+     * app timezone (America/Sao_Paulo) instead of the raw UTC wall time.
+     */
+    public function getStartAtAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value)->setTimezone(config('app.timezone')) : null;
+    }
+
+    public function getEndAtAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value)->setTimezone(config('app.timezone')) : null;
+    }
 
     public function artist(): BelongsTo
     {

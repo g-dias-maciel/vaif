@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 
 /**
  * Read-only view of n8n's LangChain memory (`agent_memory.chat_memory`).
@@ -24,6 +25,11 @@ class ChatMessage extends Model
         'message' => 'array',
         'created_at' => 'datetime',
     ];
+
+    public function getCreatedAtAttribute($value): ?Carbon
+    {
+        return $value ? Carbon::parse($value)->setTimezone(config('app.timezone')) : null;
+    }
 
     /**
      * `human` (lead) or `ai` (Beatriz/SDR).
