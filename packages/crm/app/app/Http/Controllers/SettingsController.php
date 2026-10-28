@@ -3,10 +3,14 @@
 namespace App\Http\Controllers;
 
 use App\Models\ArtistSetting;
+use App\Models\CalendarEntry;
 use App\Models\PriceBook;
+use App\Services\Google\GoogleCalendarService;
+use App\Services\Google\GoogleCalendarSync;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 class SettingsController extends Controller
 {
@@ -78,8 +82,13 @@ class SettingsController extends Controller
             }
         }
 
+        $google = app(GoogleCalendarService::class);
+        $googleConfigured = $google->isConfigured();
+
         return view('settings.index', [
             'artist' => $artist,
+            'googleConfigured' => $googleConfigured,
+            'googleServiceEmail' => $googleConfigured ? $google->serviceAccountEmail() : null,
             'promotions' => $artist->promotions()->orderByDesc('created_at')->get(),
             'pricingByKey' => $pricingByKey,
             'sizes' => $sizes,
@@ -110,6 +119,162 @@ class SettingsController extends Controller
         return back()->with($ok ? 'status' : 'error', $ok
             ? 'Sessão WhatsApp iniciada. Escaneie o QR code para conectar.'
             : 'Não foi possível conectar ao WhatsApp agora. Tente novamente.');
+    }
+
+    /**
+     * Connect the Artist's shared Google Calendar after checking that the
+     * service account can actually read/write it.
+     */
+    public function connectGoogle(Request $request, GoogleCalendarService $google)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'calendar_id' => ['required', 'string', 'max:255'],
+        ]);
+
+        $calendarId = trim($data['calendar_id']);
+
+        try {
+            $calendar = $google->getCalendar($calendarId);
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível acessar essa agenda: '.$e->getMessage());
+        }
+
+        if (in_array($calendar['access_role'] ?? null, ['reader', 'freeBusyReader'], true)) {
+            return back()->with('error', 'Essa agenda foi compartilhada apenas para leitura. Compartilhe com a permissão “Fazer alterações nos eventos”.');
+        }
+
+        $artist->forceFill([
+            'google_calendar_id' => $calendar['id'],
+            'google_calendar_summary' => $calendar['summary'],
+            'google_calendar_timezone' => $calendar['timezone'],
+            'google_connected_at' => now(),
+        ])->save();
+
+        // Queue existing upcoming bookings for the next scheduler pass. Also
+        // queue cancelled bookings so an event created before a disconnect is
+        // deleted after reconnecting.
+        CalendarEntry::where('artist_id', $artist->id)
+            ->where('kind', 'booking')
+            ->where(function ($query) {
+                $query->where(function ($upcoming) {
+                    $upcoming->where('active', true)
+                        ->where('start_at', '>=', now()->subDay());
+                })->orWhere('active', false);
+            })
+            ->update([
+                'google_sync_pending' => true,
+                'google_sync_error' => null,
+            ]);
+
+        return back()->with('status', 'Google Agenda conectada. Os agendamentos serão sincronizados em até 1 minuto.');
+    }
+
+    /**
+     * List the calendars shared with the VAIF service account so the Artist
+     * can pick one instead of hunting for the Calendar ID.
+     */
+    public function detectGoogleCalendars(GoogleCalendarService $google)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        try {
+            $calendars = $google->listCalendars();
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível listar as agendas: '.$e->getMessage());
+        }
+
+        // One service account sees every Artist's shared calendar. Artists may
+        // only see calendars matching their own account e-mail; staff may see
+        // the full list when configuring an Artist.
+        if (! auth()->user()->isStaff()) {
+            $emails = $artist->users()
+                ->pluck('email')
+                ->push(auth()->user()->email)
+                ->filter()
+                ->map(fn (string $email) => mb_strtolower(trim($email)))
+                ->unique()
+                ->all();
+
+            $calendars = array_values(array_filter(
+                $calendars,
+                fn (array $calendar) => in_array(mb_strtolower($calendar['id']), $emails, true),
+            ));
+
+            if ($calendars === []) {
+                return back()->with('error', 'Não encontramos uma agenda com o e-mail da sua conta. Compartilhe a agenda com o e-mail da VAIF e informe o ID da agenda abaixo.');
+            }
+        }
+
+        if ($calendars === []) {
+            return back()->with('error', 'Nenhuma agenda compartilhada encontrada. Compartilhe sua agenda com o e-mail da VAIF e tente novamente.');
+        }
+
+        return back()->with('google_calendars', $calendars);
+    }
+
+    /**
+     * Push pending bookings now instead of waiting for the scheduler.
+     */
+    public function syncGoogle(GoogleCalendarSync $sync)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist && $artist->hasGoogleCalendar(), 403);
+
+        try {
+            $counts = $sync->syncArtist($artist, 50);
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível sincronizar agora: '.$e->getMessage());
+        }
+
+        $summary = sprintf(
+            '%d criado(s), %d atualizado(s), %d removido(s)',
+            $counts['created'],
+            $counts['updated'],
+            $counts['deleted'],
+        );
+
+        return back()->with(
+            $counts['failed'] > 0 ? 'error' : 'status',
+            $counts['failed'] > 0
+                ? $summary.'; '.$counts['failed'].' falhou(aram). Tente novamente.'
+                : $summary.'.',
+        );
+    }
+
+    /**
+     * Stop mirroring bookings. Events already in Google are left untouched.
+     */
+    public function disconnectGoogle()
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        // Keep `google_event_id` so reconnecting to the same calendar updates
+        // the existing events instead of creating duplicates. Reconnecting to a
+        // different calendar turns the stale ids into 404s and they are
+        // recreated there.
+        CalendarEntry::where('artist_id', $artist->id)
+            ->update([
+                'google_sync_pending' => false,
+                'google_sync_error' => null,
+            ]);
+
+        $artist->forceFill([
+            'google_calendar_id' => null,
+            'google_calendar_summary' => null,
+            'google_calendar_timezone' => null,
+            'google_connected_at' => null,
+        ])->save();
+
+        return back()->with('status', 'Google Agenda desconectada. Os eventos já criados permanecem na agenda.');
     }
 
     /**

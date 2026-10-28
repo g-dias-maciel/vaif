@@ -53,6 +53,12 @@ echo "[entrypoint] caching config and views"
 php artisan config:cache
 php artisan view:cache
 
+# --- Scheduler ---------------------------------------------------------------
+# Syncs CRM bookings to Google Calendar every minute. Kept in the same
+# container so a restart of the app also restarts the scheduler.
+echo "[entrypoint] starting the scheduler"
+su -s /bin/sh www-data -c "php artisan schedule:work" >/dev/null 2>&1 &
+
 # --- Serve -------------------------------------------------------------------
 echo "[entrypoint] starting php-fpm + nginx"
 php-fpm -D

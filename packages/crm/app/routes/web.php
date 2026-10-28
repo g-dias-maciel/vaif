@@ -43,6 +43,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/config/toggle', [SettingsController::class, 'toggle'])->name('settings.toggle');
         Route::post('/config/waha/connect', [SettingsController::class, 'connectWaha'])->name('settings.waha.connect');
         Route::post('/config/waha/restart', [SettingsController::class, 'restartWaha'])->name('settings.waha.restart');
+        Route::post('/config/google', [SettingsController::class, 'connectGoogle'])->name('settings.google.connect');
+        Route::post('/config/google/detect', [SettingsController::class, 'detectGoogleCalendars'])->name('settings.google.detect');
+        Route::post('/config/google/sync', [SettingsController::class, 'syncGoogle'])->name('settings.google.sync');
+        Route::post('/config/google/disconnect', [SettingsController::class, 'disconnectGoogle'])->name('settings.google.disconnect');
         Route::post('/pricing/bulk', [SettingsController::class, 'storePricingBulk'])->name('pricing.bulk');
         Route::post('/pricing/add-location', [SettingsController::class, 'addLocation'])->name('pricing.add-location');
         Route::post('/pricing/add-size', [SettingsController::class, 'addSize'])->name('pricing.add-size');

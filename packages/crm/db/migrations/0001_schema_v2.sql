@@ -34,6 +34,11 @@ create table artists (
   wa_session_slug  text not null unique,       -- WAHA session; infrastructure config
   onboarding_token text unique,                -- consumed when onboarding completes
   onboarded_at     timestamptz,
+  -- Google Calendar shared with the VAIF service account by the Artist.
+  google_calendar_id      text,
+  google_calendar_summary text,
+  google_calendar_timezone text,
+  google_connected_at     timestamptz,
   created_at       timestamptz not null default now(),
   updated_at       timestamptz not null default now()
 );
@@ -380,6 +385,13 @@ create table calendar_entries (
   reason     text,
   created_by text not null default 'agent'
              check (created_by in ('agent','artist','staff')),
+  -- Mirror of this booking in the Artist's Google Calendar. The scheduler
+  -- retries while `google_sync_pending` is true; the event id lets us update
+  -- or delete the same event after a reschedule/cancel.
+  google_event_id     text,
+  google_sync_pending boolean not null default true,
+  google_synced_at    timestamptz,
+  google_sync_error   text,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (end_at > start_at),

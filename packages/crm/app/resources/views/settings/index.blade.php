@@ -57,6 +57,106 @@
     @endif
 </div>
 
+@if ($googleConfigured || auth()->user()->isStaff() || $artist->hasGoogleCalendar())
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Google Agenda</h2>
+
+    @if ($artist->hasGoogleCalendar())
+        <div class="flash" style="display:inline-block;">&#x25CF; Conectada</div>
+        <p class="meta" style="margin-top:8px;">
+            Agenda: <strong>{{ $artist->google_calendar_summary }}</strong>
+        </p>
+        <p class="meta"><code>{{ $artist->google_calendar_id }}</code></p>
+        <p class="meta">
+            Conectada em {{ $artist->google_connected_at?->format('d/m/Y H:i') }}
+            @if ($artist->google_calendar_timezone)
+                · Fuso: {{ $artist->google_calendar_timezone }}
+            @endif
+        </p>
+
+        <div class="actions-row">
+            <form method="post" action="{{ route('settings.google.sync') }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--small">Sincronizar agora</button>
+            </form>
+            <form method="post" action="{{ route('settings.google.disconnect') }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small"
+                    onclick="return confirm('Desconectar a Google Agenda? Os eventos já criados permanecem na agenda.');">
+                    Desconectar
+                </button>
+            </form>
+        </div>
+
+        <p class="meta" style="margin-top:10px;">
+            Os agendamentos são sincronizados automaticamente em até 1 minuto. Remarcações e cancelamentos
+            atualizam o mesmo evento. Desconectar não apaga os eventos que já estão no Google.
+        </p>
+    @elseif (! $googleConfigured)
+        <p class="meta">A integração com o Google Agenda ainda não foi configurada no servidor.</p>
+        @if (auth()->user()->isStaff())
+            <p class="meta" style="margin-top:8px;">
+                Defina <code>GOOGLE_SERVICE_ACCOUNT_JSON</code> nas variáveis de ambiente do CRM e reinicie o container.
+            </p>
+        @else
+            <p class="meta" style="margin-top:8px;">Fale com a equipe VAIF para ativar a integração.</p>
+        @endif
+    @else
+        <p class="meta">Compartilhe sua agenda com o e-mail da VAIF:</p>
+
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin:10px 0 16px;">
+            <code id="google-service-email" style="font-size:0.84rem;">{{ $googleServiceEmail }}</code>
+            <button type="button" class="btn btn--ghost btn--small"
+                onclick="navigator.clipboard.writeText(@js($googleServiceEmail)); this.textContent='Copiado';">
+                Copiar
+            </button>
+        </div>
+
+        <ol class="meta" style="margin:0 0 16px 18px; line-height:1.7;">
+            <li>Abra o Google Agenda → Configurações → Configurações da minha agenda.</li>
+            <li>Selecione a agenda e clique em “Compartilhar com pessoas específicas”.</li>
+            <li>Adicione o e-mail acima com a permissão “Fazer alterações nos eventos”.</li>
+            <li>Volte aqui, detecte a agenda compartilhada (ou cole o ID em “Integrar agenda”).</li>
+        </ol>
+
+        <form method="post" action="{{ route('settings.google.detect') }}" style="margin-bottom:16px;">
+            @csrf
+            <button type="submit" class="btn btn--ghost btn--small">Detectar agendas compartilhadas</button>
+        </form>
+
+        @if (! empty(session('google_calendars')))
+            <form method="post" action="{{ route('settings.google.connect') }}" style="margin-bottom:16px;">
+                @csrf
+                <div class="form-field" style="max-width:520px;">
+                    <label for="detected-calendar">Agendas encontradas</label>
+                    <select name="calendar_id" id="detected-calendar" style="background:var(--bg); border:1px solid var(--border); border-radius:8px; color:var(--ink); padding:10px 12px; font-family:'Montserrat', sans-serif;">
+                        @foreach (session('google_calendars') as $calendar)
+                            <option value="{{ $calendar['id'] }}">
+                                {{ $calendar['summary'] }} — {{ $calendar['id'] }}
+                            </option>
+                        @endforeach
+                    </select>
+                </div>
+                <button type="submit" class="btn btn--small" style="margin-top:10px;">Conectar agenda</button>
+            </form>
+        @endif
+
+        <form method="post" action="{{ route('settings.google.connect') }}">
+            @csrf
+            <div class="form-field" style="max-width:520px;">
+                <label for="calendar-id">Integrar agenda pelo ID</label>
+                <input type="text" name="calendar_id" id="calendar-id" required
+                    placeholder="voce@gmail.com ou xxxx@group.calendar.google.com">
+            </div>
+            <p class="meta" style="margin:6px 0 0;">
+                O ID fica em Google Agenda → Configurações → Integrar agenda → “ID da agenda”.
+            </p>
+            <button type="submit" class="btn btn--small" style="margin-top:10px;">Conectar agenda</button>
+        </form>
+    @endif
+</div>
+@endif
+
 <div class="panel" style="margin-bottom: 24px;">
     <h2 class="section-title" style="margin-top:0;">Promoções</h2>
 

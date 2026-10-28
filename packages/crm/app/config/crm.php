@@ -40,6 +40,18 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Google Calendar sync window
+    |--------------------------------------------------------------------------
+    |
+    | Only bookings inside this window are mirrored to Google. Older history
+    | stays in the CRM and is not pushed to the Artist's personal calendar.
+    |
+    */
+    'google_calendar_past_days' => 30,
+    'google_calendar_future_days' => 730,
+
+    /*
+    |--------------------------------------------------------------------------
     | Pricing table — canonical sizes and regions (the price-table tabs)
     |--------------------------------------------------------------------------
     |

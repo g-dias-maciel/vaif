@@ -1339,7 +1339,9 @@ begin
   begin
     update calendar_entries
        set start_at = p_start_at,
-           end_at   = p_start_at + v_dur
+           end_at   = p_start_at + v_dur,
+           google_sync_pending = true,
+           google_sync_error   = null
      where id = p_booking_id
     returning * into v_row;
   exception when exclusion_violation then
@@ -1372,7 +1374,9 @@ declare
   v_row calendar_entries;
 begin
   update calendar_entries
-     set active = false, reason = coalesce(p_reason, reason)
+     set active = false, reason = coalesce(p_reason, reason),
+         google_sync_pending = true,
+         google_sync_error   = null
    where id = p_booking_id and artist_id = p_artist_id
      and kind = 'booking' and active
   returning * into v_row;

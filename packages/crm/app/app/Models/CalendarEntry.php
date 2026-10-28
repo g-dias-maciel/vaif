@@ -33,12 +33,18 @@ class CalendarEntry extends Model
         'active',
         'reason',
         'created_by',
+        'google_event_id',
+        'google_sync_pending',
+        'google_synced_at',
+        'google_sync_error',
     ];
 
     protected $casts = [
         'start_at' => 'datetime',
         'end_at' => 'datetime',
         'active' => 'boolean',
+        'google_sync_pending' => 'boolean',
+        'google_synced_at' => 'datetime',
     ];
 
     /**

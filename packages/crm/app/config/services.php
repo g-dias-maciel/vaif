@@ -31,4 +31,18 @@ return [
         'region' => env('AWS_DEFAULT_REGION', 'us-east-1'),
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Google Calendar (service account)
+    |--------------------------------------------------------------------------
+    |
+    | One service account receives access to every Artist's calendar through
+    | Google Calendar's "Share with specific people" screen. The value may be
+    | raw JSON, base64-encoded JSON (recommended for env vars) or a file path.
+    |
+    */
+    'google_calendar' => [
+        'credentials' => env('GOOGLE_SERVICE_ACCOUNT_JSON'),
+    ],
+
 ];

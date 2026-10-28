@@ -12,7 +12,11 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // The WhatsApp agent writes bookings straight through `book_slot`, so
+        // polling for pending rows is the only source-independent sync.
+        $schedule->command('calendar:sync-google')
+            ->everyMinute()
+            ->withoutOverlapping(10);
     }
 
     /**

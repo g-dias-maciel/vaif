@@ -32,6 +32,10 @@ return new class extends Migration
             $table->string('wa_session_slug')->unique();
             $table->string('onboarding_token')->nullable()->unique();
             $table->dateTime('onboarded_at')->nullable();
+            $table->string('google_calendar_id')->nullable();
+            $table->string('google_calendar_summary')->nullable();
+            $table->string('google_calendar_timezone')->nullable();
+            $table->dateTime('google_connected_at')->nullable();
             $table->timestamps();
         });
 
@@ -233,6 +237,10 @@ return new class extends Migration
             $table->boolean('active')->default(true);
             $table->string('reason')->nullable();
             $table->string('created_by')->default('agent');
+            $table->string('google_event_id')->nullable();
+            $table->boolean('google_sync_pending')->default(true);
+            $table->dateTime('google_synced_at')->nullable();
+            $table->text('google_sync_error')->nullable();
             $table->timestamps();
 
             $table->index(['artist_id', 'start_at']);

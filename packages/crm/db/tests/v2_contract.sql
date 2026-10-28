@@ -231,6 +231,7 @@ begin
 
   -- 2027-03-01 is a Monday; 10:00 local (UTC-3) = 13:00 UTC.
   select * into b1 from book_slot(pg_temp.artist_a(), p1.id, timestamptz '2027-03-01 10:00:00-03');
+  perform pg_temp.ok(b1.google_sync_pending, 'a new booking queues a Google Calendar sync');
   perform pg_temp.ok(b1.id is not null, 'booking is created');
   perform pg_temp.ok(b1.kind = 'booking', 'entry kind is booking');
 
@@ -310,6 +311,7 @@ begin
     timestamptz '2027-03-01 15:00:00-03');
   perform pg_temp.ok(moved.start_at = timestamptz '2027-03-01 15:00:00-03', 'booking moved');
   perform pg_temp.ok(moved.end_at - moved.start_at = interval '2 hours', 'duration preserved');
+  perform pg_temp.ok(moved.google_sync_pending, 'a reschedule queues a Google Calendar sync');
 
   select * into blocked from block_time(pg_temp.artist_a(),
     timestamptz '2027-03-01 15:00:00-03', timestamptz '2027-03-01 16:00:00-03', 'Almoço');
@@ -324,6 +326,7 @@ begin
   select * into b2 from cancel_booking(pg_temp.artist_a(), moved.id, 'Lead desistiu');
   perform pg_temp.ok(b2.active = false, 'a cancelled booking is deactivated, not deleted');
   perform pg_temp.ok(b2.reason = 'Lead desistiu', 'cancellation reason kept');
+  perform pg_temp.ok(b2.google_sync_pending, 'a cancellation queues a Google Calendar sync');
 
   select count(*) into n from calendar_entries
    where artist_id = pg_temp.artist_a() and kind = 'booking' and active;

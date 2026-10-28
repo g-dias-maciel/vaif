@@ -25,10 +25,15 @@ class Artist extends Model
         'wa_session_slug',
         'onboarding_token',
         'onboarded_at',
+        'google_calendar_id',
+        'google_calendar_summary',
+        'google_calendar_timezone',
+        'google_connected_at',
     ];
 
     protected $casts = [
         'onboarded_at' => 'datetime',
+        'google_connected_at' => 'datetime',
     ];
 
     public function settings(): HasOne
@@ -67,6 +72,22 @@ class Artist extends Model
     public function activePromotion(): HasOne
     {
         return $this->hasOne(Promotion::class, 'artist_id')->where('status', 'active');
+    }
+
+    public function hasGoogleCalendar(): bool
+    {
+        return filled($this->google_calendar_id);
+    }
+
+    /**
+     * The timezone used when writing Google Calendar events. Prefer the
+     * calendar's own timezone, then the Artist's booking timezone.
+     */
+    public function calendarTimezone(): string
+    {
+        return $this->google_calendar_timezone
+            ?: $this->timezone
+            ?: 'America/Sao_Paulo';
     }
 
     /**
