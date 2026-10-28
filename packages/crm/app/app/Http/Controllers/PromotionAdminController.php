@@ -64,7 +64,7 @@ class PromotionAdminController extends Controller
             'multiplier' => $data['multiplier'],
             'audience' => $data['audience'],
             'quote_valid_days' => $data['quote_valid_days'],
-            'conditions' => $source?->conditions ?? [],
+            'conditions' => $source?->conditions ?? (object) [],
             'status' => 'draft',
         ]);
 

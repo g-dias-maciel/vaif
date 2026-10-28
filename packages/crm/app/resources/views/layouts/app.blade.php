@@ -350,6 +350,9 @@
         .tag-muted { color: var(--muted); border-color: var(--border); }
 
         .actions-row { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+        .pagination { display: flex; gap: 12px; list-style: none; padding: 0; margin: 0; }
+        .pagination a, .pagination span { color: var(--gold); font-size: 0.8rem; }
+        .pagination .disabled span { color: var(--muted); }
 
         .form-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 16px; margin-top: 16px; }
         .form-field { display: flex; flex-direction: column; gap: 6px; }

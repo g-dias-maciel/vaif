@@ -82,6 +82,6 @@
 @endforeach
 
 @if ($promotions->hasPages())
-    <div style="margin-top:18px;">{{ $promotions->links() }}</div>
+    <div style="margin-top:18px;">{{ $promotions->links('pagination::simple-default') }}</div>
 @endif
 @endsection
