@@ -20,6 +20,27 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.
 
+## `migrate/` — v1 → v2 data
+
+The v1 database held one Artist, its price book and one staff user; Leads were
+disposable. Two idempotent scripts copy what matters, using `dblink` against the
+v1 `postgres` database in the same cluster:
+
+- `v1_to_v2_tenants.sql` — `artists`, `artist_settings`, `price_book`
+- `v1_to_v2_users.sql` — `users`, `notes` (run after Laravel migrations)
+
+## `cutover-v2.sh`
+
+Guarded cutover helper (run on the Coolify host):
+
+```bash
+CONFIRM=yes ./packages/crm/db/cutover-v2.sh          # dump v1, rebuild vaif_crm, migrate tenants, create login roles
+STAGE=app CONFIRM=yes ./packages/crm/db/cutover-v2.sh # Laravel migrations + users/notes, after the v2 image is deployed
+```
+
+The v1 database is never modified and a full dump is written to
+`/tmp/crm-v1-pre-cutover-<ts>.dump` before anything is dropped.
+
 ## `tests/v2_contract.sql`
 
 One transaction, rolled back at the end, that fails loudly. It covers tenant

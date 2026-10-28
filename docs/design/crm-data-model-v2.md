@@ -927,6 +927,19 @@ until cutover.
 
 **Phase 3 — cutover (1 day).**
 
+- Done 2026-10-28: `vaif_crm` rebuilt from the migrations, the v1 tenant
+  (Bruno + 24 price rows) and the staff user migrated, login roles created, and
+  the contract tests pass. The v1 `postgres` database is untouched and a full
+  dump was taken (`/tmp/crm-v1-pre-cutover-*.dump`).
+- Done 2026-10-28: the v2 image was built from this commit and smoke-tested
+  against `vaif_crm` (health, login, dashboard, agenda, config, artist detail,
+  lead detail after a real `start_turn`/`patch_project`/`write_quote`/
+  `request_deposit` sequence). The smoke data was wiped afterwards.
+- Remaining: deploy that image in Coolify with `DB_DATABASE=vaif_crm` and
+  `DB_USERNAME=crm_app_login`; run `STAGE=app` for users/notes; point n8n at
+  `agent_login` / `crm_app_login` and deploy the workflow JSONs; run the smoke
+  checklist on production.
+
 1. Freeze writes: stop the n8n workflows and the CRM container.
 2. `pg_dump` the v1 database (rollback artifact):
    `docker exec <pg> pg_dump -U postgres -d postgres -Fc > /tmp/vaif-v1.dump`.
