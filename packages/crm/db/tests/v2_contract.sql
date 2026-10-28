@@ -143,6 +143,10 @@ begin
   perform pg_temp.ok(q1.offered_price_cents = 55000, 'quote keeps the offered price');
   perform pg_temp.ok(q1.status = 'open', 'quote is open');
 
+  select * into q1 from write_quote(pg_temp.artist_a(), p.id, 60000, 55000);
+  select count(*) into n from quotes where project_id = p.id and status = 'open';
+  perform pg_temp.ok(n = 1, 're-sending the same price does not restart the quote');
+
   select * into q2 from write_quote(pg_temp.artist_a(), p.id, 60000, 50000);
   select count(*) into n from quotes where project_id = p.id and status = 'open';
   perform pg_temp.ok(n = 1, 'exactly one open quote per Project');
@@ -438,6 +442,7 @@ declare
   t2    record;
   b     chat_buffers;
   state jsonb;
+  o     record;
   n     integer;
 begin
   -- Debounce: burst messages are joined, presence is recorded.
@@ -471,6 +476,11 @@ begin
   perform pg_temp.ok(t2.lead_id = t1.lead_id, 'the same Lead is reused');
   perform pg_temp.ok(t2.project_id = t1.project_id, 'the same open Project is reused');
 
+  -- Load Offer must always produce a row, even with no promotion or quote.
+  select * into o from active_offer_for_project(pg_temp.artist_a(), t1.project_id);
+  perform pg_temp.ok(o.promo_active is false, 'no active promotion reports promo_active=false');
+  perform pg_temp.ok(o.open_quote_valid is false, 'no live quote reports open_quote_valid=false');
+
   -- Scratch state merges instead of replacing.
   state := patch_chat_state(pg_temp.artist_a(), 'slug-a:5511911112222',
     '{"processo_explicado": true}'::jsonb);
@@ -502,6 +512,18 @@ begin
   perform pg_temp.ok(purge_chat_buffers() >= 1, 'purge removes the expired buffer');
   select count(*) into n from chat_buffers where chat_id = 'slug-a:5511911112222';
   perform pg_temp.ok(n = 0, 'the purged buffer is gone');
+
+  -- The prompt can read the whole price book without table access.
+  select count(*) into n from list_prices(pg_temp.artist_a());
+  perform pg_temp.ok(n = 1, 'list_prices returns the current rows for the Artist');
+
+  -- Deposit state is surfaced to the prompt.
+  perform request_deposit(pg_temp.artist_a(), t2.project_id, 18000, 'pix');
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
+  perform pg_temp.ok(t2.deposit_status = 'aguardando_confirmacao',
+    'start_turn reports a requested deposit, got ' || coalesce(t2.deposit_status,'null'));
+  perform pg_temp.ok(t2.deposit_amount_cents = 18000, 'start_turn reports the deposit amount');
 end;
 $$;
 
@@ -551,6 +573,15 @@ begin
      and payload->>'stage' = 'qualificando';
   perform pg_temp.ok(n = 1, 'the stage change is audited');
 
+  -- A tool may advance the stage during the turn; the patch must not roll it back.
+  perform set_project_stage(pg_temp.artist_a(), p.id, 'aguardando_deposito');
+  select * into p from patch_project(
+    pg_temp.artist_a(), p.id,
+    p_stage_key      := 'orcamento_enviado',
+    p_expected_stage := 'qualificando');
+  perform pg_temp.ok(p.stage_key = 'aguardando_deposito',
+    'the patch does not override a stage a tool already moved');
+
   -- Unknown stage values are refused by the lookup table.
   begin
     perform patch_project(pg_temp.artist_a(), p.id, p_stage_key => 'nao_existe');
@@ -580,9 +611,14 @@ begin
    where rolname in ('migrator','crm_app','agent_rw','analytics_ro');
   perform pg_temp.ok(n = 4, 'four NOLOGIN roles exist');
 
-  select count(*) into n from information_schema.role_table_grants
+  select count(distinct table_name) into n from information_schema.role_table_grants
    where grantee = 'agent_rw' and table_schema = 'public';
-  perform pg_temp.ok(n = 0, 'agent_rw has no direct table grants');
+  perform pg_temp.ok(n = 1, 'agent_rw has exactly one table (chat_memory), got ' || n);
+
+  select count(distinct table_name) into n from information_schema.role_table_grants
+   where grantee = 'agent_rw' and table_schema = 'public'
+     and table_name <> 'chat_memory';
+  perform pg_temp.ok(n = 0, 'agent_rw has no domain table grants');
 
   select count(*) into n from information_schema.role_table_grants
    where grantee = 'crm_app' and table_schema = 'public';
@@ -593,9 +629,61 @@ begin
      and routine_name in (
        'start_turn','upsert_project','patch_project','patch_chat_state',
        'chat_buffer_accumulate','chat_buffer_typing','chat_buffer_state',
-       'chat_buffer_clear'
+       'chat_buffer_clear','list_prices'
      );
-  perform pg_temp.ok(n = 8, 'agent_rw can execute every turn/buffer RPC, got ' || n);
+  perform pg_temp.ok(n = 9, 'agent_rw can execute every turn/buffer RPC, got ' || n);
+end;
+$$;
+
+-- ---------------------------------------------------------------------------
+-- 15. Admin surface: calendar read model, onboarding, suspend/resume, reset
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  a     artists;
+  n     integer;
+  j     jsonb;
+begin
+  -- An available slot from the artist's working hours, in the admin shape.
+  select count(*) into n
+    from list_calendar(pg_temp.artist_a(),
+                       timestamptz '2027-03-01 00:00:00-03',
+                       timestamptz '2027-03-02 00:00:00-03', 120)
+   where type = 'available';
+  perform pg_temp.ok(n > 0, 'list_calendar returns available slots');
+
+  -- A booking shows up as `booked` with the lead name.
+  select count(*) into n
+    from list_calendar(pg_temp.artist_a(),
+                       timestamptz '2027-03-01 00:00:00-03',
+                       timestamptz '2027-03-02 00:00:00-03', 120)
+   where type = 'booked';
+  perform pg_temp.ok(n >= 1, 'list_calendar returns the booked slot, got ' || n);
+
+  -- Onboarding token: stub -> onboarding, valid for 24h.
+  insert into artists (id, name, wa_session_slug, status, onboarding_token)
+  values ('99999999-9999-4999-8999-999999999999', 'Stub Artist',
+          'stub-slug', 'stub', 'tok-1');
+
+  select * into a from consume_onboarding_token('tok-1');
+  perform pg_temp.ok(a.status = 'onboarding', 'consume_onboarding_token moves stub -> onboarding');
+
+  update artists set status = 'live' where id = a.id;
+
+  select * into a from suspend_artist(a.id);
+  perform pg_temp.ok(a.status = 'suspended', 'suspend_artist suspends a live artist');
+
+  select * into a from resume_artist(a.id);
+  perform pg_temp.ok(a.status = 'live', 'resume_artist restores the artist');
+
+  select * into a from suspend_artist(a.id);
+  select * into a from suspend_artist(a.id);
+  perform pg_temp.ok(a.id is null, 'suspending a non-live artist is a no-op');
+
+  -- The destructive admin reset is scoped to one tenant.
+  j := reset_leads('slug-b');
+  perform pg_temp.ok((j->>'artist_slug') = 'slug-b', 'reset_leads echoes the slug');
+  perform pg_temp.ok((j->>'leads')::int >= 0, 'reset_leads reports a lead count');
 end;
 $$;
 

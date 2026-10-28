@@ -22,7 +22,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  a.id, a.nome, a.wa_session_slug, a.status,\n  $1::text   AS token,\n  $2::text   AS action,\n  $3::boolean AS refresh_qr,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::boolean, false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "query": "SELECT\n  a.id,\n  COALESCE(NULLIF(s.display_name, ''), a.name) AS nome,\n  a.wa_session_slug, a.status,\n  $1::text   AS token,\n  $2::text   AS action,\n  $3::boolean AS refresh_qr,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nLEFT JOIN artist_settings s ON s.artist_id = a.id\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::boolean, false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
         "options": {
           "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.refreshQr === true] }}"
         }

@@ -29,12 +29,15 @@ WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
 
 RESOLVE_QUERY = """\
 SELECT
-  a.id, a.nome, a.wa_session_slug, a.status,
+  a.id,
+  COALESCE(NULLIF(s.display_name, ''), a.name) AS nome,
+  a.wa_session_slug, a.status,
   $1::text   AS token,
   $2::text   AS action,
   $3::boolean AS refresh_qr,
   (a.id IS NOT NULL) AS found
 FROM artists a
+LEFT JOIN artist_settings s ON s.artist_id = a.id
 WHERE a.onboarding_token = $1
 UNION ALL
 SELECT

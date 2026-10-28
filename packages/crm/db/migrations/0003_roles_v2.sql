@@ -51,9 +51,15 @@ grant usage, select on all sequences in schema public to crm_app;
 grant select on all tables in schema public to analytics_ro;
 
 -- ---------------------------------------------------------------------------
--- agent_rw: no table access at all; only the RPC surface.
+-- agent_rw: no domain table access at all; only the RPC surface.
 -- (Every RPC is SECURITY DEFINER, so it runs with the owner's privileges.)
+--
+-- The one exception is `chat_memory`: it is n8n's Postgres Chat Memory table,
+-- not domain data, and the memory node cannot use an RPC. It is the transcript
+-- of a conversation, already scoped by session_id = lead_id.
 -- ---------------------------------------------------------------------------
+grant select, insert, update, delete on chat_memory to agent_rw;
+grant usage, select on sequence chat_memory_id_seq to agent_rw;
 do $$
 declare
   v_fn text;
@@ -72,10 +78,11 @@ declare
     'patch_chat_state(uuid,text,jsonb)',
     'start_turn(uuid,text,text,text,text)',
     'upsert_project(uuid,uuid,text)',
-    'patch_project(uuid,uuid,text,text,text,text,boolean,text,text,text[],text,text)',
+    'patch_project(uuid,uuid,text,text,text,text,boolean,text,text,text[],text,text,text)',
     'create_project(uuid,uuid,text,text,text,boolean,text,text,text[],text)',
     'set_project_stage(uuid,uuid,text,text)',
     'lookup_price(uuid,text,text)',
+    'list_prices(uuid)',
     'write_quote(uuid,uuid,integer,integer,numeric,integer,timestamptz,text)',
     'write_promotion_quote(uuid,uuid,uuid,text,text,text)',
     'accept_quote(uuid,uuid,uuid,text)',
@@ -115,6 +122,19 @@ revoke all on function create_event_partitions(integer) from public;
 grant execute on function create_event_partitions(integer) to crm_app;
 revoke all on function purge_chat_buffers() from public;
 grant execute on function purge_chat_buffers() to crm_app;
+
+-- Admin workflows (agenda, onboarding, QA reset) run as crm_app, never as the
+-- agent. These mutate tenants or wipe data, so they stay off agent_rw.
+revoke all on function consume_onboarding_token(text) from public;
+grant execute on function consume_onboarding_token(text) to crm_app;
+revoke all on function suspend_artist(uuid) from public;
+grant execute on function suspend_artist(uuid) to crm_app;
+revoke all on function resume_artist(uuid) from public;
+grant execute on function resume_artist(uuid) to crm_app;
+revoke all on function list_calendar(uuid,timestamptz,timestamptz,integer) from public;
+grant execute on function list_calendar(uuid,timestamptz,timestamptz,integer) to crm_app;
+revoke all on function reset_leads(text) from public;
+grant execute on function reset_leads(text) to crm_app;
 
 -- Helpers must not be callable through the API surface.
 revoke all on function log_event(uuid,uuid,uuid,text,text,jsonb) from public;

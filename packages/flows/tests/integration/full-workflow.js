@@ -65,7 +65,7 @@ const brl = (cents) => 'R$ ' + (cents / 100).toLocaleString('pt-BR', { minimumFr
 const brlRegex = (cents) => new RegExp(brl(cents).replace(/[.$]/g, '\\$&'));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const phoneFilter = (p) => `telefone = '${p}'`;
+const phoneFilter = (p) => `phone_e164 = '${p}'`;
 // pt-BR currency formatting uses a non-breaking space after "R$"; normalise it
 // so reply assertions can use ordinary spaces.
 const norm = (s) => (typeof s === 'string' ? s.replace(/[\u00A0\u202F]/g, ' ') : s);
@@ -73,30 +73,50 @@ const has = (s, re) => typeof s === 'string' && re.test(norm(s));
 
 // ── SQL helpers ──
 async function resetLead(phone) {
-  // FK-safe order: child rows first (one statement; children don't reference
-  // each other), then leads, then the debounce buffer.
+  // `chat_memory` is keyed by the Lead id as text, so collect the ids before
+  // the cascade removes the rows. Everything else hangs off the Lead FK.
   await runSql(`
-    WITH del_cm AS (DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM leads WHERE ${phoneFilter(phone)}) RETURNING 1),
-         del_ev AS (DELETE FROM events WHERE lead_id IN (SELECT id FROM leads WHERE ${phoneFilter(phone)}) RETURNING 1),
-         del_ob AS (DELETE FROM notion_sync_outbox WHERE lead_id IN (SELECT id FROM leads WHERE ${phoneFilter(phone)}) RETURNING 1),
-         del_cal AS (DELETE FROM calendar WHERE lead_id IN (SELECT id FROM leads WHERE ${phoneFilter(phone)}) RETURNING 1)
-    SELECT 'ok' AS reset;`);
+    WITH l AS (SELECT id FROM leads WHERE ${phoneFilter(phone)})
+    DELETE FROM chat_memory WHERE session_id IN (SELECT id::text FROM l);`);
+  await runSql(`DELETE FROM events WHERE lead_id IN (SELECT id FROM leads WHERE ${phoneFilter(phone)});`);
   await runSql(`DELETE FROM leads WHERE ${phoneFilter(phone)};`);
-  await runSql(`DELETE FROM message_buffer WHERE chat_id = '${SLUG}:${phone}';`);
+  await runSql(`DELETE FROM chat_buffers WHERE chat_id = '${SLUG}:${phone}';`);
 }
 
+/**
+ * Seed a Project already at the quote/deposit stage, with the gate open and a
+ * live standard quote. `start_turn` reuses the Lead and its open Project.
+ */
 async function seedNearDeposit(phone) {
   await resetLead(phone);
   const row = await runSql(`
-    INSERT INTO leads (artist_id, nome, telefone, placement, body_zone, pipeline_status, processo_explicado, preco_liberado, table_price, negotiated_price)
-    SELECT id, 'Teste Full Workflow', '${phone}', 'braco_externo', 'fechamento', 'orcamento_enviado', true, true, ${TABLE_PRICE}, ${TABLE_PRICE}
-    FROM artists WHERE wa_session_slug = '${SLUG}'
-    RETURNING id::text AS lead_id;`);
+    WITH l AS (
+      INSERT INTO leads (artist_id, name, phone_e164, source, last_message_at)
+      SELECT id, 'Teste Full Workflow', '${phone}', 'whatsapp', now()
+      FROM artists WHERE wa_session_slug = '${SLUG}'
+      RETURNING id, artist_id
+    ), p AS (
+      INSERT INTO projects (artist_id, lead_id, placement, body_zone, stage_key)
+      SELECT artist_id, id, 'braco_externo', 'fechamento', 'orcamento_enviado'
+      FROM l
+      RETURNING id, artist_id, lead_id
+    ), q AS (
+      INSERT INTO quotes (artist_id, project_id, kind, base_price_cents, offered_price_cents, status)
+      SELECT artist_id, id, 'standard', ${TABLE_PRICE}, ${TABLE_PRICE}, 'open' FROM p
+      RETURNING project_id
+    )
+    INSERT INTO chat_sessions (artist_id, chat_id, lead_id, agent_state)
+    SELECT p.artist_id, '${SLUG}:${phone}', p.lead_id,
+           '{"processo_explicado": true, "preco_liberado": true}'::jsonb
+    FROM p
+    ON CONFLICT (artist_id, chat_id) DO UPDATE SET
+      lead_id = EXCLUDED.lead_id, agent_state = EXCLUDED.agent_state
+    RETURNING lead_id::text AS lead_id;`);
   return row.lead_id;
 }
 
 /**
- * Seed a lead standing exactly at the price gate with the doubts checkpoint
+ * Seed a Lead standing exactly at the price gate with the doubts checkpoint
  * already cleared. That is the only state where the deterministic first quote
  * fires — which is also the code path that injects the promotion.
  *
@@ -106,13 +126,24 @@ async function seedNearDeposit(phone) {
 async function seedNearQuote(phone) {
   await resetLead(phone);
   const row = await runSql(`
-    INSERT INTO leads (artist_id, nome, telefone, placement, body_zone, pipeline_status,
-                       processo_explicado, duvidas_eliminadas, preco_liberado,
-                       table_price, negotiated_price)
-    SELECT id, 'Teste Promo', '${phone}', 'braco_externo', 'fechamento', 'qualificando',
-           true, true, false, ${TABLE_PRICE}, ${TABLE_PRICE}
-    FROM artists WHERE wa_session_slug = '${SLUG}'
-    RETURNING id::text AS lead_id;`);
+    WITH l AS (
+      INSERT INTO leads (artist_id, name, phone_e164, source, last_message_at)
+      SELECT id, 'Teste Promo', '${phone}', 'whatsapp', now()
+      FROM artists WHERE wa_session_slug = '${SLUG}'
+      RETURNING id, artist_id
+    ), p AS (
+      INSERT INTO projects (artist_id, lead_id, placement, body_zone, stage_key)
+      SELECT artist_id, id, 'braco_externo', 'fechamento', 'qualificando'
+      FROM l
+      RETURNING id, artist_id, lead_id
+    )
+    INSERT INTO chat_sessions (artist_id, chat_id, lead_id, agent_state)
+    SELECT p.artist_id, '${SLUG}:${phone}', p.lead_id,
+           '{"processo_explicado": true, "duvidas_eliminadas": true, "preco_liberado": false}'::jsonb
+    FROM p
+    ON CONFLICT (artist_id, chat_id) DO UPDATE SET
+      lead_id = EXCLUDED.lead_id, agent_state = EXCLUDED.agent_state
+    RETURNING lead_id::text AS lead_id;`);
   return row.lead_id;
 }
 
@@ -129,7 +160,7 @@ async function promotionPreflight() {
   try {
     await runSql('SELECT count(*)::int AS n FROM promotions');
   } catch (e) {
-    issues.push('DB: `promotions` table/function not found — apply packages/crm/supabase/migrations/20261022000000_offers_and_chat_control.sql');
+    issues.push('DB: `promotions` table/function not found — apply packages/crm/db/migrations/0001_schema_v2.sql and 0002_functions_v2.sql');
   }
   try {
     const wf = await n8n('GET', `/workflows/${WORKFLOW_ID}`);
@@ -164,16 +195,16 @@ async function activateTestPromotion() {
 
   // Same activation function the admin panel calls: snapshots the pricing
   // matrix into promotion_prices at `multiplier` and flips status to active.
-  await runSql(`SELECT 1 AS ok FROM activate_promotion('${id}');`);
+  await runSql(`SELECT 1 AS ok FROM activate_promotion('${TEST_ARTIST_ID}', '${id}');`);
 
   const state = await runSql(`
     SELECT jsonb_build_object(
       'status', p.status,
       'multiplier', p.multiplier,
       'snapshot_count', (SELECT count(*) FROM promotion_prices WHERE promotion_id = p.id),
-      'first_price', (SELECT offer_price FROM promotion_prices
+      'first_price', (SELECT offer_price_cents FROM promotion_prices
                       WHERE promotion_id = p.id AND placement = 'braco_externo' AND body_zone = 'fechamento'),
-      'second_cap', (SELECT base_price FROM promotion_prices
+      'second_cap', (SELECT base_price_cents FROM promotion_prices
                      WHERE promotion_id = p.id AND placement = 'braco_externo' AND body_zone = 'fechamento')
     )::text AS state
     FROM promotions p WHERE p.id = '${id}';`);
@@ -187,27 +218,31 @@ async function pauseTestPromotion(promotionId) {
   return row.status;
 }
 
-/** The lead's latest promotion quote (price-protection row), if any. */
+/** The Project's latest promotion quote (price-protection row), if any. */
 async function promoQuoteFor(phone) {
   const row = await runSql(`
     SELECT jsonb_build_object(
-      'count', (SELECT count(*) FROM promotion_quotes q2 JOIN leads l2 ON l2.id = q2.lead_id
-                WHERE l2.telefone = '${phone}'),
+      'count', (SELECT count(*) FROM quotes q2
+                 JOIN projects p2 ON p2.id = q2.project_id
+                 JOIN leads l2 ON l2.id = p2.lead_id
+                WHERE l2.phone_e164 = '${phone}' AND q2.kind = 'promotion'),
       'promotion_id', q.promotion_id,
       'status', q.status,
-      'placement', q.placement,
-      'body_zone', q.body_zone,
-      'first_price', q.first_price,
-      'second_cap_price', q.second_cap_price,
+      'placement', p.placement,
+      'body_zone', p.body_zone,
+      'first_price', q.offered_price_cents,
+      'second_cap_price', q.second_cap_cents,
       'valid_until', q.valid_until::text,
       'valid_days', round(extract(epoch from (q.valid_until - now())) / 86400.0, 1)
     )::text AS q
     FROM leads l
+    JOIN projects p ON p.lead_id = l.id
     LEFT JOIN LATERAL (
-      SELECT * FROM promotion_quotes WHERE lead_id = l.id ORDER BY quoted_at DESC LIMIT 1
+      SELECT * FROM quotes WHERE project_id = p.id AND kind = 'promotion'
+       ORDER BY created_at DESC LIMIT 1
     ) q ON true
-    WHERE l.telefone = '${phone}'
-    ORDER BY l.created_at DESC
+    WHERE l.phone_e164 = '${phone}'
+    ORDER BY p.created_at DESC
     LIMIT 1;`);
   return row.q ? JSON.parse(row.q) : null;
 }
@@ -215,11 +250,34 @@ async function promoQuoteFor(phone) {
 async function leadState(phone) {
   const row = await runSql(`
     SELECT jsonb_build_object(
-      'pipeline_status', pipeline_status, 'deposit_status', deposit_status,
-      'deposit_amount', deposit_amount, 'booked_date', booked_date::text,
-      'preco_liberado', preco_liberado, 'table_price', table_price, 'negotiated_price', negotiated_price
+      'stage_key', p.stage_key,
+      'deposit_status', COALESCE((
+        SELECT CASE pay.status
+                 WHEN 'confirmed' THEN 'confirmado'
+                 WHEN 'requested' THEN 'aguardando_confirmacao'
+                 ELSE 'nao_solicitado' END
+        FROM payments pay WHERE pay.project_id = p.id AND pay.kind = 'deposit'
+        ORDER BY pay.requested_at DESC LIMIT 1), 'nao_solicitado'),
+      'deposit_amount', (SELECT amount_cents FROM payments
+                          WHERE project_id = p.id AND kind = 'deposit'
+                          ORDER BY requested_at DESC LIMIT 1),
+      'booked_date', (SELECT start_at::text FROM calendar_entries
+                       WHERE project_id = p.id AND kind = 'booking' AND active
+                       ORDER BY start_at DESC LIMIT 1),
+      'preco_liberado', COALESCE((SELECT (cs.agent_state->>'preco_liberado')::boolean
+                                    FROM chat_sessions cs WHERE cs.lead_id = p.lead_id
+                                   ORDER BY cs.updated_at DESC LIMIT 1), false),
+      'table_price', (SELECT pb.base_price_cents FROM price_book pb
+                       WHERE pb.artist_id = p.artist_id AND pb.placement = p.placement
+                         AND pb.body_zone = p.body_zone AND pb.effective_to IS NULL),
+      'quoted_price', (SELECT q.offered_price_cents FROM quotes q
+                        WHERE q.project_id = p.id AND q.status = 'open'
+                        ORDER BY q.created_at DESC LIMIT 1)
     )::text AS state
-    FROM leads WHERE ${phoneFilter(phone)} ORDER BY created_at DESC LIMIT 1;`);
+    FROM projects p
+    JOIN leads l ON l.id = p.lead_id
+    WHERE l.phone_e164 = '${phone}'
+    ORDER BY p.created_at DESC LIMIT 1;`);
   return row.state ? JSON.parse(row.state) : null;
 }
 
@@ -229,21 +287,25 @@ async function bookedIsRealSlot(phone) {
   // here: the slot is now booked, so it is correctly no longer "available".
   const row = await runSql(`
     WITH x AS (
-      SELECT l.booked_date,
-             a.working_hours,
-             to_char(l.booked_date AT TIME ZONE COALESCE(NULLIF(a.timezone, ''), 'UTC'), 'HH24:MI') AS hm,
+      SELECT ce.start_at,
+             COALESCE(s.working_hours, '{}'::jsonb) AS working_hours,
+             to_char(ce.start_at AT TIME ZONE COALESCE(NULLIF(a.timezone, ''), 'UTC'), 'HH24:MI') AS hm,
              (ARRAY['seg','ter','qua','qui','sex','sab','dom'])[
-               EXTRACT(ISODOW FROM (l.booked_date AT TIME ZONE COALESCE(NULLIF(a.timezone, ''), 'UTC')))::int
+               EXTRACT(ISODOW FROM (ce.start_at AT TIME ZONE COALESCE(NULLIF(a.timezone, ''), 'UTC')))::int
              ] AS dow
-      FROM leads l
-      JOIN artists a ON a.id = l.artist_id
-      WHERE ${phoneFilter(phone)} AND l.booked_date IS NOT NULL
+      FROM calendar_entries ce
+      JOIN projects p ON p.id = ce.project_id
+      JOIN leads l ON l.id = p.lead_id
+      JOIN artists a ON a.id = ce.artist_id
+      LEFT JOIN artist_settings s ON s.artist_id = a.id
+      WHERE l.phone_e164 = '${phone}' AND ce.kind = 'booking' AND ce.active
+      ORDER BY ce.start_at DESC
+      LIMIT 1
     )
     SELECT
-      (SELECT booked_date::text FROM x LIMIT 1) AS booked,
+      (SELECT start_at::text FROM x LIMIT 1) AS booked,
       COALESCE(bool_or(
         x.hm ~ '^[0-2][0-9]:00$'
-        AND x.working_hours IS NOT NULL
         AND EXISTS (
           SELECT 1 FROM jsonb_array_elements_text(x.working_hours -> x.dow) b
           WHERE split_part(b, '-', 1) <= x.hm AND x.hm < split_part(b, '-', 2)
@@ -254,7 +316,13 @@ async function bookedIsRealSlot(phone) {
 }
 
 async function artistPrecheck() {
-  const row = await runSql(`SELECT jsonb_build_object('slug', wa_session_slug, 'status', status, 'ai_active_hours', ai_active_hours, 'telegram_group_id', telegram_group_id)::text AS a FROM artists WHERE wa_session_slug = '${SLUG}';`);
+  const row = await runSql(`
+    SELECT jsonb_build_object(
+      'slug', a.wa_session_slug, 'status', a.status,
+      'ai_active_hours', s.ai_active_hours,
+      'telegram_group_id', s.telegram_group_id)::text AS a
+    FROM artists a LEFT JOIN artist_settings s ON s.artist_id = a.id
+    WHERE a.wa_session_slug = '${SLUG}';`);
   return row.a ? JSON.parse(row.a) : null;
 }
 
@@ -266,15 +334,23 @@ async function artistPrecheck() {
  */
 async function ensureTestArtist() {
   await runSql(`
-    INSERT INTO artists (id, display_name, nome, specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key, instagram_handle, working_hours, ai_active_hours, timezone, wa_session_slug, status, telegram_group_id)
-    VALUES ('a0000000-0000-4000-8000-000000000001', 'SDR Test', 'SDR Test', ARRAY['realismo', 'blackwork'], ARRAY[]::text[], 80.00, 'percent', 30,
-      'sdr.test@pix.example', '@sdr_test',
-      '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
-      NULL, 'America/Sao_Paulo', '${SLUG}', 'live', NULLIF('${TEST_GROUP}', ''))
+    INSERT INTO artists (id, name, timezone, wa_session_slug, status)
+    VALUES ('a0000000-0000-4000-8000-000000000001', 'SDR Test', 'America/Sao_Paulo', '${SLUG}', 'live')
     ON CONFLICT (id) DO UPDATE SET
       wa_session_slug = EXCLUDED.wa_session_slug,
       status = 'live',
-      nome = EXCLUDED.nome,
+      name = EXCLUDED.name,
+      timezone = EXCLUDED.timezone;`);
+  await runSql(`
+    INSERT INTO artist_settings (artist_id, display_name, specialties, excluded_styles, floor_pct,
+                                 deposit_type, deposit_value, pix_key, instagram_handle,
+                                 working_hours, ai_active_hours, telegram_group_id)
+    VALUES ('a0000000-0000-4000-8000-000000000001', 'SDR Test',
+      ARRAY['realismo', 'blackwork'], ARRAY[]::text[], 80.00, 'percent', 30,
+      'sdr.test@pix.example', '@sdr_test',
+      '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],"qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],"sex":["14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb,
+      '{}'::jsonb, NULLIF('${TEST_GROUP}', ''))
+    ON CONFLICT (artist_id) DO UPDATE SET
       display_name = EXCLUDED.display_name,
       floor_pct = EXCLUDED.floor_pct,
       deposit_type = EXCLUDED.deposit_type,
@@ -282,18 +358,20 @@ async function ensureTestArtist() {
       pix_key = EXCLUDED.pix_key,
       instagram_handle = EXCLUDED.instagram_handle,
       working_hours = EXCLUDED.working_hours,
-      timezone = EXCLUDED.timezone,
       telegram_group_id = EXCLUDED.telegram_group_id;`);
   await runSql(`
-    INSERT INTO pricing (artist_id, placement, body_zone, table_price, session_duration_min, buffer_min)
+    INSERT INTO price_book (artist_id, placement, body_zone, base_price_cents, session_duration_min, buffer_min)
     SELECT 'a0000000-0000-4000-8000-000000000001', v.placement, v.zone, v.price, 120, 30
     FROM (VALUES
       ('antebraco','pequeno',30000),('antebraco','medio',60000),('antebraco','grande',90000),('antebraco','fechamento',120000),
       ('braco_externo','pequeno',30000),('braco_externo','medio',60000),('braco_externo','grande',90000),('braco_externo','fechamento',150000),
       ('costas','pequeno',35000),('costas','medio',70000),('costas','grande',120000),('costas','fechamento',200000)
     ) AS v(placement, zone, price)
-    ON CONFLICT (artist_id, placement, body_zone) DO UPDATE SET
-      table_price = EXCLUDED.table_price, session_duration_min = EXCLUDED.session_duration_min, buffer_min = EXCLUDED.buffer_min;`);
+    ON CONFLICT (artist_id, placement, body_zone) WHERE effective_to IS NULL
+    DO UPDATE SET
+      base_price_cents = EXCLUDED.base_price_cents,
+      session_duration_min = EXCLUDED.session_duration_min,
+      buffer_min = EXCLUDED.buffer_min;`);
 }
 
 // ── workflow driving ──
@@ -336,8 +414,7 @@ function extractTurn(exec) {
   return {
     reply: pc.final_reply || '',
     aiOutput: (firstNode(run, 'AI Agent') || {}).output || '',
-    pipeline: pc.pipeline_status || null,
-    depositStatus: pc.deposit_status_val || null,
+    pipeline: pc.stage_key || null,
     offerQuoted: pc.offer_quoted === true,
     gateViolation: pc.price_gate_violation === true,
     notification: notif,
@@ -590,7 +667,7 @@ const SCENARIOS = [
         { label: `activation snapshot is ${brl(PROMO_FIRST_CENTS)} (cap ${brl(PROMO_SECOND_CAP_CENTS)})`, ok: promo.first_price === PROMO_FIRST_CENTS && promo.second_cap === PROMO_SECOND_CAP_CENTS, detail: promo },
         { label: 'Load Offer names the promotion + multiplier', ok: !!(t1.loadOffer && t1.loadOffer.name === PROMO_NAME && Number(t1.loadOffer.multiplier) === PROMO_MULTIPLIER), detail: t1.loadOffer },
         { label: 'classifier flagged the turn as an offer quote', ok: t1.offerQuoted === true, detail: t1.offerQuoted },
-        { label: 'Write Promotion Quote node returned a quote row', ok: !!written && Number(written.first_price) === PROMO_FIRST_CENTS, detail: written },
+        { label: 'Write Promotion Quote node returned a quote row', ok: !!written && Number(written.offered_price_cents) === PROMO_FIRST_CENTS, detail: written },
         { label: 'DB: exactly one promotion quote for the lead', ok: q1.count === 1, detail: q1 },
         { label: 'DB: quote is open with the 2x price and the second-tattoo cap', ok: q1.status === 'open' && q1.first_price === PROMO_FIRST_CENTS && q1.second_cap_price === PROMO_SECOND_CAP_CENTS, detail: q1 },
         { label: 'DB: quote is bound to the quoted placement', ok: q1.placement === 'braco_externo' && q1.body_zone === 'fechamento', detail: q1 },

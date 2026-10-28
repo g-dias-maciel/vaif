@@ -1,16 +1,18 @@
 #!/usr/bin/env python3
 """Build the Beatriz WhatsApp workflow JSON definition.
 
-Mirrors the deployed Telegram core agent (debounce, dynamic classification,
-guarded pipeline transitions, handoff/deposit notifications), and differs ONLY
-in the transport layer: WAHA webhook/sendText instead of Telegram.
-
-Core (identical to Telegram):
-  Resolve Artist → Debounce (buffer + wait for burst) → Upsert Lead
+Core:
+  Resolve Artist → Debounce (buffer + wait for burst) → Start Turn
+    → Load Offer → Load Pricing → Build System Prompt
     → AI Agent (GPT-4o-mini + Postgres Chat Memory + tools)
     → Build Classification Prompt → Classify (OpenRouter) → Parse Classification
-    → Build Update Query → Update Lead → Log Event → Enqueue Notion Sync
-    → reply → Build Handoff Message → Send Notification?
+    → Build Project Patch → Patch Project → Ensure Quote / Write Promotion Quote
+    → Patch Chat State → reply → Build Handoff Message → Send Notification?
+
+Every database interaction goes through the v2 RPC surface (`resolve_artist`,
+`chat_buffer_*`, `start_turn`, `patch_project`, `patch_chat_state`, ...): the
+agent role has no domain table grants. Events are written by the RPCs, so the
+old `Log Event` / Notion mirror nodes are gone.
 
 WhatsApp/WAHA differences (transport + multi-tenancy only):
   - Trigger: WAHA webhook (n8n webhook, path /waha-webhook), responseMode
@@ -57,29 +59,33 @@ TELEGRAM_OPS = {"telegramApi": {"id": "pL4lbcexwUidxd1r", "name": "Beatriz Ops"}
 # ── Resolve Artist: session slug -> artist row, plus an explicit `found`
 #    boolean. n8n's `isNotEmpty` returns TRUE for null, so a null-uuid row
 #    would otherwise take the "found" branch. Gate on `found` instead. ──
-RESOLVE_ARTIST_QUERY = """SELECT id, nome, wa_session_slug, status, ai_active_hours, timezone,
-       specialties, nao_faco, floor_pct, deposit_type, deposit_value, pix_key,
-       instagram_handle, whatsapp_number, telegram_group_id,
-       (id IS NOT NULL) AS found
-FROM resolve_artist_from_session($1)
+RESOLVE_ARTIST_QUERY = """WITH found AS (
+  SELECT r FROM resolve_artist($1) r
+)
+SELECT (r->'artist'->>'id')::uuid                                        AS id,
+       COALESCE(NULLIF(r->'settings'->>'display_name', ''),
+                r->'artist'->>'name')                                    AS name,
+       r->'artist'->>'wa_session_slug'                                   AS wa_session_slug,
+       r->'artist'->>'status'                                            AS status,
+       r->'artist'->>'timezone'                                          AS timezone,
+       COALESCE(r->'settings'->'ai_active_hours', '{}'::jsonb)           AS ai_active_hours,
+       COALESCE(r->'settings'->'specialties', '[]'::jsonb)               AS specialties,
+       COALESCE(r->'settings'->'excluded_styles', '[]'::jsonb)           AS excluded_styles,
+       (r->'settings'->>'floor_pct')::numeric                            AS floor_pct,
+       COALESCE(r->'settings'->>'deposit_type', 'percent')               AS deposit_type,
+       (r->'settings'->>'deposit_value')::integer                        AS deposit_value,
+       r->'settings'->>'pix_key'                                         AS pix_key,
+       r->'settings'->>'instagram_handle'                                AS instagram_handle,
+       r->'settings'->>'whatsapp_number'                                 AS whatsapp_number,
+       r->'settings'->>'telegram_group_id'                               AS telegram_group_id,
+       true                                                              AS found
+FROM found
 UNION ALL
-SELECT NULL::uuid                    AS id,
-       NULL::text                    AS nome,
-       $1::text                      AS wa_session_slug,
-       NULL::text                    AS status,
-       NULL::jsonb                   AS ai_active_hours,
-       NULL::text                    AS timezone,
-       NULL::text[]                  AS specialties,
-       NULL::text[]                  AS nao_faco,
-       NULL::numeric                 AS floor_pct,
-       NULL::text                    AS deposit_type,
-       NULL::integer                 AS deposit_value,
-       NULL::text                    AS pix_key,
-       NULL::text                    AS instagram_handle,
-       NULL::text                    AS whatsapp_number,
-       NULL::text                    AS telegram_group_id,
-       false                         AS found
-WHERE NOT EXISTS (SELECT 1 FROM resolve_artist_from_session($1))
+SELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,
+       '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, NULL::numeric, 'percent',
+       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text,
+       false
+WHERE NOT EXISTS (SELECT 1 FROM found)
 LIMIT 1;"""
 
 # ── Dynamic system prompt: render beatriz-system.md template with the artist's
@@ -92,7 +98,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "\n"
     "let table = '_Nenhuma tabela de preços cadastrada. Consulte o artista antes de informar valores._';\n"
     "if (pricing.length > 0) {\n"
-    "  const rows = pricing.map(p => `| ${p.placement} | ${p.body_zone} | ${formatBRL(p.table_price)} |`).join('\\n');\n"
+    "  const rows = pricing.map(p => `| ${p.placement} | ${p.body_zone} | ${formatBRL(p.base_price_cents)} |`).join('\\n');\n"
     "  table = '| Local | Tamanho | À Vista |\\n|---|---|---|\\n' + rows;\n"
     "}\n"
     "\n"
@@ -113,11 +119,11 @@ BUILD_SYSTEM_PROMPT_JS = (
     "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL. A segunda é agendada depois, com o artista. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
     "}\n"
     "if (openQuote) {\n"
-    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_first_price) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada.';\n"
+    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada.';\n"
     "}\n"
     "\n"
     "const replacements = {\n"
-    "  '{{NOME}}': artist.nome || 'Artista',\n"
+    "  '{{NOME}}': artist.name || 'Artista',\n"
     "  '{{INSTAGRAM}}': artist.instagram_handle || '@artista',\n"
     "  '{{PIX}}': artist.pix_key || '(informe a chave PIX)',\n"
     "  '{{SINAL}}': sinal,\n"
@@ -132,31 +138,32 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  prompt = prompt.split(k).join(v);\n"
     "}\n"
     "\n"
-    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.table_price) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_first_price) || null, open_quote_second_cap: Number(offer.open_quote_second_cap) || null } } }];"
+    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.base_price_cents) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_offered_cents) || null, open_quote_second_cap: Number(offer.open_quote_second_cap) || null } } }];"
 )
 
 # ── Agent text: per-turn context + the debounced lead message. Same shape as
 #    the Telegram testbed, with artist_id resolved at runtime. ──
 AGENT_TEXT_EXPR = (
-    "={{ '[Contexto: pipeline=' + $('Upsert Lead').first().json.pipeline_status "
-    "+ ' nome=' + ($('Upsert Lead').first().json.nome || 'desconhecido') "
-    "+ ' deposit=' + ($('Upsert Lead').first().json.deposit_status || 'nao_solicitado') "
-    "+ ' tipo=' + ($('Upsert Lead').first().json.tipo_tatuagem || '?') "
-    "+ ' lead_id=' + $('Upsert Lead').first().json.id "
-    "+ ' placement=' + ($('Upsert Lead').first().json.placement || '?') "
-    "+ ' zona=' + ($('Upsert Lead').first().json.body_zone || '?') "
-    "+ ' estilo=' + ($('Upsert Lead').first().json.style || '?') "
-    "+ ' primeira_tatuagem=' + ($('Upsert Lead').first().json.primeira_tatuagem === true ? 'sim' : ($('Upsert Lead').first().json.primeira_tatuagem === false ? 'nao' : '?')) "
-    "+ ' significado=' + ($('Upsert Lead').first().json.significado || '?') "
-    "+ ' processo_explicado=' + ($('Upsert Lead').first().json.processo_explicado ? 'sim' : 'nao') "
-    "+ ' preco_liberado=' + ($('Upsert Lead').first().json.preco_liberado ? 'sim' : 'nao') "
-    "+ ' duvidas_eliminadas=' + ($('Upsert Lead').first().json.duvidas_eliminadas ? 'sim' : 'nao') "
-    "+ ' aguardando_confirmacao_duvidas=' + ($('Upsert Lead').first().json.aguardando_confirmacao_duvidas ? 'sim' : 'nao') "
-    "+ ' primeira_mensagem=' + ($('Upsert Lead').first().json.is_new ? 'sim' : 'nao') "
-    "+ ' preco_tabela=' + ($('Upsert Lead').first().json.table_price || '?') "
-    "+ ' preco_negociado=' + ($('Upsert Lead').first().json.negotiated_price || '?') "
-    "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Upsert Lead').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.negotiated_price || l.table_price; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
-    "+ ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_first_price || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() "
+    "={{ '[Contexto: pipeline=' + $('Start Turn').first().json.stage_key "
+    "+ ' nome=' + ($('Start Turn').first().json.name || 'desconhecido') "
+    "+ ' deposit=' + ($('Start Turn').first().json.deposit_status || 'nao_solicitado') "
+    "+ ' tipo=' + (function(){ var t = $('Start Turn').first().json.tattoo_type; return ({new: 'nova', cover_up: 'cobertura', rework: 'reforma'})[t] || '?'; })() "
+    "+ ' lead_id=' + $('Start Turn').first().json.lead_id "
+    "+ ' project_id=' + $('Start Turn').first().json.project_id "
+    "+ ' placement=' + ($('Start Turn').first().json.placement || '?') "
+    "+ ' zona=' + ($('Start Turn').first().json.body_zone || '?') "
+    "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
+    "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
+    "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
+    "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
+    "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
+    "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
+    "+ ' aguardando_confirmacao_duvidas=' + ((($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas) ? 'sim' : 'nao') "
+    "+ ' primeira_mensagem=' + ($('Start Turn').first().json.is_new ? 'sim' : 'nao') "
+    "+ ' preco_tabela=' + ($('Start Turn').first().json.table_price_cents || '?') "
+    "+ ' preco_negociado=' + ($('Start Turn').first().json.quoted_price_cents || '?') "
+    "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Start Turn').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.quoted_price_cents || l.table_price_cents; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
+    "+ ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_offered_cents || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() "
     "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) "
     "+ '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' "
     "+ ($('Debounce Resolve').first().json.combined_text || '') }}"
@@ -234,12 +241,7 @@ return [{ json: {
 } }];"""
 
 PRESENCE_UPSERT_QUERY = (
-    "INSERT INTO message_buffer (chat_id, pending, last_msg_at, last_typing_at, typing_state)\n"
-    "VALUES ($1, NULL, now(), now(), $2)\n"
-    "ON CONFLICT (chat_id) DO UPDATE SET\n"
-    "  last_typing_at = now(),\n"
-    "  typing_state   = EXCLUDED.typing_state\n"
-    "RETURNING chat_id;"
+    "SELECT * FROM chat_buffer_typing($1::uuid, $2::text, $3::text);"
 )
 
 # ── Humanize: scale the pause before replying to the reply length, clamped so
@@ -256,7 +258,7 @@ return [{ json: { delay_seconds: Math.round(secs * 10) / 10 } }];"""
 
 # ── Classification: same prompt + parse as the Telegram testbed. ──
 BUILD_CLASSIFICATION_PROMPT_JS = (
-    "const currentPipeline = $('Upsert Lead').first().json.pipeline_status || 'novo';\n"
+    "const currentPipeline = $('Start Turn').first().json.stage_key || 'novo';\n"
     "const userMsg = $('Debounce Resolve').first().json.combined_text || '';\n"
     "const agentOutput = $('AI Agent').first().json.output || '';\n"
     "\n"
@@ -286,7 +288,8 @@ const d = parsed.deposit || {};
 const h = parsed.handoff || {};
 const b = parsed.booking || {};
 const g = parsed.price_gate || {};
-const lead = $('Upsert Lead').first().json;
+const lead = $('Start Turn').first().json;
+const state = lead.agent_state || {};
 const agentOutput = $('AI Agent').first().json.output || '';
 
 // ── Deterministic tipo_tatuagem guard ──
@@ -298,6 +301,8 @@ function detectTipo(text) {
   return null;
 }
 const tipoDeterministic = detectTipo(rawLead);
+// The schema stores English enum values; the prompt/classifier vocabulary is PT.
+const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
 
 // ── Deterministic qualification extraction (fills classifier gaps so the
 //    lead's answers are persisted reliably and never "forgotten"). ──
@@ -361,8 +366,8 @@ function detectDuvidasZeradas(t) {
   return /^(?:n[aã]o|n)[,;:]?\\s+(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i.test(messages.join(' '));
 }
 function discoveryFallback(lead) {
-  if (!lead.tipo_tatuagem) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
-  if (lead.primeira_tatuagem == null) return 'Essa seria a sua primeira tatuagem?';
+  if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
+  if (lead.first_tattoo == null) return 'Essa seria a sua primeira tatuagem?';
   if (!lead.placement) return 'E onde no corpo você quer fazer?';
   if (!lead.body_zone) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
   if (!lead.style) return 'E qual estilo você tem em mente?';
@@ -374,13 +379,13 @@ function discoveryFallback(lead) {
 // classifier is deliberately not trusted to clear doubts or open the gate.
 const agentLower = agentOutput.toLowerCase();
 const processoDeterministic = ['processo de criação', 'projeto exclusivo', 'sentar junto com você', 'tirar as medidas', 'encaixe perfeito'].some(frase => agentLower.includes(frase));
-const processoExplicado = processoDeterministic || lead.processo_explicado === true;
-const checkpointWasPending = lead.aguardando_confirmacao_duvidas === true;
+const processoExplicado = processoDeterministic || state.processo_explicado === true;
+const checkpointWasPending = state.aguardando_confirmacao_duvidas === true;
 const explicitClearThisTurn = checkpointWasPending && detectDuvidasZeradas(rawLead);
-const duvidasEliminadas = lead.duvidas_eliminadas === true || explicitClearThisTurn;
+const duvidasEliminadas = state.duvidas_eliminadas === true || explicitClearThisTurn;
 
-const current = lead.pipeline_status || 'novo';
-const precoLiberadoJa = lead.preco_liberado === true || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+const current = lead.stage_key || 'novo';
+const precoLiberadoJa = state.preco_liberado === true || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
 // Clearing doubts authorizes a quote, but the price is not considered
 // liberated until an actual quote has been sent.
 const gateJustOpened = processoExplicado && duvidasEliminadas;
@@ -409,7 +414,7 @@ function deterministicQuote(centsOverride = null) {
   const local = places[lead.placement] || `em ${lead.placement}`;
   const zona = zones[lead.body_zone] || lead.body_zone;
   const description = `${zona} ${local}`;
-  const artistName = $('Resolve Artist').first().json.nome || 'artista';
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
   if (offerLive) {
     reply += ` E com a promoção "${offer.name || 'leve 2'}", nesse mesmo valor você leva uma segunda tatuagem de valor igual ou menor, que pode até ser para outra pessoa ou outro local. A segunda a gente agenda depois com o ${artistName}.`;
@@ -479,12 +484,14 @@ let finalReply = priceGateViolation
   : agentOutput;
 
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
+// ── Deterministic quote state: the model may not have quoted at all, so the
+//    price table decides whether a first/repeat quote goes out. ──
 const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist
   ? deterministicQuote()
   : null;
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
 const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist
-  ? deterministicQuote(lead.negotiated_price || lead.table_price)
+  ? deterministicQuote(lead.quoted_price_cents || lead.table_price_cents)
   : null;
 if (firstQuote) {
   // The first quote comes from the artist's pricing table, not generated model
@@ -505,7 +512,7 @@ if (firstQuote) {
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
   const genericPlacement = ['braco', 'perna'].includes(lead.placement);
-  const artistName = $('Resolve Artist').first().json.nome || 'artista';
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
   finalReply = genericPlacement
     ? (lead.placement === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
@@ -565,7 +572,7 @@ if (!/sinal|pix/i.test(finalReply) && finalPipeline === 'aguardando_deposito'
 
 // ── Audio handling (deterministic — the model never sees the raw placeholder
 //    matter; we answer every audio and hand off on the second). ──
-const audioCountNow = Number(lead.audio_count || 0);
+const audioCountNow = Number(state.audio_count || 0);
 const audioCountNext = isAudio ? audioCountNow + 1 : audioCountNow;
 
 let audioFinalReply = finalReply;
@@ -588,13 +595,24 @@ if (isAudio) {
   }
 }
 
+// Quote state to persist: the deterministic quote (when the model did not
+// produce one) becomes a real `quotes` row via the Ensure Quote node.
+const quoteBaseCents = !quoteActuallySent
+  ? null
+  : (firstQuote ? firstQuote.base_cents
+     : (repeatedQuote ? (lead.table_price_cents || repeatedQuote.base_cents) : (p.table_cents || null)));
+const quoteOfferedCents = !quoteActuallySent
+  ? null
+  : (firstQuote ? firstQuote.cents
+     : (repeatedQuote ? (lead.quoted_price_cents || repeatedQuote.cents) : (p.nego_cents || p.table_cents || null)));
+
 return [{ json: {
-  lead_id: lead.id,
+  lead_id: lead.lead_id,
+  project_id: lead.project_id,
   offer_quoted: !!(firstQuote && firstQuote.offer_active),
-  pipeline_status: audioPipeline,
+  stage_key: audioPipeline,
   event_type: audioEvent,
-  price_updated: !!firstQuote || (!repeatedQuote && quoteActuallySent && !!p.table_cents),
-  processo_explicado_val: processoDeterministic || lead.processo_explicado === true,
+  processo_explicado_val: processoDeterministic || state.processo_explicado === true,
   preco_liberado_val: precoLiberadoJa || quoteActuallySent,
   duvidas_eliminadas_val: duvidasEliminadas,
   aguardando_confirmacao_duvidas_val: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
@@ -605,95 +623,58 @@ return [{ json: {
   placement_val: q.placement || detectPlacement(rawLead) || null,
   body_zone_val: q.body_zone || detectZone(rawLead) || null,
   style_val: q.style || detectStyle(rawLead) || null,
-  primeira_tatuagem_val: (q.first_tattoo === true || q.first_tattoo === false)
+  first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
     ? q.first_tattoo
     : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),
-  significado_val: q.significado || null,
-  tipo_tatuagem_val: tipoDeterministic || q.tipo_tatuagem || null,
+  meaning_val: q.significado || null,
+  tattoo_type_val: TIPO_DB[tipoDeterministic || q.tipo_tatuagem] || null,
 
-  table_price_cents: !quoteActuallySent || repeatedQuote ? null : (firstQuote ? firstQuote.cents : (p.table_cents || null)),
-  negotiated_price_cents: !quoteActuallySent || repeatedQuote ? null : (firstQuote ? firstQuote.cents : (p.nego_cents || null)),
+  quote_base_cents: quoteBaseCents,
+  quote_offered_cents: quoteOfferedCents,
 
-  deposit_status_val: priceGateViolation || !/sinal|pix/i.test(audioFinalReply) ? null : (d.amount_cents ? 'aguardando_confirmacao' : null),
+  // Deposits are persisted by the Request Deposit tool; this is only the
+  // amount the classifier saw, used by the ops notification.
   deposit_amount_cents: priceGateViolation || !/sinal|pix/i.test(audioFinalReply) ? null : (d.amount_cents || null),
-  // booked_date is authoritative from the Book Slot tool only — the classifier
-  // cannot reliably reconstruct the exact slot instant (timezone/year).
-  booked_date_val: null,
-  session_duration_min_val: null,
-  buffer_min_val: null,
 
   handoff_reason: audioHandoff,
-  nome_val: parsed.name || null,
+  name_val: parsed.name || null,
+
+  // SDR scratch flags: merged into chat_sessions.agent_state by Patch Chat State.
+  chat_state: {
+    processo_explicado: processoDeterministic || state.processo_explicado === true,
+    preco_liberado: precoLiberadoJa || quoteActuallySent,
+    duvidas_eliminadas: duvidasEliminadas,
+    aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
+    audio_count: audioCountNext,
+  },
 } }];"""
 
-# ── Build Update Query: dynamic SQL. Artist_id threaded for multi-tenancy. ──
-BUILD_UPDATE_QUERY_JS = """const f = $input.first().json;
-const artistId = $('Resolve Artist').first().json.id;
+# ── Build Project Patch: the deltas the agent learned this turn. The RPC
+#    applies only non-null fields, so empty values are dropped here. ──
+BUILD_PROJECT_PATCH_JS = """const f = $input.first().json;
+const artist = $('Resolve Artist').first().json;
+const turn = $('Start Turn').first().json;
 
-function esc(s) { return String(s || '').replace(/'/g, "''"); }
+const text = (v) => (v === undefined || v === null || v === '' || v === 'null') ? null : String(v);
 
-const sets = [];
-
-const ps = esc(f.pipeline_status);
-sets.push(`pipeline_status = CASE
-    WHEN '${ps}' = 'qualificando' AND pipeline_status = 'novo' THEN 'qualificando'::text
-    WHEN '${ps}' = 'orcamento_enviado' AND pipeline_status IN ('novo','qualificando') THEN 'orcamento_enviado'::text
-    WHEN '${ps}' = 'aguardando_deposito' AND pipeline_status IN ('novo','qualificando','orcamento_enviado') THEN 'aguardando_deposito'::text
-    WHEN '${ps}' = 'agendado' AND pipeline_status IN ('novo','qualificando','orcamento_enviado','aguardando_deposito') THEN 'agendado'::text
-    WHEN '${ps}' = 'aguardando_artista' AND pipeline_status NOT IN ('fechado','perdido','agendado') THEN 'aguardando_artista'::text
-    WHEN '${ps}' = 'bloqueado' AND pipeline_status NOT IN ('fechado','perdido') THEN 'bloqueado'::text
-    ELSE pipeline_status END`);
-
-if (f.placement_val && f.placement_val !== 'null') sets.push(`placement = '${esc(f.placement_val)}'`);
-if (f.body_zone_val && f.body_zone_val !== 'null') sets.push(`body_zone = '${esc(f.body_zone_val)}'`);
-if (f.style_val && f.style_val !== 'null') sets.push(`style = '${esc(f.style_val)}'`);
-if (f.significado_val && f.significado_val !== 'null') sets.push(`significado = '${esc(f.significado_val)}'`);
-if (f.tipo_tatuagem_val && f.tipo_tatuagem_val !== 'null') sets.push(`tipo_tatuagem = '${esc(f.tipo_tatuagem_val)}'`);
-if (f.deposit_status_val && f.deposit_status_val !== 'null') sets.push(`deposit_status = '${esc(f.deposit_status_val)}'`);
-
-if (f.nome_val && f.nome_val !== 'null') sets.push(`nome = '${esc(f.nome_val)}'`);
-
-if (f.table_price_cents !== null && f.table_price_cents !== undefined && f.table_price_cents !== 'null')
-  sets.push(`table_price = ${f.table_price_cents}`);
-if (f.negotiated_price_cents !== null && f.negotiated_price_cents !== undefined && f.negotiated_price_cents !== 'null')
-  sets.push(`negotiated_price = ${f.negotiated_price_cents}`);
-if (f.deposit_amount_cents !== null && f.deposit_amount_cents !== undefined && f.deposit_amount_cents !== 'null')
-  sets.push(`deposit_amount = ${f.deposit_amount_cents}`);
-if (f.session_duration_min_val !== null && f.session_duration_min_val !== undefined && f.session_duration_min_val !== 'null')
-  sets.push(`session_duration_min = ${f.session_duration_min_val}`);
-if (f.buffer_min_val !== null && f.buffer_min_val !== undefined && f.buffer_min_val !== 'null')
-  sets.push(`buffer_min = ${f.buffer_min_val}`);
-
-if (f.primeira_tatuagem_val === true) sets.push(`primeira_tatuagem = true`);
-else if (f.primeira_tatuagem_val === false) sets.push(`primeira_tatuagem = false`);
-
-// Once the creative process has been explained, it stays explained.
-if (f.processo_explicado_val === true) sets.push(`processo_explicado = true`);
-
-// Price is liberated only after a quote is actually sent. Merely clearing the
-// doubts checkpoint is not enough to enter the negotiation phase.
-if (f.preco_liberado_val === true) sets.push(`preco_liberado = true`);
-
-// Doubts cleared is sticky, like the process flag.
-if (f.duvidas_eliminadas_val === true) sets.push(`duvidas_eliminadas = true`);
-
-// This state is set only after the assistant has actually asked the checkpoint,
-// and cleared only after a deterministic explicit confirmation.
-sets.push(`aguardando_confirmacao_duvidas = ${f.aguardando_confirmacao_duvidas_val === true ? 'true' : 'false'}`);
-
-// Audio count increments each time the lead sends an audio message.
-if (f.audio_count_val !== null && f.audio_count_val !== undefined && f.audio_count_val !== 'null')
-  sets.push(`audio_count = ${Number(f.audio_count_val) || 0}`);
-
-if (f.booked_date_val && f.booked_date_val !== 'null')
-  sets.push(`booked_date = '${esc(f.booked_date_val)}'::timestamptz`);
-
-sets.push(`last_message_at = NOW()`);
-sets.push(`updated_at = NOW()`);
-
-const query = `UPDATE public.leads SET ${sets.join(', ')} WHERE id = '${esc(String(f.lead_id))}'::uuid AND artist_id = '${artistId}' RETURNING id, pipeline_status, deposit_status;`;
-
-return [{ json: { ...f, query } }];"""
+return [{ json: {
+  ...f,
+  args: [
+    artist.id,
+    turn.project_id,
+    text(f.stage_key),
+    text(f.placement_val),
+    text(f.body_zone_val),
+    text(f.style_val),
+    (f.first_tattoo_val === true || f.first_tattoo_val === false) ? f.first_tattoo_val : null,
+    text(f.meaning_val),
+    text(f.tattoo_type_val),
+    null,                    // reference_pics: the agent never writes them
+    text(f.handoff_reason),
+    'agent',
+    text(turn.stage_key),    // expected stage: never override a tool's transition
+  ],
+} }];"""
 
 # ── Handoff / deposit notification → Telegram ops group with inline buttons.
 #    The Telegram workflow's callback branch handles confirm/cancel (handoff
@@ -701,14 +682,14 @@ return [{ json: { ...f, query } }];"""
 #    the Telegram testbed; artist first-name variants keep the handoff
 #    fallback working in multi-tenant mode. ──
 BUILD_HANDOFF_MESSAGE_JS = r"""const parseData = $('Parse Classification').first().json;
-const updateData = $('Update Lead').first().json;
-const leadData = $('Upsert Lead').first().json;
+const updateData = $('Patch Project').first().json;
+const leadData = $('Start Turn').first().json;
 const artistData = $('Resolve Artist').first().json;
 const agentOutput = (($('Parse Classification').first().json.final_reply) || ($('AI Agent').first().json.output) || '').toLowerCase();
 
 const event = (parseData && parseData.event_type) || null;
-const status = (updateData && updateData.pipeline_status)
-  || (parseData && parseData.pipeline_status)
+const status = (updateData && updateData.stage_key)
+  || (parseData && parseData.stage_key)
   || '';
 
 // Per-artist ops Telegram group (handoff/deposit confirm buttons). Required —
@@ -716,8 +697,8 @@ const status = (updateData && updateData.pipeline_status)
 // to the wrong group.
 const opsChatId = (artistData && artistData.telegram_group_id) || '';
 
-const leadNome = leadData && leadData.nome ? leadData.nome : 'Desconhecido';
-const telefone = leadData && leadData.telefone ? String(leadData.telefone).replace(/\D/g, '') : '';
+const leadNome = leadData && leadData.name ? leadData.name : 'Desconhecido';
+const telefone = leadData && leadData.phone_e164 ? String(leadData.phone_e164).replace(/\D/g, '') : '';
 const whatsappLink = telefone && /^\d{8,15}$/.test(telefone)
   ? 'https://wa.me/' + telefone
   : null;
@@ -739,7 +720,7 @@ const telefoneLine = telefoneDisplay
 // Fallback: detect a handoff directly from Beatriz's message if the
 // classifier did not emit event=handoff_triggered. Include the artist's own
 // first name (multi-tenant) plus generic phrases.
-const artistNome = artistData && artistData.nome ? String(artistData.nome).toLowerCase() : '';
+const artistNome = artistData && artistData.name ? String(artistData.name).toLowerCase() : '';
 const handoffPhrases = [
   'vou te passar pro artista', 'vou passar pro artista', 'te passar pro artista',
   'deixa eu te passar', 'vou te passar pro', 'passar o lead pro artista'
@@ -760,7 +741,7 @@ if (!event && !saidHandoff && !saidDeposit) {
 
 // Artist must have a Telegram ops group configured to receive the buttons.
 if (!opsChatId) {
-  console.error('[Beatriz-WhatsApp] Artist sem telegram_group_id configurado:', artistData && artistData.nome);
+  console.error('[Beatriz-WhatsApp] Artist sem telegram_group_id configurado:', artistData && artistData.name);
   return [{ json: { send: false } }];
 }
 
@@ -927,7 +908,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": PRESENCE_UPSERT_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.chat_id, $json.presence] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $json.chat_id, $json.presence] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1036,9 +1017,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM take_chat_control($1::text, $2::uuid);",
+                "query": "SELECT * FROM take_chat_control($1::uuid, $2::text);",
                 "options": {
-                    "queryReplacement": "={{ [$json.chat_id, $('Resolve Artist').first().json.id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $json.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1114,14 +1095,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": """INSERT INTO message_buffer (chat_id, pending, last_msg_at)
-VALUES ($1, $2, to_timestamp($3::float8 / 1000.0))
-ON CONFLICT (chat_id) DO UPDATE SET
-  pending = COALESCE(message_buffer.pending, '') || E'\n' || $2,
-  last_msg_at = GREATEST(message_buffer.last_msg_at, to_timestamp($3::float8 / 1000.0))
-RETURNING pending;""",
+                "query": "SELECT * FROM chat_buffer_accumulate($1::uuid, $2::text, $3::text, to_timestamp($4::float8 / 1000.0));",
                 "options": {
-                    "queryReplacement": "={{ [$json.chat_id, $json.msg_text, $json.msg_ts] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $json.chat_id, $json.msg_text, $json.msg_ts] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1148,9 +1124,9 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT last_msg_at, last_typing_at, typing_state, pending FROM message_buffer WHERE chat_id = $1;",
+                "query": "SELECT * FROM chat_buffer_state($1::uuid, $2::text);",
                 "options": {
-                    "queryReplacement": "={{ [$('Debounce Start').first().json.chat_id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1191,9 +1167,9 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "UPDATE message_buffer SET pending = NULL, typing_state = NULL WHERE chat_id = $1;",
+                "query": "SELECT * FROM chat_buffer_clear($1::uuid, $2::text);",
                 "options": {
-                    "queryReplacement": "={{ [$json.chat_id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $json.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1209,9 +1185,9 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT chat_owner($1::text) AS owner;",
+                "query": "SELECT chat_owner($1::uuid, $2::text) AS owner;",
                 "options": {
-                    "queryReplacement": "={{ [$('Debounce Start').first().json.chat_id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1258,9 +1234,9 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM active_offer_for_lead($1::uuid, $2::uuid);",
+                "query": "SELECT * FROM active_offer_for_project($1::uuid, $2::uuid);",
                 "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Upsert Lead').first().json.id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1274,13 +1250,7 @@ RETURNING pending;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": """SELECT placement, body_zone, table_price, session_duration_min, buffer_min
-FROM pricing
-WHERE artist_id = $1::uuid
-UNION ALL
-SELECT NULL::text, NULL::text, NULL::integer, NULL::integer, NULL::integer
-WHERE NOT EXISTS (SELECT 1 FROM pricing WHERE artist_id = $1::uuid)
-ORDER BY placement, body_zone;""",
+                "query": "SELECT * FROM list_prices($1::uuid);",
                 "options": {
                     "queryReplacement": "={{ [$('Resolve Artist').first().json.id] }}"
                 },
@@ -1291,6 +1261,7 @@ ORDER BY placement, body_zone;""",
             "id": "lp-pricing-0000-0000-0000-000000000001",
             "name": "Load Pricing",
             "credentials": POSTGRES,
+            "alwaysOutputData": True,
         },
         # 15. Build System Prompt — render beatriz-system.md with artist data
         {
@@ -1304,51 +1275,22 @@ ORDER BY placement, body_zone;""",
             "id": "lp-build-prompt-0000-0000-0000-000000000001",
             "name": "Build System Prompt",
         },
-        # 16. Upsert Lead — create or load the lead for this phone+artist
+        # 16. Start Turn — one round trip per message: the Lead (created on
+        #     first contact), the open Project, the chat session, the price
+        #     context and the SDR scratch state.
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": """WITH existing AS (
-  SELECT id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
-         COALESCE(processo_explicado, false) AS processo_explicado,
-         COALESCE(preco_liberado, false) AS preco_liberado,
-         COALESCE(duvidas_eliminadas, false) AS duvidas_eliminadas,
-         COALESCE(aguardando_confirmacao_duvidas, false) AS aguardando_confirmacao_duvidas,
-         COALESCE(audio_count, 0) AS audio_count,
-         false AS is_new
-  FROM public.leads
-  WHERE artist_id = $3::uuid
-    AND telefone = $1
-),
-inserted AS (
-  INSERT INTO public.leads (artist_id, nome, telefone, pipeline_status, conversation_started)
-  SELECT
-    $3::uuid,
-    NULLIF($2, ''),
-    $1,
-    'novo',
-    NOW()
-  WHERE NOT EXISTS (SELECT 1 FROM existing)
-  RETURNING id, telefone, pipeline_status, deposit_status, nome, placement, body_zone, style, primeira_tatuagem, significado, tipo_tatuagem, table_price, negotiated_price,
-            COALESCE(processo_explicado, false) AS processo_explicado,
-            COALESCE(preco_liberado, false) AS preco_liberado,
-            COALESCE(duvidas_eliminadas, false) AS duvidas_eliminadas,
-            COALESCE(aguardando_confirmacao_duvidas, false) AS aguardando_confirmacao_duvidas,
-            COALESCE(audio_count, 0) AS audio_count,
-            true AS is_new
-)
-SELECT * FROM existing
-UNION ALL
-SELECT * FROM inserted;""",
+                "query": "SELECT * FROM start_turn($1::uuid, $2::text, $3::text, NULLIF($4, ''), 'whatsapp');",
                 "options": {
-                    "queryReplacement": "={{ [$('Debounce Start').first().json.phone, ($('WAHA Webhook').first().json.body.payload._data?.notifyName || ''), $('Resolve Artist').first().json.id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id, $('Debounce Start').first().json.phone, ($('WAHA Webhook').first().json.body.payload._data?.notifyName || '')] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
             "typeVersion": 2.6,
             "position": [2600, 260],
-            "id": "upsert-lead-0000-0000-0000-000000000001",
-            "name": "Upsert Lead",
+            "id": "start-turn-0000-0000-0000-000000000001",
+            "name": "Start Turn",
             "credentials": POSTGRES,
         },
         # 17. OpenRouter Chat Model (sub-node)
@@ -1365,7 +1307,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "sessionIdType": "customKey",
-                "sessionKey": "={{ $('Upsert Lead').first().json.id }}",
+                "sessionKey": "={{ $('Start Turn').first().json.lead_id }}",
                 "tableName": "chat_memory",
                 "contextWindowLength": 20,
             },
@@ -1395,7 +1337,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM write_quote('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem no formato [Contexto: lead_id=UUID]') }}'::uuid, NULLIF('{{ $fromAI('table_price', 'Preço de tabela em centavos de real', 'number') }}', 'undefined')::integer, NULLIF('{{ $fromAI('negotiated_price', 'Preço negociado em centavos de real. Se não houve desconto, use o mesmo valor de table_price', 'number') }}', 'undefined')::integer)",
+                "query": "SELECT * FROM write_quote('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, NULLIF('{{ $fromAI('base_price', 'Preço de tabela em centavos de real', 'number') }}', 'undefined')::integer, NULLIF('{{ $fromAI('offered_price', 'Preço final negociado em centavos de real. Sem desconto, use o mesmo valor de base_price', 'number') }}', 'undefined')::integer)",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1409,7 +1351,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM request_deposit('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, NULLIF('{{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }}', 'undefined')::integer)",
+                "query": "SELECT * FROM request_deposit('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, NULLIF('{{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }}', 'undefined')::integer)",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1423,7 +1365,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT id, start_at, end_at, type FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120)) ORDER BY start_at LIMIT 10",
+                "query": "SELECT start_at, end_at FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120)) ORDER BY start_at LIMIT 10",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1437,7 +1379,7 @@ SELECT * FROM inserted;""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM book_slot_checked('{{ $fromAI('lead_id', 'UUID do lead — está no contexto da mensagem') }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number') }}', 'undefined')::integer, 120), COALESCE(NULLIF('{{ $fromAI('buffer_min', 'Buffer em minutos — padrão 30', 'number') }}', 'undefined')::integer, 30))",
+                "query": "SELECT * FROM book_slot('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number') }}', 'undefined')::integer, 120))",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -1490,42 +1432,63 @@ SELECT * FROM inserted;""",
             "id": "cl-parse-0000-0000-0000-000000000001",
             "name": "Parse Classification",
         },
-        # 28. Build Update Query
+        # 28. Build Project Patch — the deltas learned this turn, as RPC args.
         {
             "parameters": {
                 "mode": "runOnceForAllItems",
-                "jsCode": BUILD_UPDATE_QUERY_JS,
+                "jsCode": BUILD_PROJECT_PATCH_JS,
             },
             "type": "n8n-nodes-base.code",
             "typeVersion": 2,
             "position": [3900, 260],
             "id": "uq-build-0000-0000-0000-000000000001",
-            "name": "Build Update Query",
+            "name": "Build Project Patch",
         },
-        # 29. Update Lead
+        # 29. Patch Project — applies the deltas and moves the stage. The
+        #     expected stage makes the update optimistic: a tool that already
+        #     advanced the Project this turn is never rolled back.
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "={{ $json.query }}",
-                "options": {},
+                "query": "SELECT * FROM patch_project($1::uuid, $2::uuid, $3::text, $4::text, $5::text, $6::text, $7::boolean, $8::text, $9::text, $10::text[], $11::text, $12::text, $13::text);",
+                "options": {
+                    "queryReplacement": "={{ $json.args }}"
+                },
             },
             "type": "n8n-nodes-base.postgres",
             "typeVersion": 2.6,
             "position": [4160, 260],
             "id": "uq-update-0000-0000-0000-000000000001",
-            "name": "Update Lead",
+            "name": "Patch Project",
             "credentials": POSTGRES,
         },
-        # 29b. Write Promotion Quote — record the offer quote for 7-day price
-        #      protection. Fires only when an offer was actually quoted this turn
-        #      (deterministic offer_quoted flag) and the lead is qualified.
-        #      Idempotent: reuses an existing open quote for the same lead+promo.
+        # 29a. Ensure Quote — persist the deterministic quote when the model did
+        #      not write one. Promotion quotes take the branch below instead.
+        #      `alwaysOutputData` keeps the main path alive when no quote is due.
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM write_promotion_quote($1::uuid, $2::uuid, $3::text, $4::text) WHERE $2 IS NOT NULL AND $3 IS NOT NULL AND $4 IS NOT NULL AND $5 = true;",
+                "query": "SELECT * FROM write_quote($1::uuid, $2::uuid, $3::integer, $4::integer) WHERE $5::boolean IS NOT TRUE AND $3::integer IS NOT NULL AND $4::integer IS NOT NULL;",
                 "options": {
-                    "queryReplacement": "={{ [$('Parse Classification').first().json.lead_id, $('Load Offer').first().json.promotion_id, $('Parse Classification').first().json.placement_val, $('Parse Classification').first().json.body_zone_val, $('Parse Classification').first().json.offer_quoted] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Parse Classification').first().json.quote_base_cents, $('Parse Classification').first().json.quote_offered_cents, $('Parse Classification').first().json.offer_quoted] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [4420, 260],
+            "id": "en-quote-0000-0000-0000-000000000001",
+            "name": "Ensure Quote",
+            "credentials": POSTGRES,
+            "alwaysOutputData": True,
+        },
+        # 29b. Write Promotion Quote — price-protection snapshot for the offer.
+        #      Fires only when an offer was actually quoted this turn.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM write_promotion_quote($1::uuid, $2::uuid, $3::uuid, $4::text, $5::text) WHERE $3::uuid IS NOT NULL AND $4::text IS NOT NULL AND $5::text IS NOT NULL AND $6::boolean IS TRUE;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Load Offer').first().json.promotion_id, $('Patch Project').first().json.placement, $('Patch Project').first().json.body_zone, $('Parse Classification').first().json.offer_quoted] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -1535,76 +1498,37 @@ SELECT * FROM inserted;""",
             "name": "Write Promotion Quote",
             "credentials": POSTGRES,
         },
-        # 30. Log Event — reads the parse output (Build Update Query carries it)
+        # 29c. Patch Lead — the classifier may learn the lead's name mid-conversation.
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": """INSERT INTO public.events (lead_id, artist_id, event_type, payload)
-SELECT $1::uuid, $4::uuid, $2, $3::jsonb
-WHERE $2 IS NOT NULL AND $2 != '';""",
+                "query": "SELECT * FROM upsert_lead($1::uuid, $2::text, $3::text, 'whatsapp') WHERE NULLIF($3, '') IS NOT NULL;",
                 "options": {
-                    "queryReplacement": "={{ [$('Build Update Query').first().json.lead_id, $('Build Update Query').first().json.event_type, JSON.stringify({ pipeline_status: $('Build Update Query').first().json.pipeline_status, price_updated: $('Build Update Query').first().json.price_updated, placement: $('Build Update Query').first().json.placement_val, body_zone: $('Build Update Query').first().json.body_zone_val, style: $('Build Update Query').first().json.style_val, handoff_reason: $('Build Update Query').first().json.handoff_reason, deposit_status: $('Build Update Query').first().json.deposit_status_val, booked_date: $('Build Update Query').first().json.booked_date_val }), $('Resolve Artist').first().json.id] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.phone_e164, $('Parse Classification').first().json.name_val] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
             "typeVersion": 2.6,
-            "position": [4420, 260],
-            "id": "ev-log-0000-0000-0000-000000000001",
-            "name": "Log Event",
+            "position": [4420, 700],
+            "id": "pl-name-0000-0000-0000-000000000001",
+            "name": "Patch Lead",
             "credentials": POSTGRES,
-            "onError": "continueRegularOutput",
         },
-        # 31. Build Notion Sync Payload
+        # 29d. Patch Chat State — merge the SDR gate flags into agent_state.
         {
             "parameters": {
-                "mode": "runOnceForAllItems",
-                "jsCode": """const lead = $('Upsert Lead').first().json;
-const parsed = $('Parse Classification').first().json;
-const artist = $('Resolve Artist').first().json;
-
-return [{
-  json: {
-    lead_id: lead.id,
-    artist_id: artist.id,
-    nome: lead.nome,
-    telefone: lead.telefone,
-    pipeline_status: parsed.pipeline_status,
-    placement: parsed.placement_val,
-    body_zone: parsed.body_zone_val,
-    style: parsed.style_val,
-    tipo_tatuagem: parsed.tipo_tatuagem_val,
-    table_price: parsed.table_price_cents,
-    negotiated_price: parsed.negotiated_price_cents,
-    deposit_status: parsed.deposit_status_val,
-    deposit_amount: parsed.deposit_amount_cents,
-    booked_date: parsed.booked_date_val,
-    session_duration_min: parsed.session_duration_min_val,
-    handoff_reason: parsed.handoff_reason,
-  }
-}];""",
+                "operation": "executeQuery",
+                "query": "SELECT patch_chat_state($1::uuid, $2::text, $3::jsonb) AS agent_state;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id, JSON.stringify($('Parse Classification').first().json.chat_state || {})] }}"
+                },
             },
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
             "position": [4680, 260],
-            "id": "ns-payload-0000-0000-0000-000000000001",
-            "name": "Build Notion Sync Payload",
-        },
-        # 32. Enqueue Notion Sync
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT enqueue_notion_sync($1::uuid, $2::uuid, $3::jsonb);",
-                "options": {
-                    "queryReplacement": "={{ [$json.lead_id, $json.artist_id, JSON.stringify($json)] }}"
-                },
-            },
-            "type": "n8n-nodes-base.postgres",
-            "typeVersion": 2.6,
-            "position": [4940, 260],
-            "id": "ns-enqueue-0000-0000-0000-000000000001",
-            "name": "Enqueue Notion Sync",
+            "id": "cs-patch-0000-0000-0000-000000000001",
+            "name": "Patch Chat State",
             "credentials": POSTGRES,
-            "onError": "continueRegularOutput",
         },
         # 32b. Build Humanize Delay — reply-time proportional to reply length.
         {
@@ -1868,10 +1792,10 @@ return [{
         "Chat Owned by Artist?": {
             "main": [
                 [],
-                [{"node": "Upsert Lead", "type": "main", "index": 0}],
+                [{"node": "Start Turn", "type": "main", "index": 0}],
             ]
         },
-        "Upsert Lead": {
+        "Start Turn": {
             "main": [[{"node": "Load Offer", "type": "main", "index": 0}]]
         },
         "Load Offer": {
@@ -1911,24 +1835,22 @@ return [{
             "main": [[{"node": "Parse Classification", "type": "main", "index": 0}]]
         },
         "Parse Classification": {
-            "main": [[{"node": "Build Update Query", "type": "main", "index": 0}]]
+            "main": [[{"node": "Build Project Patch", "type": "main", "index": 0}]]
         },
-        "Build Update Query": {
-            "main": [[{"node": "Update Lead", "type": "main", "index": 0}]]
+        "Build Project Patch": {
+            "main": [[{"node": "Patch Project", "type": "main", "index": 0}]]
         },
-        "Update Lead": {
+        "Patch Project": {
             "main": [[
-                {"node": "Log Event", "type": "main", "index": 0},
+                {"node": "Ensure Quote", "type": "main", "index": 0},
                 {"node": "Write Promotion Quote", "type": "main", "index": 0},
+                {"node": "Patch Lead", "type": "main", "index": 0},
             ]]
         },
-        "Log Event": {
-            "main": [[{"node": "Build Notion Sync Payload", "type": "main", "index": 0}]]
+        "Ensure Quote": {
+            "main": [[{"node": "Patch Chat State", "type": "main", "index": 0}]]
         },
-        "Build Notion Sync Payload": {
-            "main": [[{"node": "Enqueue Notion Sync", "type": "main", "index": 0}]]
-        },
-        "Enqueue Notion Sync": {
+        "Patch Chat State": {
             "main": [[{"node": "Build Humanize Delay", "type": "main", "index": 0}]]
         },
         "Build Humanize Delay": {

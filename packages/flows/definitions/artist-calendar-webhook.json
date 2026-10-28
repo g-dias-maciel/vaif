@@ -22,7 +22,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  a.id, a.nome, a.timezone, a.status, a.wa_session_slug AS slug,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min,\n  $7::text     AS telefone,\n  $8::text     AS nome,\n  $9::text     AS chat_id,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,\n  $7::text, $8::text, $9::text,\n  false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
+        "query": "SELECT\n  a.id,\n  COALESCE(NULLIF(s.display_name, ''), a.name) AS nome,\n  a.timezone, a.status, a.wa_session_slug AS slug,\n  $1::text     AS token,\n  $2::text     AS action,\n  $3::text     AS start_at,\n  $4::text     AS end_at,\n  $5::text     AS block_id,\n  $6::integer  AS duration_min,\n  $7::text     AS telefone,\n  $8::text     AS nome_param,\n  $9::text     AS chat_id,\n  (a.id IS NOT NULL) AS found\nFROM artists a\nLEFT JOIN artist_settings s ON s.artist_id = a.id\nWHERE a.onboarding_token = $1\nUNION ALL\nSELECT\n  NULL::uuid, NULL::text, NULL::text, NULL::text, NULL::text,\n  $1::text, $2::text, $3::text, $4::text, $5::text, $6::integer,\n  $7::text, $8::text, $9::text,\n  false AS found\nWHERE NOT EXISTS (SELECT 1 FROM artists a WHERE a.onboarding_token = $1)\nLIMIT 1;",
         "options": {
           "queryReplacement": "={{ [$json.body.token, $json.body.action, $json.body.start_at, $json.body.end_at, $json.body.block_id, $json.body.duration_min, $json.body.telefone, $json.body.nome, $json.body.chat_id] }}"
         }
@@ -111,7 +111,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "(\n  SELECT id, start_at, end_at, type, lead_nome, placement, telefone\n  FROM (\n    SELECT id, start_at, end_at, 'available'::text AS type,\n           NULL::text AS lead_nome, NULL::text AS placement, NULL::text AS telefone\n    FROM check_availability(\n      $1::uuid,\n      COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),\n      COALESCE($3::timestamptz, now() + interval '60 days'),\n      COALESCE($4::integer, 60)\n    )\n    UNION ALL\n    SELECT c.id, c.start_at, c.end_at, c.type,\n           NULL::text, NULL::text, NULL::text\n    FROM calendar c\n    WHERE c.artist_id = $1::uuid\n      AND c.type = 'blocked'\n      AND c.end_at > now()\n    UNION ALL\n    SELECT c.id, c.start_at, c.end_at, 'booked'::text AS type,\n           l.nome, l.placement, l.telefone\n    FROM calendar c\n    LEFT JOIN leads l ON l.id = c.lead_id\n    WHERE c.artist_id = $1::uuid\n      AND c.type = 'booked'\n      AND c.end_at > now()\n  ) s\n  ORDER BY start_at\n)\nUNION ALL\nSELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text,\n       NULL::text, NULL::text, NULL::text;",
+        "query": "(\n  SELECT id, start_at, end_at, type, lead_nome, placement, telefone\n  FROM list_calendar(\n    $1::uuid,\n    $2::timestamptz,\n    $3::timestamptz,\n    COALESCE($4::integer, 60)\n  )\n)\nUNION ALL\nSELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text,\n       NULL::text, NULL::text, NULL::text;",
         "options": {
           "queryReplacement": "={{ [$json.id, $json.start_at, $json.end_at, $json.duration_min] }}"
         }
@@ -148,7 +148,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, artist_id, start_at, end_at, type\nFROM block_slot($1::uuid, $2::timestamptz, $3::timestamptz);",
+        "query": "SELECT id, artist_id, start_at, end_at, kind AS type\nFROM block_time($1::uuid, $2::timestamptz, $3::timestamptz);",
         "options": {
           "queryReplacement": "={{ [$json.id, $json.start_at, $json.end_at] }}"
         }
@@ -185,9 +185,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH removed AS (\n  SELECT * FROM unblock_slot($1::uuid)\n)\nSELECT id, artist_id, start_at, end_at, type\nFROM removed\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM removed);",
+        "query": "WITH removed AS (\n  SELECT * FROM unblock_time($1::uuid, $2::uuid)\n)\nSELECT id, artist_id, start_at, end_at, kind AS type\nFROM removed\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM removed);",
         "options": {
-          "queryReplacement": "={{ [$json.block_id] }}"
+          "queryReplacement": "={{ [$json.id, $json.block_id] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -330,7 +330,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT\n  l.telefone, l.nome, l.pipeline_status,\n  is_returning_customer($1::uuid, l.telefone) AS is_returning,\n  COALESCE(chat_owner($2::text || ':' || l.telefone), 'beatriz') AS owner,\n  $2::text || ':' || l.telefone AS chat_id\nFROM leads l\nWHERE l.artist_id = $1::uuid\n  AND l.telefone IS NOT NULL\nORDER BY COALESCE(l.last_message_at, l.created_at) DESC\nLIMIT 200\nUNION ALL\nSELECT NULL::text, NULL::text, NULL::text, false, 'beatriz'::text, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM leads WHERE artist_id = $1::uuid);",
+        "query": "SELECT\n  l.phone_e164 AS telefone,\n  l.name AS nome,\n  p.stage_key AS pipeline_status,\n  is_returning_customer($1::uuid, l.phone_e164) AS is_returning,\n  chat_owner($1::uuid, $2::text || ':' || l.phone_e164) AS owner,\n  $2::text || ':' || l.phone_e164 AS chat_id\nFROM leads l\nLEFT JOIN LATERAL (\n  SELECT stage_key FROM projects\n   WHERE projects.lead_id = l.id AND projects.artist_id = l.artist_id\n   ORDER BY updated_at DESC LIMIT 1\n) p ON true\nWHERE l.artist_id = $1::uuid\n  AND l.phone_e164 IS NOT NULL\nORDER BY COALESCE(l.last_message_at, l.created_at) DESC\nLIMIT 200\nUNION ALL\nSELECT NULL::text, NULL::text, NULL::text, false, 'agent'::text, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM leads WHERE artist_id = $1::uuid);",
         "options": {
           "queryReplacement": "={{ [$json.id, $json.slug] }}"
         }
@@ -367,9 +367,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT telefone, nome, source\nFROM import_returning_customer($1::uuid, $2::text, NULLIF($3::text, ''), NULL);",
+        "query": "SELECT phone_e164 AS telefone, name AS nome, source\nFROM import_returning_customer($1::uuid, $2::text, NULLIF($3::text, ''), NULL);",
         "options": {
-          "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome] }}"
+          "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome_param] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -404,9 +404,9 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH r AS (SELECT * FROM return_chat_control($1::text, $2::uuid))\nSELECT chat_id, owner FROM r\nUNION ALL\nSELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);",
+        "query": "WITH r AS (SELECT * FROM return_chat_control($1::uuid, $2::text))\nSELECT chat_id, owner FROM r\nUNION ALL\nSELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);",
         "options": {
-          "queryReplacement": "={{ [$json.chat_id, $json.id] }}"
+          "queryReplacement": "={{ [$json.id, $json.chat_id] }}"
         }
       },
       "type": "n8n-nodes-base.postgres",
@@ -427,7 +427,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const r = $input.first().json;\nreturn [{\n  json: {\n    success: true,\n    action: 'return_chat',\n    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'beatriz' },\n  }\n}];"
+        "jsCode": "const r = $input.first().json;\nreturn [{\n  json: {\n    success: true,\n    action: 'return_chat',\n    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'agent' },\n  }\n}];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,

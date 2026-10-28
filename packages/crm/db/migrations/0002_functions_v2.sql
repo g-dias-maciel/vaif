@@ -587,7 +587,11 @@ create or replace function patch_project(
   p_tattoo_type    text    default null,
   p_reference_pics text[]  default null,
   p_handoff_reason text    default null,
-  p_actor          text    default 'agent'
+  p_actor          text    default 'agent',
+  -- The stage the caller believed the Project was in (start of its turn).
+  -- When a tool already moved it (quote/deposit/booking), the patch must not
+  -- put it back: the expected stage no longer matches the live row.
+  p_expected_stage text    default null
 )
 returns setof projects
 language plpgsql security definer
@@ -645,7 +649,9 @@ begin
       'project_updated', jsonb_build_object('fields', to_jsonb(v_changed)));
   end if;
 
-  if p_stage_key is not null and p_stage_key is distinct from v_before.stage_key then
+  if p_stage_key is not null
+     and p_stage_key is distinct from v_before.stage_key
+     and (p_expected_stage is null or p_expected_stage = v_before.stage_key) then
     perform set_project_stage(p_artist_id, p_project_id, p_stage_key, p_actor);
   end if;
 
@@ -680,6 +686,8 @@ returns table (
   first_tattoo       boolean,
   meaning            text,
   tattoo_type        text,
+  deposit_status     text,
+  deposit_amount_cents integer,
   table_price_cents  integer,
   quoted_price_cents integer,
   agent_state        jsonb
@@ -695,6 +703,8 @@ declare
   v_table    integer;
   v_is_new   boolean;
   v_state    jsonb := '{}'::jsonb;
+  v_pay_status text;
+  v_pay_cents  integer;
 begin
   if v_phone is null then
     raise exception 'start_turn: invalid phone' using errcode = '22023';
@@ -731,6 +741,14 @@ begin
    order by q.created_at desc
    limit 1;
 
+  select pay.status, pay.amount_cents into v_pay_status, v_pay_cents
+    from payments pay
+   where pay.artist_id = p_artist_id
+     and pay.project_id = v_project.id
+     and pay.kind = 'deposit'
+   order by pay.requested_at desc
+   limit 1;
+
   select pb.base_price_cents into v_table
     from price_book pb
    where pb.artist_id = p_artist_id
@@ -751,6 +769,12 @@ begin
   first_tattoo       := v_project.first_tattoo;
   meaning            := v_project.meaning;
   tattoo_type        := v_project.tattoo_type;
+  deposit_status     := case v_pay_status
+                          when 'confirmed' then 'confirmado'
+                          when 'requested' then 'aguardando_confirmacao'
+                          else 'nao_solicitado'
+                        end;
+  deposit_amount_cents := v_pay_cents;
   table_price_cents  := v_table;
   quoted_price_cents := v_quoted;
   agent_state        := coalesce(v_state, '{}'::jsonb);
@@ -789,6 +813,28 @@ as $$
 $$;
 
 
+-- The whole current price book, for the agent's system prompt. `agent_rw` has
+-- no table grants, so the prompt cannot read `price_book` directly.
+create or replace function list_prices(p_artist_id uuid)
+returns table (
+  placement            text,
+  body_zone            text,
+  base_price_cents     integer,
+  session_duration_min integer,
+  buffer_min           integer
+)
+language sql stable security definer
+set search_path = public, pg_temp
+as $$
+  select pb.placement, pb.body_zone, pb.base_price_cents,
+         pb.session_duration_min, pb.buffer_min
+  from price_book pb
+  where pb.artist_id = p_artist_id
+    and pb.effective_to is null
+  order by pb.placement, pb.body_zone;
+$$;
+
+
 create or replace function write_quote(
   p_artist_id           uuid,
   p_project_id          uuid,
@@ -813,6 +859,21 @@ begin
   if not found then
     raise exception 'write_quote: project % does not belong to artist %',
       p_project_id, p_artist_id using errcode = '23503';
+  end if;
+
+  -- Re-sending the same price (the agent often confirms a quote it already
+  -- wrote this turn) must not supersede and recreate the row.
+  select * into v_row from quotes
+   where artist_id = p_artist_id
+     and project_id = p_project_id
+     and status = 'open'
+     and base_price_cents = p_base_price_cents
+     and offered_price_cents = v_offered
+   order by created_at desc
+   limit 1;
+  if found then
+    return next v_row;
+    return;
   end if;
 
   -- One live quote per Project: supersede the previous one instead of failing.
@@ -1366,12 +1427,21 @@ create or replace function unblock_time(
   p_artist_id uuid,
   p_block_id  uuid
 )
-returns void
-language sql security definer
+returns setof calendar_entries
+language plpgsql security definer
 set search_path = public, pg_temp
 as $$
+declare
+  v_row calendar_entries;
+begin
   delete from calendar_entries
-   where id = p_block_id and artist_id = p_artist_id and kind = 'block';
+   where id = p_block_id and artist_id = p_artist_id and kind = 'block'
+  returning * into v_row;
+
+  if v_row.id is not null then
+    return next v_row;
+  end if;
+end;
 $$;
 
 
@@ -1535,6 +1605,7 @@ returns table (
   multiplier               numeric,
   quote_valid_days         integer,
   conditions               jsonb,
+  promo_active             boolean,
   open_quote_id            uuid,
   open_quote_valid_until   timestamptz,
   open_quote_placement     text,
@@ -1580,16 +1651,15 @@ begin
   order by created_at desc
   limit 1;
 
-  if v_promo.id is null and v_quote.id is null then
-    return;
-  end if;
-
+  -- Always return one row: the agent's Load Offer node must not stop the
+  -- workflow when there is neither a promotion nor a live quote.
   promotion_id             := v_promo.id;
   name                     := v_promo.name;
   description              := (select t.description from promotion_types t where t.key = v_promo.type_key);
   multiplier               := v_promo.multiplier;
   quote_valid_days         := v_promo.quote_valid_days;
   conditions               := v_promo.conditions;
+  promo_active             := v_promo.id is not null;
   open_quote_id            := v_quote.id;
   open_quote_valid_until   := v_quote.valid_until;
   open_quote_placement     := v_project.placement;
@@ -1687,5 +1757,206 @@ begin
       ((now() at time zone 'UTC') + make_interval(months => i))::date
     );
   end loop;
+end;
+$$;
+
+
+-- -----------------------------------------------------------------------------
+-- Admin surface: onboarding, artist status, calendar read model, reset
+--
+-- These are called by the VAIF admin workflows (agenda page, onboarding
+-- portal), not by the agent. They are granted to `crm_app` only.
+-- -----------------------------------------------------------------------------
+
+create or replace function consume_onboarding_token(p_token text)
+returns setof artists
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_artist artists;
+begin
+  update artists
+     set status = 'onboarding'
+   where onboarding_token = p_token
+     and status = 'stub'
+     and created_at > now() - interval '24 hours'
+  returning * into v_artist;
+
+  if v_artist.id is not null then
+    return next v_artist;
+  end if;
+end;
+$$;
+
+
+create or replace function suspend_artist(p_artist_id uuid)
+returns setof artists
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_artist artists;
+begin
+  update artists
+     set status = 'suspended'
+   where id = p_artist_id and status = 'live'
+  returning * into v_artist;
+
+  if v_artist.id is not null then
+    return next v_artist;
+  end if;
+end;
+$$;
+
+
+create or replace function resume_artist(p_artist_id uuid)
+returns setof artists
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_artist artists;
+begin
+  update artists
+     set status = 'live'
+   where id = p_artist_id and status = 'suspended'
+  returning * into v_artist;
+
+  if v_artist.id is not null then
+    return next v_artist;
+  end if;
+end;
+$$;
+
+
+-- Agenda read model: free slots + blocks + bookings in one shape. The API
+-- keeps the v1 keys (`type`, `lead_nome`, `telefone`) for the admin bundle.
+create or replace function list_calendar(
+  p_artist_id    uuid,
+  p_from         timestamptz default null,
+  p_to           timestamptz default null,
+  p_duration_min integer default 60
+)
+returns table (
+  id         uuid,
+  start_at   timestamptz,
+  end_at     timestamptz,
+  type       text,
+  lead_nome  text,
+  placement  text,
+  telefone   text
+)
+language sql stable security definer
+set search_path = public, pg_temp
+as $$
+  with bounds as (
+    select coalesce(p_from, date_trunc('day', now())) as from_at,
+           coalesce(p_to, now() + interval '60 days')     as to_at
+  )
+  select null::uuid, s.start_at, s.end_at, 'available'::text,
+         null::text, null::text, null::text
+  from bounds b
+  cross join lateral check_availability(p_artist_id, b.from_at, b.to_at, p_duration_min) s
+
+  union all
+
+  select c.id, c.start_at, c.end_at, 'blocked'::text, null::text, null::text, null::text
+  from calendar_entries c, bounds b
+  where c.artist_id = p_artist_id
+    and c.kind = 'block'
+    and c.active
+    and c.end_at > now()
+    and c.start_at < b.to_at
+
+  union all
+
+  select c.id, c.start_at, c.end_at, 'booked'::text,
+         l.name, p.placement, l.phone_e164
+  from calendar_entries c
+  cross join bounds b
+  left join projects p on p.id = c.project_id
+  left join leads l on l.id = c.lead_id
+  where c.artist_id = p_artist_id
+    and c.kind = 'booking'
+    and c.active
+    and c.end_at > now()
+    and c.start_at < b.to_at
+
+  order by 2;
+$$;
+
+
+-- Destructive admin helper for the QA/reset workflow. `null` wipes every
+-- artist; a slug wipes just that tenant. Domain rows go through the Lead
+-- cascade; blocks (no Lead) survive.
+create or replace function reset_leads(p_artist_slug text default null)
+returns jsonb
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_artist_id uuid;
+  v_events    integer := 0;
+  v_calendar  integer := 0;
+  v_memory    integer := 0;
+  v_leads     integer := 0;
+  v_projects  integer := 0;
+  v_buffer    integer := 0;
+begin
+  if p_artist_slug is null then
+    delete from events;
+    get diagnostics v_events = row_count;
+
+    delete from chat_memory where session_id in (select id::text from leads);
+    get diagnostics v_memory = row_count;
+
+    delete from calendar_entries where lead_id is not null;
+    get diagnostics v_calendar = row_count;
+
+    select count(*) into v_projects from projects;
+
+    delete from leads;
+    get diagnostics v_leads = row_count;
+
+    delete from chat_buffers;
+    get diagnostics v_buffer = row_count;
+  else
+    select id into v_artist_id from artists where wa_session_slug = p_artist_slug;
+    if v_artist_id is null then
+      raise exception 'reset_leads: no artist with wa_session_slug=%', p_artist_slug;
+    end if;
+
+    delete from events where artist_id = v_artist_id;
+    get diagnostics v_events = row_count;
+
+    delete from chat_memory
+     where session_id in (
+       select id::text from leads where artist_id = v_artist_id
+     );
+    get diagnostics v_memory = row_count;
+
+    delete from calendar_entries
+     where artist_id = v_artist_id and lead_id is not null;
+    get diagnostics v_calendar = row_count;
+
+    select count(*) into v_projects from projects where artist_id = v_artist_id;
+
+    delete from leads where artist_id = v_artist_id;
+    get diagnostics v_leads = row_count;
+
+    delete from chat_buffers where artist_id = v_artist_id;
+    get diagnostics v_buffer = row_count;
+  end if;
+
+  return jsonb_build_object(
+    'artist_slug', p_artist_slug,
+    'leads', v_leads,
+    'projects', v_projects,
+    'events', v_events,
+    'calendar', v_calendar,
+    'chat_memory', v_memory,
+    'chat_buffers', v_buffer
+  );
 end;
 $$;

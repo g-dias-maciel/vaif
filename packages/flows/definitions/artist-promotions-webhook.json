@@ -102,7 +102,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT a.id, a.nome, a.status,\n       (SELECT p.name FROM promotions p WHERE p.artist_id = a.id AND p.status = 'active' LIMIT 1) AS active_promotion\nFROM artists a\nORDER BY a.nome;",
+        "query": "SELECT a.id, COALESCE(NULLIF(s.display_name, ''), a.name) AS nome, a.status,\n       (SELECT p.name FROM promotions p WHERE p.artist_id = a.id AND p.status = 'active' LIMIT 1) AS active_promotion\nFROM artists a\nLEFT JOIN artist_settings s ON s.artist_id = a.id\nORDER BY 2;",
         "options": {}
       },
       "type": "n8n-nodes-base.postgres",
@@ -137,7 +137,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT p.id, p.artist_id, a.nome AS artist_name, p.type_key, p.name, p.multiplier, p.audience, p.status,\n       p.activated_at, p.paused_at, p.ended_at, p.quote_valid_days\nFROM promotions p\nJOIN artists a ON a.id = p.artist_id\nWHERE ($1::uuid IS NULL OR p.artist_id = $1::uuid)\nORDER BY p.created_at DESC\nLIMIT 100;",
+        "query": "SELECT p.id, p.artist_id,\n       COALESCE(NULLIF(s.display_name, ''), a.name) AS artist_name,\n       p.type_key, p.name, p.multiplier, p.audience, p.status,\n       p.activated_at, p.paused_at, p.ended_at, p.quote_valid_days\nFROM promotions p\nJOIN artists a ON a.id = p.artist_id\nLEFT JOIN artist_settings s ON s.artist_id = a.id\nWHERE ($1::uuid IS NULL OR p.artist_id = $1::uuid)\nORDER BY p.created_at DESC\nLIMIT 100;",
         "options": {
           "queryReplacement": "={{ [$json.body.artist_id ? $json.body.artist_id : null] }}"
         }
@@ -211,7 +211,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, artist_id, name, multiplier, status FROM activate_promotion($1::uuid)\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM activate_promotion($1::uuid));",
+        "query": "WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)\nSELECT id, artist_id, name, multiplier, status\nFROM activate_promotion((SELECT artist_id FROM p), (SELECT id FROM p))\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM p);",
         "options": {
           "queryReplacement": "={{ [$json.body.promotion_id] }}"
         }
@@ -248,7 +248,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, artist_id, name, multiplier, status FROM pause_promotion($1::uuid)\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM pause_promotion($1::uuid));",
+        "query": "WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)\nSELECT id, artist_id, name, multiplier, status\nFROM pause_promotion((SELECT artist_id FROM p), (SELECT id FROM p))\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM p);",
         "options": {
           "queryReplacement": "={{ [$json.body.promotion_id] }}"
         }
@@ -285,7 +285,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "SELECT id, artist_id, name, multiplier, status FROM end_promotion($1::uuid)\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM end_promotion($1::uuid));",
+        "query": "WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)\nSELECT id, artist_id, name, multiplier, status\nFROM end_promotion((SELECT artist_id FROM p), (SELECT id FROM p))\nUNION ALL\nSELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text\nWHERE NOT EXISTS (SELECT 1 FROM p);",
         "options": {
           "queryReplacement": "={{ [$json.body.promotion_id] }}"
         }

@@ -32,16 +32,20 @@ const expected = $env.VAIF_ADMIN_TOKEN || '';
 return [{ json: { authorized: token !== '' && token === expected, body: body } }];"""
 
 LIST_ARTISTS_QUERY = """\
-SELECT a.id, a.nome, a.status,
+SELECT a.id, COALESCE(NULLIF(s.display_name, ''), a.name) AS nome, a.status,
        (SELECT p.name FROM promotions p WHERE p.artist_id = a.id AND p.status = 'active' LIMIT 1) AS active_promotion
 FROM artists a
-ORDER BY a.nome;"""
+LEFT JOIN artist_settings s ON s.artist_id = a.id
+ORDER BY 2;"""
 
 LIST_PROMOTIONS_QUERY = """\
-SELECT p.id, p.artist_id, a.nome AS artist_name, p.type_key, p.name, p.multiplier, p.audience, p.status,
+SELECT p.id, p.artist_id,
+       COALESCE(NULLIF(s.display_name, ''), a.name) AS artist_name,
+       p.type_key, p.name, p.multiplier, p.audience, p.status,
        p.activated_at, p.paused_at, p.ended_at, p.quote_valid_days
 FROM promotions p
 JOIN artists a ON a.id = p.artist_id
+LEFT JOIN artist_settings s ON s.artist_id = a.id
 WHERE ($1::uuid IS NULL OR p.artist_id = $1::uuid)
 ORDER BY p.created_at DESC
 LIMIT 100;"""
@@ -55,22 +59,28 @@ VALUES ($1::uuid, COALESCE(NULLIF($2::text, ''), 'bogo_same_value'),
 RETURNING id, artist_id, type_key, name, multiplier, audience, status;"""
 
 ACTIVATE_PROMOTION_QUERY = """\
-SELECT id, artist_id, name, multiplier, status FROM activate_promotion($1::uuid)
+WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)
+SELECT id, artist_id, name, multiplier, status
+FROM activate_promotion((SELECT artist_id FROM p), (SELECT id FROM p))
 UNION ALL
 SELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text
-WHERE NOT EXISTS (SELECT 1 FROM activate_promotion($1::uuid));"""
+WHERE NOT EXISTS (SELECT 1 FROM p);"""
 
 PAUSE_PROMOTION_QUERY = """\
-SELECT id, artist_id, name, multiplier, status FROM pause_promotion($1::uuid)
+WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)
+SELECT id, artist_id, name, multiplier, status
+FROM pause_promotion((SELECT artist_id FROM p), (SELECT id FROM p))
 UNION ALL
 SELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text
-WHERE NOT EXISTS (SELECT 1 FROM pause_promotion($1::uuid));"""
+WHERE NOT EXISTS (SELECT 1 FROM p);"""
 
 END_PROMOTION_QUERY = """\
-SELECT id, artist_id, name, multiplier, status FROM end_promotion($1::uuid)
+WITH p AS (SELECT id, artist_id FROM promotions WHERE id = $1::uuid)
+SELECT id, artist_id, name, multiplier, status
+FROM end_promotion((SELECT artist_id FROM p), (SELECT id FROM p))
 UNION ALL
 SELECT NULL::uuid, NULL::uuid, NULL::text, NULL::numeric, NULL::text
-WHERE NOT EXISTS (SELECT 1 FROM end_promotion($1::uuid));"""
+WHERE NOT EXISTS (SELECT 1 FROM p);"""
 
 LIST_ARTISTS_RESPONSE_JS = r"""const rows = $input.all().map(i => i.json);
 return [{ json: { success: true, action: 'list_artists', artists: rows } }];"""

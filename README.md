@@ -456,14 +456,14 @@ Core behavior:
   have no more questions.
 - **Qualification** — placement, body zone (`pequeno`/`medio`/`grande`/
   `fechamento`), style, first tattoo, meaning, tattoo type.
-- **Pricing** — reads the artist's `pricing` table by placement × body zone;
-  writes the quote through the `write_quote` Postgres tool.
+- **Pricing** — reads the artist's `price_book` (placement × body zone) through
+  `list_prices`; writes the quote through the `write_quote` RPC.
 - **Negotiation** — applies the artist's `floor_pct`; below the floor, hands off.
-- **Promotions** — loads the artist's active promotion and writes a promotion
-  quote when eligible.
-- **Availability and booking** — `check_availability` derives 60-minute slots
-  from the artist's `working_hours`; `book_slot` / `book_slot_checked` reserve
-  the slot and guard against conflicts.
+- **Promotions** — loads the active promotion with `active_offer_for_project`
+  and writes a promotion quote when eligible.
+- **Availability and booking** — `check_availability` derives hourly slots
+  from the artist's `working_hours`; `book_slot` reserves the slot and the
+  GiST exclusion constraint guards against conflicts.
 - **Deposit (sinal)** — requests the PIX deposit through `request_deposit`,
   using the exact amount calculated by the workflow (never by the model).
 - **Handoff triggers** — cover-up/reform requests, artist requests, missing
@@ -473,73 +473,91 @@ Core behavior:
   takes the chat out of the AI window; the artist returns it from `/agenda`.
 - **Returning leads** — `returning_customers` marks old clients so promotions
   and messaging can target new vs returning audiences.
-- **Debounce + humanization** — buffers rapid messages, waits, shows typing,
-  and adds a humanized delay before sending.
+- **Debounce + humanization** — buffers rapid messages in `chat_buffers`,
+  waits, shows typing, and adds a humanized delay before sending.
 - **AI active hours** — respects the artist's `ai_active_hours`.
 - **Conversation classification** — a second model call extracts fields and
-  advances `pipeline_status` (`novo` → `qualificando` → `orcamento_enviado` →
-  `aguardando_deposito` → `agendado`, plus `aguardando_artista`,
-  `fechado`, `perdido`, `bloqueado`).
-- **Audit trail** — every state transition writes an `events` row.
+  advances the Project's `stage_key` (`novo` → `qualificando` →
+  `orcamento_enviado` → `aguardando_deposito` → `agendado`, plus
+  `aguardando_artista`, `fechado`, `perdido`). The SDR scratch flags
+  (`processo_explicado`, `preco_liberado`, `duvidas_eliminadas`, ...) live in
+  `chat_sessions.agent_state`.
+- **Audit trail** — every RPC writes an `events` row in the same transaction.
 
 ### 6.2 Workflows
 
 | File | Workflow | Trigger | Purpose |
 |---|---|---|---|
 | `beatriz-whatsapp-agent.json` | Beatriz WhatsApp Agent | `/webhook/waha-webhook` | Production WhatsApp SDR |
-| `beatriz-telegram.json` | Beatriz Telegram + Postgres | Telegram trigger | Testbed for the same conversation |
 | `beatriz-ops-callback.json` | Beatriz Ops Callback | Telegram callback | Handoff/deposit buttons from Telegram |
 | `artist-onboard-webhook.json` | Artist Onboard Webhook | `/webhook/onboard-api` | QR validation, status, consume |
 | `artist-calendar-webhook.json` | Artist Calendar Webhook | `/webhook/calendar` | Availability, blocks, SDR status, customers |
 | `artist-promotions-webhook.json` | Artist Promotions Webhook | `/webhook/promotions` | Create/activate/pause/end promotions |
-| `artist-onboarding-form.json` | Artist Onboarding Form | n8n form `/form/onboard` | Create artist + pricing + WAHA session |
+| `artist-onboarding-form.json` | Artist Onboarding Form | n8n form `/form/onboard` | Create artist + settings + price book + WAHA session |
 | `diagnostico-gratuito.json` | Diagnóstico Gratuito | `/webhook/diagnostico` | Telegram approval → e-mail diagnostic |
 | `admin-reset-leads.json` | Admin Reset Leads | `/webhook/reset-leads` | Destructive reset (guarded) |
-| `migration-beatriz.json` | DB Migration | `/webhook/db-migration` | Idempotent schema/functions |
+
+The v1 `migration-beatriz.json` DB Migration workflow is retired: schema changes
+ship as SQL migrations applied by the deploy step, not by an n8n workflow. The
+Telegram testbed (`beatriz-telegram.json`) is also retired; the WhatsApp agent
+is the only deployed SDR.
 
 ### 6.3 Database contract
 
-The Postgres schema is owned by `packages/crm/supabase/migrations` and
-`seed.sql`. The main tables:
+The Postgres schema is owned by `packages/crm/db/migrations`:
+
+- `0001_schema_v2.sql` — tables, indexes, partitions, constraints
+- `0002_functions_v2.sql` — the RPC surface (`start_turn`, `patch_project`, ...)
+- `0003_roles_v2.sql` — least-privilege roles and grants
+
+The main tables:
 
 | Table | Purpose |
 |---|---|
-| `artists` | Tenant config: timezone, working hours, deposit, PIX, floor, session slug |
-| `leads` | One person **and** their project per artist (name, phone, source, placement, style, price, deposit, pipeline status) |
-| `calendar` | Booked and blocked slots |
-| `events` | Audit log of every transition |
-| `pricing` | Price matrix (placement × body zone × duration) |
-| `promotions`, `promotion_prices`, `promotion_quotes` | Pre-approved offers |
+| `artists`, `artist_settings` | Tenant identity, hours, deposit, PIX, session slug |
+| `leads` | One person per artist (name, phone, source, LGPD markers) |
+| `lead_channels` | Which WAHA/IG/Telegram thread belongs to a Lead |
+| `chat_sessions` | Chat ownership + the SDR scratch flags (`agent_state`) |
+| `chat_buffers` | Debounce burst (Postgres fallback for Redis) |
+| `projects` | One tattoo job per Lead (`stage_key`, placement, style, …) |
+| `quotes` | Standard and promotion quotes, one open per Project |
+| `payments` | Manual deposits (requested → confirmed) |
+| `calendar_entries` | Bookings and blocks; GiST exclusion constraint |
+| `price_book` | Price matrix (placement × body zone × duration) |
+| `promotions`, `promotion_prices` | Pre-approved offers |
 | `returning_customers` | Old clients per artist |
-| `chat_control` | Who owns a WhatsApp chat |
-| `message_buffer` | Debounce state |
+| `events` | Monthly-partitioned audit log |
+| `chat_memory` | n8n Postgres Chat Memory (30-day purge) |
 
 The accepted schema for 1,000+ Artists is in
 [`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)
 (decision: [`docs/adr/0002-crm-schema-v2.md`](docs/adr/0002-crm-schema-v2.md)).
-The actual deployed schema is captured in
-[`packages/crm/db/baseline`](packages/crm/db/baseline), with the differences
-recorded in
-[`docs/design/crm-v1-production-drift.md`](docs/design/crm-v1-production-drift.md).
-A future automatic-deposit product is sketched in
-[`docs/ideas/signal-confirmation-platform.md`](docs/ideas/signal-confirmation-platform.md).
+The contract tests live in `packages/crm/db/tests/v2_contract.sql` and run in CI
+on `postgres:17-alpine`.
 
-Key Postgres functions used by n8n: `set_artist_context`,
-`resolve_artist_from_session`, `validate_onboarding_token`,
-`consume_onboarding_token`, `complete_artist_onboarding`, `suspend_artist`,
-`resume_artist`, `lookup_price`, `write_quote`, `request_deposit`,
-`check_availability`, `book_slot`, `book_slot_checked`, `block_slot`,
-`unblock_slot`, `activate_promotion`, `pause_promotion`, `end_promotion`,
-`is_returning_customer`, `active_offer_for_lead`, `write_promotion_quote`,
-`import_returning_customer`, `take_chat_control`, `return_chat_control`,
-`chat_owner`, `confirm_deposit`.
+The agent connects as `agent_rw`, which has **no domain table grants** — only
+`EXECUTE` on the RPCs (and DML on `chat_memory`, which the n8n memory node
+writes directly). The CRM app connects as `crm_app`.
+
+Key RPCs used by n8n: `resolve_artist`, `chat_buffer_accumulate/_typing/_state/
+_clear`, `chat_owner`, `take_chat_control`, `return_chat_control`, `start_turn`,
+`patch_project`, `patch_chat_state`, `list_prices`, `write_quote`,
+`write_promotion_quote`, `active_offer_for_project`, `request_deposit`,
+`confirm_deposit`, `check_availability`, `book_slot`, `reschedule_booking`,
+`cancel_booking`, `block_time`, `unblock_time`, `import_returning_customer`,
+`list_calendar`, `consume_onboarding_token`, `suspend_artist`, `resume_artist`,
+`reset_leads`.
 
 ### 6.4 Deploy and test
 
-Validate/normalize a workflow JSON:
+Validate/normalize a workflow JSON (`build-workflow.py` is retired with the
+Telegram testbed; the WhatsApp builder is the source of truth):
 
 ```bash
-python3 packages/flows/definitions/build-workflow.py
+python3 packages/flows/definitions/build-whatsapp-workflow.py
+python3 packages/flows/definitions/build-calendar-workflow.py
+python3 packages/flows/definitions/build-onboard-workflow.py
+python3 packages/flows/definitions/build-promotions-workflow.py
 ```
 
 Deploy to n8n (`N8N_API_KEY` in env or `~/.n8n-api-key`):
@@ -563,14 +581,13 @@ Live-stack tests (mutate a dedicated test artist):
 ```bash
 node packages/flows/tests/integration/calendar-agenda.js
 node packages/flows/tests/integration/full-workflow.js
-python3 packages/flows/tests/test_harness.py
 ```
 
-### 6.5 Telegram testbed
+### 6.5 Telegram testbed (retired)
 
-`beatriz-telegram.json` runs the same persona against Telegram with full
-Postgres persistence. Workflow ID `JyNwRrqonIEExg2m`. See
-`packages/flows/beatriz-telegram/README.md`.
+`beatriz-telegram.json` targeted the v1 schema and is no longer deployed. The
+WhatsApp agent is the only SDR; `packages/flows/beatriz-telegram/README.md` is
+kept for historical context.
 
 ---
 
@@ -585,9 +602,9 @@ Beatriz, so the CRM is the system of record for the artist.
 - `users.artist_id` links an artist user to the `artists` table; staff have no
   artist and select one from `/artists`.
 - Laravel native session auth; authorization in policies + `role:` middleware.
-- The app connects through a service-role Postgres connection, bypassing RLS.
-  RLS remains in place for the n8n/Beatriz path. See
-  `docs/adr/0001-auth-model.md`.
+- The app connects as `crm_app` (full DML, no DDL). RLS is not used (ADR-0002);
+  isolation is `artist_id` + composite foreign keys, and the role split keeps
+  the n8n agent away from the tables. See `docs/adr/0002-crm-schema-v2.md`.
 
 ### 7.2 Features
 

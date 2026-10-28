@@ -65,7 +65,9 @@ MAIN_DB = {"postgres": {"id": "nngaQDfXHYQ1Q43P", "name": "main-db"}}
 # row must be gated on the boolean, not on id presence.
 RESOLVE_ARTIST_QUERY = """\
 SELECT
-  a.id, a.nome, a.timezone, a.status, a.wa_session_slug AS slug,
+  a.id,
+  COALESCE(NULLIF(s.display_name, ''), a.name) AS nome,
+  a.timezone, a.status, a.wa_session_slug AS slug,
   $1::text     AS token,
   $2::text     AS action,
   $3::text     AS start_at,
@@ -73,10 +75,11 @@ SELECT
   $5::text     AS block_id,
   $6::integer  AS duration_min,
   $7::text     AS telefone,
-  $8::text     AS nome,
+  $8::text     AS nome_param,
   $9::text     AS chat_id,
   (a.id IS NOT NULL) AS found
 FROM artists a
+LEFT JOIN artist_settings s ON s.artist_id = a.id
 WHERE a.onboarding_token = $1
 UNION ALL
 SELECT
@@ -94,46 +97,26 @@ LIMIT 1;"""
 LIST_AVAILABILITY_QUERY = """\
 (
   SELECT id, start_at, end_at, type, lead_nome, placement, telefone
-  FROM (
-    SELECT id, start_at, end_at, 'available'::text AS type,
-           NULL::text AS lead_nome, NULL::text AS placement, NULL::text AS telefone
-    FROM check_availability(
-      $1::uuid,
-      COALESCE($2::timestamptz, date_trunc('day', now())::timestamptz),
-      COALESCE($3::timestamptz, now() + interval '60 days'),
-      COALESCE($4::integer, 60)
-    )
-    UNION ALL
-    SELECT c.id, c.start_at, c.end_at, c.type,
-           NULL::text, NULL::text, NULL::text
-    FROM calendar c
-    WHERE c.artist_id = $1::uuid
-      AND c.type = 'blocked'
-      AND c.end_at > now()
-    UNION ALL
-    SELECT c.id, c.start_at, c.end_at, 'booked'::text AS type,
-           l.nome, l.placement, l.telefone
-    FROM calendar c
-    LEFT JOIN leads l ON l.id = c.lead_id
-    WHERE c.artist_id = $1::uuid
-      AND c.type = 'booked'
-      AND c.end_at > now()
-  ) s
-  ORDER BY start_at
+  FROM list_calendar(
+    $1::uuid,
+    $2::timestamptz,
+    $3::timestamptz,
+    COALESCE($4::integer, 60)
+  )
 )
 UNION ALL
 SELECT NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text,
        NULL::text, NULL::text, NULL::text;"""
 
 BLOCK_SLOT_QUERY = """\
-SELECT id, artist_id, start_at, end_at, type
-FROM block_slot($1::uuid, $2::timestamptz, $3::timestamptz);"""
+SELECT id, artist_id, start_at, end_at, kind AS type
+FROM block_time($1::uuid, $2::timestamptz, $3::timestamptz);"""
 
 UNBLOCK_SLOT_QUERY = """\
 WITH removed AS (
-  SELECT * FROM unblock_slot($1::uuid)
+  SELECT * FROM unblock_time($1::uuid, $2::uuid)
 )
-SELECT id, artist_id, start_at, end_at, type
+SELECT id, artist_id, start_at, end_at, kind AS type
 FROM removed
 UNION ALL
 SELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text
@@ -147,38 +130,45 @@ SELECT id, status FROM resume_artist($1::uuid);"""
 
 CUSTOMERS_QUERY = """\
 SELECT
-  l.telefone, l.nome, l.pipeline_status,
-  is_returning_customer($1::uuid, l.telefone) AS is_returning,
-  COALESCE(chat_owner($2::text || ':' || l.telefone), 'beatriz') AS owner,
-  $2::text || ':' || l.telefone AS chat_id
+  l.phone_e164 AS telefone,
+  l.name AS nome,
+  p.stage_key AS pipeline_status,
+  is_returning_customer($1::uuid, l.phone_e164) AS is_returning,
+  chat_owner($1::uuid, $2::text || ':' || l.phone_e164) AS owner,
+  $2::text || ':' || l.phone_e164 AS chat_id
 FROM leads l
+LEFT JOIN LATERAL (
+  SELECT stage_key FROM projects
+   WHERE projects.lead_id = l.id AND projects.artist_id = l.artist_id
+   ORDER BY updated_at DESC LIMIT 1
+) p ON true
 WHERE l.artist_id = $1::uuid
-  AND l.telefone IS NOT NULL
+  AND l.phone_e164 IS NOT NULL
 ORDER BY COALESCE(l.last_message_at, l.created_at) DESC
 LIMIT 200
 UNION ALL
-SELECT NULL::text, NULL::text, NULL::text, false, 'beatriz'::text, NULL::text
+SELECT NULL::text, NULL::text, NULL::text, false, 'agent'::text, NULL::text
 WHERE NOT EXISTS (SELECT 1 FROM leads WHERE artist_id = $1::uuid);"""
 
 IMPORT_CUSTOMER_QUERY = """\
-SELECT telefone, nome, source
+SELECT phone_e164 AS telefone, name AS nome, source
 FROM import_returning_customer($1::uuid, $2::text, NULLIF($3::text, ''), NULL);"""
 
 RETURN_CHAT_QUERY = """\
-WITH r AS (SELECT * FROM return_chat_control($1::text, $2::uuid))
+WITH r AS (SELECT * FROM return_chat_control($1::uuid, $2::text))
 SELECT chat_id, owner FROM r
 UNION ALL
 SELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);"""
 
 BLOCK_SLOT_QUERY = """\
-SELECT id, artist_id, start_at, end_at, type
-FROM block_slot($1::uuid, $2::timestamptz, $3::timestamptz);"""
+SELECT id, artist_id, start_at, end_at, kind AS type
+FROM block_time($1::uuid, $2::timestamptz, $3::timestamptz);"""
 
 UNBLOCK_SLOT_QUERY = """\
 WITH removed AS (
-  SELECT * FROM unblock_slot($1::uuid)
+  SELECT * FROM unblock_time($1::uuid, $2::uuid)
 )
-SELECT id, artist_id, start_at, end_at, type
+SELECT id, artist_id, start_at, end_at, kind AS type
 FROM removed
 UNION ALL
 SELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text
@@ -305,7 +295,7 @@ return [{
   json: {
     success: true,
     action: 'return_chat',
-    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'beatriz' },
+    chat: { chat_id: r.chat_id || $json.chat_id, owner: r.owner || 'agent' },
   }
 }];"""
 
@@ -471,7 +461,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": UNBLOCK_SLOT_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.block_id] }}"
+                    "queryReplacement": "={{ [$json.id, $json.block_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -609,7 +599,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": IMPORT_CUSTOMER_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome] }}"
+                    "queryReplacement": "={{ [$json.id, $json.telefone, $json.nome_param] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -637,7 +627,7 @@ WF = {
                 "operation": "executeQuery",
                 "query": RETURN_CHAT_QUERY,
                 "options": {
-                    "queryReplacement": "={{ [$json.chat_id, $json.id] }}"
+                    "queryReplacement": "={{ [$json.id, $json.chat_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",

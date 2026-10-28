@@ -39,7 +39,7 @@ with open(os.path.join(FLOWS_ROOT, "prompts", "beatriz-system.md")) as f:
     template = f.read()
 
 print("=== Template placeholders ===")
-expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}"]
+expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}"]
 for ph in expected:
     check(f"placeholder {ph} present", ph in template)
 
@@ -57,7 +57,7 @@ check("no leftover placeholders besides expected",
 # ── 2. Runtime render fills every placeholder with artist data ──
 print("=== Runtime render (Bruno seed data) ===")
 artist = {
-    "nome": "Bruno",
+    "name": "Bruno",
     "instagram_handle": "@bruno.tattoo",
     "pix_key": "bruno.tattoo@pix.com.br",
     "deposit_type": "percent",
@@ -79,13 +79,14 @@ piso = f"{int(float(artist['floor_pct']))}%"
 desconto_max = f"{100 - int(float(artist['floor_pct']))}%"
 
 repl = {
-    "{{NOME}}": artist["nome"],
+    "{{NOME}}": artist["name"],
     "{{INSTAGRAM}}": artist["instagram_handle"],
     "{{PIX}}": artist["pix_key"],
     "{{SINAL}}": sinal,
     "{{PISO}}": piso,
     "{{DESCONTO_MAX}}": desconto_max,
     "{{TABELA_PRECOS}}": table,
+    "{{OFFER}}": "_Nenhuma promoção ativa no momento._",
 }
 rendered = template
 for k, v in repl.items():
@@ -136,27 +137,33 @@ check("Debounce Resolve → Debounce Decision (process → Clear Buffer, wait �
       wf["connections"]["Debounce Resolve"]["main"][0][0]["node"] == "Debounce Decision"
       and wf["connections"]["Debounce Decision"]["main"][0][0]["node"] == "Clear Buffer"
       and wf["connections"]["Debounce Decision"]["main"][1][0]["node"] == "Wait")
-check("Enqueue Notion Sync → humanize → Send WAHA Message → Stop Typing → handoff",
-      wf["connections"]["Enqueue Notion Sync"]["main"][0][0]["node"] == "Build Humanize Delay"
+check("Patch Chat State → humanize → Send WAHA Message → Stop Typing → handoff",
+      wf["connections"]["Ensure Quote"]["main"][0][0]["node"] == "Patch Chat State"
+      and wf["connections"]["Patch Chat State"]["main"][0][0]["node"] == "Build Humanize Delay"
       and wf["connections"]["Build Humanize Delay"]["main"][0][0]["node"] == "Send Typing"
       and wf["connections"]["Send Typing"]["main"][0][0]["node"] == "Humanize Delay"
       and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Send WAHA Message"
       and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
-check("Clear Buffer → Upsert Lead → Load Pricing → Build System Prompt → AI Agent",
-      wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Upsert Lead"
-      and wf["connections"]["Upsert Lead"]["main"][0][0]["node"] == "Load Pricing"
+check("Clear Buffer → Check Chat Owner → Start Turn → Load Offer → Load Pricing → Build System Prompt → AI Agent",
+      wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
+      and wf["connections"]["Chat Owned by Artist?"]["main"][1][0]["node"] == "Start Turn"
+      and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Load Offer"
+      and wf["connections"]["Load Offer"]["main"][0][0]["node"] == "Load Pricing"
       and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Build System Prompt"
       and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "AI Agent")
-check("AI Agent → Build Classification Prompt → Classify → Parse → Build Update Query → Update Lead",
+check("AI Agent → Build Classification Prompt → Classify → Parse → Build Project Patch → Patch Project",
       wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
-      and wf["connections"]["Parse Classification"]["main"][0][0]["node"] == "Build Update Query"
-      and wf["connections"]["Build Update Query"]["main"][0][0]["node"] == "Update Lead")
-check("Log Event reads Build Update Query output (fixes events never logging)",
-      "$('Build Update Query').first().json" in nodes["Log Event"]["parameters"]["options"]["queryReplacement"]
-      and "$('Update Lead').first().json" not in nodes["Log Event"]["parameters"]["options"]["queryReplacement"])
+      and wf["connections"]["Parse Classification"]["main"][0][0]["node"] == "Build Project Patch"
+      and wf["connections"]["Build Project Patch"]["main"][0][0]["node"] == "Patch Project")
+check("Patch Project fans out to quote persistence, promotion quote and name patch",
+      {c["node"] for c in wf["connections"]["Patch Project"]["main"][0]}
+      == {"Ensure Quote", "Write Promotion Quote", "Patch Lead"})
+check("the Notion mirror is gone (RPCs write the audit trail)",
+      "Log Event" not in nodes and "Enqueue Notion Sync" not in nodes
+      and "Build Notion Sync Payload" not in nodes)
 
 # ── 3b. Rule 1: mandatory self-introduction ──
 print("=== Mandatory introduction ===")
@@ -178,7 +185,7 @@ check("prompt has the one-time price gate section",
 check("prompt requires process explained before price",
       "`processo_explicado=SIM` no contexto" in template)
 check("prompt requires explicit no-doubts before price",
-      "disse EXPLICITAMENTE, na mensagem dele, que não tem mais nenhuma dúvida" in template)
+      "SÓ avance para o preço (Fase 6) DEPOIS que o lead disser explicitamente que não tem mais dúvidas" in template)
 check("prompt once-gate is permanent and skips the doubts question",
       "o gate está ABERTO PARA SEMPRE" in template
       and "NUNCA mais pergunte \"Antes de falarmos de valores, ficou alguma dúvida?\"" in template)
@@ -190,14 +197,14 @@ check("classifier only needs duvidas before the first quote",
       "o gate já foi aberto" in CLASSIFY_TEMPLATE)
 parse_js = nodes["Parse Classification"]["parameters"]["jsCode"]
 check("parse gate is sticky once opened",
-      "precoLiberadoJa" in parse_js and "gateAlreadyOpen = precoLiberadoJa ||" in parse_js)
+      "precoLiberadoJa" in parse_js and "priceGateOpen = precoLiberadoJa || gateJustOpened" in parse_js)
 check("parse deterministically records a sent quote even if classifier missed it",
       "Deterministic quote state" in parse_js
       and "finalPipeline = 'orcamento_enviado'" in parse_js)
 check("parse does not persist classifier booking dates (Book Slot is authoritative)",
-      "booked_date_val: null" in parse_js and "authoritative from the Book Slot tool" in parse_js)
-check("update query persists preco_liberado",
-      "preco_liberado = true" in nodes["Build Update Query"]["parameters"]["jsCode"])
+      "booked_date_val" not in parse_js)
+check("parse exposes the gate flags for agent_state",
+      "chat_state:" in parse_js and "preco_liberado: precoLiberadoJa || quoteActuallySent" in parse_js)
 check("redundant Lookup Price tool removed from the agent",
       "Lookup Price" not in nodes
       and not any(c.get("node") == "Lookup Price"
@@ -211,8 +218,8 @@ check("parse enforces the doubt-loop follow-up while pre-price",
       "preGateDoubtLoop" in parse_js and "Mais alguma dúvida?'" in parse_js)
 check("prompt states the last-line doubt rule",
       "REGRA DA ÚLTIMA LINHA" in template)
-check("upsert returns preco_liberado",
-      "COALESCE(preco_liberado, false) AS preco_liberado" in nodes["Upsert Lead"]["parameters"]["query"])
+check("start_turn returns the scratch state",
+      "start_turn" in nodes["Start Turn"]["parameters"]["query"])
 check("agent text threads preco_liberado",
       "preco_liberado=" in AGENT_TEXT_JS)
 check("agent text exposes a precomputed signal amount",
@@ -223,13 +230,14 @@ check("prompt tells Beatriz to use sinal_reais verbatim",
 check("parse guard downgrades premature quote transitions",
       "!priceGateOpen && ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(finalPipeline)" in parse_js)
 check("parse computes the price gate (open once quote stage reached)",
-      "priceGateOpen" in parse_js and "gateAlreadyOpen" in parse_js)
+      "priceGateOpen" in parse_js and "priceGateOpen = precoLiberadoJa || gateJustOpened" in parse_js)
 check("parse replaces premature price replies with the doubts question",
       "priceGateViolation" in parse_js
       and "'Antes de falarmos de valores, ficou alguma dúvida?'" in parse_js
       and "final_reply" in parse_js)
 check("premature replies don't persist pricing",
-      "priceGateViolation ? null : (p.table_cents" in parse_js)
+      "const quoteBaseCents = !quoteActuallySent" in parse_js
+      and "const quoteOfferedCents = !quoteActuallySent" in parse_js)
 check("reply uses the guarded final_reply",
       nodes["Send WAHA Message"]["parameters"]["bodyParameters"]["parameters"][2]["value"]
       == "={{ $('Parse Classification').first().json.final_reply }}")
@@ -237,14 +245,14 @@ check("humanize scales to the guarded reply length",
       "$('Parse Classification').first().json.final_reply" in nodes["Build Humanize Delay"]["parameters"]["jsCode"])
 check("parse detects the creative-process text deterministically",
       "processo de criação" in parse_js and "processoDeterministic" in parse_js)
-check("update query persists processo_explicado",
-      "processo_explicado = true" in nodes["Build Update Query"]["parameters"]["jsCode"])
-check("upsert returns is_new",
-      "true AS is_new" in nodes["Upsert Lead"]["parameters"]["query"]
-      and "false AS is_new" in nodes["Upsert Lead"]["parameters"]["query"])
-check("upsert returns telefone (used by handoff/signal notifications)",
-      "SELECT id, telefone, pipeline_status" in nodes["Upsert Lead"]["parameters"]["query"]
-      and "RETURNING id, telefone, pipeline_status" in nodes["Upsert Lead"]["parameters"]["query"])
+check("chat_state persists processo_explicado",
+      "processo_explicado: processoDeterministic" in parse_js)
+check("start_turn owns is_new",
+      "start_turn" in nodes["Start Turn"]["parameters"]["query"]
+      and "primeira_mensagem=" in AGENT_TEXT_JS and "is_new" in AGENT_TEXT_JS)
+check("handoff notification reads the Lead phone from Start Turn",
+      "const leadData = $('Start Turn').first().json;" in nodes["Build Handoff Message"]["parameters"]["jsCode"]
+      and "leadData.phone_e164" in nodes["Build Handoff Message"]["parameters"]["jsCode"])
 
 # ── 3d. Rule 3: typing-aware debounce + humanized response time ──
 print("=== Typing debounce + humanize ===")
@@ -256,8 +264,8 @@ check("Route Event drops non message/presence events (3rd output)",
       nodes["Route Event"]["parameters"].get("numberOutputs") == 3
       and "'presence.update' ? 0" in nodes["Route Event"]["parameters"]["output"])
 gs = nodes["Get Buffer State"]["parameters"]["query"]
-check("buffer state reads typing columns",
-      "last_typing_at" in gs and "typing_state" in gs)
+check("buffer state reads the pending burst",
+      "chat_buffer_state" in gs)
 dr = nodes["Debounce Resolve"]["parameters"]["jsCode"]
 check("debounce waits on active typing",
       "typingActive" in dr and "typing_state === 'typing'" in dr)
@@ -267,14 +275,14 @@ check("debounce caps the typing wait (safety)",
       "TYPING_GRACE_MS" in dr)
 check("debounce stops stale executions (newer message owns reply)",
       "isStale" in dr and "lastMsgAt > msgTs" in dr)
-check("buffer write is monotonic (out-of-order messages can't both win)",
-      "GREATEST(message_buffer.last_msg_at" in nodes["Debounce Accumulate"]["parameters"]["query"])
+check("buffer write uses the accumulating RPC (monotonic timestamps)",
+      "chat_buffer_accumulate" in nodes["Debounce Accumulate"]["parameters"]["query"])
 check("clear buffer also resets typing state",
-      "typing_state = NULL" in nodes["Clear Buffer"]["parameters"]["query"])
+      "chat_buffer_clear" in nodes["Clear Buffer"]["parameters"]["query"])
 check("presence upsert records typing state",
-      "typing_state" in nodes["Presence Upsert"]["parameters"]["query"])
-check("presence events gate typing hold",
-      "EXCLUDED.typing_state" in nodes["Presence Upsert"]["parameters"]["query"])
+      "chat_buffer_typing" in nodes["Presence Upsert"]["parameters"]["query"])
+check("presence events carry the typing state to the buffer",
+      "$json.presence" in nodes["Presence Upsert"]["parameters"]["options"]["queryReplacement"])
 check("humanize delay scales with reply length",
       "delay_seconds" in nodes["Build Humanize Delay"]["parameters"]["jsCode"]
       and "words" in nodes["Build Humanize Delay"]["parameters"]["jsCode"])

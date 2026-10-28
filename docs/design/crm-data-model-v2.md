@@ -721,6 +721,8 @@ Two options:
   nightly job deleting rows older than 30 days (or older than the Lead's last
   activity). It is ephemeral agent context, not a system of record, so a short
   retention is acceptable. Cheapest and does not touch the agent workflow.
+  Because the node writes the table directly, `agent_rw` gets DML on
+  `chat_memory` (and its sequence) — the only table grant it has.
 - **B. Replace it with a CRM-owned `messages` table.** Only if the CRM needs to
   display conversation history: `(id bigint, artist_id, lead_id, direction,
   body, created_at)` partitioned monthly, retention 24 months, tenant index.
@@ -782,7 +784,7 @@ foreign key (artist_id, lead_id) references leads (artist_id, id)
 |---|---|
 | `migrator` | owns the schema, runs DDL (deploy job only) |
 | `crm_app` | `select/insert/update` on domain tables; no DDL |
-| `agent_rw` | `execute` on the RPCs only; no direct table grants |
+| `agent_rw` | `execute` on the RPCs; `chat_memory` DML only (n8n memory node); no domain table grants |
 | `analytics_ro` | `select` on domain tables + rollups |
 
 Also `revoke create on schema public from public;` and pin `search_path` on every
@@ -812,14 +814,15 @@ to that Artist (the composite FKs make this cheap).
 | `start_turn(p_artist_id, p_chat_id, p_phone, p_name, p_source)` | `Upsert Lead` + `Upsert Project` + buffer reads | one call per turn: Lead, open Project, chat session, price context, `is_new`, `agent_state` |
 | `upsert_lead(p_artist_id, p_phone, p_name, p_source)` | inline `INSERT ... ON CONFLICT` | normalizes phone; returns Lead |
 | `upsert_project(p_artist_id, p_lead_id)` | none (new) | the Lead's open Project; creates one when the last is `fechado`/`perdido` |
-| `patch_project(p_artist_id, p_project_id, p_stage_key, ...)` | `Build Update Query` (raw SQL) | applies only non-null fields; stage goes through `set_project_stage` |
+| `patch_project(p_artist_id, p_project_id, p_stage_key, ..., p_expected_stage)` | `Build Update Query` (raw SQL) | applies only non-null fields; stage goes through `set_project_stage`, and is skipped when a tool already moved it during the turn |
 | `resolve_chat_session(p_artist_id, p_chat_id, p_lead_id)` | `take_chat_control` / `chat_owner` | creates/returns `chat_sessions` row |
 | `patch_chat_state(p_artist_id, p_chat_id, p_patch)` | lead scratch columns | merges the SDR gate flags into `chat_sessions.agent_state` |
 | `chat_buffer_accumulate/_typing/_state/_clear` | `message_buffer` writes | the debounce burst (`chat_buffers`) |
 | `create_project(p_artist_id, p_lead_id, p_placement, ...)` | none (new) | one job per call |
 | `lookup_price(p_artist_id, p_placement, p_body_zone)` | `lookup_price` | reads current `price_book` |
-| `write_quote(p_artist_id, p_project_id, ...)` | `write_quote` | inserts into `quotes`, moves stage |
+| `write_quote(p_artist_id, p_project_id, ...)` | `write_quote` | inserts into `quotes`, moves stage; re-sending the same price keeps the open quote |
 | `write_promotion_quote(p_artist_id, p_project_id, p_promotion_id, ...)` | `write_promotion_quote` | inserts `kind='promotion'` |
+| `active_offer_for_project(p_artist_id, p_project_id)` | `active_offer_for_lead` | active promotion + live quote, always exactly one row |
 | `request_deposit(p_artist_id, p_project_id, p_amount)` | `request_deposit` | inserts `payments` + stage |
 | `confirm_deposit(p_artist_id, p_project_id)` | `confirm_deposit` | manual confirmation by the Artist; adds returning customer |
 | `check_availability(p_artist_id, p_from, p_to, p_duration)` | same | reads `calendar_entries` |
@@ -863,10 +866,11 @@ compatibility layer.
 
 ---
 
-## 10. Migration to v2 (no live data)
+## 10. Migration to v2 (disposable v1 data)
 
-Because there are no live Artists, this is a cutover, not a data migration.
-Still do it in verifiable phases.
+v1 held one Artist, its price book and one staff user; Leads were disposable.
+This is still done in verifiable phases, with the v1 database left untouched
+until cutover.
 
 **Phase 0 — make the current schema knowable (1 day).**
 - Done 2026-10-28: `pg_dump --schema-only` captured as
@@ -901,21 +905,48 @@ Still do it in verifiable phases.
   sessions, same slot).
 
 **Phase 2 — port the write paths (2–3 days).**
-- Rewrite the ~20 n8n Postgres nodes to the new RPC names/tables; update
-  `packages/flows/definitions/*.json` and the migration workflow.
-- Delete the Notion workflows (`notion-sync.json`, `notion-sync-consumer.json`)
-  and the `notion_*` columns/tables; no compatibility layer.
-- Port the Laravel models/controllers (Lead, Project, Quote, CalendarEntry,
-  Payment) and the Blade views.
-- SQL contract tests for every RPC: happy path, cross-tenant denial, invalid
-  transition, double booking, quote expiry, manual deposit confirmation.
+- Done 2026-10-28: the Laravel app reads/writes the v2 models (`Project`,
+  `Quote`, `Payment`, `PriceBook`, `CalendarEntry`, `ArtistSetting`); 44 tests
+  pass on SQLite.
+- Done 2026-10-28: the WhatsApp agent runs entirely through RPCs:
+  `resolve_artist`, `chat_buffer_*`, `start_turn`, `list_prices`,
+  `active_offer_for_project`, `write_quote`, `request_deposit`, `check_availability`,
+  `book_slot`, `patch_project`, `patch_chat_state`, `write_promotion_quote`.
+  `Log Event` / `Enqueue Notion Sync` are gone — the RPCs write `events`.
+- Done 2026-10-28: admin workflows ported (`artist-calendar-webhook`,
+  `artist-onboard-webhook`, `artist-onboarding-form`,
+  `artist-promotions-webhook`, `admin-reset-leads`). `list_calendar`,
+  `consume_onboarding_token`, `suspend_artist`, `resume_artist` and
+  `reset_leads` are back on the v2 RPC surface (granted to `crm_app` only).
+- Done 2026-10-28: the v1 DB Migration workflow (`migration-beatriz.json`) is
+  retired; schema changes ship as SQL migrations.
+- Done 2026-10-28: the Notion mirror was removed from the repo and live n8n.
+- Done 2026-10-28: SQL contract tests cover every turn/buffer/RPC path,
+  cross-tenant denial, invalid transition, double booking, quote expiry, manual
+  deposit confirmation and the optimistic stage guard.
 
 **Phase 3 — cutover (1 day).**
-- Deploy schema, functions, n8n workflows and app together; remove the Notion
-  workflows and their schedules in the same window.
-- Re-seed demo data.
-- Run the end-to-end checklist: login, board, lead detail, book, reschedule,
-  cancel, deposit, promotion quote, analytics, onboarding.
+
+1. Freeze writes: stop the n8n workflows and the CRM container.
+2. `pg_dump` the v1 database (rollback artifact):
+   `docker exec <pg> pg_dump -U postgres -d postgres -Fc > /tmp/vaif-v1.dump`.
+3. Rebuild `vaif_crm` from `0001_schema_v2.sql`, `0002_functions_v2.sql`,
+   `0003_roles_v2.sql`.
+4. Apply Laravel migrations as `migrator` (`users`, `notes`), then run
+   `packages/crm/db/migrate/v1_to_v2_tenants.sql` and `v1_to_v2_users.sql`.
+5. Create the NOLOGIN group roles (done by `0003`) and the login roles with
+   passwords from Coolify: `crm_app_login IN ROLE crm_app`,
+   `agent_login IN ROLE agent_rw`, `analytics_login IN ROLE analytics_ro`.
+6. Repoint `DATABASE_URL`:
+   - CRM container → `crm_app_login`
+   - n8n agent workflow → `agent_login`
+   - admin workflows (calendar/onboarding/promotions/reset) → `crm_app_login`
+   Set `RUN_MIGRATIONS=false` on the CRM container.
+7. Deploy the workflow JSONs and activate the agent.
+8. Smoke test: `/api/up`, login, board, lead detail, new WhatsApp turn,
+   availability, booking, deposit request, promotion quote, onboarding form.
+9. Delete the old `postgres` schema only after the smoke test and the backup
+   are verified.
 
 **Phase 4 — operations.**
 - Partition maintenance job (create next 2 months, detach > 24 months).

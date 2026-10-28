@@ -35,11 +35,13 @@ chown -R www-data:www-data storage bootstrap/cache
 php artisan optimize:clear >/dev/null 2>&1 || true
 
 # --- Migrations --------------------------------------------------------------
-# Laravel only owns `users`, `notes` and `promotion_quotes`; the domain tables
-# come from packages/crm/supabase. Set RUN_MIGRATIONS=false if you prefer to run
-# `php artisan migrate` yourself from Coolify's terminal.
-if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
-    echo "[entrypoint] running migrations"
+# The schema is owned by `packages/crm/db/migrations` (applied by the `migrator`
+# deploy step, not by this container). Laravel's own migrations only own
+# `users` and `notes`; they are run once by the deploy job as `migrator`.
+# RUN_MIGRATIONS is therefore OFF by default: the runtime role (`crm_app`) has
+# DML but no DDL.
+if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+    echo "[entrypoint] running Laravel migrations as $DB_USERNAME"
     php artisan migrate --force --no-interaction
 fi
 
