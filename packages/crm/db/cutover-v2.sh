@@ -106,6 +106,14 @@ docker exec "$PG_CONTAINER" pg_dump -U "$DB_USER" -d "$SOURCE_DB" -Fc > "$dump"
 echo "    $(du -h "$dump" | cut -f1) $dump"
 
 say "2/6 recreate $TARGET_DB"
+if docker exec "$PG_CONTAINER" psql -U "$DB_USER" -d "$SOURCE_DB" -Atc \
+     "select 1 from pg_database where datname = '$TARGET_DB'" | grep -q 1; then
+  if docker exec "$PG_CONTAINER" psql -U "$DB_USER" -d "$TARGET_DB" -Atc \
+       "select to_regclass('public.users')" 2>/dev/null | grep -q users; then
+    [ "${ALLOW_EXISTING:-}" = "yes" ] || \
+      fail "$TARGET_DB already has app data; set ALLOW_EXISTING=yes to rebuild it"
+  fi
+fi
 docker exec "$PG_CONTAINER" psql -U "$DB_USER" -d "$SOURCE_DB" -q \
   -c "drop database if exists $TARGET_DB"
 docker exec "$PG_CONTAINER" createdb -U "$DB_USER" "$TARGET_DB"

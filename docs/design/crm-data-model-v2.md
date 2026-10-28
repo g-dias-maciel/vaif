@@ -949,8 +949,10 @@ Remaining operational follow-ups:
 
 1. Rotate the `crm_app_login` / `agent_login` passwords (generated during the
    cutover) and update the Coolify env + n8n credentials.
-2. Decide and enable the backup mechanism (WAL-G/pgBackRest or nightly dump).
-3. Run the synthetic load test (1,000 Artists / 3M Leads / 15M Events).
+2. Set `VAIF_ADMIN_TOKEN` in the n8n environment — the promotions webhook
+   authorizes against it and currently returns 401 without it.
+3. Decide and enable the backup mechanism (WAL-G/pgBackRest or nightly dump).
+4. Run the synthetic load test (1,000 Artists / 3M Leads / 15M Events).
 
 **Phase 4 — operations.**
 - Partition maintenance job (create next 2 months, detach > 24 months).
