@@ -174,8 +174,9 @@ class Project extends Model
     {
         return match ($this->tattoo_type) {
             'cover_up' => 'Sim (cobertura)',
-            'new' => 'Não (tatuagem nova)',
-            default => '—',
+            'rework'   => 'Sim (reforma)',
+            'new'      => 'Não (tatuagem nova)',
+            default    => '—',
         };
     }
 

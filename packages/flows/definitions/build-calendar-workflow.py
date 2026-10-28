@@ -160,20 +160,6 @@ SELECT chat_id, owner FROM r
 UNION ALL
 SELECT NULL::text, NULL::text WHERE NOT EXISTS (SELECT 1 FROM r);"""
 
-BLOCK_SLOT_QUERY = """\
-SELECT id, artist_id, start_at, end_at, kind AS type
-FROM block_time($1::uuid, $2::timestamptz, $3::timestamptz);"""
-
-UNBLOCK_SLOT_QUERY = """\
-WITH removed AS (
-  SELECT * FROM unblock_time($1::uuid, $2::uuid)
-)
-SELECT id, artist_id, start_at, end_at, kind AS type
-FROM removed
-UNION ALL
-SELECT NULL::uuid, NULL::uuid, NULL::timestamptz, NULL::timestamptz, NULL::text
-WHERE NOT EXISTS (SELECT 1 FROM removed);"""
-
 BUILD_LIST_RESPONSE_JS = r"""const items = $input.all();
 const artist = $('Resolve Artist by Token').first().json;
 
