@@ -70,8 +70,21 @@ if [ "$STAGE" = "app" ]; then
   [ -n "$APP_CONTAINER" ] || fail "no CRM container found; set APP_CONTAINER"
   say "CRM app container: $APP_CONTAINER"
 
+  # Refuse to run the v1 migration set against the v2 database: the v2 image is
+  # the one that has App\Models\Project (v1 had Lead/Pricing/CalendarSlot).
+  docker exec "$APP_CONTAINER" test -f /app/app/Models/Project.php \
+    || fail "container is not the v2 image; deploy it first"
+
   say "Laravel migrations (users, notes) against $TARGET_DB"
-  docker exec -e DB_DATABASE="$TARGET_DB" "$APP_CONTAINER" \
+  # The schema owner runs DDL. By default use the owner credentials already in
+  # the container; set OWNER_DB_PASSWORD (and optionally OWNER_DB_USER) if the
+  # container has already been repointed at crm_app_login.
+  env_args="-e DB_DATABASE=$TARGET_DB -e DB_USERNAME=${OWNER_DB_USER:-postgres}"
+  if [ -n "${OWNER_DB_PASSWORD:-}" ]; then
+    env_args="$env_args -e DB_PASSWORD=$OWNER_DB_PASSWORD"
+  fi
+  # shellcheck disable=SC2086
+  docker exec $env_args "$APP_CONTAINER" \
     sh -lc 'php artisan config:clear >/dev/null && php artisan migrate --force --no-interaction'
 
   say "copying v1 users and notes"
