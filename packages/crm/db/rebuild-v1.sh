@@ -21,7 +21,6 @@
 #   DB_USER=postgres
 #   DB_NAME=postgres
 #   RESTORE_USERS=yes    preserve existing CRM logins (users table only)
-#   SEED_DEMO=yes        load seed.sql (demo Artist "Bruno") after the rebuild
 #   AUTO_ROLLBACK=yes    restore the backup if any step fails (default yes)
 # =============================================================================
 set -euo pipefail
@@ -145,12 +144,6 @@ docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP
 log "applying 20261022000000_offers_and_chat_control.sql"
 docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$SQL_OFFERS"
 
-if [ "${SEED_DEMO:-no}" = "yes" ] && [ -f "$SUPABASE_DIR/seed.sql" ]; then
-  log "seeding demo Artist (Bruno)"
-  docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
-    < "$SUPABASE_DIR/seed.sql" || log "WARNING: demo seed failed"
-fi
-
 # --- 4. Start the app (entrypoint runs Laravel migrations) -------------------
 if [ -n "${APP_CONTAINER:-}" ]; then
   log "starting $APP_CONTAINER"
@@ -209,9 +202,6 @@ if [ -n "${APP_CONTAINER:-}" ]; then
 fi
 
 log "done. backup kept at $BACKUP"
-if [ "${SEED_DEMO:-no}" = "yes" ]; then
-  log "demo Artist: Bruno (b0000000-0000-0000-0000-000000000001)"
-fi
 if [ -n "${APP_CONTAINER:-}" ]; then
   log "create a staff login with: docker exec -w /app $APP_CONTAINER php artisan crm:make-staff you@example.com"
 fi
