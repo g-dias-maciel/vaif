@@ -99,5 +99,5 @@
         @endif
     </form>
 </div>
-@include('partials.project-board', ['projects' => $projects, 'pipeline' => $pipeline, 'readonly' => false])
+@include('partials.project-board', ['projects' => $projects, 'pipeline' => $pipeline, 'readonly' => false, 'agentAction' => true])
 @endsection

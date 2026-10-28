@@ -1,5 +1,8 @@
 @php
     $grouped = $projects->groupBy('stage_key');
+    // The dashboard offers the agent silence toggle; staff/admin boards keep
+    // the mark-lost action.
+    $agentAction = $agentAction ?? false;
 @endphp
 
 <div class="board">
@@ -21,6 +24,9 @@
                                 @endif
                                 @if ($project->is_returning)
                                     <span class="tag">Recorrente</span>
+                                @endif
+                                @if ($agentAction && $project->lead?->agent_blocked)
+                                    <span class="tag tag-muted">Agente silenciado</span>
                                 @endif
                             </strong>
                             <span class="phone">{{ $project->lead?->phone_e164 }}</span>
@@ -49,7 +55,22 @@
                                 @if ($project->whatsapp_url)
                                     <a href="{{ $project->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
                                 @endif
-                                @if ($project->stage_key !== 'perdido')
+                                @if ($agentAction && $project->lead)
+                                    @can('flagAgent', $project->lead)
+                                        @if ($project->lead->agent_blocked)
+                                            <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn--ghost btn--small">Reativar agente</button>
+                                            </form>
+                                        @else
+                                            <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
+                                                @csrf
+                                                <button type="submit" class="btn btn--danger btn--small"
+                                                    onclick="return confirm('Silenciar a Beatriz para este cliente? Ela deixará de responder automaticamente.');">Silenciar agente</button>
+                                            </form>
+                                        @endif
+                                    @endcan
+                                @elseif ($project->stage_key !== 'perdido')
                                     <form method="post" action="{{ route('projects.mark-lost', $project) }}" class="inline">
                                         @csrf
                                         <button type="submit" class="btn btn--danger btn--small"

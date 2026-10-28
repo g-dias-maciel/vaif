@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Models\Artist;
 use App\Models\Lead;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -80,5 +81,32 @@ class LeadAgentFlagTest extends TestCase
         $this->actingAs($user)->post("/leads/{$lead->id}/agent")->assertForbidden();
 
         $this->assertNull($lead->refresh()->agent_blocked_at);
+    }
+
+    public function test_the_dashboard_offers_silence_instead_of_mark_lost(): void
+    {
+        $artist = $this->artist();
+        $lead = $this->lead($artist);
+        $user = $this->artistUser($artist);
+
+        Project::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
+            'stage_key' => 'novo',
+        ]);
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('Silenciar agente')
+            ->assertDontSee('Marcar perdido');
+
+        $this->actingAs($user)->post("/leads/{$lead->id}/agent")->assertRedirect();
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('Agente silenciado')
+            ->assertSee('Reativar agente')
+            ->assertDontSee('Marcar perdido');
     }
 }
