@@ -747,7 +747,7 @@ if (!opsChatId) {
 
 // ── Handoff ──
 if (event === 'handoff_triggered' || saidHandoff) {
-  const leadId = (parseData && parseData.lead_id) || '';
+  const projectId = (parseData && parseData.project_id) || '';
   const reasonMap = {
     cover_up: 'Cover-up',
     reforma: 'Reforma de tatuagem',
@@ -772,15 +772,15 @@ if (event === 'handoff_triggered' || saidHandoff) {
     chatId: opsChatId,
     text: msg.join('\n'),
     btn1_text: '\u2705 Confirmar',
-    btn1_cb: 'handoff:confirm:' + leadId,
+    btn1_cb: 'handoff:confirm:' + projectId,
     btn2_text: '\u274C Cancelar',
-    btn2_cb: 'handoff:cancel:' + leadId,
+    btn2_cb: 'handoff:cancel:' + projectId,
   } }];
 }
 
 // ── Deposit requested ──
 if (event === 'deposit_requested' || saidDeposit) {
-  const leadId = parseData.lead_id || '';
+  const projectId = parseData.project_id || '';
   const amount = parseData.deposit_amount_cents
     ? 'R$ ' + (parseData.deposit_amount_cents / 100).toFixed(2).replace('.', ',')
     : 'valor pendente';
@@ -799,9 +799,9 @@ if (event === 'deposit_requested' || saidDeposit) {
     chatId: opsChatId,
     text: msg,
     btn1_text: '\u2705 Sinal Recebido',
-    btn1_cb: 'deposit:confirm:' + leadId,
+    btn1_cb: 'deposit:confirm:' + projectId,
     btn2_text: '\u274C Não Pago',
-    btn2_cb: 'deposit:cancel:' + leadId,
+    btn2_cb: 'deposit:cancel:' + projectId,
   } }];
 }
 
