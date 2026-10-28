@@ -175,6 +175,9 @@ check("prompt requires intro even if the lead already described the tattoo",
       "AINDA QUE o lead já tenha descrito a tatuagem na primeira mensagem" in template)
 check("agent text threads primeira_mensagem",
       "primeira_mensagem=" in AGENT_TEXT_JS and "is_new" in AGENT_TEXT_JS)
+check("first reply asks only the name",
+      "Antes de começarmos, como posso te chamar?" in template
+      and "pergunte APENAS o nome" in template)
 
 # ── 3c. Rule 2: hard price gate ──
 print("=== Price gate ===")
@@ -271,6 +274,13 @@ check("debounce waits on active typing",
       "typingActive" in dr and "typing_state === 'typing'" in dr)
 check("debounce has a quiet period",
       "QUIET_MS" in dr and "quiet" in dr)
+check("debounce waits long enough to stack a burst",
+      "QUIET_MS = 6000" in dr)
+check("LID chats resolve the real phone from remoteJidAlt",
+      "remoteJidAlt" in nodes["Debounce Start"]["parameters"]["jsCode"]
+      and "phoneJid" in nodes["Debounce Start"]["parameters"]["jsCode"])
+check("presence uses the same full chat key as messages",
+      "session + ':' + chatId" in nodes["Presence Start"]["parameters"]["jsCode"])
 check("debounce caps the typing wait (safety)",
       "TYPING_GRACE_MS" in dr)
 check("debounce stops stale executions (newer message owns reply)",

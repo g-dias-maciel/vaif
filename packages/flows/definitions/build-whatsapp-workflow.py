@@ -248,7 +248,7 @@ const isStale = lastMsgAt > msgTs;
 
 const now = Date.now();
 // Answer only after this much silence (no new message, no typing).
-const QUIET_MS = 4000;
+const QUIET_MS = 6000;
 // While WAHA reports the lead as actively typing, hold the reply. Cap the
 // wait so a lost "paused" presence event can never stall the conversation.
 const TYPING_GRACE_MS = 30000;
