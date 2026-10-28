@@ -54,6 +54,8 @@ NÃO classifique como handoff a menos que Beatriz tenha EXPLICITAMENTE dito que 
 
 Retorne APENAS este JSON. Use null para campos ausentes:
 
+Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana", "pode me chamar de Ana", "sou o João"). null se o lead não disse. NÃO use o nome de perfil do WhatsApp.
+
 {
   "pipeline": "string",
   "event": "string or null",

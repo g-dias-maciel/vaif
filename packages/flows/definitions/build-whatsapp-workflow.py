@@ -175,7 +175,13 @@ AGENT_TEXT_EXPR = (
 DEBOUNCE_START_JS = """const wa = $('WAHA Webhook').first().json.body || {};
 const payload = wa.payload || {};
 const session = wa.session || 'unknown';
-const from = String(payload.from || '').replace('@c.us', '');
+const rawFrom = String(payload.from || '');
+// WhatsApp's LID addressing sends `292...@lid`; the real phone is in
+// `_data.key.remoteJidAlt`. Never store the LID as the phone number.
+const key = (payload._data && payload._data.key) || {};
+const altJid = String(key.remoteJidAlt || key.senderPn || '');
+const phoneJid = rawFrom.endsWith('@lid') && altJid ? altJid : rawFrom;
+const phone = phoneJid.replace(/@.*$/, '').replace(/\D/g, '');
 const type = payload.type || 'chat';
 const media = payload.media || {};
 const rawText = String(payload.body || '');
@@ -200,8 +206,8 @@ const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
   .slice(0, 5);
 
 return [{ json: {
-  chat_id: session + ':' + from,
-  phone: from,
+  chat_id: session + ':' + rawFrom,
+  phone: phone,
   msg_text: text,
   msg_ts: Date.now(),
   media_url: mediaUrl,
@@ -272,13 +278,13 @@ for (const item of presences) {
   if (item && item.lastKnownPresence) presence = item.lastKnownPresence;
 }
 
-const from = chatId.replace('@c.us', '').split('@')[0];
+const phone = chatId.replace(/@.*$/, '').replace(/\D/g, '');
 
 return [{ json: {
-  chat_id: session + ':' + from,
+  chat_id: session + ':' + chatId,
   presence: presence || 'paused',
   is_typing: presence === 'typing' || presence === 'recording',
-  phone: from,
+  phone: phone,
   session: wa.session,
 } }];"""
 
