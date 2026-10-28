@@ -437,7 +437,7 @@
 
                         @if (session('staff_artist_id') && $navArtist)
                             <div class="nav-group">
-                                <span class="nav-group-label">{{ $navArtist->nome ?: $navArtist->display_name }}</span>
+                                <span class="nav-group-label">{{ $navArtist->displayName() }}</span>
                                 <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
                                     <x-icon name="grid" /> <span>Dashboard</span>
                                 </a>
@@ -460,11 +460,11 @@
 
                 <div class="sidebar-foot">
                     <div class="who">
-                        <span class="who-avatar" title="{{ $navArtist?->nome ?: $navUser->name }}">{{ mb_substr($navArtist?->nome ?: $navUser->name, 0, 1) }}</span>
+                        <span class="who-avatar" title="{{ $navArtist?->displayName() ?: $navUser->name }}">{{ mb_substr($navArtist?->displayName() ?: $navUser->name, 0, 1) }}</span>
                         <span class="who-name">{{ $navUser->name }}</span>
                         <span class="who-role">{{ $navUser->isArtist() ? 'Artista' : 'Equipe VAIF' }}</span>
                         @if (! $navUser->isArtist() && $navArtist)
-                            <span class="who-context">Visualizando: {{ $navArtist->nome ?: $navArtist->display_name }}</span>
+                            <span class="who-context">Visualizando: {{ $navArtist->displayName() }}</span>
                         @endif
                     </div>
                     <form method="post" action="{{ route('logout') }}">

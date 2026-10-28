@@ -7,10 +7,9 @@ return [
     | Lead pipeline statuses and their Portuguese display labels.
     |--------------------------------------------------------------------------
     |
-    | The keys are the canonical `pipeline_status` values written by the SDR
-    | agent (Beatriz) to the `leads` table; the values are the labels the
-    | Artist sees in the CRM. Keep this in sync with the agent's prompt and
-    | the Postgres functions in packages/crm/supabase.
+    | The keys are the canonical `stage_key` values written by the SDR agent
+    | (Beatriz) to `projects`; the values are the labels the Artist sees in the
+    | CRM. Keep this in sync with the agent's prompt and `pipeline_stages`.
     |
     */
 

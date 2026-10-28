@@ -3,7 +3,7 @@
 @section('title', 'Agenda')
 
 @section('content')
-<h1 class="page-title">Agenda — {{ $artist?->nome }}</h1>
+<h1 class="page-title">Agenda — {{ $artist?->displayName() }}</h1>
 
 <div class="pricing-tabs">
     <a class="pricing-tab {{ $filter === 'upcoming' ? 'active' : '' }}" href="{{ route('bookings.index', ['filter' => 'upcoming']) }}">Próximos</a>

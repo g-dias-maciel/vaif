@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Pricing;
+use App\Models\ArtistSetting;
+use App\Models\PriceBook;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class SettingsController extends Controller
 {
@@ -19,8 +21,11 @@ class SettingsController extends Controller
             return redirect()->route('artists.index');
         }
 
-        $pricing = Pricing::query()
+        $artist->loadMissing('settings');
+
+        $pricing = PriceBook::query()
             ->where('artist_id', $artist->id)
+            ->whereNull('effective_to')
             ->get();
 
         $pricingByKey = [];
@@ -31,22 +36,41 @@ class SettingsController extends Controller
         $sizes = config('crm.pricing_sizes');
         $regions = config('crm.pricing_regions');
 
-        // Merge custom sizes + locations stored on the artist.
-        $extras = $artist?->pricing_extras ?? [];
+        // Merge custom sizes + locations stored on the artist settings.
+        $extras = $artist->settings?->pricing_extras ?? [];
         foreach ($extras['sizes'] ?? [] as $size) {
             $sizes[$size] = ucfirst(str_replace('_', ' ', $size));
         }
+
+        // Placements that exist in the price book but not in the config list
+        // (custom locations) are grouped under "Outros".
+        $known = [];
+        foreach ($regions as $region) {
+            $known = array_merge($known, array_keys($region['locations']));
+        }
+        $known = array_merge($known, array_keys($sizes));
+        $custom = [];
+        foreach (array_keys($pricingByKey) as $placement) {
+            if (! in_array($placement, $known, true)) {
+                $custom[$placement] = ucfirst(str_replace('_', ' ', $placement));
+            }
+        }
+        if ($custom !== []) {
+            $regions['outros'] = ['label' => 'Outros', 'locations' => $custom];
+        }
+
         foreach ($extras['locations'] ?? [] as $loc) {
             $region = $loc['region'] ?? null;
             $name = $loc['name'] ?? null;
-            if ($region && $name && isset($regions[$region])) {
+            if ($region && $name) {
+                $regions[$region] ??= ['label' => ucfirst($region), 'locations' => []];
                 $regions[$region]['locations'][$name] = ucfirst(str_replace('_', ' ', $name));
             }
         }
 
         $waha = null;
         $qr = null;
-        if ($artist && $artist->wa_session_slug) {
+        if ($artist->wa_session_slug) {
             $service = WahaService::make();
             $waha = $service->status($artist);
             if ($waha && ! $waha['connected']) {
@@ -111,6 +135,9 @@ class SettingsController extends Controller
 
     /**
      * Bulk save a region's price matrix.
+     *
+     * Prices are versioned: changing a cell closes the current row and inserts
+     * a new one, so quotes already sent keep their original price.
      */
     public function storePricingBulk(Request $request)
     {
@@ -119,51 +146,65 @@ class SettingsController extends Controller
         abort_unless($artist, 403);
 
         $artistId = $artist->id;
-        $region = (string) $request->input('region');
         $cells = $request->input('cells', []);
 
         $saved = 0;
         $removed = 0;
 
-        foreach ($cells as $placement => $zones) {
-            if (! is_array($zones)) {
-                continue;
-            }
+        DB::transaction(function () use ($artistId, $cells, &$saved, &$removed) {
+            $now = now();
 
-            foreach ($zones as $bodyZone => $values) {
-                $price = trim((string) ($values['price'] ?? ''));
-                $duration = (int) ($values['duration'] ?? 120);
-
-                if ($price === '') {
-                    $existing = Pricing::where('artist_id', $artistId)
-                        ->where('placement', $placement)
-                        ->where('body_zone', $bodyZone)
-                        ->first();
-
-                    if ($existing && $existing->active) {
-                        $existing->update(['active' => false]);
-                        $removed++;
-                    }
-
+            foreach ($cells as $placement => $zones) {
+                if (! is_array($zones)) {
                     continue;
                 }
 
-                $priceCents = max(0, (int) round((float) str_replace(',', '.', $price) * 100));
+                foreach ($zones as $bodyZone => $values) {
+                    $price = trim((string) ($values['price'] ?? ''));
+                    $duration = max(1, (int) ($values['duration'] ?? 120));
 
-                Pricing::updateOrCreate(
-                    ['artist_id' => $artistId, 'placement' => $placement, 'body_zone' => $bodyZone],
-                    [
-                        'region' => $region,
-                        'table_price' => $priceCents,
-                        'session_duration_min' => max(1, $duration),
+                    $current = PriceBook::query()
+                        ->where('artist_id', $artistId)
+                        ->where('placement', $placement)
+                        ->where('body_zone', $bodyZone)
+                        ->whereNull('effective_to')
+                        ->first();
+
+                    if ($price === '') {
+                        if ($current) {
+                            $current->update(['effective_to' => $now]);
+                            $removed++;
+                        }
+
+                        continue;
+                    }
+
+                    $priceCents = max(0, (int) round((float) str_replace(',', '.', $price) * 100));
+
+                    if ($current
+                        && $current->base_price_cents === $priceCents
+                        && $current->session_duration_min === $duration) {
+                        continue;
+                    }
+
+                    if ($current) {
+                        $current->update(['effective_to' => $now]);
+                    }
+
+                    PriceBook::create([
+                        'artist_id' => $artistId,
+                        'placement' => $placement,
+                        'body_zone' => $bodyZone,
+                        'base_price_cents' => $priceCents,
+                        'session_duration_min' => $duration,
                         'buffer_min' => 30,
-                        'active' => true,
-                    ],
-                );
+                        'effective_from' => $now,
+                    ]);
 
-                $saved++;
+                    $saved++;
+                }
             }
-        }
+        });
 
         $message = "$saved preço(s) salvo(s).";
         if ($removed > 0) {
@@ -187,11 +228,12 @@ class SettingsController extends Controller
             'name' => ['required', 'string', 'max:255'],
         ]);
 
-        $extras = $artist->pricing_extras ?? [];
+        $settings = $this->settings($artist);
+        $extras = $settings->pricing_extras ?? [];
         $locations = $extras['locations'] ?? [];
         $locations[] = ['region' => $data['region'], 'name' => $data['name']];
         $extras['locations'] = $locations;
-        $artist->update(['pricing_extras' => $extras]);
+        $settings->update(['pricing_extras' => $extras]);
 
         return back()->with('status', 'Local adicionado.');
     }
@@ -209,14 +251,20 @@ class SettingsController extends Controller
             'name' => ['required', 'string', 'max:255'],
         ]);
 
-        $extras = $artist->pricing_extras ?? [];
+        $settings = $this->settings($artist);
+        $extras = $settings->pricing_extras ?? [];
         $sizes = $extras['sizes'] ?? [];
         if (! in_array($data['name'], $sizes, true)) {
             $sizes[] = $data['name'];
         }
         $extras['sizes'] = $sizes;
-        $artist->update(['pricing_extras' => $extras]);
+        $settings->update(['pricing_extras' => $extras]);
 
         return back()->with('status', 'Tamanho adicionado.');
+    }
+
+    private function settings(\App\Models\Artist $artist): ArtistSetting
+    {
+        return $artist->settings()->firstOrCreate(['artist_id' => $artist->id]);
     }
 }

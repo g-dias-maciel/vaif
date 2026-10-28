@@ -2,7 +2,7 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Lead;
+use App\Models\Project;
 use App\Support\Periods;
 use Illuminate\Http\Request;
 
@@ -22,34 +22,33 @@ class AnalyticsController extends Controller
         $period = Periods::fromRequest($request->query('period'));
         $from = Periods::start($period);
 
-        // A Lead IS the pipeline card: contact + project + money all live on
-        // the same row, so one query feeds the funnel, the money and the board.
-        $leads = Lead::query()
+        // A Project is the pipeline card: job + quotes + payments.
+        $projects = Project::with(['lead', 'acceptedQuote', 'latestQuote', 'payments'])
             ->where('artist_id', $artist->id)
             ->when($from, fn ($q) => $q->where('created_at', '>=', $from))
             ->get();
 
-        $total = $leads->count();
-        $won = $leads->whereIn('pipeline_status', self::WON_STATUSES)->count();
-        $lost = $leads->where('pipeline_status', 'perdido')->count();
+        $total = $projects->count();
+        $won = $projects->whereIn('stage_key', self::WON_STATUSES)->count();
+        $lost = $projects->where('stage_key', 'perdido')->count();
 
         $conversionRate = $total > 0 ? round($won / $total * 100, 1) : 0.0;
         $lostRate = $total > 0 ? round($lost / $total * 100, 1) : 0.0;
 
-        $bySource = $leads->groupBy('lead_source')
+        $bySource = $projects->groupBy(fn (Project $project) => $project->lead?->source)
             ->map->count()
             ->filter(fn ($count, $source) => $source !== null && $source !== '');
 
-        $wonLeads = $leads->whereIn('pipeline_status', self::WON_STATUSES)
-            ->filter(fn (Lead $lead) => $lead->charged_price_cents !== null);
+        $wonProjects = $projects->whereIn('stage_key', self::WON_STATUSES)
+            ->filter(fn (Project $project) => $project->charged_price_cents !== null);
 
-        $avgTicket = $wonLeads->isNotEmpty()
-            ? (int) round($wonLeads->avg(fn (Lead $lead) => $lead->charged_price_cents))
+        $avgTicket = $wonProjects->isNotEmpty()
+            ? (int) round($wonProjects->avg(fn (Project $project) => $project->charged_price_cents))
             : 0;
 
-        $revenue = (int) $wonLeads->sum(fn (Lead $lead) => $lead->charged_price_cents);
+        $revenue = (int) $wonProjects->sum(fn (Project $project) => $project->charged_price_cents);
 
-        $byStage = $leads->groupBy('pipeline_status')->map->count();
+        $byStage = $projects->groupBy('stage_key')->map->count();
 
         $pipelineStatuses = config('crm.pipeline_statuses');
         $monthly = $this->monthlyTrend($artist->id);
@@ -76,8 +75,8 @@ class AnalyticsController extends Controller
     }
 
     /**
-     * Last 12 months trend. Conversions and revenue are both lead-level: a won
-     * Lead is bucketed by the month the conversation started.
+     * Last 12 months trend. Conversions and revenue are both project-level: a
+     * won Project is bucketed by the month the job was created.
      *
      * @return array{labels: array, won: array, rate: array, revenue: array}
      */
@@ -92,28 +91,32 @@ class AnalyticsController extends Controller
             $m = $start->copy()->addMonths($i);
             $buckets[$m->format('Y-m')] = [
                 'label' => $ptMonths[(int) $m->format('n')].'/'.$m->format('y'),
-                'leadTotal' => 0,
-                'leadWon' => 0,
+                'total' => 0,
+                'won' => 0,
                 'revenue' => 0,
             ];
         }
 
-        foreach (Lead::where('artist_id', $artistId)->get() as $lead) {
-            $key = $lead->created_at?->format('Y-m');
+        $projects = Project::with(['acceptedQuote', 'latestQuote'])
+            ->where('artist_id', $artistId)
+            ->get();
+
+        foreach ($projects as $project) {
+            $key = $project->created_at?->format('Y-m');
             if ($key === null || ! isset($buckets[$key])) {
                 continue;
             }
 
-            $buckets[$key]['leadTotal']++;
+            $buckets[$key]['total']++;
 
-            if (! in_array($lead->pipeline_status, self::WON_STATUSES, true)) {
+            if (! in_array($project->stage_key, self::WON_STATUSES, true)) {
                 continue;
             }
 
-            $buckets[$key]['leadWon']++;
+            $buckets[$key]['won']++;
 
-            if ($lead->charged_price_cents !== null) {
-                $buckets[$key]['revenue'] += $lead->charged_price_cents;
+            if ($project->charged_price_cents !== null) {
+                $buckets[$key]['revenue'] += $project->charged_price_cents;
             }
         }
 
@@ -124,8 +127,8 @@ class AnalyticsController extends Controller
 
         foreach ($buckets as $b) {
             $labels[] = $b['label'];
-            $won[] = $b['leadWon'];
-            $rate[] = $b['leadTotal'] > 0 ? round($b['leadWon'] / $b['leadTotal'] * 100, 1) : 0.0;
+            $won[] = $b['won'];
+            $rate[] = $b['total'] > 0 ? round($b['won'] / $b['total'] * 100, 1) : 0.0;
             $revenue[] = round($b['revenue'] / 100, 2);
         }
 

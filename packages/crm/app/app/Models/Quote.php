@@ -7,43 +7,46 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 /**
- * A promotion quote sent to a Lead: the price-protected offer for one
- * placement, valid for `quote_valid_days` from the moment it was sent.
+ * A price offered for one Project. Standard and promotion quotes share this
+ * table: a promotion quote keeps the `second_cap_cents` of the "Leve 2" offer.
  *
- * A quote outlives a paused promotion (the lead keeps the quoted price until
+ * A quote is a snapshot: later price-book changes never rewrite it. A quote
+ * outlives a paused promotion (the Lead keeps the quoted price until
  * `valid_until`); ending a promotion voids its open quotes.
  */
-class PromotionQuote extends Model
+class Quote extends Model
 {
     use HasUuids;
 
-    protected $table = 'promotion_quotes';
+    protected $table = 'quotes';
 
-    // The table records `quoted_at`/`created_at`; it has no `updated_at`.
     public $timestamps = false;
 
     protected $fillable = [
         'id',
-        'promotion_id',
-        'lead_id',
         'artist_id',
-        'placement',
-        'body_zone',
-        'first_price',
-        'second_cap_price',
-        'quoted_at',
+        'project_id',
+        'kind',
+        'promotion_id',
+        'base_price_cents',
+        'offered_price_cents',
+        'discount_percent',
+        'second_cap_cents',
         'valid_until',
         'status',
-        'secured_at',
+        'created_by',
         'created_at',
+        'accepted_at',
     ];
 
     protected $casts = [
-        'first_price' => 'integer',
-        'second_cap_price' => 'integer',
-        'quoted_at' => 'datetime',
+        'base_price_cents' => 'integer',
+        'offered_price_cents' => 'integer',
+        'second_cap_cents' => 'integer',
+        'discount_percent' => 'decimal:2',
         'valid_until' => 'datetime',
-        'secured_at' => 'datetime',
+        'created_at' => 'datetime',
+        'accepted_at' => 'datetime',
     ];
 
     public function promotion(): BelongsTo
@@ -51,9 +54,9 @@ class PromotionQuote extends Model
         return $this->belongsTo(Promotion::class, 'promotion_id');
     }
 
-    public function lead(): BelongsTo
+    public function project(): BelongsTo
     {
-        return $this->belongsTo(Lead::class, 'lead_id');
+        return $this->belongsTo(Project::class, 'project_id');
     }
 
     /**
@@ -64,8 +67,7 @@ class PromotionQuote extends Model
     public function isOpen(): bool
     {
         return $this->status === 'open'
-            && $this->valid_until !== null
-            && $this->valid_until->isFuture();
+            && ($this->valid_until === null || $this->valid_until->isFuture());
     }
 
     /**
@@ -75,7 +77,8 @@ class PromotionQuote extends Model
     {
         return match (true) {
             $this->status === 'void' => 'Anulada',
-            $this->status === 'secured' => 'Garantida',
+            $this->status === 'accepted' => 'Aceita',
+            $this->status === 'declined' => 'Recusada',
             $this->status === 'lapsed' => 'Expirada',
             $this->status === 'open' && ! $this->isOpen() => 'Expirada',
             default => 'Aberta',
@@ -87,7 +90,7 @@ class PromotionQuote extends Model
      */
     public function daysRemaining(): ?int
     {
-        if (! $this->isOpen()) {
+        if (! $this->isOpen() || $this->valid_until === null) {
             return null;
         }
 
@@ -96,12 +99,12 @@ class PromotionQuote extends Model
 
     public function firstPriceLabel(): string
     {
-        return $this->money($this->first_price);
+        return $this->money($this->offered_price_cents);
     }
 
     public function secondCapLabel(): string
     {
-        return $this->money($this->second_cap_price);
+        return $this->money($this->second_cap_cents);
     }
 
     private function money(?int $cents): string

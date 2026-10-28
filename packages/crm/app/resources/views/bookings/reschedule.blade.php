@@ -6,7 +6,7 @@
 <div class="panel">
     <h1>Remarcar agendamento</h1>
     <p class="meta">
-        {{ $slot->lead?->nome ?: 'Cliente' }} — atualmente
+        {{ $slot->lead?->displayName() ?? 'Cliente' }} — atualmente
         <strong>{{ $slot->start_at->format('d/m/Y H:i') }}</strong>
     </p>
 

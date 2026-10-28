@@ -12,7 +12,7 @@
         @forelse ($artists as $a)
             <li>
                 <a href="{{ route('artists.select', $a) }}">
-                    <strong>{{ $a->nome ?: $a->display_name }}</strong>
+                    <strong>{{ $a->displayName() }}</strong>
                     <span class="meta">{{ $a->leads_count }} lead(s)</span>
                     <span class="badge">{{ $a->status }}</span>
                 </a>

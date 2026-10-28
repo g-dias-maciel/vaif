@@ -56,11 +56,15 @@ create table artist_settings (
   telegram_group_id text,                               -- agent notifications
   working_hours     jsonb not null default '{}'::jsonb,
   ai_active_hours   jsonb not null default '{}'::jsonb,
+  -- Custom sizes/locations the Artist added to their price matrix. UI-only
+  -- configuration: the actual prices live in `price_book`.
+  pricing_extras    jsonb not null default '{}'::jsonb,
   currency          text not null default 'BRL' check (char_length(currency) = 3),
   created_at        timestamptz not null default now(),
   updated_at        timestamptz not null default now(),
   check (jsonb_typeof(working_hours) = 'object'),
-  check (jsonb_typeof(ai_active_hours) = 'object')
+  check (jsonb_typeof(ai_active_hours) = 'object'),
+  check (jsonb_typeof(pricing_extras) = 'object')
 );
 
 

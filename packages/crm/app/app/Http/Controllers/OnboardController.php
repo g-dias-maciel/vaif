@@ -39,7 +39,7 @@ class OnboardController extends Controller
         $user = User::firstOrCreate(
             ['email' => $data['email']],
             [
-                'name' => $data['nome'] ?? ($artist->nome ?: 'Artista'),
+                'name' => $data['nome'] ?? $artist->displayName(),
                 'password' => Hash::make($data['password'] ?? Str::random(16)),
                 'role' => User::ROLE_ARTIST,
                 'artist_id' => $artist->id,

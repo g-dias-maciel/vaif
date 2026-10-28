@@ -126,8 +126,9 @@ class CreateStaffUserCommandTest extends TestCase
     {
         $artist = Artist::create([
             'id' => 'a0000000-0000-0000-0000-000000000001',
-            'nome' => 'Artist',
+            'name' => 'Artist',
             'status' => 'live',
+            'wa_session_slug' => 'artist',
         ]);
 
         User::create([
@@ -152,8 +153,9 @@ class CreateStaffUserCommandTest extends TestCase
     {
         $artist = Artist::create([
             'id' => 'a0000000-0000-0000-0000-000000000001',
-            'nome' => 'Artist',
+            'name' => 'Artist',
             'status' => 'live',
+            'wa_session_slug' => 'artist',
         ]);
 
         User::create([

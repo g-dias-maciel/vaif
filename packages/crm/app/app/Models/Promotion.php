@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 /**
  * A pre-approved offer the SDR agent presents alongside the price. Mechanics
@@ -53,7 +54,7 @@ class Promotion extends Model
 
     public function quotes(): HasMany
     {
-        return $this->hasMany(PromotionQuote::class, 'promotion_id');
+        return $this->hasMany(Quote::class, 'promotion_id');
     }
 
     public function isActive(): bool

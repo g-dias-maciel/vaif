@@ -2,11 +2,11 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CalendarSlot;
-use App\Models\Event;
+use App\Models\CalendarEntry;
 use App\Services\BookingService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use RuntimeException;
 
 class BookingController extends Controller
@@ -27,9 +27,10 @@ class BookingController extends Controller
             ? $request->query('filter')
             : 'upcoming';
 
-        $bookingsQuery = CalendarSlot::with('lead')
+        $bookingsQuery = CalendarEntry::with(['lead', 'project'])
             ->where('artist_id', $artist->id)
-            ->where('type', 'booked');
+            ->where('kind', 'booking')
+            ->where('active', true);
 
         if ($filter === 'upcoming') {
             $bookingsQuery->where('start_at', '>=', now())->orderBy('start_at');
@@ -41,9 +42,9 @@ class BookingController extends Controller
 
         $bookings = $bookingsQuery->get();
 
-        $blocked = CalendarSlot::with('lead')
-            ->where('artist_id', $artist->id)
-            ->where('type', 'blocked')
+        $blocked = CalendarEntry::where('artist_id', $artist->id)
+            ->where('kind', 'block')
+            ->where('active', true)
             ->where('end_at', '>=', now())
             ->orderBy('start_at')
             ->get();
@@ -87,12 +88,14 @@ class BookingController extends Controller
             return back()->withErrors(['date' => 'O horário final deve ser depois do inicial.']);
         }
 
-        CalendarSlot::create([
-            'artist_id' => $artist->id,
-            'type' => 'blocked',
-            'start_at' => $start,
-            'end_at' => $end,
-        ]);
+        $created = DB::select(
+            'select id from block_time(?, ?, ?, ?, ?)',
+            [$artist->id, $start, $end, 'Bloqueio manual', 'artist'],
+        );
+
+        if ($created === []) {
+            return back()->withErrors(['date' => 'Este período já está ocupado por um agendamento ou bloqueio.']);
+        }
 
         return back()->with('status', 'Período bloqueado.');
     }
@@ -100,11 +103,11 @@ class BookingController extends Controller
     /**
      * Remove a blocked period.
      */
-    public function unblock(CalendarSlot $slot)
+    public function unblock(CalendarEntry $slot)
     {
         $this->authorize('unblock', $slot);
 
-        $slot->delete();
+        DB::select('select unblock_time(?, ?)', [$slot->artist_id, $slot->id]);
 
         return back()->with('status', 'Período desbloqueado.');
     }
@@ -112,50 +115,42 @@ class BookingController extends Controller
     /**
      * Mark the booking's sinal (deposit) as received.
      */
-    public function confirmDeposit(Request $request, CalendarSlot $slot)
+    public function confirmDeposit(Request $request, CalendarEntry $slot)
     {
         $this->authorize('reschedule', $slot);
 
-        $lead = $slot->lead;
+        if (! $slot->project_id) {
+            return back()->withErrors(['deposit' => 'Este agendamento não tem um projeto associado.']);
+        }
 
-        if ($lead && $lead->deposit_status !== 'confirmado') {
-            $lead->update(['deposit_status' => 'confirmado']);
-
-            Event::create([
-                'lead_id' => $slot->lead_id,
-                'artist_id' => $slot->artist_id,
-                'event_type' => 'deposit_confirmed',
-                'payload' => ['actor' => 'artist'],
+        try {
+            DB::select('select * from confirm_deposit(?, ?, ?, ?, ?)', [
+                $slot->artist_id,
+                $slot->project_id,
+                'manual',
+                null,
+                'artist',
             ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return back()->withErrors(['deposit' => 'Não foi possível confirmar o sinal: nenhum sinal solicitado.']);
         }
 
         return back()->with('status', 'Sinal confirmado.');
     }
 
     /**
-     * Cancel a booking: remove the slot and return the project to the pipeline.
+     * Cancel a booking: the entry stays for audit but stops blocking the slot.
      */
-    public function cancel(Request $request, CalendarSlot $slot)
+    public function cancel(Request $request, CalendarEntry $slot)
     {
         $this->authorize('reschedule', $slot);
 
-        $lead = $slot->lead;
-
-        $slot->delete();
-
-        if ($lead) {
-            $lead->update([
-                'pipeline_status' => 'aguardando_deposito',
-                'booked_date' => null,
-            ]);
-
-            Event::create([
-                'lead_id' => $slot->lead_id,
-                'artist_id' => $slot->artist_id,
-                'event_type' => 'booking_cancelled',
-                'payload' => ['actor' => 'artist'],
-            ]);
-        }
+        DB::select('select * from cancel_booking(?, ?, ?, ?)', [
+            $slot->artist_id,
+            $slot->id,
+            null,
+            'artist',
+        ]);
 
         return back()->with('status', 'Agendamento cancelado.');
     }
@@ -163,11 +158,11 @@ class BookingController extends Controller
     /**
      * Reschedule form: list the free slots the Artist can move this booking to.
      */
-    public function rescheduleForm(Request $request, CalendarSlot $slot)
+    public function rescheduleForm(Request $request, CalendarEntry $slot)
     {
         $this->authorize('reschedule', $slot);
 
-        $duration = $this->slotDuration($slot);
+        $duration = $slot->durationMinutes();
 
         $available = app(BookingService::class)->availableSlots(
             $slot->artist_id,
@@ -184,9 +179,9 @@ class BookingController extends Controller
     }
 
     /**
-     * Perform the reschedule, validated against the Artist's availability.
+     * Perform the reschedule, validated by the calendar exclusion constraint.
      */
-    public function reschedule(Request $request, CalendarSlot $slot)
+    public function reschedule(Request $request, CalendarEntry $slot)
     {
         $this->authorize('reschedule', $slot);
 
@@ -199,12 +194,5 @@ class BookingController extends Controller
         }
 
         return redirect()->route('bookings.index')->with('status', 'Agendamento remarcado.');
-    }
-
-    private function slotDuration(CalendarSlot $slot): int
-    {
-        $minutes = (int) $slot->start_at->diffInMinutes($slot->end_at);
-
-        return max(30, $minutes);
     }
 }

@@ -2,22 +2,30 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Event;
 use App\Models\Lead;
 use App\Models\Note;
+use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class LeadController extends Controller
 {
     /**
-     * Detail view of a Lead: contact, the single tattoo project attached to
-     * the conversation, its bookings/events, promotion quotes and notes.
+     * Detail view of a Lead: contact data plus every Project (tattoo job)
+     * attached to this person, with its quotes, bookings and events.
      */
     public function show(Lead $lead)
     {
         $this->authorize('view', $lead);
 
-        $lead->load(['notes.author', 'promotionQuotes.promotion', 'calendar', 'events']);
+        $lead->load([
+            'notes.author',
+            'projects.quotes.promotion',
+            'projects.acceptedQuote',
+            'projects.payments',
+            'projects.calendar',
+            'events',
+        ]);
 
         return view('leads.show', [
             'lead' => $lead,
@@ -46,20 +54,18 @@ class LeadController extends Controller
     }
 
     /**
-     * Mark a Lead's project as lost (perdido).
+     * Mark one of the Lead's Projects as lost (perdido).
      */
-    public function markLost(Request $request, Lead $lead)
+    public function markLost(Request $request, Project $project)
     {
-        $this->authorize('markLost', $lead);
+        $this->authorize('markLost', $project);
 
-        if ($lead->pipeline_status !== 'perdido') {
-            $lead->update(['pipeline_status' => 'perdido']);
-
-            Event::create([
-                'lead_id' => $lead->id,
-                'artist_id' => $lead->artist_id,
-                'event_type' => 'lead_lost',
-                'payload' => ['actor' => 'artist'],
+        if ($project->stage_key !== 'perdido') {
+            DB::select('select * from set_project_stage(?, ?, ?, ?)', [
+                $project->artist_id,
+                $project->id,
+                'perdido',
+                'artist',
             ]);
         }
 

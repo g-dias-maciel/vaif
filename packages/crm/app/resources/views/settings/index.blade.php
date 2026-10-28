@@ -14,7 +14,7 @@
 @endphp
 
 @section('content')
-<h1 class="page-title">Configuração — {{ $artist?->nome }}</h1>
+<h1 class="page-title">Configuração — {{ $artist?->displayName() }}</h1>
 
 <div class="panel" style="margin-bottom: 24px;">
     <h2 class="section-title" style="margin-top:0;">Conexão WhatsApp</h2>
@@ -115,7 +115,7 @@
                                         <td>
                                             <input type="number" step="0.01" min="0"
                                                 name="cells[{{ $locationKey }}][{{ $sizeKey }}][price]"
-                                                value="{{ $cell ? number_format($cell->table_price / 100, 2, '.', '') : '' }}"
+                                                value="{{ $cell ? number_format($cell->base_price_cents / 100, 2, '.', '') : '' }}"
                                                 placeholder="0,00" aria-label="Preço (R$) — {{ $sizeLabel }}">
                                         </td>
                                         <td>

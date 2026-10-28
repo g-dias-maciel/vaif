@@ -3,22 +3,29 @@
 namespace Tests\Feature;
 
 use App\Models\Artist;
-use App\Models\CalendarSlot;
+use App\Models\CalendarEntry;
 use App\Models\Lead;
+use App\Models\Payment;
+use App\Models\Project;
 use App\Models\Promotion;
-use App\Models\PromotionQuote;
 use App\Models\PromotionType;
+use App\Models\Quote;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
 /**
- * End-to-end integration test: simulates the SDR agent's writes (the exact
- * shapes n8n/Beatriz produce) and drives the Artist-facing CRM through HTTP,
- * verifying the two work together end-to-end.
+ * End-to-end test of the v2 shape: Leads (people) own Projects (jobs), and each
+ * Project carries quotes, payments and calendar entries.
+ *
+ * Reads run on SQLite (local dev / CI default). The write paths that go through
+ * Postgres RPCs (`mark lost`, `block`, `confirm deposit`, `cancel`, `reschedule`)
+ * need the real functions and are skipped there — packages/crm/db/tests/v2_contract.sql
+ * covers those RPCs on PostgreSQL.
  */
 class CrmSdrIntegrationTest extends TestCase
 {
@@ -39,13 +46,16 @@ class CrmSdrIntegrationTest extends TestCase
 
     private function seedArtist(): Artist
     {
-        return Artist::create([
+        $artist = Artist::create([
             'id' => self::ARTIST_ID,
-            'nome' => 'Bruno',
-            'display_name' => 'Bruno',
+            'name' => 'Bruno',
             'status' => 'live',
             'timezone' => 'America/Sao_Paulo',
             'wa_session_slug' => 'default',
+        ]);
+
+        $artist->settings()->create([
+            'display_name' => 'Bruno',
             'working_hours' => [
                 'seg' => ['09:00-12:00', '14:00-18:00'],
                 'ter' => ['09:00-12:00', '14:00-18:00'],
@@ -55,6 +65,8 @@ class CrmSdrIntegrationTest extends TestCase
                 'sab' => ['09:00-13:00'],
             ],
         ]);
+
+        return $artist;
     }
 
     private function artistUser(): User
@@ -80,26 +92,43 @@ class CrmSdrIntegrationTest extends TestCase
 
     // --- SDR write simulation (what Beatriz/n8n would persist) ---
 
+    private static int $phoneSeq = 0;
+
     private function sdrLead(array $attrs = []): Lead
     {
+        self::$phoneSeq++;
+
         return Lead::create(array_merge([
             'id' => (string) Str::uuid(),
             'artist_id' => self::ARTIST_ID,
-            'nome' => 'Cliente',
-            'telefone' => '5511988880001',
+            'name' => 'Cliente',
+            'phone_e164' => sprintf('551198888%04d', self::$phoneSeq),
+            'source' => 'whatsapp',
         ], $attrs));
     }
 
-    private function sdrBooking(Lead $lead, $start = null): CalendarSlot
+    private function sdrProject(Lead $lead, array $attrs = []): Project
+    {
+        return Project::create(array_merge([
+            'id' => (string) Str::uuid(),
+            'artist_id' => self::ARTIST_ID,
+            'lead_id' => $lead->id,
+            'stage_key' => 'novo',
+        ], $attrs));
+    }
+
+    private function sdrBooking(Project $project, $start = null): CalendarEntry
     {
         $start = $start ?? now()->addDay();
 
-        return CalendarSlot::create([
+        return CalendarEntry::create([
             'artist_id' => self::ARTIST_ID,
-            'lead_id' => $lead->id,
-            'type' => 'booked',
+            'kind' => 'booking',
+            'project_id' => $project->id,
+            'lead_id' => $project->lead_id,
             'start_at' => $start,
             'end_at' => $start->copy()->addMinutes(120),
+            'active' => true,
         ]);
     }
 
@@ -126,21 +155,41 @@ class CrmSdrIntegrationTest extends TestCase
         ], $attrs));
     }
 
-    private function seedQuote(Lead $lead, Promotion $promotion, array $attrs = []): PromotionQuote
+    private function seedQuote(Project $project, Promotion $promotion, array $attrs = []): Quote
     {
-        return PromotionQuote::create(array_merge([
+        return Quote::create(array_merge([
             'id' => (string) Str::uuid(),
-            'promotion_id' => $promotion->id,
-            'lead_id' => $lead->id,
             'artist_id' => self::ARTIST_ID,
-            'placement' => 'braco_externo',
-            'body_zone' => 'fechamento',
-            'first_price' => 300000,
-            'second_cap_price' => 150000,
-            'quoted_at' => now()->subDay(),
+            'project_id' => $project->id,
+            'kind' => 'promotion',
+            'promotion_id' => $promotion->id,
+            'base_price_cents' => 300000,
+            'offered_price_cents' => 300000,
+            'second_cap_cents' => 150000,
             'valid_until' => now()->addDays(6),
             'status' => 'open',
+            'created_at' => now()->subDay(),
         ], $attrs));
+    }
+
+    private function seedPayment(Project $project, array $attrs = []): Payment
+    {
+        return Payment::create(array_merge([
+            'id' => (string) Str::uuid(),
+            'artist_id' => self::ARTIST_ID,
+            'project_id' => $project->id,
+            'kind' => 'deposit',
+            'amount_cents' => 15000,
+            'status' => 'requested',
+            'requested_at' => now(),
+        ], $attrs));
+    }
+
+    private function requiresPostgres(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Requires the Postgres RPCs (see packages/crm/db/tests/v2_contract.sql).');
+        }
     }
 
     // --- Tests ---
@@ -150,9 +199,9 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $this->sdrLead(['nome' => 'Ana', 'pipeline_status' => 'novo']);
-        $this->sdrLead(['nome' => 'Carlos', 'pipeline_status' => 'qualificando', 'placement' => 'antebraco']);
-        $this->sdrLead(['nome' => 'Fernanda', 'pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
+        $this->sdrProject($this->sdrLead(['name' => 'Ana']));
+        $this->sdrProject($this->sdrLead(['name' => 'Carlos']), ['stage_key' => 'qualificando', 'placement' => 'antebraco']);
+        $this->sdrProject($this->sdrLead(['name' => 'Fernanda']), ['stage_key' => 'agendado', 'placement' => 'peito']);
 
         $response = $this->actingAs($user)->get('/');
 
@@ -170,14 +219,13 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead([
-            'nome' => 'Rafael',
-            'pipeline_status' => 'agendado',
+        $lead = $this->sdrLead(['name' => 'Rafael']);
+        $project = $this->sdrProject($lead, [
+            'stage_key' => 'agendado',
             'placement' => 'peito',
-            'deposit_status' => 'confirmado',
-            'booked_date' => now()->addDay()->setTime(10, 0),
         ]);
-        $this->sdrBooking($lead, now()->addDay()->setTime(10, 0));
+        $this->seedPayment($project, ['status' => 'confirmed', 'confirmed_at' => now()]);
+        $this->sdrBooking($project, now()->addDay()->setTime(10, 0));
 
         $agenda = $this->actingAs($user)->get('/bookings');
         $agenda->assertOk();
@@ -189,54 +237,58 @@ class CrmSdrIntegrationTest extends TestCase
         $dashboard->assertSee('Rafael');
     }
 
-    public function test_artist_marks_lead_lost()
+    public function test_artist_marks_project_lost()
     {
+        $this->requiresPostgres();
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Pedro', 'pipeline_status' => 'novo']);
+        $project = $this->sdrProject($this->sdrLead(['name' => 'Pedro']));
 
-        $this->actingAs($user)->post("/leads/{$lead->id}/lost")->assertRedirect();
+        $this->actingAs($user)->post("/projects/{$project->id}/lost")->assertRedirect();
 
-        $this->assertSame('perdido', $lead->fresh()->pipeline_status);
-        $this->assertDatabaseHas('events', ['lead_id' => $lead->id, 'event_type' => 'lead_lost']);
+        $this->assertSame('perdido', $project->fresh()->stage_key);
+        $this->assertDatabaseHas('events', ['project_id' => $project->id, 'type' => 'stage_changed']);
     }
 
     public function test_artist_confirms_deposit()
     {
+        $this->requiresPostgres();
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead([
-            'nome' => 'Gustavo',
-            'pipeline_status' => 'agendado',
-            'deposit_status' => 'aguardando_confirmacao',
-        ]);
-        $slot = $this->sdrBooking($lead);
+        $lead = $this->sdrLead(['name' => 'Gustavo']);
+        $project = $this->sdrProject($lead, ['stage_key' => 'aguardando_deposito']);
+        $slot = $this->sdrBooking($project);
+        $payment = $this->seedPayment($project);
 
         $this->actingAs($user)->post("/bookings/{$slot->id}/confirm-deposit")->assertRedirect();
 
-        $this->assertSame('confirmado', $lead->fresh()->deposit_status);
-        $this->assertDatabaseHas('events', ['lead_id' => $lead->id, 'event_type' => 'deposit_confirmed']);
+        $this->assertSame('confirmed', $payment->fresh()->status);
+        $this->assertDatabaseHas('returning_customers', [
+            'artist_id' => self::ARTIST_ID,
+            'phone_e164' => $lead->phone_e164,
+        ]);
     }
 
     public function test_artist_cancels_booking()
     {
+        $this->requiresPostgres();
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Fernanda', 'pipeline_status' => 'agendado', 'booked_date' => now()->addDay()]);
-        $slot = $this->sdrBooking($lead);
+        $project = $this->sdrProject($this->sdrLead(['name' => 'Fernanda']), ['stage_key' => 'agendado']);
+        $slot = $this->sdrBooking($project);
 
         $this->actingAs($user)->post("/bookings/{$slot->id}/cancel")->assertRedirect();
 
-        $this->assertNull(CalendarSlot::find($slot->id));
-        $this->assertSame('aguardando_deposito', $lead->fresh()->pipeline_status);
-        $this->assertNull($lead->fresh()->booked_date);
+        $this->assertFalse($slot->fresh()->active);
+        $this->assertDatabaseHas('events', ['project_id' => $project->id, 'type' => 'booking_cancelled']);
     }
 
     public function test_artist_blocks_and_unblocks_time()
     {
+        $this->requiresPostgres();
         $this->seedArtist();
         $user = $this->artistUser();
 
@@ -244,13 +296,13 @@ class CrmSdrIntegrationTest extends TestCase
 
         $this->actingAs($user)->post('/bookings/block', ['date' => $date])->assertRedirect();
 
-        $blocked = CalendarSlot::where('type', 'blocked')->first();
+        $blocked = CalendarEntry::where('kind', 'block')->first();
         $this->assertNotNull($blocked);
         $this->assertSame($date, $blocked->start_at->toDateString());
 
         $this->actingAs($user)->post("/bookings/{$blocked->id}/unblock")->assertRedirect();
 
-        $this->assertNull(CalendarSlot::find($blocked->id));
+        $this->assertNull(CalendarEntry::find($blocked->id));
     }
 
     public function test_lead_detail_shows_project_and_contact()
@@ -259,16 +311,19 @@ class CrmSdrIntegrationTest extends TestCase
         $user = $this->artistUser();
 
         $lead = $this->sdrLead([
-            'nome' => 'Ana',
-            'telefone' => '5511988880001',
-            'pipeline_status' => 'fechado',
+            'name' => 'Ana',
+            'phone_e164' => '5511988880001',
+        ]);
+        $project = $this->sdrProject($lead, [
+            'stage_key' => 'fechado',
+            'closed_at' => now(),
             'placement' => 'costas',
             'body_zone' => 'medio',
             'style' => 'realismo',
-            'table_price' => 40000,
-            'tipo_tatuagem' => 'cobertura',
-            'significado' => 'Homenagem à mãe',
+            'tattoo_type' => 'cover_up',
+            'meaning' => 'Homenagem à mãe',
         ]);
+        $this->seedQuote($project, $this->seedPromotion(), ['offered_price_cents' => 40000, 'second_cap_cents' => 20000]);
 
         $response = $this->actingAs($user)->get("/leads/{$lead->id}");
 
@@ -285,26 +340,27 @@ class CrmSdrIntegrationTest extends TestCase
     {
         $this->seedArtist();
         $user = $this->artistUser();
-        $lead = $this->sdrLead(['nome' => 'Ana']);
+        $lead = $this->sdrLead(['name' => 'Ana']);
 
         $this->actingAs($user)->get("/tattoos/{$lead->id}")
             ->assertStatus(301)
             ->assertRedirect(route('leads.show', $lead));
     }
 
-    public function test_analytics_counts_leads_not_tattoos()
+    public function test_analytics_counts_projects()
     {
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $this->sdrLead(['nome' => 'Ana', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
-        $this->sdrLead(['nome' => 'Carlos', 'pipeline_status' => 'novo']);
+        $won = $this->sdrProject($this->sdrLead(['name' => 'Ana']), ['stage_key' => 'fechado', 'closed_at' => now()]);
+        $this->seedQuote($won, $this->seedPromotion(), ['offered_price_cents' => 40000, 'status' => 'accepted']);
+        $this->sdrProject($this->sdrLead(['name' => 'Carlos']));
 
         $response = $this->actingAs($user)->get('/analytics?period=all');
 
         $response->assertOk();
         $response->assertViewHas('total', 2);
-        $response->assertViewHas('won', 1);   // only Ana converted
+        $response->assertViewHas('won', 1);
         $response->assertViewHas('revenueCents', 40000);
     }
 
@@ -312,10 +368,15 @@ class CrmSdrIntegrationTest extends TestCase
     {
         $this->seedArtist();
         $user = $this->artistUser();
+        $promotion = $this->seedPromotion();
 
-        $this->sdrLead(['nome' => 'A', 'pipeline_status' => 'fechado', 'table_price' => 60000]);
-        $this->sdrLead(['nome' => 'B', 'pipeline_status' => 'agendado', 'table_price' => 50000]);
-        $this->sdrLead(['nome' => 'C', 'pipeline_status' => 'aguardando_deposito', 'table_price' => 90000]);
+        foreach ([['A', 'fechado', 60000], ['B', 'agendado', 50000], ['C', 'aguardando_deposito', 90000]] as [$name, $stage, $cents]) {
+            $project = $this->sdrProject($this->sdrLead(['name' => $name]), [
+                'stage_key' => $stage,
+                'closed_at' => $stage === 'fechado' ? now() : null,
+            ]);
+            $this->seedQuote($project, $promotion, ['offered_price_cents' => $cents]);
+        }
 
         $response = $this->actingAs($user)->get('/');
 
@@ -330,21 +391,13 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $oldClosed = $this->sdrLead([
-            'nome' => 'Antigo',
-            'pipeline_status' => 'perdido',
-            'table_price' => 50000,
-        ]);
-        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        $oldClosed = $this->sdrProject($this->sdrLead(['name' => 'Antigo']), ['stage_key' => 'perdido']);
+        Project::whereKey($oldClosed->id)->update(['closed_at' => now()->subMonths(10)]);
 
-        $oldOpen = $this->sdrLead([
-            'nome' => 'Aberto',
-            'pipeline_status' => 'qualificando',
-            'table_price' => 30000,
-        ]);
-        Lead::whereKey($oldOpen->id)->update(['updated_at' => now()->subMonths(10)]);
+        $oldOpen = $this->sdrProject($this->sdrLead(['name' => 'Aberto']), ['stage_key' => 'qualificando']);
+        Project::whereKey($oldOpen->id)->update(['updated_at' => now()->subMonths(10)]);
 
-        $this->sdrLead(['nome' => 'Recente', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
+        $this->sdrProject($this->sdrLead(['name' => 'Recente']), ['stage_key' => 'fechado', 'closed_at' => now()]);
 
         $response = $this->actingAs($user)->get('/');
 
@@ -359,12 +412,8 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
 
-        $oldClosed = $this->sdrLead([
-            'nome' => 'Historico',
-            'pipeline_status' => 'fechado',
-            'table_price' => 50000,
-        ]);
-        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        $oldClosed = $this->sdrProject($this->sdrLead(['name' => 'Historico']), ['stage_key' => 'fechado']);
+        Project::whereKey($oldClosed->id)->update(['closed_at' => now()->subMonths(10)]);
 
         $this->actingAs($user)->get('/')->assertDontSee('Historico');
         $this->actingAs($user)->get('/?period=all')->assertOk()->assertSee('Historico');
@@ -374,15 +423,14 @@ class CrmSdrIntegrationTest extends TestCase
     {
         $this->seedArtist();
         $user = $this->artistUser();
+        $promotion = $this->seedPromotion();
 
-        $oldClosed = $this->sdrLead([
-            'nome' => 'Velho',
-            'pipeline_status' => 'fechado',
-            'table_price' => 60000,
-        ]);
-        Lead::whereKey($oldClosed->id)->update(['updated_at' => now()->subMonths(10)]);
+        $oldClosed = $this->sdrProject($this->sdrLead(['name' => 'Velho']), ['stage_key' => 'fechado']);
+        Project::whereKey($oldClosed->id)->update(['closed_at' => now()->subMonths(10)]);
+        $this->seedQuote($oldClosed, $promotion, ['offered_price_cents' => 60000]);
 
-        $this->sdrLead(['nome' => 'Novo', 'pipeline_status' => 'fechado', 'table_price' => 40000]);
+        $newClosed = $this->sdrProject($this->sdrLead(['name' => 'Novo']), ['stage_key' => 'fechado', 'closed_at' => now()]);
+        $this->seedQuote($newClosed, $promotion, ['offered_price_cents' => 40000]);
 
         $this->actingAs($user)->get('/')
             ->assertViewHas('realizadoCents', 40000);
@@ -433,12 +481,13 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $user = $this->artistUser();
         $promotion = $this->seedPromotion(['name' => 'Leve 2 de Inverno']);
-        $lead = $this->sdrLead(['nome' => 'Mariana']);
-        $this->seedQuote($lead, $promotion);
+        $lead = $this->sdrLead(['name' => 'Mariana']);
+        $project = $this->sdrProject($lead, ['placement' => 'braco_externo', 'body_zone' => 'fechamento']);
+        $this->seedQuote($project, $promotion);
 
         $this->actingAs($user)->get(route('leads.show', $lead))
             ->assertOk()
-            ->assertSee('Cotações de promoção')
+            ->assertSee('Cotações')
             ->assertSee('Leve 2 de Inverno')
             ->assertSee('R$ 3.000,00')
             ->assertSee('R$ 1.500,00')
@@ -449,11 +498,12 @@ class CrmSdrIntegrationTest extends TestCase
     {
         $this->seedArtist();
         $user = $this->artistUser();
-        $lead = $this->sdrLead(['nome' => 'Sem Promo']);
+        $lead = $this->sdrLead(['name' => 'Sem Promo']);
+        $this->sdrProject($lead);
 
         $this->actingAs($user)->get(route('leads.show', $lead))
             ->assertOk()
-            ->assertDontSee('Cotações de promoção enviadas');
+            ->assertDontSee('Promoção:');
     }
 
     public function test_expired_promotion_quote_is_labelled_expired()
@@ -462,15 +512,15 @@ class CrmSdrIntegrationTest extends TestCase
         $user = $this->artistUser();
         $promotion = $this->seedPromotion();
         $lead = $this->sdrLead();
-        $this->seedQuote($lead, $promotion, [
-            'quoted_at' => now()->subDays(10),
+        $project = $this->sdrProject($lead);
+        $this->seedQuote($project, $promotion, [
+            'created_at' => now()->subDays(10),
             'valid_until' => now()->subDays(3),
         ]);
 
         $this->actingAs($user)->get(route('leads.show', $lead))
             ->assertOk()
-            ->assertSee('Expirada')
-            ->assertDontSee('>Aberta<', false);
+            ->assertSee('Expirada');
     }
 
     public function test_void_promotion_quote_is_labelled_annulled()
@@ -479,39 +529,39 @@ class CrmSdrIntegrationTest extends TestCase
         $user = $this->artistUser();
         $promotion = $this->seedPromotion();
         $lead = $this->sdrLead();
-        $this->seedQuote($lead, $promotion, ['status' => 'void']);
+        $project = $this->sdrProject($lead);
+        $this->seedQuote($project, $promotion, ['status' => 'void']);
 
         $this->actingAs($user)->get(route('leads.show', $lead))
             ->assertOk()
             ->assertSee('Anulada');
     }
 
-    public function test_lead_detail_shows_only_the_matching_promotion_quote()
+    public function test_lead_detail_shows_only_its_own_quote()
     {
         $this->seedArtist();
         $user = $this->artistUser();
         $promotion = $this->seedPromotion(['name' => 'Leve 2 de Inverno']);
 
-        $matching = $this->sdrLead([
+        $matchingLead = $this->sdrLead(['name' => 'Com Promo']);
+        $matching = $this->sdrProject($matchingLead, [
             'placement' => 'braco_externo',
             'body_zone' => 'fechamento',
-            'pipeline_status' => 'orcamento_enviado',
+            'stage_key' => 'orcamento_enviado',
         ]);
-        $other = $this->sdrLead([
-            'placement' => 'costas',
-            'body_zone' => 'medio',
-            'pipeline_status' => 'novo',
-        ]);
+
+        $otherLead = $this->sdrLead(['name' => 'Sem Promo', 'phone_e164' => '5511977770002']);
+        $this->sdrProject($otherLead, ['placement' => 'costas', 'body_zone' => 'medio']);
 
         $this->seedQuote($matching, $promotion);
 
-        $this->actingAs($user)->get(route('leads.show', $matching))
+        $this->actingAs($user)->get(route('leads.show', $matchingLead))
             ->assertOk()
             ->assertSee('Promoção: Leve 2 de Inverno')
             ->assertSee('R$ 3.000,00')
             ->assertSee('R$ 1.500,00');
 
-        $this->actingAs($user)->get(route('leads.show', $other))
+        $this->actingAs($user)->get(route('leads.show', $otherLead))
             ->assertOk()
             ->assertDontSee('Promoção: Leve 2 de Inverno');
     }
@@ -521,7 +571,8 @@ class CrmSdrIntegrationTest extends TestCase
         $this->seedArtist();
         $promotion = $this->seedPromotion(['name' => 'Leve 2 de Inverno']);
         $lead = $this->sdrLead();
-        $this->seedQuote($lead, $promotion);
+        $project = $this->sdrProject($lead);
+        $this->seedQuote($project, $promotion);
 
         $this->actingAs($this->staffUser())->get(route('leads.show', $lead))
             ->assertOk()
@@ -557,16 +608,48 @@ class CrmSdrIntegrationTest extends TestCase
         $response->assertSee('Tronco');
     }
 
-    public function test_staff_can_mark_lead_lost_on_any_artist()
+    public function test_config_saves_prices_as_versioned_rows()
     {
         $this->seedArtist();
-        $staff = $this->staffUser();
+        $user = $this->artistUser();
 
-        $lead = $this->sdrLead(['nome' => 'Pedro', 'pipeline_status' => 'novo']);
+        $this->actingAs($user)->post('/pricing/bulk', [
+            'region' => 'braco',
+            'cells' => [
+                'antebraco' => [
+                    'pequeno' => ['price' => '300,00', 'duration' => 90],
+                ],
+            ],
+        ])->assertRedirect();
 
-        $this->actingAs($staff)->post("/leads/{$lead->id}/lost")->assertRedirect();
+        $this->assertDatabaseHas('price_book', [
+            'artist_id' => self::ARTIST_ID,
+            'placement' => 'antebraco',
+            'body_zone' => 'pequeno',
+            'base_price_cents' => 30000,
+        ]);
 
-        $this->assertSame('perdido', $lead->fresh()->pipeline_status);
+        // A second save with a new price closes the old row and opens a new one.
+        $this->actingAs($user)->post('/pricing/bulk', [
+            'region' => 'braco',
+            'cells' => [
+                'antebraco' => [
+                    'pequeno' => ['price' => '350,00', 'duration' => 90],
+                ],
+            ],
+        ])->assertRedirect();
+
+        $rows = DB::table('price_book')
+            ->where('artist_id', self::ARTIST_ID)
+            ->where('placement', 'antebraco')
+            ->where('body_zone', 'pequeno')
+            ->orderBy('effective_from')
+            ->get();
+
+        $this->assertCount(2, $rows);
+        $this->assertNotNull($rows[0]->effective_to);
+        $this->assertNull($rows[1]->effective_to);
+        $this->assertSame(35000, (int) $rows[1]->base_price_cents);
     }
 
     public function test_staff_can_create_artist_with_login()
@@ -574,13 +657,14 @@ class CrmSdrIntegrationTest extends TestCase
         $staff = $this->staffUser();
 
         $this->actingAs($staff)->post('/artists', [
-            'nome' => 'Novo Artista',
+            'name' => 'Novo Artista',
             'email' => 'novo@vaif.com.br',
             'password' => 'password',
             'deposit_value' => 25,
         ])->assertRedirect();
 
-        $this->assertDatabaseHas('artists', ['nome' => 'Novo Artista']);
+        $this->assertDatabaseHas('artists', ['name' => 'Novo Artista']);
+        $this->assertDatabaseHas('artist_settings', ['display_name' => 'Novo Artista', 'deposit_value' => 25]);
         $this->assertDatabaseHas('users', ['email' => 'novo@vaif.com.br', 'role' => 'artist']);
     }
 

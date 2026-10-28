@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\CalendarSlot;
-use App\Models\Lead;
+use App\Models\CalendarEntry;
+use App\Models\Project;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
@@ -12,7 +12,7 @@ class DashboardController extends Controller
 {
     /**
      * Artist home (or the selected artist for staff): the agent toggle, a week
-     * view of scheduled appointments, the faturamento summary, and the Lead
+     * view of scheduled appointments, the faturamento summary, and the Project
      * pipeline — all in one dashboard. Staff without a selected artist go to
      * the Artists list.
      *
@@ -32,24 +32,24 @@ class DashboardController extends Controller
         $from = Periods::start($period);
         $closedStatuses = config('crm.closed_pipeline_statuses');
 
-        $leads = Lead::query()
+        $projects = Project::with(['lead', 'acceptedQuote', 'latestQuote', 'payments', 'calendar'])
             ->where('artist_id', $artist->id)
             ->where(function ($query) use ($from, $closedStatuses) {
                 // Open stages are always visible — a live deal must never
                 // disappear because it is old.
                 $query->where(function ($open) use ($closedStatuses) {
-                    $open->whereNull('pipeline_status')
-                        ->orWhereNotIn('pipeline_status', $closedStatuses);
+                    $open->whereNull('stage_key')
+                        ->orWhereNotIn('stage_key', $closedStatuses);
                 });
 
-                // Closed history is windowed by last activity.
+                // Closed history is windowed by when it closed.
                 if ($from !== null) {
                     $query->orWhere(function ($closed) use ($from, $closedStatuses) {
-                        $closed->whereIn('pipeline_status', $closedStatuses)
-                            ->where('updated_at', '>=', $from);
+                        $closed->whereIn('stage_key', $closedStatuses)
+                            ->where('closed_at', '>=', $from);
                     });
                 } else {
-                    $query->orWhereIn('pipeline_status', $closedStatuses);
+                    $query->orWhereIn('stage_key', $closedStatuses);
                 }
             })
             ->orderByDesc('updated_at')
@@ -59,17 +59,17 @@ class DashboardController extends Controller
         $agendadoCents = 0;  // agendado — booked, upcoming
         $esperadoCents = 0;  // active, sinal not paid — floating
 
-        foreach ($leads as $lead) {
-            $price = $lead->charged_price_cents;
+        foreach ($projects as $project) {
+            $price = $project->charged_price_cents;
             if ($price === null) {
                 continue;
             }
 
-            if ($lead->pipeline_status === 'fechado') {
+            if ($project->stage_key === 'fechado') {
                 $realizadoCents += $price;
-            } elseif ($lead->pipeline_status === 'agendado') {
+            } elseif ($project->stage_key === 'agendado') {
                 $agendadoCents += $price;
-            } elseif ($lead->pipeline_status !== 'perdido' && $lead->deposit_status !== 'confirmado') {
+            } elseif ($project->stage_key !== 'perdido' && $project->deposit_status !== 'confirmado') {
                 $esperadoCents += $price;
             }
         }
@@ -85,14 +85,15 @@ class DashboardController extends Controller
 
         $weekStart = $ref->startOfWeek(CarbonImmutable::MONDAY);
 
-        $slots = CalendarSlot::with('lead')
+        $slots = CalendarEntry::with(['lead', 'project'])
             ->where('artist_id', $artist->id)
-            ->whereIn('type', ['booked', 'blocked'])
+            ->where('active', true)
+            ->whereIn('kind', ['booking', 'block'])
             ->where('start_at', '>=', $weekStart)
             ->where('start_at', '<', $weekStart->addDays(7))
             ->orderBy('start_at')
             ->get()
-            ->groupBy(fn (CalendarSlot $slot) => $slot->start_at->toDateString());
+            ->groupBy(fn (CalendarEntry $slot) => $slot->start_at->toDateString());
 
         $names = [1 => 'Seg', 2 => 'Ter', 3 => 'Qua', 4 => 'Qui', 5 => 'Sex', 6 => 'Sáb', 7 => 'Dom'];
 
@@ -101,7 +102,7 @@ class DashboardController extends Controller
         for ($i = 0; $i < 7; $i++) {
             $date = $weekStart->addDays($i);
             $daySlots = $slots->get($date->toDateString()) ?? collect();
-            $weekCount += $daySlots->where('type', 'booked')->count();
+            $weekCount += $daySlots->where('kind', 'booking')->count();
             $days[] = [
                 'date' => $date,
                 'label' => $names[$date->dayOfWeekIso],
@@ -113,7 +114,7 @@ class DashboardController extends Controller
         return view('dashboard.index', [
             'artist' => $artist,
             'activePromotion' => $artist->activePromotion,
-            'leads' => $leads,
+            'projects' => $projects,
             'pipeline' => config('crm.pipeline_statuses'),
             'period' => $period,
             'periodOptions' => Periods::options(),

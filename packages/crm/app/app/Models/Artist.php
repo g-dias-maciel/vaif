@@ -15,46 +15,40 @@ class Artist extends Model
 
     protected $keyType = 'string';
 
-    // The artists table predates Laravel and only has `created_at`.
-    public $timestamps = false;
-
     protected $table = 'artists';
 
     protected $fillable = [
         'id',
-        'nome',
-        'display_name',
+        'name',
         'status',
         'timezone',
-        'instagram_handle',
-        'whatsapp_number',
         'wa_session_slug',
-        'pricing_extras',
-        'deposit_type',
-        'deposit_value',
-        'working_hours',
-        'pix_key',
-        'floor_pct',
-        'specialties',
-        'nao_faco',
+        'onboarding_token',
+        'onboarded_at',
     ];
 
     protected $casts = [
-        'specialties' => 'array',
-        'nao_faco' => 'array',
-        'working_hours' => 'array',
-        'ai_active_hours' => 'array',
-        'pricing_extras' => 'array',
+        'onboarded_at' => 'datetime',
     ];
+
+    public function settings(): HasOne
+    {
+        return $this->hasOne(ArtistSetting::class, 'artist_id');
+    }
 
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class, 'artist_id');
     }
 
+    public function projects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'artist_id');
+    }
+
     public function calendar(): HasMany
     {
-        return $this->hasMany(CalendarSlot::class, 'artist_id');
+        return $this->hasMany(CalendarEntry::class, 'artist_id');
     }
 
     public function promotions(): HasMany
@@ -68,6 +62,15 @@ class Artist extends Model
     public function activePromotion(): HasOne
     {
         return $this->hasOne(Promotion::class, 'artist_id')->where('status', 'active');
+    }
+
+    /**
+     * What the Artist sees as their name: the display name from settings,
+     * falling back to the legal/company name.
+     */
+    public function displayName(): string
+    {
+        return $this->settings?->display_name ?: $this->name;
     }
 
     /**

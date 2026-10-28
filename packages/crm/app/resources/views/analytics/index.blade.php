@@ -3,7 +3,7 @@
 @section('title', 'Análises')
 
 @section('content')
-<h1 class="page-title">Análises — {{ $artist?->nome }}</h1>
+<h1 class="page-title">Análises — {{ $artist?->displayName() }}</h1>
 
 <form method="get" action="{{ route('analytics.index') }}" class="period-form">
     <label for="period">Período</label>

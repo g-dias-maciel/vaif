@@ -3,7 +3,7 @@
 @section('title', 'Dashboard')
 
 @section('content')
-<h1 class="page-title">Dashboard — {{ $artist?->nome }}</h1>
+<h1 class="page-title">Dashboard — {{ $artist?->displayName() }}</h1>
 
 <div class="panel" style="margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
     @if ($artist && ($artist->status === 'live' || $artist->status === 'onboarding'))
@@ -66,12 +66,12 @@
                 </div>
 
                 @forelse ($day['slots'] as $slot)
-                    @if ($slot->type === 'booked')
+                    @if ($slot->kind === 'booking')
                         <a class="week-slot" href="{{ $slot->lead ? route('leads.show', $slot->lead) : '#' }}">
                             <div class="time">{{ $slot->start_at->format('H:i') }}–{{ $slot->end_at->format('H:i') }}</div>
-                            <div class="name">{{ $slot->lead?->nome ?: 'Cliente' }}</div>
-                            @if ($slot->lead?->placement)
-                                <div class="place">{{ $slot->lead->placement }}</div>
+                            <div class="name">{{ $slot->lead?->displayName() ?? 'Cliente' }}</div>
+                            @if ($slot->project?->placement)
+                                <div class="place">{{ $slot->project->placement }}</div>
                             @endif
                         </a>
                     @else
@@ -99,5 +99,5 @@
         @endif
     </form>
 </div>
-@include('partials.lead-board', ['leads' => $leads, 'pipeline' => $pipeline, 'readonly' => false])
+@include('partials.project-board', ['projects' => $projects, 'pipeline' => $pipeline, 'readonly' => false])
 @endsection

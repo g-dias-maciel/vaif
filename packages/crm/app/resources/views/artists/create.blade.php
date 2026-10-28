@@ -15,8 +15,8 @@
         @csrf
 
         <div class="form-field">
-            <label for="nome">Nome *</label>
-            <input type="text" name="nome" id="nome" value="{{ old('nome') }}" required>
+            <label for="name">Nome *</label>
+            <input type="text" name="name" id="name" value="{{ old('name') }}" required>
         </div>
 
         <div class="form-field">

@@ -46,7 +46,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:artist,staff')->group(function () {
         Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
-        Route::post('/leads/{lead}/lost', [LeadController::class, 'markLost'])->name('leads.mark-lost');
+        Route::post('/projects/{project}/lost', [LeadController::class, 'markLost'])->name('projects.mark-lost');
 
         // Tattoos used to be a separate entity; a Lead is now the project.
         // Keep old links working with a permanent redirect.

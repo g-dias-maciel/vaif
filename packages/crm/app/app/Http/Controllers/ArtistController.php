@@ -3,11 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Artist;
-use App\Models\CalendarSlot;
-use App\Models\Lead;
+use App\Models\CalendarEntry;
+use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Str;
 
 class ArtistController extends Controller
 {
@@ -17,7 +18,7 @@ class ArtistController extends Controller
     public function index()
     {
         $artists = Artist::withCount('leads')
-            ->orderBy('nome')
+            ->orderBy('name')
             ->get();
 
         return view('artists.index', ['artists' => $artists]);
@@ -30,21 +31,22 @@ class ArtistController extends Controller
     {
         session(['staff_artist_id' => $artist->id]);
 
-        $leads = Lead::query()
+        $projects = Project::with(['lead', 'acceptedQuote', 'latestQuote', 'payments', 'calendar'])
             ->where('artist_id', $artist->id)
             ->orderByDesc('updated_at')
             ->get();
 
-        $bookings = CalendarSlot::with('lead')
+        $bookings = CalendarEntry::with(['lead', 'project'])
             ->where('artist_id', $artist->id)
-            ->where('type', 'booked')
+            ->where('kind', 'booking')
+            ->where('active', true)
             ->where('start_at', '>=', now())
             ->orderBy('start_at')
             ->get();
 
         return view('artists.show', [
             'artist' => $artist,
-            'leads' => $leads,
+            'projects' => $projects,
             'bookings' => $bookings,
             'pipeline' => config('crm.pipeline_statuses'),
         ]);
@@ -55,7 +57,7 @@ class ArtistController extends Controller
      */
     public function toggleAgent(Artist $artist)
     {
-        return back()->with('status', ($artist->nome ?: $artist->display_name).' — '.$artist->toggleAgent());
+        return back()->with('status', $artist->displayName().' — '.$artist->toggleAgent());
     }
 
     /**
@@ -65,7 +67,7 @@ class ArtistController extends Controller
     {
         session(['staff_artist_id' => $artist->id]);
 
-        return redirect()->route('dashboard')->with('status', 'Visualizando: '.($artist->nome ?: $artist->display_name));
+        return redirect()->route('dashboard')->with('status', 'Visualizando: '.$artist->displayName());
     }
 
     /**
@@ -77,12 +79,12 @@ class ArtistController extends Controller
     }
 
     /**
-     * Staff: create the Artist, their CRM login, and default settings.
+     * Staff: create the Artist, their settings, a CRM login, and default hours.
      */
     public function store(Request $request)
     {
         $data = $request->validate([
-            'nome' => ['required', 'string', 'max:255'],
+            'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
             'password' => ['required', 'string', 'min:6'],
             'timezone' => ['nullable', 'string', 'max:64'],
@@ -92,21 +94,36 @@ class ArtistController extends Controller
             'deposit_value' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
 
+        $slug = $data['wa_session_slug'] ?? null;
+
+        if (! $slug) {
+            $slug = Str::slug($data['name']);
+            $slug = $slug !== '' ? $slug : 'artist';
+            $base = $slug;
+            $i = 2;
+            while (Artist::where('wa_session_slug', $slug)->exists()) {
+                $slug = $base.'-'.$i++;
+            }
+        }
+
         $artist = Artist::create([
-            'nome' => $data['nome'],
-            'display_name' => $data['nome'],
+            'name' => $data['name'],
             'status' => 'live',
             'timezone' => $data['timezone'] ?? 'America/Sao_Paulo',
+            'wa_session_slug' => $slug,
+        ]);
+
+        $artist->settings()->create([
+            'display_name' => $data['name'],
             'whatsapp_number' => $data['whatsapp_number'] ?? null,
             'instagram_handle' => $data['instagram_handle'] ?? null,
-            'wa_session_slug' => $data['wa_session_slug'] ?? null,
             'deposit_type' => 'percent',
             'deposit_value' => $data['deposit_value'] ?? 30,
             'working_hours' => $this->defaultWorkingHours(),
         ]);
 
         User::create([
-            'name' => $data['nome'],
+            'name' => $data['name'],
             'email' => $data['email'],
             'password' => Hash::make($data['password']),
             'role' => User::ROLE_ARTIST,
