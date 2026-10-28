@@ -24,6 +24,25 @@
     @endif
 </div>
 
+<div class="panel" style="margin-bottom: 20px;">
+    <h2 class="section-title" style="margin-top:0;">Conversa</h2>
+
+    @if ($chatMessages->isEmpty())
+        <p class="meta">Nenhuma conversa registrada ainda.</p>
+    @else
+        <div class="chat-thread">
+            @foreach ($chatMessages as $message)
+                <div class="chat-bubble {{ $message->direction }}">
+                    <div class="chat-who">{{ $message->direction === 'inbound' ? 'Cliente' : 'Beatriz' }}</div>
+                    <div class="chat-text">{{ $message->content !== '' ? $message->content : '—' }}</div>
+                    <div class="chat-time">{{ $message->created_at?->format('d/m H:i') }}</div>
+                </div>
+            @endforeach
+        </div>
+        <p class="meta" style="margin-top:10px;">Últimas {{ $chatMessages->count() }} mensagens.</p>
+    @endif
+</div>
+
 @forelse ($lead->projects->sortByDesc('created_at') as $project)
     @php
         $promoQuote = $project->quotes
@@ -95,10 +114,25 @@
         @endif
 
         @if ($project->reference_pics)
-            <h2 class="section-title">Fotos de referência</h2>
+            <h2 class="section-title">Referências</h2>
             <div class="ref-grid">
-                @foreach ($project->reference_pics as $img)
-                    <a href="{{ $img }}" target="_blank" rel="noopener"><img src="{{ $img }}" alt="Referência"></a>
+                @foreach ($project->reference_pics as $ref)
+                    @php
+                        $isImage = preg_match('/\.(jpe?g|png|webp|gif)(\?|$)/i', $ref)
+                            || str_contains($ref, '/storage/references/');
+                        $host = parse_url($ref, PHP_URL_HOST);
+                    @endphp
+
+                    @if ($isImage)
+                        <a href="{{ $ref }}" target="_blank" rel="noopener" class="ref-thumb">
+                            <img src="{{ $ref }}" alt="Referência">
+                        </a>
+                    @else
+                        <a href="{{ $ref }}" target="_blank" rel="noopener" class="ref-link">
+                            <span>{{ $host ?: 'Link' }}</span>
+                            <small>Abrir link ↗</small>
+                        </a>
+                    @endif
                 @endforeach
             </div>
         @endif
@@ -158,13 +192,16 @@
 @endforelse
 
 <div class="panel" style="margin-bottom: 20px;">
-    <h2 class="section-title" style="margin-top:0;">Histórico</h2>
+    <h2 class="section-title" style="margin-top:0;">Histórico de atividades</h2>
     <ul class="slot-list">
         @forelse ($lead->events->sortByDesc('created_at') as $event)
             <li>
                 <div class="slot-main">
-                    <strong>{{ $event->type }}</strong>
-                    <span class="meta">{{ $event->actor }} · {{ $event->created_at?->format('d/m/Y H:i') }}</span>
+                    <strong>{{ $event->label }}</strong>
+                    <span class="meta">
+                        {{ $event->detail ? $event->detail.' · ' : '' }}{{ $event->actor }}
+                        · {{ $event->created_at?->format('d/m/Y H:i') }}
+                    </span>
                 </div>
             </li>
         @empty

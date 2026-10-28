@@ -60,6 +60,8 @@ revoke select on admin_settings from analytics_ro;
 -- Memory node creates its table at runtime, so it needs CREATE on that schema.
 -- It is not domain data and lives outside `public`.
 -- ---------------------------------------------------------------------------
+grant usage on schema agent_memory to crm_app;
+grant select on agent_memory.chat_memory to crm_app;
 grant usage, create on schema agent_memory to agent_rw;
 alter table agent_memory.chat_memory owner to agent_rw;
 alter sequence agent_memory.chat_memory_id_seq owner to agent_rw;

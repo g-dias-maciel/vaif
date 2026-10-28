@@ -276,6 +276,19 @@
 
         .ref-grid { display: flex; flex-wrap: wrap; gap: 10px; }
         .ref-grid img { width: 120px; height: 120px; object-fit: cover; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); }
+        .ref-grid .ref-thumb { display: block; }
+        .ref-link { display: flex; flex-direction: column; justify-content: center; gap: 4px; width: 170px; min-height: 56px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--panel-2); color: var(--ink); }
+        .ref-link span { font-size: 0.8rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .ref-link small { color: var(--muted); font-size: 0.65rem; }
+
+        /* ---- Lead conversation overview ---- */
+        .chat-thread { display: flex; flex-direction: column; gap: 10px; max-height: 460px; overflow-y: auto; padding-right: 6px; }
+        .chat-bubble { max-width: 78%; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); }
+        .chat-bubble.inbound { align-self: flex-start; border-top-left-radius: 4px; }
+        .chat-bubble.outbound { align-self: flex-end; border-top-right-radius: 4px; background: rgba(212,176,76,0.10); border-color: rgba(212,176,76,0.35); }
+        .chat-who { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 3px; }
+        .chat-text { font-size: 0.86rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
+        .chat-time { font-size: 0.62rem; color: var(--muted); margin-top: 4px; text-align: right; }
 
         .btn {
             display: inline-block; background: var(--gold); color: #0A0A0A; padding: 9px 18px; border-radius: 8px;

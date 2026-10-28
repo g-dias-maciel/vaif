@@ -19,4 +19,7 @@ return [
 
     'waha_webhook_url' => env('WAHA_WEBHOOK_URL', 'https://n8n.vaif.com.br/webhook/waha-webhook'),
 
+    // Shared secret for internal automation (n8n → CRM reference uploads).
+    'crm_internal_token' => env('CRM_INTERNAL_TOKEN'),
+
 ];

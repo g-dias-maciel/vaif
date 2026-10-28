@@ -27,9 +27,22 @@ class LeadController extends Controller
             'events',
         ]);
 
+        // `agent_memory` is Postgres-only (n8n's memory schema); SQLite local
+        // dev/tests have no conversation transcript.
+        $chatMessages = DB::connection()->getDriverName() === 'sqlite'
+            ? collect()
+            : $lead->chatMessages()
+                ->orderByDesc('id')
+                ->limit(50)
+                ->get()
+                ->reverse()
+                ->values();
+
         return view('leads.show', [
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
+            'chatMessages' => $chatMessages,
+            'eventLabels' => config('crm.event_labels'),
         ]);
     }
 

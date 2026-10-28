@@ -84,6 +84,35 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Audit event labels
+    |--------------------------------------------------------------------------
+    |
+    | `events.type` stays machine-readable; the lead timeline shows Portuguese.
+    |
+    */
+
+    'event_labels' => [
+        'project_created' => 'Projeto criado',
+        'project_updated' => 'Dados do projeto atualizados',
+        'stage_changed' => 'Etapa alterada',
+        'quote_sent' => 'Orçamento enviado',
+        'promotion_quote_sent' => 'Orçamento promocional enviado',
+        'quote_accepted' => 'Orçamento aceito',
+        'deposit_requested' => 'Sinal solicitado',
+        'deposit_confirmed' => 'Sinal confirmado',
+        'booking_created' => 'Agendamento criado',
+        'booking_rescheduled' => 'Agendamento remarcado',
+        'booking_cancelled' => 'Agendamento cancelado',
+        'time_blocked' => 'Horário bloqueado',
+        'promotion_activated' => 'Promoção ativada',
+        'promotion_paused' => 'Promoção pausada',
+        'promotion_ended' => 'Promoção encerrada',
+        'handoff_triggered' => 'Encaminhado ao artista',
+        'lead_anonymized' => 'Dados anonimizados (LGPD)',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Member area link
     |--------------------------------------------------------------------------
     |

@@ -34,6 +34,10 @@ chown -R www-data:www-data storage bootstrap/cache
 # registers a closure, which Laravel refuses to cache.
 php artisan optimize:clear >/dev/null 2>&1 || true
 
+# Public mirror for uploaded reference media (idempotent; the target may be on a
+# persistent volume).
+php artisan storage:link >/dev/null 2>&1 || true
+
 # --- Migrations --------------------------------------------------------------
 # The schema is owned by `packages/crm/db/migrations` (applied by the `migrator`
 # deploy step, not by this container). Laravel's own migrations only own

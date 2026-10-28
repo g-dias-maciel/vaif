@@ -65,6 +65,14 @@ class Lead extends Model
     }
 
     /**
+     * n8n's conversation memory, keyed by the Lead id as `session_id`.
+     */
+    public function chatMessages(): HasMany
+    {
+        return $this->hasMany(ChatMessage::class, 'session_id', 'id');
+    }
+
+    /**
      * What to show as the Lead's name when they never gave one.
      */
     public function displayName(): string

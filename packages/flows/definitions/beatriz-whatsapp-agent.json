@@ -248,7 +248,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const wa = $('WAHA Webhook').first().json.body || {};\nconst payload = wa.payload || {};\nconst session = wa.session || 'unknown';\nconst from = String(payload.from || '').replace('@c.us', '');\nconst type = payload.type || 'chat';\n\nlet text = payload.body || '';\nif (!text) {\n  if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';\n  else if (type === 'video') text = '[VÍDEO RECEBIDO]';\n  else if (type === 'image' || type === 'sticker' || payload.hasMedia) text = '[FOTO RECEBIDA]';\n  else text = '[MÍDIA RECEBIDA]';\n}\n\nreturn [{ json: { chat_id: session + ':' + from, phone: from, msg_text: text, msg_ts: Date.now() } }];"
+        "jsCode": "const wa = $('WAHA Webhook').first().json.body || {};\nconst payload = wa.payload || {};\nconst session = wa.session || 'unknown';\nconst from = String(payload.from || '').replace('@c.us', '');\nconst type = payload.type || 'chat';\nconst media = payload.media || {};\nconst rawText = String(payload.body || '');\n\nlet text = rawText;\nif (!text) {\n  if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';\n  else if (type === 'video') text = '[VÍDEO RECEBIDO]';\n  else if (type === 'image' || type === 'sticker' || payload.hasMedia) text = '[FOTO RECEBIDA]';\n  else text = '[MÍDIA RECEBIDA]';\n}\n\n// Reference media (WAHA download URL) and links the lead sent. Audio/video are\n// not references; only images/stickers with a downloadable URL.\nconst mediaMime = String(media.mimetype || payload.mimetype || '');\nconst mediaUrl = (payload.hasMedia && media.url && (mediaMime.startsWith('image/') || type === 'image' || type === 'sticker'))\n  ? media.url\n  : null;\n\nconst links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])\n  .map(u => u.replace(/[.,;:!?)\\]]+$/, ''))))\n  .slice(0, 5);\n\nreturn [{ json: {\n  chat_id: session + ':' + from,\n  phone: from,\n  msg_text: text,\n  msg_ts: Date.now(),\n  media_url: mediaUrl,\n  media_mime: mediaMime || null,\n  links: links,\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -538,6 +538,49 @@
           "name": "agent-db"
         }
       }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const start = $('Debounce Start').first().json || {};\nconst turn = $('Start Turn').first().json || {};\nconst artist = $('Resolve Artist').first().json || {};\n\nif (!turn.project_id || !artist.id) return [];\n\nconst refs = [];\nif (start.media_url) {\n  refs.push({ artist_id: artist.id, project_id: turn.project_id, url: start.media_url, mime: start.media_mime || null });\n}\nfor (const link of (start.links || [])) {\n  if (link && link !== start.media_url) {\n    refs.push({ artist_id: artist.id, project_id: turn.project_id, url: link, mime: null });\n  }\n}\n\nreturn refs.slice(0, 6).map(r => ({ json: r }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        2600,
+        440
+      ],
+      "id": "ref-build-0000-0000-0000-000000000001",
+      "name": "Build References"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://crm.vaif.com.br/api/references",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        2860,
+        440
+      ],
+      "id": "ref-save-0000-0000-0000-000000000001",
+      "name": "Save References",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Y5cnEcS1lT3hwZrS",
+          "name": "crm-internal"
+        }
+      },
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -1324,6 +1367,22 @@
         [
           {
             "node": "Load Offer",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Build References",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build References": {
+      "main": [
+        [
+          {
+            "node": "Save References",
             "type": "main",
             "index": 0
           }

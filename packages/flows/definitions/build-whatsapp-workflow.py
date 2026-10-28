@@ -49,6 +49,7 @@ CLASSIFY_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/classify-conve
 
 # ── Credentials (n8n instance) ──
 POSTGRES = {"postgres": {"id": "Fw3dgkcXV7Bblry5", "name": "agent-db"}}
+CRM_INTERNAL = {"httpHeaderAuth": {"id": "Y5cnEcS1lT3hwZrS", "name": "crm-internal"}}
 OPENROUTER = {"openRouterApi": {"id": "ow26hPDMir1dMfz0", "name": "OpenRouter account"}}
 WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
 # Dedicated ops bot — receives the deposit/handoff confirm buttons (callback_query)
@@ -176,8 +177,10 @@ const payload = wa.payload || {};
 const session = wa.session || 'unknown';
 const from = String(payload.from || '').replace('@c.us', '');
 const type = payload.type || 'chat';
+const media = payload.media || {};
+const rawText = String(payload.body || '');
 
-let text = payload.body || '';
+let text = rawText;
 if (!text) {
   if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';
   else if (type === 'video') text = '[VÍDEO RECEBIDO]';
@@ -185,7 +188,46 @@ if (!text) {
   else text = '[MÍDIA RECEBIDA]';
 }
 
-return [{ json: { chat_id: session + ':' + from, phone: from, msg_text: text, msg_ts: Date.now() } }];"""
+// Reference media (WAHA download URL) and links the lead sent. Audio/video are
+// not references; only images/stickers with a downloadable URL.
+const mediaMime = String(media.mimetype || payload.mimetype || '');
+const mediaUrl = (payload.hasMedia && media.url && (mediaMime.startsWith('image/') || type === 'image' || type === 'sticker'))
+  ? media.url
+  : null;
+
+const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
+  .map(u => u.replace(/[.,;:!?)\\]]+$/, ''))))
+  .slice(0, 5);
+
+return [{ json: {
+  chat_id: session + ':' + from,
+  phone: from,
+  msg_text: text,
+  msg_ts: Date.now(),
+  media_url: mediaUrl,
+  media_mime: mediaMime || null,
+  links: links,
+} }];"""
+
+# Side branch after Start Turn: attach the inbound reference picture and any
+# links to the Project. The CRM downloads WAHA media with its own API key.
+BUILD_REFERENCES_JS = """const start = $('Debounce Start').first().json || {};
+const turn = $('Start Turn').first().json || {};
+const artist = $('Resolve Artist').first().json || {};
+
+if (!turn.project_id || !artist.id) return [];
+
+const refs = [];
+if (start.media_url) {
+  refs.push({ artist_id: artist.id, project_id: turn.project_id, url: start.media_url, mime: start.media_mime || null });
+}
+for (const link of (start.links || [])) {
+  if (link && link !== start.media_url) {
+    refs.push({ artist_id: artist.id, project_id: turn.project_id, url: link, mime: null });
+  }
+}
+
+return refs.slice(0, 6).map(r => ({ json: r }));"""
 
 DEBOUNCE_RESOLVE_JS = """const state = $('Get Buffer State').first().json || {};
 const msgTs = $('Debounce Start').first().json.msg_ts;
@@ -1293,6 +1335,39 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Start Turn",
             "credentials": POSTGRES,
         },
+        # 16b. Build References — the inbound picture/links, once the Project exists.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_REFERENCES_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2600, 440],
+            "id": "ref-build-0000-0000-0000-000000000001",
+            "name": "Build References",
+        },
+        # 16c. Save References — POST to the CRM internal endpoint (the CRM
+        #      downloads WAHA media with its own key and stores it).
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://crm.vaif.com.br/api/references",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json) }}",
+                "options": {"timeout": 30000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [2860, 440],
+            "id": "ref-save-0000-0000-0000-000000000001",
+            "name": "Save References",
+            "credentials": CRM_INTERNAL,
+            "onError": "continueRegularOutput",
+        },
         # 17. OpenRouter Chat Model (sub-node)
         {
             "parameters": {"model": "openai/gpt-4o-mini", "options": {}},
@@ -1796,7 +1871,13 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             ]
         },
         "Start Turn": {
-            "main": [[{"node": "Load Offer", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "Load Offer", "type": "main", "index": 0},
+                {"node": "Build References", "type": "main", "index": 0},
+            ]]
+        },
+        "Build References": {
+            "main": [[{"node": "Save References", "type": "main", "index": 0}]]
         },
         "Load Offer": {
             "main": [[{"node": "Load Pricing", "type": "main", "index": 0}]]
