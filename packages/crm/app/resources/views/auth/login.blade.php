@@ -4,6 +4,7 @@
 
 @section('content')
 <div class="login-card">
+    <img src="{{ asset('img/vaif_logo.webp') }}" alt="VAIF" class="login-logo">
     <h1>Entrar</h1>
 
     @if ($errors->any())

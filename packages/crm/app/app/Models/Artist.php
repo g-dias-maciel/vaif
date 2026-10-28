@@ -36,6 +36,11 @@ class Artist extends Model
         return $this->hasOne(ArtistSetting::class, 'artist_id');
     }
 
+    public function users(): HasMany
+    {
+        return $this->hasMany(User::class, 'artist_id');
+    }
+
     public function leads(): HasMany
     {
         return $this->hasMany(Lead::class, 'artist_id');

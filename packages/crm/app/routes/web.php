@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ArtistController;
 use App\Http\Controllers\Auth\LoginController;
+use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AnalyticsController;
@@ -20,6 +21,10 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
+
+    // First-password invite (artist created by staff).
+    Route::get('/password/set/{token}', [PasswordSetupController::class, 'show'])->name('password.set');
+    Route::post('/password/set', [PasswordSetupController::class, 'store'])->name('password.set.store');
 });
 
 Route::middleware('auth')->group(function () {
@@ -67,6 +72,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/artists', [ArtistController::class, 'store'])->name('artists.store');
         Route::get('/artists/{artist}/select', [ArtistController::class, 'select'])->name('artists.select');
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');
+        Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');
     });
 });

@@ -4,6 +4,13 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>@yield('title', 'CRM') — VAIF</title>
+    <link rel="icon" href="{{ asset('img/favicon/favicon.ico') }}" sizes="any" type="image/x-icon">
+    <link rel="icon" href="{{ asset('img/favicon/favicon-16x16.png') }}" sizes="16x16" type="image/png">
+    <link rel="icon" href="{{ asset('img/favicon/favicon-32x32.png') }}" sizes="32x32" type="image/png">
+    <link rel="apple-touch-icon" href="{{ asset('img/favicon/apple-touch-icon.png') }}">
+    <link rel="icon" href="{{ asset('img/favicon/android-chrome-192x192.png') }}" sizes="192x192" type="image/png">
+    <link rel="icon" href="{{ asset('img/favicon/android-chrome-512x512.png') }}" sizes="512x512" type="image/png">
+    <link rel="manifest" href="{{ asset('img/favicon/site.webmanifest') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
@@ -308,6 +315,7 @@
         .slot-option input { margin-right: 10px; }
 
         .login-card { max-width: 380px; margin: 60px auto; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 36px 30px; }
+        .login-logo { display: block; width: 190px; max-width: 100%; height: auto; margin: 0 auto 18px; }
         .login-card h1 { font-family: 'Roboto', sans-serif; font-weight: 600; font-size: 2rem; margin-bottom: 20px; }
         .login-card label { display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
         .login-card input { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--ink); padding: 11px 12px; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }

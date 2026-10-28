@@ -24,9 +24,11 @@
             <input type="email" name="email" id="email" value="{{ old('email') }}" required>
         </div>
 
-        <div class="form-field">
-            <label for="password">Senha *</label>
-            <input type="password" name="password" id="password" required>
+        <div class="form-field" style="grid-column: 1 / -1;">
+            <p style="margin:0;color:var(--muted);font-size:0.82rem;line-height:1.5;">
+                O artista receberá um e-mail com um link para definir a própria senha.
+                Nenhuma senha é criada por aqui.
+            </p>
         </div>
 
         <div class="form-field">

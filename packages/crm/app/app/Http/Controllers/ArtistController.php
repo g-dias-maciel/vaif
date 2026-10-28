@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Mail\ArtistInvite;
 use App\Models\Artist;
 use App\Models\CalendarEntry;
 use App\Models\Project;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Password;
 use Illuminate\Support\Str;
 
 class ArtistController extends Controller
@@ -86,7 +89,6 @@ class ArtistController extends Controller
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'email' => ['required', 'email', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:6'],
             'timezone' => ['nullable', 'string', 'max:64'],
             'whatsapp_number' => ['nullable', 'string', 'max:32'],
             'instagram_handle' => ['nullable', 'string', 'max:255'],
@@ -122,15 +124,52 @@ class ArtistController extends Controller
             'working_hours' => $this->defaultWorkingHours(),
         ]);
 
-        User::create([
+        $user = User::create([
             'name' => $data['name'],
             'email' => $data['email'],
-            'password' => Hash::make($data['password']),
+            // Placeholder until the artist sets their own password via the invite.
+            'password' => Hash::make(Str::random(64)),
             'role' => User::ROLE_ARTIST,
             'artist_id' => $artist->id,
         ]);
 
-        return redirect()->route('artists.show', $artist)->with('status', 'Artista criado com acesso ao CRM.');
+        $sent = $this->sendInvite($user);
+
+        return redirect()
+            ->route('artists.show', $artist)
+            ->with('status', $sent
+                ? 'Artista criado. Convite enviado para '.$user->email.'.'
+                : 'Artista criado, mas o convite não pôde ser enviado. Use "Reenviar convite".');
+    }
+
+    /**
+     * Staff: re-send the first-password invite.
+     */
+    public function resendInvite(Artist $artist)
+    {
+        $user = $artist->users()->where('role', User::ROLE_ARTIST)->latest()->first();
+
+        if (! $user) {
+            return back()->withErrors(['email' => 'Este artista não tem usuário de acesso.']);
+        }
+
+        return back()->with('status', $this->sendInvite($user)
+            ? 'Convite reenviado para '.$user->email.'.'
+            : 'Não foi possível enviar o convite. Verifique a configuração de e-mail.');
+    }
+
+    private function sendInvite(User $user): bool
+    {
+        try {
+            $token = Password::broker()->createToken($user);
+            Mail::to($user->email)->send(new ArtistInvite($user, $token));
+
+            return true;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return false;
+        }
     }
 
     private function defaultWorkingHours(): array
