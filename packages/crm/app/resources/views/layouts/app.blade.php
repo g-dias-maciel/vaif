@@ -13,7 +13,7 @@
     <link rel="manifest" href="{{ asset('img/favicon/site.webmanifest') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;600;700&family=Montserrat:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
             --bg: #0A0A0A;
@@ -53,7 +53,7 @@
             gap: 8px; padding: 0 0 22px 10px;
         }
         .brand {
-            font-family: 'Roboto', sans-serif; font-size: 1.35rem; font-weight: 600;
+            font-family: 'Montserrat', sans-serif; font-size: 1.35rem; font-weight: 600;
             letter-spacing: 1px; color: var(--ink); text-decoration: none;
         }
         .brand:hover { color: var(--ink); opacity: 1; }
@@ -150,10 +150,10 @@
             .collapse-btn { display: none; }
         }
         h1.page-title, .panel h1 {
-            font-family: 'Roboto', sans-serif; font-weight: 600; font-size: 1.9rem; margin-bottom: 20px;
+            font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 1.9rem; margin-bottom: 20px;
         }
         h2.section-title {
-            font-family: 'Roboto', sans-serif; font-weight: 600; font-size: 1.3rem;
+            font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 1.3rem;
             text-transform: uppercase; letter-spacing: 1.5px; color: var(--ink); margin: 28px 0 14px;
         }
         .flash {
@@ -182,7 +182,7 @@
         .board { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 16px; align-items: start; }
         .column { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 14px; }
         .column-title {
-            font-family: 'Roboto', sans-serif; font-size: 1.05rem; font-weight: 600;
+            font-family: 'Montserrat', sans-serif; font-size: 1.05rem; font-weight: 600;
             text-transform: uppercase; letter-spacing: 1px; color: var(--gold); margin-bottom: 12px;
             display: flex; justify-content: space-between; align-items: baseline;
         }
@@ -239,7 +239,7 @@
 
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
         .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
-        .stat-value { font-family: 'Roboto', sans-serif; font-size: 1.8rem; font-weight: 600; color: var(--gold); line-height: 1.1; }
+        .stat-value { font-family: 'Montserrat', sans-serif; font-size: 1.8rem; font-weight: 600; color: var(--gold); line-height: 1.1; }
         .stat-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
         .bar-row { margin-bottom: 14px; }
         .bar-label { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 5px; }
@@ -248,7 +248,7 @@
         .bar-fill { background: var(--gold); height: 6px; }
 
         .week-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
-        .week-range { font-family: 'Roboto', sans-serif; font-size: 1.25rem; color: var(--ink); }
+        .week-range { font-family: 'Montserrat', sans-serif; font-size: 1.25rem; color: var(--ink); }
         .week-scroll { overflow-x: auto; }
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 10px; }
         .week-day { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 130px; }
@@ -316,7 +316,7 @@
 
         .login-card { max-width: 380px; margin: 60px auto; background: var(--panel); border: 1px solid var(--border); border-radius: 16px; padding: 36px 30px; }
         .login-logo { display: block; width: 190px; max-width: 100%; height: auto; margin: 0 auto 18px; }
-        .login-card h1 { font-family: 'Roboto', sans-serif; font-weight: 600; font-size: 2rem; margin-bottom: 20px; }
+        .login-card h1 { font-family: 'Montserrat', sans-serif; font-weight: 600; font-size: 2rem; margin-bottom: 20px; }
         .login-card label { display: flex; flex-direction: column; gap: 6px; font-size: 0.75rem; letter-spacing: 0.5px; text-transform: uppercase; color: var(--muted); margin-bottom: 14px; }
         .login-card input { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--ink); padding: 11px 12px; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }
         .login-card input:focus { outline: none; border-color: var(--gold); }
