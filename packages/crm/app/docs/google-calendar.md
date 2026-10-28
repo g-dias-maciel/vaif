@@ -12,6 +12,10 @@ one credential for the whole company instead of one refresh token per Artist.
 
 - Active bookings inside the window (`-30 days` to `+730 days`, configurable in
   `config/crm.php`) become events titled `Tatuagem — <cliente>`.
+- Event times use the **Artist's CRM timezone** (`artists.timezone`), because
+  that is how the booking was made. The Google Calendar's own timezone only
+  controls how Google displays the event, so keep both in sync (for example,
+  `America/Sao_Paulo`).
 - Reschedules update the same Google event.
 - Cancellations delete the Google event.
 - Bookings created by Beatriz through `book_slot` are picked up too, because the

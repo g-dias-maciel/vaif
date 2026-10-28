@@ -80,13 +80,14 @@ class Artist extends Model
     }
 
     /**
-     * The timezone used when writing Google Calendar events. Prefer the
-     * calendar's own timezone, then the Artist's booking timezone.
+     * The timezone used when writing Google Calendar events. The Artist's
+     * booking timezone is authoritative; the calendar's own timezone only
+     * controls how Google displays the event.
      */
     public function calendarTimezone(): string
     {
-        return $this->google_calendar_timezone
-            ?: $this->timezone
+        return $this->timezone
+            ?: $this->google_calendar_timezone
             ?: 'America/Sao_Paulo';
     }
 

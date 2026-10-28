@@ -221,11 +221,24 @@ class SettingsController extends Controller
     /**
      * Push pending bookings now instead of waiting for the scheduler.
      */
-    public function syncGoogle(GoogleCalendarSync $sync)
+    public function syncGoogle(GoogleCalendarService $google, GoogleCalendarSync $sync)
     {
         $artist = $this->activeArtist();
 
         abort_unless($artist && $artist->hasGoogleCalendar(), 403);
+
+        // Refresh the calendar name/timezone too, so a change made in Google
+        // (for example the display timezone) is reflected here.
+        try {
+            $calendar = $google->getCalendar($artist->google_calendar_id);
+
+            $artist->forceFill([
+                'google_calendar_summary' => $calendar['summary'],
+                'google_calendar_timezone' => $calendar['timezone'],
+            ])->save();
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível atualizar os dados da agenda: '.$e->getMessage());
+        }
 
         try {
             $counts = $sync->syncArtist($artist, 50);

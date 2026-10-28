@@ -102,6 +102,19 @@ class GoogleCalendarSyncTest extends TestCase
         $this->assertSame($entry->id, $captured['extendedProperties']['private']['vaif_booking_id']);
     }
 
+    public function test_the_artist_timezone_wins_over_the_google_calendar_timezone(): void
+    {
+        $artist = $this->artist();
+        $artist->forceFill(['google_calendar_timezone' => 'Europe/Berlin'])->save();
+
+        [, , $entry] = $this->booking($artist);
+
+        $payload = app(GoogleCalendarSync::class)->eventPayload($artist->fresh(), $entry);
+
+        $this->assertSame('America/Sao_Paulo', $payload['start']['timeZone']);
+        $this->assertStringContainsString('-03:00', $payload['start']['dateTime']);
+    }
+
     public function test_a_rescheduled_booking_updates_the_existing_event(): void
     {
         $artist = $this->artist();
