@@ -66,33 +66,52 @@ class WahaService
 
     /**
      * Base64 PNG of the session QR code, or null.
+     *
+     * WAHA only serves the QR while the session is in SCAN_QR_CODE; a freshly
+     * created session is STOPPED until /start is called, and takes a moment to
+     * move to SCAN_QR_CODE.
      */
     public function qr(Artist $artist): ?string
     {
-        try {
-            $resp = $this->client()->get("/api/{$artist->wa_session_slug}/auth/qr?format=base64");
-        } catch (ConnectionException) {
-            return null;
+        $current = $this->status($artist);
+
+        if ($current && $current['state'] === 'STOPPED') {
+            $this->start($artist);
         }
 
-        if (! $resp->successful()) {
-            return null;
-        }
+        for ($attempt = 0; $attempt < 4; $attempt++) {
+            try {
+                $resp = $this->client()->get("/api/{$artist->wa_session_slug}/auth/qr?format=base64");
+            } catch (ConnectionException) {
+                return null;
+            }
 
-        $data = $resp->json();
-        if (is_array($data)) {
-            return $data['qrcode'] ?? $data['data'] ?? $data['qr'] ?? null;
-        }
+            if ($resp->successful()) {
+                $data = $resp->json();
+                if (is_array($data)) {
+                    return $data['qrcode'] ?? $data['data'] ?? $data['qr'] ?? null;
+                }
 
-        if (str_starts_with((string) $resp->header('Content-Type'), 'image/')) {
-            return base64_encode($resp->body());
+                if (str_starts_with((string) $resp->header('Content-Type'), 'image/')) {
+                    return base64_encode($resp->body());
+                }
+
+                return null;
+            }
+
+            // 422 = session not in SCAN_QR_CODE yet; give it a moment.
+            if ($resp->status() !== 422) {
+                return null;
+            }
+
+            usleep(1000000);
         }
 
         return null;
     }
 
     /**
-     * Create (or recreate) the WAHA session, wiring the agent webhook.
+     * Create (or reuse) the WAHA session and start it so it emits the QR.
      */
     public function create(Artist $artist): bool
     {
@@ -110,7 +129,37 @@ class WahaService
             return false;
         }
 
-        return $resp->successful();
+        // 422 means the session already exists: reuse it and just start it
+        // when needed (never restart a working session).
+        if ($resp->status() === 422) {
+            $current = $this->status($artist);
+
+            if ($current && in_array($current['state'], ['STARTING', 'SCAN_QR_CODE', 'WORKING'], true)) {
+                return true;
+            }
+
+            return $this->start($artist);
+        }
+
+        if (! $resp->successful()) {
+            return false;
+        }
+
+        return $this->start($artist);
+    }
+
+    /**
+     * Start a stopped session (WAHA returns 422 when it is already running).
+     */
+    public function start(Artist $artist): bool
+    {
+        try {
+            $resp = $this->client()->post("/api/sessions/{$artist->wa_session_slug}/start");
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $resp->successful() || $resp->status() === 422;
     }
 
     /**

@@ -40,6 +40,8 @@
                 <img src="data:image/png;base64,{{ $qr }}" alt="QR Code" style="width: 220px; height: 220px; background:#fff; border-radius: 12px;">
                 <p class="meta" style="margin-top:8px;">Escaneie o QR code no WhatsApp do artista para conectar.</p>
             </div>
+        @elseif ($waha && !$waha['connected'])
+            <p class="meta" style="margin-top:10px;">Preparando o QR code… esta página atualiza automaticamente.</p>
         @endif
 
         <div style="display:flex; gap:10px; margin-top:14px; flex-wrap:wrap;">
@@ -177,4 +179,9 @@
     });
 })();
 </script>
+@if ($waha && !$waha['connected'] && !$qr && in_array($waha['state'], ['STARTING', 'SCAN_QR_CODE'], true))
+    <script>
+        setTimeout(function () { window.location.reload(); }, 4000);
+    </script>
+@endif
 @endpush
