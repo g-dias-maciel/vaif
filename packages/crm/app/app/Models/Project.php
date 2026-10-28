@@ -180,6 +180,26 @@ class Project extends Model
         };
     }
 
+    public function getPlacementLabelAttribute(): ?string
+    {
+        if (! $this->placement) {
+            return null;
+        }
+
+        return config('crm.placement_labels')[$this->placement]
+            ?? ucfirst(str_replace('_', ' ', $this->placement));
+    }
+
+    public function getBodyZoneLabelAttribute(): ?string
+    {
+        if (! $this->body_zone) {
+            return null;
+        }
+
+        return config('crm.body_zone_labels')[$this->body_zone]
+            ?? ucfirst(str_replace('_', ' ', $this->body_zone));
+    }
+
     /**
      * Reference picture URLs.
      *

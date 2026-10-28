@@ -63,9 +63,12 @@ class ChatMessage extends Model
         $content = trim((string) $content);
 
         if ($this->message_type === 'human') {
+            // The agent prefixes every inbound message with its context and
+            // the artist marker. Neither belongs in the conversation view.
             $content = preg_replace('/^\[Contexto:.*?\]\s*/s', '', $content) ?? $content;
+            $content = preg_replace('/^\[artist_id=[^\]]*\]\s*/i', '', $content) ?? $content;
         }
 
-        return $content;
+        return trim($content);
     }
 }

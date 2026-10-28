@@ -27,23 +27,41 @@ class LeadController extends Controller
             'events',
         ]);
 
-        // `agent_memory` is Postgres-only (n8n's memory schema); SQLite local
-        // dev/tests have no conversation transcript.
-        $chatMessages = DB::connection()->getDriverName() === 'sqlite'
-            ? collect()
-            : $lead->chatMessages()
-                ->orderByDesc('id')
-                ->limit(50)
-                ->get()
-                ->reverse()
-                ->values();
-
         return view('leads.show', [
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
-            'chatMessages' => $chatMessages,
+            'chatMessages' => $this->latestChatMessages($lead),
             'eventLabels' => config('crm.event_labels'),
         ]);
+    }
+
+    /**
+     * The conversation panel, polled by the lead page so new messages appear
+     * without a full reload (and without losing a note being typed).
+     */
+    public function conversation(Lead $lead)
+    {
+        $this->authorize('view', $lead);
+
+        return view('leads._conversation', [
+            'chatMessages' => $this->latestChatMessages($lead),
+        ]);
+    }
+
+    private function latestChatMessages(Lead $lead)
+    {
+        // `agent_memory` is Postgres-only (n8n's memory schema); SQLite local
+        // dev/tests have no conversation transcript.
+        if (DB::connection()->getDriverName() === 'sqlite') {
+            return collect();
+        }
+
+        return $lead->chatMessages()
+            ->orderByDesc('id')
+            ->limit(50)
+            ->get()
+            ->reverse()
+            ->values();
     }
 
     /**

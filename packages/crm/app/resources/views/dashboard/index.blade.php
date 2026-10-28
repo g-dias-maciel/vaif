@@ -71,7 +71,7 @@
                             <div class="time">{{ $slot->start_at->format('H:i') }}–{{ $slot->end_at->format('H:i') }}</div>
                             <div class="name">{{ $slot->lead?->displayName() ?? 'Cliente' }}</div>
                             @if ($slot->project?->placement)
-                                <div class="place">{{ $slot->project->placement }}</div>
+                                <div class="place">{{ $slot->project->placement_label }}</div>
                             @endif
                         </a>
                     @else

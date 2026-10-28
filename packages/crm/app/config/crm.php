@@ -84,6 +84,47 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Placement and body-zone labels
+    |--------------------------------------------------------------------------
+    |
+    | Projects store canonical keys (used by price_book); the UI shows accents
+    | and the artist's language.
+    |
+    */
+
+    'placement_labels' => [
+        'braco' => 'Braço',
+        'braco_externo' => 'Braço externo',
+        'braco_interno' => 'Braço interno',
+        'antebraco' => 'Antebraço',
+        'costas' => 'Costas',
+        'peito' => 'Peito',
+        'perna' => 'Perna',
+        'coxa' => 'Coxa',
+        'panturrilha' => 'Panturrilha',
+        'tornozelo' => 'Tornozelo',
+        'pescoco' => 'Pescoço',
+        'costela' => 'Costela',
+        'barriga' => 'Barriga',
+        'ombro' => 'Ombro',
+        'pulso' => 'Pulso',
+        'dedo' => 'Dedo',
+        'dedos' => 'Dedos',
+        'mao' => 'Mão',
+        'pe' => 'Pé',
+        'rosto' => 'Rosto',
+        'partes_intimas' => 'Partes íntimas',
+    ],
+
+    'body_zone_labels' => [
+        'pequeno' => 'Pequeno',
+        'medio' => 'Médio',
+        'grande' => 'Grande',
+        'fechamento' => 'Fechamento',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Audit event labels
     |--------------------------------------------------------------------------
     |

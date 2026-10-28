@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
     // ---- Shared (artist + staff): lead detail + booking actions ----
     Route::middleware('role:artist,staff')->group(function () {
         Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
+        Route::get('/leads/{lead}/conversation', [LeadController::class, 'conversation'])->name('leads.conversation');
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
         Route::post('/projects/{project}/lost', [LeadController::class, 'markLost'])->name('projects.mark-lost');
 

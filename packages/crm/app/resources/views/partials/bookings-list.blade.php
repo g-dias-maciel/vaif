@@ -11,7 +11,7 @@
                 </strong>
                 <span>{{ $b->start_at->format('d/m/Y H:i') }} – {{ $b->end_at->format('H:i') }}</span>
                 @if ($b->project?->placement)
-                    <span class="gold">{{ $b->project->placement }}</span>
+                    <span class="gold">{{ $b->project->placement_label }}</span>
                 @endif
                 @if ($b->project)
                     @if ($b->project->deposit_status === 'confirmado')

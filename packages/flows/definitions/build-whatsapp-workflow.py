@@ -354,7 +354,13 @@ const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
 
 // ── Deterministic qualification extraction (fills classifier gaps so the
 //    lead's answers are persisted reliably and never "forgotten"). ──
+function normalizeText(t) {
+  return String(t || '').toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/_/g, ' ');
+}
 function detectPlacement(t) {
+  const text = normalizeText(t);
   const map = [
     ['braço externo', 'braco_externo'], ['braco externo', 'braco_externo'],
     ['braço interno', 'braco_interno'], ['braco interno', 'braco_interno'],
@@ -368,17 +374,19 @@ function detectPlacement(t) {
     ['peito', 'peito'], ['perna', 'perna'], ['coxa', 'coxa'],
     ['dedo', 'dedo'], ['mão', 'mao'], ['mao', 'mao'], ['pé', 'pe'], ['pe', 'pe'],
   ];
-  for (const [k, v] of map) if (t.includes(k)) return v;
+  for (const [k, v] of map) if (text.includes(k)) return v;
   return null;
 }
 function detectZone(t) {
-  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo/.test(t)) return 'fechamento';
-  if (/quase tudo|a maior parte|maior parte|grande/.test(t)) return 'grande';
-  if (/área média|area media|metade|médi[oa]|medi[oa]/.test(t)) return 'medio';
-  if (/partinha|pedacinho|só um detalhe|so um detalhe|pequen[oa]/.test(t)) return 'pequeno';
+  const text = normalizeText(t);
+  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo/.test(text)) return 'fechamento';
+  if (/quase tudo|a maior parte|maior parte|grande/.test(text)) return 'grande';
+  if (/area media|metade|medi[oa]/.test(text)) return 'medio';
+  if (/partinha|pedacinho|so um detalhe|pequen[oa]/.test(text)) return 'pequeno';
   return null;
 }
 function detectStyle(t) {
+  const text = normalizeText(t);
   const map = [
     ['neo tradicional', 'neo_tradicional'], ['neo trad', 'neo_tradicional'],
     ['old school', 'old_school'], ['oldschool', 'old_school'],
@@ -390,7 +398,7 @@ function detectStyle(t) {
     ['japonês', 'japones'], ['japones', 'japones'], ['oriental', 'oriental'],
     ['tribal', 'tribal'], ['floral', 'floral'],
   ];
-  for (const [k, v] of map) if (t.includes(k)) return v;
+  for (const [k, v] of map) if (text.includes(k)) return v;
   return null;
 }
 function detectFirstTattoo(t) {
@@ -668,9 +676,9 @@ return [{ json: {
   audio_count_val: audioCountNext,
   final_reply: audioFinalReply,
 
-  placement_val: q.placement || detectPlacement(rawLead) || null,
-  body_zone_val: q.body_zone || detectZone(rawLead) || null,
-  style_val: q.style || detectStyle(rawLead) || null,
+  placement_val: detectPlacement(q.placement) || detectPlacement(rawLead) || null,
+  body_zone_val: detectZone(q.body_zone) || detectZone(rawLead) || null,
+  style_val: detectStyle(q.style) || detectStyle(rawLead) || null,
   first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
     ? q.first_tattoo
     : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),

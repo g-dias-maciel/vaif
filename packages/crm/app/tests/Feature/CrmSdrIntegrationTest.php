@@ -329,7 +329,7 @@ class CrmSdrIntegrationTest extends TestCase
 
         $response->assertOk();
         $response->assertSee('Detalhes do projeto');
-        $response->assertSee('costas');
+        $response->assertSee('Costas');
         $response->assertSee('realismo');
         $response->assertSee('Sim (cobertura)');
         $response->assertSee('Homenagem à mãe');

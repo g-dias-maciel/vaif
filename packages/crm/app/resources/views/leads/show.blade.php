@@ -27,20 +27,9 @@
 <div class="panel" style="margin-bottom: 20px;">
     <h2 class="section-title" style="margin-top:0;">Conversa</h2>
 
-    @if ($chatMessages->isEmpty())
-        <p class="meta">Nenhuma conversa registrada ainda.</p>
-    @else
-        <div class="chat-thread">
-            @foreach ($chatMessages as $message)
-                <div class="chat-bubble {{ $message->direction }}">
-                    <div class="chat-who">{{ $message->direction === 'inbound' ? 'Cliente' : 'Beatriz' }}</div>
-                    <div class="chat-text">{{ $message->content !== '' ? $message->content : '—' }}</div>
-                    <div class="chat-time">{{ $message->created_at?->format('d/m H:i') }}</div>
-                </div>
-            @endforeach
-        </div>
-        <p class="meta" style="margin-top:10px;">Últimas {{ $chatMessages->count() }} mensagens.</p>
-    @endif
+    <div id="conversation-body" data-url="{{ route('leads.conversation', $lead) }}">
+        @include('leads._conversation', ['chatMessages' => $chatMessages])
+    </div>
 </div>
 
 @forelse ($lead->projects->sortByDesc('created_at') as $project)
@@ -86,8 +75,8 @@
         <div class="detail-grid">
             <div><span class="meta">Primeira tatuagem</span><div>{{ $project->first_tattoo === null ? '—' : ($project->first_tattoo ? 'Sim' : 'Não') }}</div></div>
             <div><span class="meta">Cobertura</span><div>{{ $project->tattoo_type_label }}</div></div>
-            <div><span class="meta">Local</span><div>{{ $project->placement ?: '—' }}</div></div>
-            <div><span class="meta">Tamanho / zona</span><div>{{ $project->body_zone ?: '—' }}</div></div>
+            <div><span class="meta">Local</span><div>{{ $project->placement_label ?: '—' }}</div></div>
+            <div><span class="meta">Tamanho / zona</span><div>{{ $project->body_zone_label ?: '—' }}</div></div>
             <div><span class="meta">Estilo</span><div>{{ $project->style ?: '—' }}</div></div>
             <div><span class="meta">Depósito</span><div>{{ $project->deposit_status ?: '—' }}</div></div>
         </div>
@@ -153,7 +142,7 @@
                     <div class="promo-main">
                         <strong>{{ $quote->promotion?->name ?: 'Tabela' }}</strong>
                         <span class="meta">
-                            {{ $project->placement ?: '—' }} · {{ $project->body_zone ?: '—' }}
+                            {{ $project->placement_label ?: '—' }} · {{ $project->body_zone_label ?: '—' }}
                             · 1ª {{ $quote->firstPriceLabel() }}
                             @if ($quote->second_cap_cents !== null)
                                 · 2ª até {{ $quote->secondCapLabel() }}
@@ -226,3 +215,56 @@
     </form>
 </div>
 @endsection
+
+@push('scripts')
+<script>
+(function () {
+    var body = document.getElementById('conversation-body');
+    if (!body) return;
+
+    var url = body.dataset.url;
+    var busy = false;
+
+    function thread() {
+        return body.querySelector('.chat-thread');
+    }
+
+    function scrollToBottom() {
+        var t = thread();
+        if (t) t.scrollTop = t.scrollHeight;
+    }
+
+    scrollToBottom();
+
+    async function tick() {
+        if (document.hidden || busy) return;
+        busy = true;
+
+        try {
+            var response = await fetch(url, {
+                headers: { 'Accept': 'text/html' },
+                credentials: 'same-origin',
+                cache: 'no-store'
+            });
+
+            if (!response.ok) return;
+
+            var html = await response.text();
+            if (html.trim() === body.innerHTML.trim()) return;
+
+            var t = thread();
+            var atBottom = !t || (t.scrollHeight - t.scrollTop - t.clientHeight < 60);
+
+            body.innerHTML = html;
+            if (atBottom) scrollToBottom();
+        } catch (e) {
+            // keep the last rendered conversation
+        } finally {
+            busy = false;
+        }
+    }
+
+    setInterval(tick, 8000);
+})();
+</script>
+@endpush

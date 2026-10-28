@@ -28,7 +28,7 @@
 
                         @if ($project->placement || $project->body_zone || $project->style)
                             <div class="meta">
-                                {{ collect([$project->placement, $project->body_zone, $project->style])->filter()->implode(' · ') }}
+                                {{ collect([$project->placement_label, $project->body_zone_label, $project->style])->filter()->implode(' · ') }}
                             </div>
                         @endif
 
