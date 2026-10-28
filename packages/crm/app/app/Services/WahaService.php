@@ -77,6 +77,8 @@ class WahaService
 
         if ($current && $current['state'] === 'STOPPED') {
             $this->start($artist);
+        } elseif ($current && $current['state'] === 'FAILED') {
+            $this->restart($artist);
         }
 
         for ($attempt = 0; $attempt < 4; $attempt++) {
@@ -136,6 +138,10 @@ class WahaService
 
             if ($current && in_array($current['state'], ['STARTING', 'SCAN_QR_CODE', 'WORKING'], true)) {
                 return true;
+            }
+
+            if ($current && $current['state'] === 'FAILED') {
+                return $this->restart($artist);
             }
 
             return $this->start($artist);
