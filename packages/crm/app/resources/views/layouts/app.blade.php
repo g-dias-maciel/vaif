@@ -162,6 +162,23 @@
         }
         .flash.error { background: #2a0a0a; color: var(--danger); border-color: var(--danger); }
 
+        /* Transient error toast for action failures (validation errors stay inline). */
+        .toast {
+            position: fixed; top: 18px; right: 18px; z-index: 100;
+            display: flex; align-items: flex-start; gap: 12px;
+            max-width: min(440px, calc(100vw - 36px));
+            padding: 14px 16px; border-radius: 10px;
+            border: 1px solid var(--border); background: var(--panel);
+            box-shadow: 0 16px 40px rgba(0,0,0,0.45);
+            font-size: 0.84rem; line-height: 1.45; color: var(--ink);
+        }
+        .toast-error { border-color: var(--danger); background: #2a0a0a; color: #fecaca; }
+        .toast button {
+            margin-left: auto; background: transparent; border: 0; color: inherit;
+            font-size: 1.15rem; line-height: 1; cursor: pointer; padding: 0 2px; opacity: 0.75;
+        }
+        .toast button:hover { opacity: 1; }
+
         .promo-pill {
             display: inline-flex; align-items: center; gap: 6px;
             padding: 6px 12px; border-radius: 999px;
@@ -585,6 +602,19 @@
             @yield('content')
         </main>
     @endauth
+
+    @if (session('error'))
+        <div class="toast toast-error" id="app-error-toast" role="alert">
+            <span>{{ session('error') }}</span>
+            <button type="button" aria-label="Fechar" onclick="this.closest('.toast').remove()">&times;</button>
+        </div>
+        <script>
+            setTimeout(function () {
+                var el = document.getElementById('app-error-toast');
+                if (el) el.remove();
+            }, 7000);
+        </script>
+    @endif
 
     @stack('scripts')
 </body>

@@ -88,7 +88,7 @@ class PromotionAdminController extends Controller
     public function update(Request $request, Promotion $promotion)
     {
         if ($promotion->status === 'ended') {
-            return back()->withErrors(['name' => 'Uma promoção encerrada não pode ser editada.']);
+            return back()->with('error', 'Uma promoção encerrada não pode ser editada.');
         }
 
         $data = $this->validated($request, false);
@@ -116,21 +116,21 @@ class PromotionAdminController extends Controller
     public function activate(Promotion $promotion)
     {
         if ($promotion->status === 'active') {
-            return back()->withErrors(['promotion' => 'Esta promoção já está ativa.']);
+            return back()->with('error', 'Esta promoção já está ativa.');
         }
         if ($promotion->status === 'ended') {
-            return back()->withErrors(['promotion' => 'Uma promoção encerrada não pode ser reativada. Crie uma nova.']);
+            return back()->with('error', 'Uma promoção encerrada não pode ser reativada. Crie uma nova.');
         }
 
         if (! PriceBook::where('artist_id', $promotion->artist_id)->whereNull('effective_to')->exists()) {
-            return back()->withErrors(['promotion' => 'O artista não tem uma tabela de preços vigente para gerar a promoção.']);
+            return back()->with('error', 'O artista não tem uma tabela de preços vigente para gerar a promoção.');
         }
 
         try {
             DB::select('select * from activate_promotion(?, ?)', [$promotion->artist_id, $promotion->id]);
         } catch (QueryException $e) {
             if ((string) $e->getCode() === '23505') {
-                return back()->withErrors(['promotion' => 'Já existe outra promoção ativa para este artista. Pause ou encerre a atual primeiro.']);
+                return back()->with('error', 'Já existe outra promoção ativa para este artista. Pause ou encerre a atual primeiro.');
             }
 
             throw $e;
@@ -146,7 +146,7 @@ class PromotionAdminController extends Controller
     public function pause(Promotion $promotion)
     {
         if ($promotion->status !== 'active') {
-            return back()->withErrors(['promotion' => 'Só uma promoção ativa pode ser pausada.']);
+            return back()->with('error', 'Só uma promoção ativa pode ser pausada.');
         }
 
         DB::select('select * from pause_promotion(?, ?)', [$promotion->artist_id, $promotion->id]);
@@ -157,7 +157,7 @@ class PromotionAdminController extends Controller
     public function end(Promotion $promotion)
     {
         if (! in_array($promotion->status, ['active', 'paused'], true)) {
-            return back()->withErrors(['promotion' => 'Só uma promoção ativa ou pausada pode ser encerrada.']);
+            return back()->with('error', 'Só uma promoção ativa ou pausada pode ser encerrada.');
         }
 
         DB::select('select * from end_promotion(?, ?)', [$promotion->artist_id, $promotion->id]);

@@ -137,7 +137,7 @@ class ArtistController extends Controller
 
         return redirect()
             ->route('artists.show', $artist)
-            ->with('status', $sent
+            ->with($sent ? 'status' : 'error', $sent
                 ? 'Artista criado. Convite enviado para '.$user->email.'.'
                 : 'Artista criado, mas o convite não pôde ser enviado. Use "Reenviar convite".');
     }
@@ -150,10 +150,12 @@ class ArtistController extends Controller
         $user = $artist->users()->where('role', User::ROLE_ARTIST)->latest()->first();
 
         if (! $user) {
-            return back()->withErrors(['email' => 'Este artista não tem usuário de acesso.']);
+            return back()->with('error', 'Este artista não tem usuário de acesso.');
         }
 
-        return back()->with('status', $this->sendInvite($user)
+        $sent = $this->sendInvite($user);
+
+        return back()->with($sent ? 'status' : 'error', $sent
             ? 'Convite reenviado para '.$user->email.'.'
             : 'Não foi possível enviar o convite. Verifique a configuração de e-mail.');
     }

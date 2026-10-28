@@ -116,7 +116,7 @@ class BookingController extends Controller
         );
 
         if ($created === []) {
-            return back()->withErrors(['date' => 'Este período já está ocupado por um agendamento ou bloqueio.']);
+            return back()->with('error', 'Este período já está ocupado por um agendamento ou bloqueio.');
         }
 
         return back()->with('status', 'Período bloqueado.');
@@ -142,7 +142,7 @@ class BookingController extends Controller
         $this->authorize('reschedule', $slot);
 
         if (! $slot->project_id) {
-            return back()->withErrors(['deposit' => 'Este agendamento não tem um projeto associado.']);
+            return back()->with('error', 'Este agendamento não tem um projeto associado.');
         }
 
         try {
@@ -154,7 +154,7 @@ class BookingController extends Controller
                 'artist',
             ]);
         } catch (\Illuminate\Database\QueryException $e) {
-            return back()->withErrors(['deposit' => 'Não foi possível confirmar o sinal: nenhum sinal solicitado.']);
+            return back()->with('error', 'Não foi possível confirmar o sinal: nenhum sinal solicitado.');
         }
 
         return back()->with('status', 'Sinal confirmado.');
@@ -212,7 +212,7 @@ class BookingController extends Controller
         try {
             app(BookingService::class)->reschedule($slot, $startAt);
         } catch (RuntimeException $e) {
-            return back()->withErrors(['start_at' => $e->getMessage()]);
+            return back()->with('error', $e->getMessage());
         }
 
         return redirect()->route('bookings.index')->with('status', 'Agendamento remarcado.');

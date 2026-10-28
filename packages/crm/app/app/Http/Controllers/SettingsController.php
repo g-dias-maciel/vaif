@@ -107,8 +107,8 @@ class SettingsController extends Controller
 
         $ok = WahaService::make()->create($artist);
 
-        return back()->with('status', $ok
-            ? 'Sessão WhatsApp criada. Escaneie o QR code para conectar.'
+        return back()->with($ok ? 'status' : 'error', $ok
+            ? 'Sessão WhatsApp iniciada. Escaneie o QR code para conectar.'
             : 'Não foi possível conectar ao WhatsApp agora. Tente novamente.');
     }
 
@@ -123,7 +123,7 @@ class SettingsController extends Controller
 
         $ok = WahaService::make()->restart($artist);
 
-        return back()->with('status', $ok
+        return back()->with($ok ? 'status' : 'error', $ok
             ? 'Sessão WhatsApp reiniciada.'
             : 'Não foi possível reiniciar a sessão agora.');
     }
