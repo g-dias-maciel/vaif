@@ -430,7 +430,148 @@ $$;
 
 
 -- ---------------------------------------------------------------------------
--- 12. Roles exist and the agent has no table access
+-- 12. Agent turn: start_turn, scratch state, debounce buffer
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  t1    record;
+  t2    record;
+  b     chat_buffers;
+  state jsonb;
+  n     integer;
+begin
+  -- Debounce: burst messages are joined, presence is recorded.
+  select * into b from chat_buffer_accumulate(
+    pg_temp.artist_a(), 'slug-a:5511911112222', 'oi', now());
+  perform pg_temp.ok(b.pending = 'oi', 'first buffered message is stored');
+
+  select * into b from chat_buffer_accumulate(
+    pg_temp.artist_a(), 'slug-a:5511911112222', 'quero uma tattoo', now());
+  perform pg_temp.ok(b.pending = E'oi\nquero uma tattoo',
+    'burst messages are joined, got ' || b.pending);
+
+  select * into b from chat_buffer_typing(
+    pg_temp.artist_a(), 'slug-a:5511911112222', 'typing', now());
+  perform pg_temp.ok(b.typing_state = 'typing', 'typing state is recorded');
+
+  -- First contact creates the Lead, the Project and the chat session.
+  select * into t1 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '11 91111-2222', 'Ana', 'whatsapp');
+  perform pg_temp.ok(t1.is_new, 'the first turn is new');
+  perform pg_temp.ok(t1.project_id is not null, 'a Project is opened');
+  perform pg_temp.ok(t1.stage_key = 'novo', 'the Project starts in novo');
+  perform pg_temp.ok(t1.agent_state = '{}'::jsonb, 'scratch state starts empty');
+  perform pg_temp.ok(chat_owner(pg_temp.artist_a(), 'slug-a:5511911112222') = 'agent',
+    'the chat session is created and owned by the agent');
+
+  -- Second turn: same Lead and same open Project, not new.
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222', null, 'whatsapp');
+  perform pg_temp.ok(not t2.is_new, 'the second turn is not new');
+  perform pg_temp.ok(t2.lead_id = t1.lead_id, 'the same Lead is reused');
+  perform pg_temp.ok(t2.project_id = t1.project_id, 'the same open Project is reused');
+
+  -- Scratch state merges instead of replacing.
+  state := patch_chat_state(pg_temp.artist_a(), 'slug-a:5511911112222',
+    '{"processo_explicado": true}'::jsonb);
+  state := patch_chat_state(pg_temp.artist_a(), 'slug-a:5511911112222',
+    '{"audio_count": 1}'::jsonb);
+  perform pg_temp.ok(state->>'processo_explicado' = 'true',
+    'state is sticky across patches');
+  perform pg_temp.ok((state->>'audio_count')::int = 1, 'numeric flags are stored');
+
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
+  perform pg_temp.ok(t2.agent_state->>'processo_explicado' = 'true',
+    'start_turn returns the scratch state');
+
+  -- Clearing the buffer keeps the row but drops the pending burst.
+  select * into b from chat_buffer_clear(pg_temp.artist_a(), 'slug-a:5511911112222');
+  perform pg_temp.ok(b.pending is null, 'clear drops the pending text');
+
+  -- A closed Project is history: the next conversation opens a new one.
+  perform set_project_stage(pg_temp.artist_a(), t1.project_id, 'fechado');
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
+  perform pg_temp.ok(t2.project_id <> t1.project_id,
+    'a new Project starts after the previous one was closed');
+
+  -- Expired buffers are purged.
+  update chat_buffers set expires_at = now() - interval '1 minute'
+   where artist_id = pg_temp.artist_a() and chat_id = 'slug-a:5511911112222';
+  perform pg_temp.ok(purge_chat_buffers() >= 1, 'purge removes the expired buffer');
+  select count(*) into n from chat_buffers where chat_id = 'slug-a:5511911112222';
+  perform pg_temp.ok(n = 0, 'the purged buffer is gone');
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------------
+-- 13. patch_project: deltas only, stage through the guard, audit trail
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  p projects;
+  n integer;
+begin
+  select * into p from projects
+   where artist_id = pg_temp.artist_a()
+     and stage_key not in ('fechado','perdido')
+   order by created_at desc limit 1;
+
+  select * into p from patch_project(
+    pg_temp.artist_a(), p.id,
+    p_placement    => 'costas',
+    p_body_zone    => 'grande',
+    p_style        => 'realismo',
+    p_first_tattoo => true,
+    p_tattoo_type  => 'cover_up',
+    p_meaning      => 'homenagem');
+
+  perform pg_temp.ok(p.placement = 'costas', 'placement is patched');
+  perform pg_temp.ok(p.first_tattoo, 'booleans are patched');
+  perform pg_temp.ok(p.tattoo_type = 'cover_up', 'tattoo_type is patched');
+  perform pg_temp.ok(p.meaning = 'homenagem', 'meaning is patched');
+
+  select count(*) into n from events
+   where project_id = p.id and type = 'project_updated';
+  perform pg_temp.ok(n = 1, 'one project_updated event for the turn, got ' || n);
+
+  -- Re-sending the same value is silent.
+  select * into p from patch_project(pg_temp.artist_a(), p.id, p_placement => 'costas');
+  select count(*) into n from events
+   where project_id = p.id and type = 'project_updated';
+  perform pg_temp.ok(n = 1, 'unchanged fields do not log again');
+
+  -- Stage changes are delegated, so closed_at and the event stay consistent.
+  select * into p from patch_project(pg_temp.artist_a(), p.id, p_stage_key => 'qualificando');
+  perform pg_temp.ok(p.stage_key = 'qualificando', 'stage is patched');
+  select count(*) into n from events
+   where project_id = p.id and type = 'stage_changed'
+     and payload->>'stage' = 'qualificando';
+  perform pg_temp.ok(n = 1, 'the stage change is audited');
+
+  -- Unknown stage values are refused by the lookup table.
+  begin
+    perform patch_project(pg_temp.artist_a(), p.id, p_stage_key => 'nao_existe');
+    raise exception 'FAIL: unknown stage accepted';
+  exception when foreign_key_violation then
+    null;
+  end;
+
+  -- Cross-tenant patching is refused.
+  begin
+    perform patch_project(pg_temp.artist_b(), p.id, p_style => 'blackwork');
+    raise exception 'FAIL: another Artist could patch this Project';
+  exception when foreign_key_violation then
+    null;
+  end;
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------------
+-- 14. Roles exist and the agent has no table access
 -- ---------------------------------------------------------------------------
 do $$
 declare n integer;
@@ -446,6 +587,15 @@ begin
   select count(*) into n from information_schema.role_table_grants
    where grantee = 'crm_app' and table_schema = 'public';
   perform pg_temp.ok(n > 0, 'crm_app has table grants');
+
+  select count(*) into n from information_schema.routine_privileges
+   where grantee = 'agent_rw' and routine_schema = 'public'
+     and routine_name in (
+       'start_turn','upsert_project','patch_project','patch_chat_state',
+       'chat_buffer_accumulate','chat_buffer_typing','chat_buffer_state',
+       'chat_buffer_clear'
+     );
+  perform pg_temp.ok(n = 8, 'agent_rw can execute every turn/buffer RPC, got ' || n);
 end;
 $$;
 

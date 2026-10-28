@@ -330,6 +330,7 @@ create table chat_sessions (
   last_inbound_at timestamptz,
   last_outbound_at timestamptz,
   typing_state    text,
+  agent_state     jsonb not null default '{}'::jsonb,  -- SDR gate flags (prompt state)
   updated_at      timestamptz not null default now(),
   primary key (artist_id, chat_id),
   foreign key (artist_id, lead_id) references leads (artist_id, id) on delete cascade
@@ -338,10 +339,35 @@ create table chat_sessions (
 create index chat_sessions_lead on chat_sessions (artist_id, lead_id);
 ```
 
+`chat_sessions.agent_state` is where the SDR keeps the flags it needs between
+turns — `processo_explicado`, `preco_liberado`, `duvidas_eliminadas`,
+`aguardando_confirmacao_duvidas`, `audio_count`. They are prompt state, not
+domain data: no CRM screen reads them, no constraint depends on them, so they
+live in one jsonb column instead of widening the schema. `patch_chat_state`
+merges a patch and is the only writer.
+
 The **debounce buffer itself should move to Redis** (`artist:chat:pending`, TTL
-a few minutes). If Redis is not available, keep a `chat_buffers` table with a
-composite key and an `expires_at` cleanup job. Postgres is the wrong place for
-high-frequency ephemeral state.
+a few minutes). The current Coolify deployment has no app Redis (only the
+shared Coolify Redis), so v2 ships the documented fallback:
+
+```sql
+create table chat_buffers (
+  artist_id      uuid not null references artists(id) on delete cascade,
+  chat_id        text not null,
+  pending        text,                            -- inbound messages of the burst
+  last_msg_at    timestamptz,
+  last_typing_at timestamptz,
+  typing_state   text,
+  expires_at     timestamptz not null default now() + interval '1 hour',
+  updated_at     timestamptz not null default now(),
+  primary key (artist_id, chat_id)
+);
+
+create index chat_buffers_expires on chat_buffers (expires_at);
+```
+
+There is deliberately no foreign key to `chat_sessions`: the webhook buffers a
+burst before the Lead exists. `purge_chat_buffers()` drops expired rows.
 
 ### 5.3 Projects and pipeline stages
 
@@ -377,7 +403,7 @@ create table projects (
   style           text,
   first_tattoo    boolean,
   meaning         text,
-  tattoo_type     text check (tattoo_type in ('new','cover_up')),
+  tattoo_type     text check (tattoo_type in ('new','cover_up','rework')),
   reference_pics  text[] not null default '{}',
   handoff_reason  text,
   accepted_quote_id uuid,                        -- set when the Lead accepts
@@ -783,8 +809,13 @@ to that Artist (the composite FKs make this cheap).
 | RPC | Replaces | Notes |
 |---|---|---|
 | `resolve_artist(p_slug text)` | `resolve_artist_from_session` | returns artist + settings |
+| `start_turn(p_artist_id, p_chat_id, p_phone, p_name, p_source)` | `Upsert Lead` + `Upsert Project` + buffer reads | one call per turn: Lead, open Project, chat session, price context, `is_new`, `agent_state` |
 | `upsert_lead(p_artist_id, p_phone, p_name, p_source)` | inline `INSERT ... ON CONFLICT` | normalizes phone; returns Lead |
+| `upsert_project(p_artist_id, p_lead_id)` | none (new) | the Lead's open Project; creates one when the last is `fechado`/`perdido` |
+| `patch_project(p_artist_id, p_project_id, p_stage_key, ...)` | `Build Update Query` (raw SQL) | applies only non-null fields; stage goes through `set_project_stage` |
 | `resolve_chat_session(p_artist_id, p_chat_id, p_lead_id)` | `take_chat_control` / `chat_owner` | creates/returns `chat_sessions` row |
+| `patch_chat_state(p_artist_id, p_chat_id, p_patch)` | lead scratch columns | merges the SDR gate flags into `chat_sessions.agent_state` |
+| `chat_buffer_accumulate/_typing/_state/_clear` | `message_buffer` writes | the debounce burst (`chat_buffers`) |
 | `create_project(p_artist_id, p_lead_id, p_placement, ...)` | none (new) | one job per call |
 | `lookup_price(p_artist_id, p_placement, p_body_zone)` | `lookup_price` | reads current `price_book` |
 | `write_quote(p_artist_id, p_project_id, ...)` | `write_quote` | inserts into `quotes`, moves stage |

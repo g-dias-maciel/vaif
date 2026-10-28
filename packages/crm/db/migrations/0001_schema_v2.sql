@@ -119,13 +119,39 @@ create table chat_sessions (
   last_inbound_at  timestamptz,
   last_outbound_at timestamptz,
   typing_state     text,
+  -- Agent scratch state for this conversation: the sales-gate flags the SDR
+  -- keeps between turns (processo_explicado, preco_liberado, duvidas_eliminadas,
+  -- aguardando_confirmacao_duvidas, audio_count). Free-form by design: it is
+  -- prompt state, not domain data, and never drives a constraint.
+  agent_state      jsonb not null default '{}'::jsonb,
   updated_at       timestamptz not null default now(),
   created_at       timestamptz not null default now(),
   primary key (artist_id, chat_id),
-  foreign key (artist_id, lead_id) references leads (artist_id, id) on delete cascade
+  foreign key (artist_id, lead_id) references leads (artist_id, id) on delete cascade,
+  check (jsonb_typeof(agent_state) = 'object')
 );
 
 create index chat_sessions_lead on chat_sessions (artist_id, lead_id);
+
+
+-- Debounce buffer: the inbound messages still waiting for a quiet window before
+-- the agent replies. Ephemeral, so it is separate from chat_sessions and
+-- self-purges (`purge_chat_buffers`). Rows exist before the Lead does — the
+-- webhook buffers first, `upsert_lead` runs only when the burst settles — so
+-- there is no FK to chat_sessions.
+create table chat_buffers (
+  artist_id      uuid not null references artists(id) on delete cascade,
+  chat_id        text not null,
+  pending        text,
+  last_msg_at    timestamptz,
+  last_typing_at timestamptz,
+  typing_state   text,
+  expires_at     timestamptz not null default now() + interval '1 hour',
+  updated_at     timestamptz not null default now(),
+  primary key (artist_id, chat_id)
+);
+
+create index chat_buffers_expires on chat_buffers (expires_at);
 
 
 -- =============================================================================
@@ -164,7 +190,7 @@ create table projects (
   style             text,
   first_tattoo      boolean,
   meaning           text,
-  tattoo_type       text check (tattoo_type in ('new','cover_up')),
+  tattoo_type       text check (tattoo_type in ('new','cover_up','rework')),
   reference_pics    text[] not null default '{}',
   handoff_reason    text,
   accepted_quote_id uuid,                          -- FK added after quotes exists
@@ -513,4 +539,6 @@ create trigger trg_promotions_touch before update on promotions
 create trigger trg_calendar_entries_touch before update on calendar_entries
   for each row execute function touch_updated_at();
 create trigger trg_chat_sessions_touch before update on chat_sessions
+  for each row execute function touch_updated_at();
+create trigger trg_chat_buffers_touch before update on chat_buffers
   for each row execute function touch_updated_at();

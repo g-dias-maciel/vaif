@@ -65,6 +65,14 @@ declare
     'take_chat_control(uuid,text,uuid)',
     'return_chat_control(uuid,text)',
     'chat_owner(uuid,text)',
+    'chat_buffer_accumulate(uuid,text,text,timestamptz)',
+    'chat_buffer_typing(uuid,text,text,timestamptz)',
+    'chat_buffer_state(uuid,text)',
+    'chat_buffer_clear(uuid,text)',
+    'patch_chat_state(uuid,text,jsonb)',
+    'start_turn(uuid,text,text,text,text)',
+    'upsert_project(uuid,uuid,text)',
+    'patch_project(uuid,uuid,text,text,text,text,boolean,text,text,text[],text,text)',
     'create_project(uuid,uuid,text,text,text,boolean,text,text,text[],text)',
     'set_project_stage(uuid,uuid,text,text)',
     'lookup_price(uuid,text,text)',
@@ -105,6 +113,8 @@ revoke all on function purge_chat_memory(interval) from public;
 grant execute on function purge_chat_memory(interval) to crm_app;
 revoke all on function create_event_partitions(integer) from public;
 grant execute on function create_event_partitions(integer) to crm_app;
+revoke all on function purge_chat_buffers() from public;
+grant execute on function purge_chat_buffers() to crm_app;
 
 -- Helpers must not be callable through the API surface.
 revoke all on function log_event(uuid,uuid,uuid,text,text,jsonb) from public;

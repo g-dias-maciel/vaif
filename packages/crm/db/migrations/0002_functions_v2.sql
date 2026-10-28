@@ -259,6 +259,184 @@ $$;
 
 
 -- -----------------------------------------------------------------------------
+-- Debounce buffer (chat_buffers)
+--
+-- The agent answers a burst of WhatsApp messages once, after a quiet window.
+-- Redis is the intended store for that pending text; when the deployment has no
+-- app Redis (the current Coolify setup) this table is the fallback described in
+-- the design. Rows are tenant-scoped and expire after an hour.
+-- -----------------------------------------------------------------------------
+
+-- Appends an inbound message to the chat's pending burst.
+create or replace function chat_buffer_accumulate(
+  p_artist_id uuid,
+  p_chat_id   text,
+  p_text      text,
+  p_msg_at    timestamptz default now()
+)
+returns setof chat_buffers
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_row chat_buffers;
+begin
+  if not exists (select 1 from artists where id = p_artist_id) then
+    raise exception 'chat_buffer_accumulate: unknown artist %', p_artist_id
+      using errcode = '23503';
+  end if;
+
+  insert into chat_buffers (artist_id, chat_id, pending, last_msg_at, expires_at)
+  values (p_artist_id, p_chat_id, nullif(p_text, ''),
+          coalesce(p_msg_at, now()), now() + interval '1 hour')
+  on conflict (artist_id, chat_id) do update set
+    pending = case
+                when nullif(excluded.pending, '') is null then chat_buffers.pending
+                when nullif(chat_buffers.pending, '') is null then excluded.pending
+                else chat_buffers.pending || E'\n' || excluded.pending
+              end,
+    last_msg_at = greatest(
+                    coalesce(chat_buffers.last_msg_at, excluded.last_msg_at),
+                    coalesce(excluded.last_msg_at, now())
+                  ),
+    expires_at  = now() + interval '1 hour'
+  returning * into v_row;
+
+  return next v_row;
+end;
+$$;
+
+
+-- Records a WAHA presence event (`typing` / `paused`) for the chat.
+create or replace function chat_buffer_typing(
+  p_artist_id uuid,
+  p_chat_id   text,
+  p_state     text,
+  p_at        timestamptz default now()
+)
+returns setof chat_buffers
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_row chat_buffers;
+begin
+  if not exists (select 1 from artists where id = p_artist_id) then
+    raise exception 'chat_buffer_typing: unknown artist %', p_artist_id
+      using errcode = '23503';
+  end if;
+
+  insert into chat_buffers (artist_id, chat_id, last_typing_at, typing_state, expires_at)
+  values (p_artist_id, p_chat_id, coalesce(p_at, now()), p_state,
+          now() + interval '1 hour')
+  on conflict (artist_id, chat_id) do update set
+    last_typing_at = greatest(
+                       coalesce(chat_buffers.last_typing_at, excluded.last_typing_at),
+                       coalesce(excluded.last_typing_at, now())
+                     ),
+    typing_state   = excluded.typing_state,
+    expires_at     = now() + interval '1 hour'
+  returning * into v_row;
+
+  return next v_row;
+end;
+$$;
+
+
+-- Current buffer state; no row means "nothing pending".
+create or replace function chat_buffer_state(
+  p_artist_id uuid,
+  p_chat_id   text
+)
+returns setof chat_buffers
+language sql stable security definer
+set search_path = public, pg_temp
+as $$
+  select * from chat_buffers
+   where artist_id = p_artist_id and chat_id = p_chat_id;
+$$;
+
+
+-- Drops the pending burst after the agent answers. The row (and its
+-- last_msg_at) stays so a still-running execution can tell it is stale.
+create or replace function chat_buffer_clear(
+  p_artist_id uuid,
+  p_chat_id   text
+)
+returns setof chat_buffers
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_row chat_buffers;
+begin
+  update chat_buffers
+     set pending = null, typing_state = null
+   where artist_id = p_artist_id and chat_id = p_chat_id
+  returning * into v_row;
+
+  if v_row.chat_id is not null then
+    return next v_row;
+  end if;
+end;
+$$;
+
+
+-- Maintenance: drops abandoned buffers (SDR disabled mid-burst, crashed run).
+create or replace function purge_chat_buffers()
+returns integer
+language sql security definer
+set search_path = public, pg_temp
+as $$
+  with gone as (
+    delete from chat_buffers where expires_at < now() returning 1
+  )
+  select count(*)::integer from gone;
+$$;
+
+
+-- -----------------------------------------------------------------------------
+-- Agent scratch state (chat_sessions.agent_state)
+--
+-- The SDR keeps its sales-gate flags between turns: whether the creative
+-- process was explained, whether the price gate is open, whether the doubts
+-- checkpoint is pending, how many audios arrived. They are prompt state, not
+-- domain data, so they stay in one jsonb column instead of growing the schema.
+-- -----------------------------------------------------------------------------
+
+create or replace function patch_chat_state(
+  p_artist_id uuid,
+  p_chat_id   text,
+  p_patch     jsonb
+)
+returns jsonb
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_state jsonb;
+begin
+  if p_patch is null or jsonb_typeof(p_patch) <> 'object' then
+    raise exception 'patch_chat_state: patch must be a jsonb object'
+      using errcode = '22023';
+  end if;
+
+  update chat_sessions
+     set agent_state = agent_state || p_patch
+   where artist_id = p_artist_id and chat_id = p_chat_id
+  returning agent_state into v_state;
+
+  if not found then
+    raise exception 'patch_chat_state: no chat session for artist % chat %',
+      p_artist_id, p_chat_id using errcode = '23503';
+  end if;
+
+  return v_state;
+end;
+$$;
+
+
+-- -----------------------------------------------------------------------------
 -- Projects
 -- -----------------------------------------------------------------------------
 
@@ -340,6 +518,244 @@ begin
     jsonb_build_object('stage', p_stage_key));
 
   return next v_row;
+end;
+$$;
+
+
+-- Returns the Lead's current Project, creating one when there is none. A
+-- `fechado` (finished) or `perdido` (lost) Project is history: the next
+-- conversation about the same person starts a new job.
+create or replace function upsert_project(
+  p_artist_id uuid,
+  p_lead_id   uuid,
+  p_actor     text default 'agent'
+)
+returns setof projects
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_row projects;
+begin
+  if not exists (
+    select 1 from leads where id = p_lead_id and artist_id = p_artist_id
+  ) then
+    raise exception 'upsert_project: lead % does not belong to artist %',
+      p_lead_id, p_artist_id using errcode = '23503';
+  end if;
+
+  -- Two executions of the same conversation must not create two Projects.
+  perform pg_advisory_xact_lock(hashtext('project:' || p_lead_id::text)::bigint);
+
+  select * into v_row from projects
+   where artist_id = p_artist_id
+     and lead_id = p_lead_id
+     and stage_key not in ('fechado','perdido')
+   order by updated_at desc
+   limit 1;
+
+  if found then
+    return next v_row;
+    return;
+  end if;
+
+  insert into projects (artist_id, lead_id, stage_key)
+  values (p_artist_id, p_lead_id, 'novo')
+  returning * into v_row;
+
+  perform log_event(p_artist_id, p_lead_id, v_row.id, p_actor, 'project_created',
+    jsonb_build_object('auto', true));
+
+  return next v_row;
+end;
+$$;
+
+
+-- Updates the qualification fields of a Project and, optionally, its stage.
+-- Only non-null arguments are applied, so the caller can send the deltas it
+-- actually learned this turn. Stage changes go through set_project_stage, which
+-- keeps `closed_at` and the audit event consistent.
+create or replace function patch_project(
+  p_artist_id      uuid,
+  p_project_id     uuid,
+  p_stage_key      text    default null,
+  p_placement      text    default null,
+  p_body_zone      text    default null,
+  p_style          text    default null,
+  p_first_tattoo   boolean default null,
+  p_meaning        text    default null,
+  p_tattoo_type    text    default null,
+  p_reference_pics text[]  default null,
+  p_handoff_reason text    default null,
+  p_actor          text    default 'agent'
+)
+returns setof projects
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_before  projects;
+  v_row     projects;
+  v_changed text[] := '{}';
+begin
+  select * into v_before from projects
+   where id = p_project_id and artist_id = p_artist_id
+   for update;
+
+  if not found then
+    raise exception 'patch_project: project % does not belong to artist %',
+      p_project_id, p_artist_id using errcode = '23503';
+  end if;
+
+  if p_placement is not null and p_placement is distinct from v_before.placement then
+    v_changed := array_append(v_changed, 'placement');
+  end if;
+  if p_body_zone is not null and p_body_zone is distinct from v_before.body_zone then
+    v_changed := array_append(v_changed, 'body_zone');
+  end if;
+  if p_style is not null and p_style is distinct from v_before.style then
+    v_changed := array_append(v_changed, 'style');
+  end if;
+  if p_first_tattoo is not null and p_first_tattoo is distinct from v_before.first_tattoo then
+    v_changed := array_append(v_changed, 'first_tattoo');
+  end if;
+  if p_meaning is not null and p_meaning is distinct from v_before.meaning then
+    v_changed := array_append(v_changed, 'meaning');
+  end if;
+  if p_tattoo_type is not null and p_tattoo_type is distinct from v_before.tattoo_type then
+    v_changed := array_append(v_changed, 'tattoo_type');
+  end if;
+  if p_handoff_reason is not null and p_handoff_reason is distinct from v_before.handoff_reason then
+    v_changed := array_append(v_changed, 'handoff_reason');
+  end if;
+
+  update projects set
+    placement      = coalesce(p_placement, placement),
+    body_zone      = coalesce(p_body_zone, body_zone),
+    style          = coalesce(p_style, style),
+    first_tattoo   = coalesce(p_first_tattoo, first_tattoo),
+    meaning        = coalesce(p_meaning, meaning),
+    tattoo_type    = coalesce(p_tattoo_type, tattoo_type),
+    reference_pics = coalesce(p_reference_pics, reference_pics),
+    handoff_reason = coalesce(p_handoff_reason, handoff_reason)
+  where id = p_project_id and artist_id = p_artist_id;
+
+  if array_length(v_changed, 1) is not null then
+    perform log_event(p_artist_id, v_before.lead_id, p_project_id, p_actor,
+      'project_updated', jsonb_build_object('fields', to_jsonb(v_changed)));
+  end if;
+
+  if p_stage_key is not null and p_stage_key is distinct from v_before.stage_key then
+    perform set_project_stage(p_artist_id, p_project_id, p_stage_key, p_actor);
+  end if;
+
+  select * into v_row from projects
+   where id = p_project_id and artist_id = p_artist_id;
+
+  return next v_row;
+end;
+$$;
+
+
+-- Everything the agent needs at the start of a turn, in one call: the Lead
+-- (created on first contact), the Project being quoted, the chat session used
+-- for ownership/scratch state, and the price context for the prompt.
+create or replace function start_turn(
+  p_artist_id uuid,
+  p_chat_id   text,
+  p_phone     text,
+  p_name      text default null,
+  p_source    text default null
+)
+returns table (
+  lead_id            uuid,
+  project_id         uuid,
+  is_new             boolean,
+  name               text,
+  phone_e164         text,
+  stage_key          text,
+  placement          text,
+  body_zone          text,
+  style              text,
+  first_tattoo       boolean,
+  meaning            text,
+  tattoo_type        text,
+  table_price_cents  integer,
+  quoted_price_cents integer,
+  agent_state        jsonb
+)
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_phone    text := normalize_phone(p_phone);
+  v_lead     leads;
+  v_project  projects;
+  v_quoted   integer;
+  v_table    integer;
+  v_is_new   boolean;
+  v_state    jsonb := '{}'::jsonb;
+begin
+  if v_phone is null then
+    raise exception 'start_turn: invalid phone' using errcode = '22023';
+  end if;
+  if p_chat_id is null or btrim(p_chat_id) = '' then
+    raise exception 'start_turn: chat_id is required' using errcode = '22023';
+  end if;
+
+  -- Serialise turns of the same conversation: `is_new` stays exact and two
+  -- concurrent executions cannot both open a Project.
+  perform pg_advisory_xact_lock(hashtext(p_artist_id::text || ':' || v_phone)::bigint);
+
+  v_is_new := not exists (
+    select 1 from leads l
+     where l.artist_id = p_artist_id and l.phone_e164 = v_phone
+  );
+
+  select * into v_lead from upsert_lead(p_artist_id, v_phone, p_name, p_source);
+  select * into v_project from upsert_project(p_artist_id, v_lead.id, 'agent');
+
+  perform link_channel(p_artist_id, v_lead.id, 'whatsapp', p_chat_id);
+  perform resolve_chat_session(p_artist_id, p_chat_id, v_lead.id);
+
+  select cs.agent_state into v_state
+    from chat_sessions cs
+   where cs.artist_id = p_artist_id and cs.chat_id = p_chat_id;
+
+  select q.offered_price_cents into v_quoted
+    from quotes q
+   where q.artist_id = p_artist_id
+     and q.project_id = v_project.id
+     and q.status = 'open'
+     and (q.valid_until is null or q.valid_until > now())
+   order by q.created_at desc
+   limit 1;
+
+  select pb.base_price_cents into v_table
+    from price_book pb
+   where pb.artist_id = p_artist_id
+     and pb.placement = v_project.placement
+     and pb.body_zone = v_project.body_zone
+     and pb.effective_to is null
+   limit 1;
+
+  lead_id            := v_lead.id;
+  project_id         := v_project.id;
+  is_new             := v_is_new;
+  name               := v_lead.name;
+  phone_e164         := v_lead.phone_e164;
+  stage_key          := v_project.stage_key;
+  placement          := v_project.placement;
+  body_zone          := v_project.body_zone;
+  style              := v_project.style;
+  first_tattoo       := v_project.first_tattoo;
+  meaning            := v_project.meaning;
+  tattoo_type        := v_project.tattoo_type;
+  table_price_cents  := v_table;
+  quoted_price_cents := v_quoted;
+  agent_state        := coalesce(v_state, '{}'::jsonb);
+
+  return next;
 end;
 $$;
 
