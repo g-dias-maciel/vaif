@@ -21,17 +21,26 @@
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "const body = $json.body || {};\nconst token = body.admin_token || '';\nconst expected = $env.VAIF_ADMIN_TOKEN || '';\nreturn [{ json: { authorized: token !== '' && token === expected, body: body } }];"
+        "operation": "executeQuery",
+        "query": "SELECT EXISTS (\n  SELECT 1 FROM admin_settings\n   WHERE key = 'promotions_token' AND value = md5($1::text)\n) AS authorized,\n$2::jsonb AS body;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.admin_token || '', JSON.stringify($json.body || {})] }}"
+        }
       },
-      "type": "n8n-nodes-base.code",
-      "typeVersion": 2,
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
       "position": [
-        260,
+        400,
         0
       ],
-      "id": "promo-auth-0000-0000-0000-000000000001",
-      "name": "Authorize"
+      "id": "promo-auth-check-0000-0000-0000-000000000001",
+      "name": "Check Admin Token",
+      "credentials": {
+        "postgres": {
+          "id": "vboyB1OhLNIXIBWt",
+          "name": "admin-db"
+        }
+      }
     },
     {
       "parameters": {
@@ -60,7 +69,7 @@
       "type": "n8n-nodes-base.if",
       "typeVersion": 2.2,
       "position": [
-        520,
+        620,
         0
       ],
       "id": "promo-auth-if-0000-0000-0000-000000000001",
@@ -359,14 +368,14 @@
       "main": [
         [
           {
-            "node": "Authorize",
+            "node": "Check Admin Token",
             "type": "main",
             "index": 0
           }
         ]
       ]
     },
-    "Authorize": {
+    "Check Admin Token": {
       "main": [
         [
           {

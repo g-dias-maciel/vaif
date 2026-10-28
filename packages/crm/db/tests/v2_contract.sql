@@ -694,6 +694,12 @@ begin
   j := reset_leads('slug-b');
   perform pg_temp.ok((j->>'artist_slug') = 'slug-b', 'reset_leads echoes the slug');
   perform pg_temp.ok((j->>'leads')::int >= 0, 'reset_leads reports a lead count');
+
+  -- Shared admin tokens are app-only, invisible to analytics.
+  perform pg_temp.ok(has_table_privilege('crm_app', 'admin_settings', 'select'),
+    'crm_app can read admin_settings');
+  perform pg_temp.ok(not has_table_privilege('analytics_ro', 'admin_settings', 'select'),
+    'analytics_ro cannot read admin_settings');
 end;
 $$;
 

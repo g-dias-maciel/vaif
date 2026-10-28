@@ -528,6 +528,7 @@ The main tables:
 | `returning_customers` | Old clients per artist |
 | `events` | Monthly-partitioned audit log |
 | `agent_memory.chat_memory` | n8n Postgres Chat Memory (agent-owned schema, 30-day purge) |
+| `admin_settings` | Shared admin token hashes (crm_app only; not visible to analytics) |
 
 The accepted schema for 1,000+ Artists is in
 [`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)

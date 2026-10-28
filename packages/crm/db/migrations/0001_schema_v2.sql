@@ -475,6 +475,21 @@ create table returning_customers (
 
 
 -- =============================================================================
+-- 10b. Admin secrets (shared tokens for the VAIF admin workflows)
+--
+-- n8n runs with N8N_BLOCK_ENV_ACCESS_IN_NODE=true, so a workflow cannot read
+-- `$env`. Shared admin tokens are stored as a one-way hash and compared in SQL
+-- by the workflow. Only `crm_app` can read this table; `analytics_ro` cannot.
+-- =============================================================================
+
+create table admin_settings (
+  key        text primary key,
+  value      text not null,                 -- e.g. md5(token)
+  updated_at timestamptz not null default now()
+);
+
+
+-- =============================================================================
 -- 11. Conversation memory (design §5.10) — owned by the n8n memory node
 -- =============================================================================
 

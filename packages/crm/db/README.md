@@ -53,8 +53,13 @@ createdb vaif_restore_test
 pg_restore -d vaif_restore_test --no-owner < vaif_crm-<ts>.dump
 ```
 
-A dump on the same host does not survive losing the host — add an off-host copy
-(rsync/S3/rclone) once the destination is chosen.
+Each run also uploads the dump, its sha256 and the role dump to
+`gdrive:vaif-crm-backups` (Google Drive via rclone, credential at
+`/root/.config/rclone/rclone.conf`, mode 600) and applies the same 30-day
+retention there. Restoring from the remote copy has been tested.
+
+The local dump still lives on the same host; the Drive copy is the off-host
+protection. PITR is still open.
 
 ## `cutover-v2.sh`
 

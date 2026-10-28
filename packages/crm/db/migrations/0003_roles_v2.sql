@@ -49,6 +49,8 @@ grant usage, select on all sequences in schema public to crm_app;
 -- analytics_ro: read-only
 -- ---------------------------------------------------------------------------
 grant select on all tables in schema public to analytics_ro;
+-- Shared admin tokens are not analytics data.
+revoke select on admin_settings from analytics_ro;
 
 -- ---------------------------------------------------------------------------
 -- agent_rw: no domain table access at all; only the RPC surface.

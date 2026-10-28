@@ -26,11 +26,6 @@ BASE = os.path.dirname(os.path.abspath(__file__))
 MAIN_DB = {"postgres": {"id": "vboyB1OhLNIXIBWt", "name": "admin-db"}}
 WEBHOOK_PATH = "promotions"
 
-AUTH_JS = r"""const body = $json.body || {};
-const token = body.admin_token || '';
-const expected = $env.VAIF_ADMIN_TOKEN || '';
-return [{ json: { authorized: token !== '' && token === expected, body: body } }];"""
-
 LIST_ARTISTS_QUERY = """\
 SELECT a.id, COALESCE(NULLIF(s.display_name, ''), a.name) AS nome, a.status,
        (SELECT p.name FROM promotions p WHERE p.artist_id = a.id AND p.status = 'active' LIMIT 1) AS active_promotion
@@ -122,12 +117,23 @@ WF = {
             "webhookId": "promo-webhook-0000-0000-0000-000000000001",
         },
         {
-            "parameters": {"mode": "runOnceForAllItems", "jsCode": AUTH_JS},
-            "type": "n8n-nodes-base.code",
-            "typeVersion": 2,
-            "position": [260, 0],
-            "id": "promo-auth-0000-0000-0000-000000000001",
-            "name": "Authorize",
+            "parameters": {
+                "operation": "executeQuery",
+                "query": """SELECT EXISTS (
+  SELECT 1 FROM admin_settings
+   WHERE key = 'promotions_token' AND value = md5($1::text)
+) AS authorized,
+$2::jsonb AS body;""",
+                "options": {
+                    "queryReplacement": "={{ [$json.body.admin_token || '', JSON.stringify($json.body || {})] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [400, 0],
+            "id": "promo-auth-check-0000-0000-0000-000000000001",
+            "name": "Check Admin Token",
+            "credentials": MAIN_DB,
         },
         {
             "parameters": {
@@ -152,7 +158,7 @@ WF = {
             },
             "type": "n8n-nodes-base.if",
             "typeVersion": 2.2,
-            "position": [520, 0],
+            "position": [620, 0],
             "id": "promo-auth-if-0000-0000-0000-000000000001",
             "name": "Authorized?",
         },
@@ -344,9 +350,9 @@ WF = {
     ],
     "connections": {
         "Promotions Webhook": {
-            "main": [[{"node": "Authorize", "type": "main", "index": 0}]]
+            "main": [[{"node": "Check Admin Token", "type": "main", "index": 0}]]
         },
-        "Authorize": {
+        "Check Admin Token": {
             "main": [[{"node": "Authorized?", "type": "main", "index": 0}]]
         },
         "Authorized?": {

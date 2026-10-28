@@ -952,9 +952,10 @@ Remaining operational follow-ups:
 2. Set `VAIF_ADMIN_TOKEN` in the n8n environment — the promotions webhook
    authorizes against it and currently returns 401 without it.
 3. **Backups**: nightly `pg_dump` + role dump at 03:15 UTC with 30-day
-   retention and a tested restore (`/var/backups/vaif-crm`). Add an off-host
-   copy and/or PITR (WAL-G/pgBackRest) — the local dump does not survive losing
-   the host.
+   retention and a tested restore (`/var/backups/vaif-crm`). The same files are
+   copied to Google Drive (`gdrive:vaif-crm-backups`) with the same retention;
+   a restore from the remote copy was tested. PITR (WAL-G/pgBackRest) is still
+   open.
 4. Run the synthetic load test (1,000 Artists / 3M Leads / 15M Events).
 
 **Phase 4 — operations.**
@@ -965,8 +966,10 @@ Remaining operational follow-ups:
 - Done 2026-10-28: nightly `pg_dump` + role dump at 03:15 UTC, 30-day
   retention, `pg_restore --list` validation, restore tested
   (`packages/crm/db/backup-v2.sh`).
-- Still open: off-host copy and PITR (WAL-G/pgBackRest sidecar on Coolify),
-  plus a quarterly restore drill.
+- Done 2026-10-28: off-host copy to Google Drive via rclone
+  (`gdrive:vaif-crm-backups`), same 30-day window, remote restore tested.
+- Still open: PITR (WAL-G/pgBackRest sidecar on Coolify) and a quarterly
+  restore drill.
 
 Rollback before cutover is trivial: the v1 tables are untouched until Phase 3.
 After cutover, keep a `pg_dump` of the pre-cutover database.
