@@ -21,6 +21,7 @@
 #   DB_USER=postgres
 #   DB_NAME=postgres
 #   RESTORE_USERS=yes    preserve existing CRM logins (users table only)
+#   SEED_DEMO=yes        load seed.sql (demo Artist "Bruno") after the rebuild
 #   AUTO_ROLLBACK=yes    restore the backup if any step fails (default yes)
 # =============================================================================
 set -euo pipefail
@@ -54,12 +55,36 @@ die() { printf '[rebuild] ERROR: %s\n' "$*" >&2; exit 1; }
 command -v docker >/dev/null || die "docker not found; run this on the Coolify host"
 timeout 10 docker info >/dev/null 2>&1 || die "cannot talk to the Docker daemon (try sudo)"
 
-PG_CONTAINER="${PG_CONTAINER:-$(docker ps --format '{{.Names}}\t{{.Image}}' \
-  | awk -F'\t' 'tolower($2) ~ /postgres/ {print $1; exit}')}"
-[ -n "${PG_CONTAINER:-}" ] || die "no postgres container found; set PG_CONTAINER"
+# Auto-detection is deliberately conservative: this host runs several Postgres
+# containers (Coolify's own, n8n, ...) and picking the wrong one drops the wrong
+# database. Only a container that actually has public.leads is the CRM.
+if [ -z "${PG_CONTAINER:-}" ]; then
+  for name in $(docker ps --format '{{.Names}}'); do
+    image="$(docker inspect -f '{{.Config.Image}}' "$name" 2>/dev/null || true)"
+    case "$image" in
+      *postgres*) ;;
+      *) continue ;;
+    esac
+    if docker exec "$name" psql -U "$DB_USER" -d "$DB_NAME" -Atc \
+        "select to_regclass('public.leads') is not null" 2>/dev/null | grep -qx t; then
+      PG_CONTAINER="$name"
+      break
+    fi
+  done
+fi
+[ -n "${PG_CONTAINER:-}" ] || die "no postgres container has table public.leads; set PG_CONTAINER"
 
-APP_CONTAINER="${APP_CONTAINER:-$(docker ps --format '{{.Names}}\t{{.Image}}' \
-  | awk -F'\t' 'tolower($1 $2) ~ /crm/ {print $1; exit}')}"
+# Same for the app: prefer the container Coolify labels as the crm.vaif.com.br
+# site, never a container that merely has 'crm' somewhere in its name.
+if [ -z "${APP_CONTAINER:-}" ]; then
+  for name in $(docker ps --format '{{.Names}}'); do
+    if docker inspect -f '{{range $k, $v := .Config.Labels}}{{$k}}={{$v}}{{"\n"}}{{end}}' \
+        "$name" 2>/dev/null | grep -q 'crm\.vaif\.com\.br'; then
+      APP_CONTAINER="$name"
+      break
+    fi
+  done
+fi
 [ -n "${APP_CONTAINER:-}" ] || log "WARNING: no crm container found; set APP_CONTAINER to run Laravel migrations"
 
 TS="$(date +%Y%m%d-%H%M%S)"
@@ -84,6 +109,8 @@ fi
 rollback() {
   [ "$AUTO_ROLLBACK" = "yes" ] || { log "AUTO_ROLLBACK=no, leaving database as-is"; return; }
   log "rolling back from $BACKUP"
+  docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -c \
+    'select pg_terminate_backend(pid) from pg_stat_activity where datname = current_database() and pid <> pg_backend_pid();' >/dev/null 2>&1 || true
   docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
     -c 'drop schema public cascade; create schema public;' || true
   docker exec -i "$PG_CONTAINER" pg_restore -U "$DB_USER" -d "$DB_NAME" --no-owner --no-privileges \
@@ -102,6 +129,11 @@ fi
 # --- 3. Rebuild --------------------------------------------------------------
 log "dropping schema public"
 docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 <<'SQL'
+-- n8n and pgAdmin hold idle connections to the same database; they would block
+-- the DROP. They reconnect on their own.
+select pg_terminate_backend(pid)
+from pg_stat_activity
+where datname = current_database() and pid <> pg_backend_pid();
 drop schema public cascade;
 create schema public;
 alter schema public owner to current_user;
@@ -112,6 +144,12 @@ docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP
 
 log "applying 20261022000000_offers_and_chat_control.sql"
 docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$SQL_OFFERS"
+
+if [ "${SEED_DEMO:-no}" = "yes" ] && [ -f "$SUPABASE_DIR/seed.sql" ]; then
+  log "seeding demo Artist (Bruno)"
+  docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 \
+    < "$SUPABASE_DIR/seed.sql" || log "WARNING: demo seed failed"
+fi
 
 # --- 4. Start the app (entrypoint runs Laravel migrations) -------------------
 if [ -n "${APP_CONTAINER:-}" ]; then
@@ -132,9 +170,13 @@ fi
 if [ "$RESTORE_USERS" = "yes" ] && [ -s "$USERS_DUMP" ]; then
   log "restoring users"
   if docker exec -i "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 < "$USERS_DUMP"; then
+    # The dump has explicit ids but no sequence value (--table selects only the
+    # table), so advance users_id_seq past the restored rows.
+    docker exec "$PG_CONTAINER" psql -U "$DB_USER" -d "$DB_NAME" -v ON_ERROR_STOP=1 -q -c \
+      "select setval(pg_get_serial_sequence('users','id'), coalesce((select max(id) from users), 1))" >/dev/null
     log "users restored"
   else
-    log "WARNING: users restore failed (artist FK?); create a login with: php artisan crm:make-staff you@example.com"
+    log "WARNING: users restore failed; create a login with: php artisan crm:make-staff you@example.com"
   fi
 fi
 
@@ -167,7 +209,9 @@ if [ -n "${APP_CONTAINER:-}" ]; then
 fi
 
 log "done. backup kept at $BACKUP"
-log "demo Artist: Bruno (b0000000-0000-0000-0000-000000000001)"
+if [ "${SEED_DEMO:-no}" = "yes" ]; then
+  log "demo Artist: Bruno (b0000000-0000-0000-0000-000000000001)"
+fi
 if [ -n "${APP_CONTAINER:-}" ]; then
   log "create a staff login with: docker exec -w /app $APP_CONTAINER php artisan crm:make-staff you@example.com"
 fi
