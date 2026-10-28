@@ -120,10 +120,19 @@ def update_workflow(wf_id, def_path):
     if was_active and not result.get("active"):
         request("POST", f"/workflows/{wf_id}/activate", {})
         print(f"Re-activated: {wf_id}")
+    if was_active:
+        # n8n 2.x keeps a published version separate from the draft; without
+        # this the webhook keeps running the previous version.
+        publish(wf_id)
+
+def publish(wf_id):
+    request("POST", f"/workflows/{wf_id}/publish", {})
+    print(f"Published: {wf_id}")
 
 def activate(wf_id):
     request("POST", f"/workflows/{wf_id}/activate", {})
     print(f"Activated: {wf_id}")
+    publish(wf_id)
 
 def deactivate(wf_id):
     request("POST", f"/workflows/{wf_id}/deactivate", {})
