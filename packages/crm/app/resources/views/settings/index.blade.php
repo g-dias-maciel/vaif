@@ -70,9 +70,17 @@
         <p class="meta">
             Conectada em {{ $artist->google_connected_at?->format('d/m/Y H:i') }}
             @if ($artist->google_calendar_timezone)
-                · Fuso: {{ $artist->google_calendar_timezone }}
+                · Fuso da agenda Google: {{ $artist->google_calendar_timezone }}
             @endif
         </p>
+
+        @if ($artist->google_calendar_timezone && $artist->google_calendar_timezone !== $artist->timezone)
+            <div class="flash error" style="display:block; margin-top:10px;">
+                O fuso da Google Agenda ({{ $artist->google_calendar_timezone }}) é diferente do fuso do CRM
+                ({{ $artist->timezone }}). Os eventos podem aparecer em outro horário. Ajuste o fuso da agenda
+                no Google para {{ $artist->timezone }} e clique em “Sincronizar agora”.
+            </div>
+        @endif
 
         <div class="actions-row">
             <form method="post" action="{{ route('settings.google.sync') }}" class="inline">
