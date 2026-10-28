@@ -499,8 +499,8 @@ Core behavior:
 
 The v1 `migration-beatriz.json` DB Migration workflow is retired: schema changes
 ship as SQL migrations applied by the deploy step, not by an n8n workflow. The
-Telegram testbed (`beatriz-telegram.json`) is also retired; the WhatsApp agent
-is the only deployed SDR.
+Telegram testbed was removed with the v1 schema; the WhatsApp agent is the only
+deployed SDR.
 
 ### 6.3 Database contract
 
@@ -550,8 +550,7 @@ _clear`, `chat_owner`, `take_chat_control`, `return_chat_control`, `start_turn`,
 
 ### 6.4 Deploy and test
 
-Validate/normalize a workflow JSON (`build-workflow.py` is retired with the
-Telegram testbed; the WhatsApp builder is the source of truth):
+Regenerate a workflow from its builder (the builders are the source of truth):
 
 ```bash
 python3 packages/flows/definitions/build-whatsapp-workflow.py
@@ -583,11 +582,10 @@ node packages/flows/tests/integration/calendar-agenda.js
 node packages/flows/tests/integration/full-workflow.js
 ```
 
-### 6.5 Telegram testbed (retired)
+### 6.5 Telegram testbed (removed)
 
-`beatriz-telegram.json` targeted the v1 schema and is no longer deployed. The
-WhatsApp agent is the only SDR; `packages/flows/beatriz-telegram/README.md` is
-kept for historical context.
+The Telegram testbed targeted the v1 schema and was removed with it. The
+WhatsApp agent is the only SDR; use `full-workflow.js` for end-to-end testing.
 
 ---
 
@@ -881,7 +879,7 @@ debounce/typing, humanized delay and notification text.
 | LP deployment | `packages/lp/DEPLOY-COOLIFY.md` |
 | CRM app notes | `packages/crm/app/README.md` |
 | CRM deployment | `packages/crm/app/DEPLOY-COOLIFY.md` |
-| Beatriz testbed | `packages/flows/beatriz-telegram/README.md` |
+| Beatriz end-to-end test | `packages/flows/tests/integration/full-workflow.js` |
 | Beatriz prompt | `packages/flows/prompts/beatriz-system.md` |
 | Conversation tests | `packages/flows/tests/conversation/README.md` |
 | Integration tests | `packages/flows/tests/integration/README.md` |
