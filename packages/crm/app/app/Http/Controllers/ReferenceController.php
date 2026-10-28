@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Project;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
@@ -52,18 +53,31 @@ class ReferenceController extends Controller
             ], 422);
         }
 
-        $refs = $project->reference_pics ?? [];
-        if (! in_array($stored, $refs, true)) {
-            $refs[] = $stored;
-            $refs = array_slice($refs, -self::MAX_REFERENCES);
-            $project->reference_pics = $refs;
-            $project->save();
-        }
+        // Serialise concurrent uploads for the same Project: n8n sends the
+        // picture and each link as separate items in parallel, and a plain
+        // read-modify-write would drop all but the last one.
+        $project = DB::transaction(function () use ($project, $stored) {
+            $locked = Project::query()
+                ->where('artist_id', $project->artist_id)
+                ->whereKey($project->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $refs = $locked->reference_pics ?? [];
+            if (! in_array($stored, $refs, true)) {
+                $refs[] = $stored;
+                $refs = array_slice($refs, -self::MAX_REFERENCES);
+                $locked->reference_pics = $refs;
+                $locked->save();
+            }
+
+            return $locked;
+        });
 
         return response()->json([
             'ok' => true,
             'reference' => $stored,
-            'references' => $project->fresh()->reference_pics ?? [],
+            'references' => $project->reference_pics ?? [],
         ]);
     }
 
