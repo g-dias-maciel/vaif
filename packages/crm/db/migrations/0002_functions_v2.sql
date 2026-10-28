@@ -690,7 +690,8 @@ returns table (
   deposit_amount_cents integer,
   table_price_cents  integer,
   quoted_price_cents integer,
-  agent_state        jsonb
+  agent_state        jsonb,
+  agent_blocked      boolean
 )
 language plpgsql security definer
 set search_path = public, pg_temp
@@ -778,6 +779,7 @@ begin
   table_price_cents  := v_table;
   quoted_price_cents := v_quoted;
   agent_state        := coalesce(v_state, '{}'::jsonb);
+  agent_blocked      := v_lead.agent_blocked_at is not null;
 
   return next;
 end;

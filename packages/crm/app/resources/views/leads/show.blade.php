@@ -17,11 +17,27 @@
         <div><span class="meta">Última mensagem</span><div>{{ $lead->last_message_at?->format('d/m/Y H:i') ?: '—' }}</div></div>
     </div>
 
-    @if ($lead->whatsapp_url)
-        <div style="margin-top: 16px;">
+    <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-top: 16px;">
+        @if ($lead->whatsapp_url)
             <a href="{{ $lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp">WhatsApp</a>
-        </div>
-    @endif
+        @endif
+
+        @if ($lead->agent_blocked)
+            <span class="tag tag-muted">Agente silenciado</span>
+            <form method="post" action="{{ route('leads.agent.toggle', $lead) }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small">Reativar agente</button>
+            </form>
+        @else
+            <form method="post" action="{{ route('leads.agent.toggle', $lead) }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small"
+                        onclick="return confirm('Silenciar a Beatriz para este cliente? Ela deixará de responder automaticamente.');">
+                    Silenciar agente
+                </button>
+            </form>
+        @endif
+    </div>
 </div>
 
 <div class="panel" style="margin-bottom: 20px;">

@@ -541,6 +541,39 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "agent-blocked-cond-0000",
+              "leftValue": "={{ $json.agent_blocked }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        2600,
+        640
+      ],
+      "id": "agent-blocked-0000-0000-0000-000000000001",
+      "name": "Agent Blocked?"
+    },
+    {
+      "parameters": {
         "mode": "runOnceForAllItems",
         "jsCode": "const start = $('Debounce Start').first().json || {};\nconst turn = $('Start Turn').first().json || {};\nconst artist = $('Resolve Artist').first().json || {};\n\nif (!turn.project_id || !artist.id) return [];\n\nconst refs = [];\nif (start.media_url) {\n  refs.push({ artist_id: artist.id, project_id: turn.project_id, url: start.media_url, mime: start.media_mime || null });\n}\nfor (const link of (start.links || [])) {\n  if (link && link !== start.media_url) {\n    refs.push({ artist_id: artist.id, project_id: turn.project_id, url: link, mime: null });\n  }\n}\n\nreturn refs.slice(0, 6).map(r => ({ json: r }));"
       },
@@ -1364,6 +1397,18 @@
     },
     "Start Turn": {
       "main": [
+        [
+          {
+            "node": "Agent Blocked?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Agent Blocked?": {
+      "main": [
+        [],
         [
           {
             "node": "Load Offer",

@@ -66,6 +66,7 @@ return new class extends Migration
             $table->dateTime('first_seen_at')->nullable();
             $table->dateTime('last_message_at')->nullable();
             $table->dateTime('archived_at')->nullable();
+            $table->dateTime('agent_blocked_at')->nullable();
             $table->dateTime('anonymized_at')->nullable();
             $table->timestamps();
 

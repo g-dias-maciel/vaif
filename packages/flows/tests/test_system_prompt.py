@@ -145,10 +145,12 @@ check("Patch Chat State → humanize → Send WAHA Message → Stop Typing → h
       and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Send WAHA Message"
       and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
-check("Clear Buffer → Check Chat Owner → Start Turn → Load Offer → Load Pricing → Build System Prompt → AI Agent",
+check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Load Offer → Load Pricing → Build System Prompt → AI Agent",
       wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
       and wf["connections"]["Chat Owned by Artist?"]["main"][1][0]["node"] == "Start Turn"
-      and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Load Offer"
+      and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Agent Blocked?"
+      and wf["connections"]["Agent Blocked?"]["main"][0] == []
+      and [c["node"] for c in wf["connections"]["Agent Blocked?"]["main"][1]] == ["Load Offer", "Build References"]
       and wf["connections"]["Load Offer"]["main"][0][0]["node"] == "Load Pricing"
       and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Build System Prompt"
       and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "AI Agent")

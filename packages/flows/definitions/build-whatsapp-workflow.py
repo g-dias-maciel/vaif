@@ -1349,6 +1349,34 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Start Turn",
             "credentials": POSTGRES,
         },
+        # 16a. Agent Blocked? — the artist silenced the SDR for this Lead.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "agent-blocked-cond-0000",
+                            "leftValue": "={{ $json.agent_blocked }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [2600, 640],
+            "id": "agent-blocked-0000-0000-0000-000000000001",
+            "name": "Agent Blocked?",
+        },
         # 16b. Build References — the inbound picture/links, once the Project exists.
         {
             "parameters": {
@@ -1885,10 +1913,16 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             ]
         },
         "Start Turn": {
-            "main": [[
-                {"node": "Load Offer", "type": "main", "index": 0},
-                {"node": "Build References", "type": "main", "index": 0},
-            ]]
+            "main": [[{"node": "Agent Blocked?", "type": "main", "index": 0}]]
+        },
+        "Agent Blocked?": {
+            "main": [
+                [],
+                [
+                    {"node": "Load Offer", "type": "main", "index": 0},
+                    {"node": "Build References", "type": "main", "index": 0},
+                ],
+            ]
         },
         "Build References": {
             "main": [[{"node": "Save References", "type": "main", "index": 0}]]

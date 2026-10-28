@@ -65,6 +65,25 @@ class LeadController extends Controller
     }
 
     /**
+     * Silence or reactivate the SDR for this Lead. The agent still records the
+     * inbound message but sends no automatic reply while the flag is set.
+     */
+    public function toggleAgent(Lead $lead)
+    {
+        $this->authorize('flagAgent', $lead);
+
+        $blocked = $lead->agent_blocked_at !== null;
+
+        $lead->forceFill([
+            'agent_blocked_at' => $blocked ? null : now(),
+        ])->save();
+
+        return back()->with('status', $blocked
+            ? 'Agente reativado para este cliente.'
+            : 'Agente silenciado para este cliente. A Beatriz não responderá mais automaticamente.');
+    }
+
+    /**
      * Add an internal note to a Lead.
      */
     public function storeNote(Request $request, Lead $lead)

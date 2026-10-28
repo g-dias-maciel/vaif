@@ -484,6 +484,17 @@ begin
   perform pg_temp.ok(t2.lead_id = t1.lead_id, 'the same Lead is reused');
   perform pg_temp.ok(t2.project_id = t1.project_id, 'the same open Project is reused');
 
+  -- The artist can silence the SDR for this person.
+  update leads set agent_blocked_at = now() where id = t1.lead_id;
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
+  perform pg_temp.ok(t2.agent_blocked, 'start_turn reports the silenced Lead');
+
+  update leads set agent_blocked_at = null where id = t1.lead_id;
+  select * into t2 from start_turn(
+    pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
+  perform pg_temp.ok(not t2.agent_blocked, 'unblocking resumes the agent');
+
   -- Load Offer must always produce a row, even with no promotion or quote.
   select * into o from active_offer_for_project(pg_temp.artist_a(), t1.project_id);
   perform pg_temp.ok(o.promo_active is false, 'no active promotion reports promo_active=false');

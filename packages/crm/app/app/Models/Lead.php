@@ -29,6 +29,7 @@ class Lead extends Model
         'first_seen_at',
         'last_message_at',
         'archived_at',
+        'agent_blocked_at',
         'anonymized_at',
     ];
 
@@ -36,6 +37,7 @@ class Lead extends Model
         'first_seen_at' => 'datetime',
         'last_message_at' => 'datetime',
         'archived_at' => 'datetime',
+        'agent_blocked_at' => 'datetime',
         'anonymized_at' => 'datetime',
     ];
 
@@ -94,6 +96,11 @@ class Lead extends Model
      * Whether this Lead is an old / returning client: their phone is already
      * in the returning_customers table (a prior confirmed tattoo or an import).
      */
+    public function getAgentBlockedAttribute(): bool
+    {
+        return $this->agent_blocked_at !== null;
+    }
+
     public function getIsReturningAttribute(): bool
     {
         return DB::table('returning_customers')

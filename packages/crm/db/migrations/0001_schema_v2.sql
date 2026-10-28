@@ -82,6 +82,9 @@ create table leads (
   first_seen_at   timestamptz not null default now(),
   last_message_at timestamptz,
   archived_at     timestamptz,
+  -- The artist silenced the SDR for this person. The agent still records the
+  -- inbound message (start_turn) but sends no reply while this is set.
+  agent_blocked_at timestamptz,
   anonymized_at   timestamptz,                     -- LGPD erasure marker
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now(),

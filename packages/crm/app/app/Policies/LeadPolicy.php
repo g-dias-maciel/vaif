@@ -34,6 +34,20 @@ class LeadPolicy
     }
 
     /**
+     * Whether the user can silence/reactivate the SDR for this Lead.
+     */
+    public function flagAgent(User $user, Lead $lead): bool
+    {
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        return $user->isArtist()
+            && $user->artist_id !== null
+            && $lead->artist_id === $user->artist_id;
+    }
+
+    /**
      * Whether the user can mark this Lead's project as lost (perdido).
      */
     public function markLost(User $user, Lead $lead): bool
