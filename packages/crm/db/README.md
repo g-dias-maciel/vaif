@@ -29,6 +29,33 @@ v1 `postgres` database in the same cluster:
 - `v1_to_v2_tenants.sql` — `artists`, `artist_settings`, `price_book`
 - `v1_to_v2_users.sql` — `users`, `notes` (run after Laravel migrations)
 
+## `backup-v2.sh`
+
+Nightly logical backup of `vaif_crm` (custom format) plus the cluster roles
+(login roles/passwords are not in a database dump). Retention is 30 days and
+every dump is validated with `pg_restore --list` before it replaces the
+previous one.
+
+Installed on the Coolify host as `/opt/vaif-crm/backup-v2.sh`, run by
+`/etc/cron.d/vaif-crm-backup` at **03:15 UTC**:
+
+```bash
+install -m 700 backup-v2.sh /opt/vaif-crm/backup-v2.sh
+printf '15 3 * * * root /opt/vaif-crm/backup-v2.sh >> /var/log/vaif-crm-backup.log 2>&1\n' \
+  > /etc/cron.d/vaif-crm-backup
+```
+
+Files land in `/var/backups/vaif-crm/` (mode 600). A restore into a scratch
+database has been tested:
+
+```bash
+createdb vaif_restore_test
+pg_restore -d vaif_restore_test --no-owner < vaif_crm-<ts>.dump
+```
+
+A dump on the same host does not survive losing the host — add an off-host copy
+(rsync/S3/rclone) once the destination is chosen.
+
 ## `cutover-v2.sh`
 
 Guarded cutover helper (run on the Coolify host):

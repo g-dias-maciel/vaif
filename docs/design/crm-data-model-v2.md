@@ -951,7 +951,10 @@ Remaining operational follow-ups:
    cutover) and update the Coolify env + n8n credentials.
 2. Set `VAIF_ADMIN_TOKEN` in the n8n environment — the promotions webhook
    authorizes against it and currently returns 401 without it.
-3. Decide and enable the backup mechanism (WAL-G/pgBackRest or nightly dump).
+3. **Backups**: nightly `pg_dump` + role dump at 03:15 UTC with 30-day
+   retention and a tested restore (`/var/backups/vaif-crm`). Add an off-host
+   copy and/or PITR (WAL-G/pgBackRest) — the local dump does not survive losing
+   the host.
 4. Run the synthetic load test (1,000 Artists / 3M Leads / 15M Events).
 
 **Phase 4 — operations.**
@@ -959,8 +962,11 @@ Remaining operational follow-ups:
 - Retention jobs: anonymize Leads older than 5 years; drop Event partitions
   older than 24 months after exporting them to object storage.
 - Daily metrics rollup (when analytics needs it).
-- PITR backup + quarterly restore test (WAL-G/pgBackRest sidecar on Coolify, or
-  scheduled `pg_dump` until PITR is in place).
+- Done 2026-10-28: nightly `pg_dump` + role dump at 03:15 UTC, 30-day
+  retention, `pg_restore --list` validation, restore tested
+  (`packages/crm/db/backup-v2.sh`).
+- Still open: off-host copy and PITR (WAL-G/pgBackRest sidecar on Coolify),
+  plus a quarterly restore drill.
 
 Rollback before cutover is trivial: the v1 tables are untouched until Phase 3.
 After cutover, keep a `pg_dump` of the pre-cutover database.
