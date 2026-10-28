@@ -132,6 +132,7 @@ declare
   q2     quotes;
   n      integer;
   stage  text;
+  t      record;
 begin
   select id into lead_a from leads
    where artist_id = pg_temp.artist_a() and phone_e164 = '+5511987654321';
@@ -155,6 +156,13 @@ begin
 
   select stage_key into stage from projects where id = p.id;
   perform pg_temp.ok(stage = 'orcamento_enviado', 'sending a quote advances the stage');
+
+  -- start_turn surfaces the live quote for the prompt.
+  select * into t from start_turn(
+    pg_temp.artist_a(), 'slug-a:+5511987654321', '+5511987654321');
+  perform pg_temp.ok(t.project_id = p.id, 'start_turn reuses the open Project');
+  perform pg_temp.ok(t.quoted_price_cents = 50000,
+    'start_turn returns the open quote price, got ' || coalesce(t.quoted_price_cents::text, 'null'));
 end;
 $$;
 
