@@ -86,6 +86,13 @@ class SettingsController extends Controller
             'regions' => $regions,
             'waha' => $waha,
             'qr' => $qr,
+            'stateLabels' => [
+                'WORKING' => 'Conectado',
+                'SCAN_QR_CODE' => 'Aguardando leitura do QR code',
+                'STARTING' => 'Iniciando…',
+                'FAILED' => 'Falhou',
+                'STOPPED' => 'Desconectado',
+            ],
         ]);
     }
 
