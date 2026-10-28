@@ -2086,6 +2086,44 @@
           "name": "main-db"
         }
       }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE artists ADD COLUMN IF NOT EXISTS pricing_extras JSONB;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1300,
+        2100
+      ],
+      "name": "Mig_109_ALTER",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "ALTER TABLE pricing ADD COLUMN IF NOT EXISTS region TEXT;"
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        260,
+        2200
+      ],
+      "name": "Mig_110_ALTER",
+      "credentials": {
+        "postgres": {
+          "id": "nngaQDfXHYQ1Q43P",
+          "name": "main-db"
+        }
+      }
     }
   ],
   "connections": {
@@ -3282,6 +3320,28 @@
         [
           {
             "node": "Mig_108_FN_confirm_deposit",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_108_FN_confirm_deposit": {
+      "main": [
+        [
+          {
+            "node": "Mig_109_ALTER",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mig_109_ALTER": {
+      "main": [
+        [
+          {
+            "node": "Mig_110_ALTER",
             "type": "main",
             "index": 0
           }

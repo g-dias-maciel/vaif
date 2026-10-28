@@ -50,71 +50,100 @@ are the underlying causes.
 
 ### 2.1 Correctness bugs that will not survive 1,000 tenants
 
+All of the following were verified against the production dump captured on
+2026-10-28 (`packages/crm/db/baseline/0001_production.sql`).
+
 1. **Chat state is keyed by `chat_id` alone.**
    `message_buffer.chat_id` and `chat_control.chat_id` are global primary keys
-   (`001_idempotent_schema.sql:175`, `:973`). The same phone can talk to two
-   Artists; their buffers and ownership would collide. This is a data-leak bug,
-   not a scaling one.
+   (`001_idempotent_schema.sql:175`, `:973`). Today the n8n Code nodes build
+   `chat_id` as `session:phone` and the WAHA session slug is unique per Artist,
+   so collisions do not happen *yet* — but the database does not enforce the
+   convention. Any new writer, or a shared WAHA session, collides across
+   tenants. Not a live leak; a latent one.
 2. **No unique Lead per `(artist_id, phone)`.**
-   `CONTEXT.md` defines "one Lead per person per Artist", but `leads` has no
-   unique constraint (`001_idempotent_schema.sql:52–89`). Duplicates are one
-   retry away.
-3. **One row = person + job.**
+   `CONTEXT.md` defines "one Lead per person per Artist", but production has
+   only a non-unique `idx_leads_artist_phone` on `(artist_id, telefone)`.
+   Duplicates are one retry away. The dump is schema-only, so run
+   `select count(*) - count(distinct (artist_id, telefone)) from leads;` in
+   Phase 0 to measure existing duplicates.
+3. **Four core tables have no foreign key to `artists`.**
+   `leads.artist_id`, `pricing.artist_id`, `calendar.artist_id` and
+   `events.artist_id` are plain `uuid NOT NULL` in production. The migration
+   files declare `references artists(id)`, but they use `CREATE TABLE IF NOT
+   EXISTS`, so the constraints were never added to the pre-existing tables.
+   Orphan rows and cross-tenant references are possible today. Only
+   `calendar.lead_id`, `events.lead_id` and the newer promotion/chat tables
+   have FKs.
+4. **One row = person + job.**
    A returning Lead, or a Lead buying two tattoos in one conversation, cannot be
    modelled. The current model overwrites or duplicates. `returning_customers`
    is a workaround for the missing relationship.
-4. **Double-booking is not enforced by the database.**
-   `calendar` has no exclusion constraint (`001_idempotent_schema.sql:148`).
-   Correctness depends on every writer remembering the advisory lock inside
-   `book_slot`. A new writer — the Laravel reschedule path already exists — can
-   violate it.
-5. **Two app columns are missing from every Postgres migration.**
+5. **Double-booking is not enforced by the database.**
+   `calendar` has no exclusion constraint (only
+   `idx_calendar_artist_range`). Correctness depends on every writer
+   remembering the advisory lock inside `book_slot`. A new writer — the Laravel
+   reschedule path already exists — can violate it. `calendar.type` still
+   defaults to `'available'`, a value nothing writes any more.
+6. **Two app columns are missing from production.**
    `pricing.region` and `artists.pricing_extras` are written by
-   `SettingsController` but are not created by any file in
-   `packages/crm/supabase/migrations`; they exist in the SQLite fixture and, at
-   best, as an undocumented manual `ALTER` in production. Saving prices or
-   adding a custom size/location on a clean deploy will fail the same way
-   `tattoos` did.
-6. **`SECURITY DEFINER` functions do not pin `search_path`.**
-   Every RPC in `001_idempotent_schema.sql` is `SECURITY DEFINER` without
-   `SET search_path`. Combined with any default `CREATE` grant on `public`
-   (PostgreSQL 14 and earlier; verify on the deployed version), that is a
-   privilege-escalation footgun.
+   `SettingsController` but exist in no Postgres migration and **not in
+   production either**. Saving prices or adding a custom size/location fails
+   with `SQLSTATE 42703` (`column does not exist`) on the deployed stack, the
+   same class of failure as the `tattoos` outage.
+7. **All 31 production RPCs are `SECURITY DEFINER` without `search_path`.**
+   Confirmed in the dump. Combined with a superuser connection and a writable
+   `public` schema, that is a privilege-escalation footgun.
+8. **RLS is partial.**
+   Only `chat_control`, `promotion_prices`, `promotion_quotes`, `promotions`
+   and `returning_customers` have RLS. `artists`, `leads`, `calendar`, `events`
+   and `pricing` do not. The policies read
+   `current_setting('app.artist_id')` without `missing_ok`, so any session that
+   forgets `set_artist_context` errors instead of returning zero rows. It is
+   neither complete isolation nor safe to keep as-is.
 
 ### 2.2 Scale problems
 
-7. **`events` is an unbounded UUID table.**
-   No partitioning, no retention, random UUIDv4 PKs, JSONB payloads
-   (`001_idempotent_schema.sql:160–169`). At 20M rows/year this becomes the
-   largest object and the slowest to vacuum.
-8. **`notion_sync_outbox` is a global queue with no archival.**
-   Done rows accumulate forever; `idx_outbox_pending` only helps the hot path.
-   v2 removes Notion entirely (decision 2026-10-27), so this table and its
-   consumer are deleted rather than redesigned.
-9. **Chat buffer writes are row upserts in Postgres.**
-   Every inbound WhatsApp message upserts `message_buffer`; at 1,000 Artists that
-   is tens of millions of writes/year for ephemeral state that a TTL store should
-   own.
-10. **Analytics scans domain rows.**
+9. **`chat_memory` is the largest unbounded table nobody designed.**
+   The n8n Postgres Chat Memory node creates it at runtime: one row per message,
+   `session_id` only, `jsonb` payload, **no index on `session_id`**, no
+   retention and no migration. At 2–4M Leads/year and ~20 messages per
+   conversation it is 40–80M rows/year, and every agent turn filters it
+   unindexed. This is the first table that will hurt at 1,000 Artists.
+10. **`events` is an unbounded UUID table.**
+    No partitioning, no retention, random UUIDv4 PKs, JSONB payloads, and the
+    only index is `(lead_id, created_at)` — no `(artist_id, created_at)` for the
+    dashboard. At 20M rows/year this becomes the largest designed object and the
+    slowest to vacuum.
+11. **`notion_sync_outbox` is a global queue with no archival.**
+    Done rows accumulate forever; `idx_outbox_pending` only helps the hot path.
+    v2 removes Notion entirely (decision 2026-10-27), so this table and its
+    consumer are deleted rather than redesigned.
+12. **Chat buffer writes are row upserts in Postgres.**
+    Every inbound WhatsApp message upserts `message_buffer`; at 1,000 Artists
+    that is tens of millions of writes/year for ephemeral state that a TTL store
+    should own.
+13. **Analytics scans domain rows.**
     `AnalyticsController` loads all Leads for the Artist and aggregates in PHP.
     At 4k Leads/artist/year this is fine; at 5 years it is not. There is no
     daily rollup.
-11. **Config and secrets share a row.**
-    `artists.notion_token` sits next to display name and working hours
-    (`001_idempotent_schema.sql:49`). Rotating a token touches the tenant row;
-    a tenant dump leaks credentials. v2 drops the Notion token; the remaining
-    WAHA session mapping is infrastructure config, not a tenant secret.
 
 ### 2.3 Operational problems
 
-12. **No migration history.** Three files create/alter the same tables; some
-    columns exist only because someone ran an `ALTER` by hand. There is no way to
-    answer "what is in production?" from the repo.
-13. **No environment parity.** Tests run on a SQLite fixture that has already
+14. **No migration history, and the migrations lie by omission.**
+    Three overlapping files create/alter the same tables, and
+    `CREATE TABLE IF NOT EXISTS` means a table that already exists keeps its old
+    shape forever. That is exactly how the missing FKs and the two missing
+    columns happened. There is no way to answer "what is in production?" from
+    the repo — hence the baseline dump.
+15. **No environment parity.** Tests run on a SQLite fixture that has already
     diverged twice (`tattoos`, `pricing.region`). A green test suite is not
     evidence the schema works.
-14. **No retention policy.** Leads, events and outbox have no archival or LGPD
-    deletion story.
+16. **No retention policy.** Leads, Events, `chat_memory` and the outbox have no
+    archival or LGPD deletion story.
+17. **No database roles.** The dump contains no `GRANT`/`REVOKE` and everything
+    is owned by `postgres`; the app and n8n almost certainly connect as a
+    superuser (confirm the connection strings in Phase 0). A bug or a leaked
+    credential is a full-database compromise.
 
 ---
 
@@ -172,8 +201,8 @@ This deliberately reintroduces a person/job split, but unlike the deleted
 `Tattoo` model it is a real domain distinction, not a phantom table:
 
 - Ana gets a back piece in January and an arm piece in June → **one Lead, two
-  Projects**. The returning badge comes from the prior completed Booking, not a
-  duplicate Lead.
+  Projects**. The returning badge comes from `returning_customers` (written when
+  a deposit is confirmed), not from a duplicate Lead.
 - Carlos buys the "Leve 2" promotion for himself and a friend → **one Lead, two
   Projects**, each with its own placement, quote and deposit.
 - A Lead who only asks for a price → **one Lead, one Project** in
@@ -187,13 +216,14 @@ Project), so the artist-facing UX does not change.
 ## 5. Schema
 
 The DDL below is the core. Target is the **self-hosted Coolify Postgres**
-(decision 2026-10-27); confirm the running major version in Phase 0 before
-applying. Extensions: `btree_gist` (for the calendar exclusion constraint);
+(decision 2026-10-27), confirmed as PostgreSQL **17.7** in the production dump.
+Extensions: `btree_gist` (for the calendar exclusion constraint);
 `gen_random_uuid()` is built into Postgres 13+. UUIDv7 values are generated by
 the application (`Symfony\Component\Uid\UuidV7`, already available through
-Laravel 10's `symfony/uid` dependency). Note: `generated always as identity` on
-a **partitioned** table requires PostgreSQL 17; on PG15/16 use a sequence default
-as shown for `events`.
+Laravel 10's `symfony/uid` dependency). Identity columns on partitioned tables
+are supported on 17, but we use an explicit sequence default for `events`: it
+behaves identically across partition attach/detach and keeps the DDL portable to
+15/16.
 
 ### 5.1 Tenants and configuration
 
@@ -591,7 +621,8 @@ separate `promotion_quotes` table. `promotions` must expose
 not reference another Artist's promotion.
 
 `returning_customers` stays as a cheap lookup/import registry, keyed by
-`(artist_id, phone_e164)`, and is also written when a Booking is completed:
+`(artist_id, phone_e164)`, and is also written by `confirm_deposit` (the current
+production behaviour):
 
 ```sql
 create table returning_customers (
@@ -599,15 +630,16 @@ create table returning_customers (
   phone_e164   text not null,
   name         text,
   source       text not null default 'imported'
-               check (source in ('imported','booking_confirmed')),
+               check (source in ('imported','deposit_confirmed')),
   confirmed_at timestamptz,
   created_at   timestamptz not null default now(),
   primary key (artist_id, phone_e164)
 );
 ```
 
-For correctness, the source of truth is "has a completed booking with this
-Artist"; the table is a cache/import surface, not a second truth.
+For correctness, the source of truth is "has a confirmed deposit or completed
+booking with this Artist"; the table is a cache/import surface, not a second
+truth.
 
 ### 5.8 No async integration queue in v2
 
@@ -647,6 +679,29 @@ The rollup runs on the primary at first. A streaming read replica (Coolify
 Postgres, manual setup) is the next step if chart queries start competing with
 the agent's writes; revisit at ~50M events or when p95 dashboard latency
 regresses.
+
+### 5.10 Conversation memory (n8n-owned today)
+
+The n8n Postgres Chat Memory node creates `chat_memory (id integer, session_id
+varchar, message jsonb)` at runtime. It is one row per message, has **no index
+on `session_id`**, no retention, no `artist_id`, and no migration. At 1,000
+Artists it is the largest table in the database and the agent reads it unindexed
+on every turn.
+
+Two options:
+
+- **A. Keep it, make it safe (v2 default).** Add
+  `create index chat_memory_session on chat_memory (session_id, id);` and a
+  nightly job deleting rows older than 30 days (or older than the Lead's last
+  activity). It is ephemeral agent context, not a system of record, so a short
+  retention is acceptable. Cheapest and does not touch the agent workflow.
+- **B. Replace it with a CRM-owned `messages` table.** Only if the CRM needs to
+  display conversation history: `(id bigint, artist_id, lead_id, direction,
+  body, created_at)` partitioned monthly, retention 24 months, tenant index.
+  This requires replacing the memory node with explicit reads/writes in n8n.
+
+Start with A. `events` remains the audit trail; losing old chat memory must never
+lose business state — the Lead, Project and Booking rows carry that.
 
 ---
 
@@ -783,16 +838,18 @@ Because there are no live Artists, this is a cutover, not a data migration.
 Still do it in verifiable phases.
 
 **Phase 0 — make the current schema knowable (1 day).**
-- Record the deployed Postgres version (`select version()`), confirm
-  `btree_gist` can be installed, and decide the backup mechanism (WAL-G vs
-  nightly dump).
-- `pg_dump --schema-only` the deployed DB; commit it as
-  `packages/crm/db/baseline/0001_production.sql`.
-- Add a CI job that applies the baseline + v2 migrations to a throwaway
-  Postgres container and runs SQL contract tests. No more SQLite-only proof.
-- Fix the two missing columns in the current app if it must stay up before v2:
-  `alter table pricing add column if not exists region text;`
-  `alter table artists add column if not exists pricing_extras jsonb;`
+- Done 2026-10-28: `pg_dump --schema-only` captured as
+  `packages/crm/db/baseline/0001_production.sql`; PostgreSQL **17.7** confirmed;
+  `btree_gist` absent; drift recorded in
+  `docs/design/crm-v1-production-drift.md`.
+- Done 2026-10-28: the two missing app columns were appended to
+  `001_idempotent_schema.sql` (`pricing.region`, `artists.pricing_extras`) and
+  the generated migration workflow was rebuilt. They apply on the next run of
+  the DB Migration workflow.
+- Remaining: add a CI job that applies the baseline + v2 migrations to a
+  throwaway Postgres container and runs SQL contract tests. No more SQLite-only
+  proof.
+- Remaining: decide the backup mechanism (WAL-G/pgBackRest vs nightly dump).
 
 **Phase 1 — build and load-test v2 (2–3 days).**
 - Write `packages/crm/db/migrations/0001_schema_v2.sql` (the DDL above) and
@@ -846,6 +903,7 @@ After cutover, keep a `pg_dump` of the pre-cutover database.
 | Analytics | Daily rollups on the primary; add a streaming read replica when charts compete with writes. |
 | Backups | Coolify does not provide managed PITR: run WAL-G/pgBackRest, or start with daily `pg_dump` + WAL archiving; test restore quarterly. |
 | Monitoring | `pg_stat_statements`, slow query log (>200 ms), partition count/age, replication lag, disk. |
+| Conversation memory | `chat_memory`: index `(session_id, id)` + 30-day purge. Replace with a partitioned `messages` table only if the CRM needs to show history (§5.10). |
 | Secrets | No tenant tokens in the database. WAHA session mapping is infra config; secrets stay in Coolify env vars. |
 | LGPD | 24 months hot Events, 5 years Lead records, then anonymize (`anonymized_at`, `anonymize_lead`); export/delete runbook; do not log phone numbers in app logs. |
 | Notion | Removed. The CRM is the only surface; no per-Artist tokens, no outbox. |
@@ -890,13 +948,15 @@ a schema one, but it should be sized in the same plan.
 | 3 | Payments | **Manual confirmation only** | `payments` stays as an audit trail; Artist confirms deposits in the CRM. Pix automation is a separate idea. |
 | 4 | Retention | **24 months hot Events, 5 years Leads, then anonymize** | Partition drop + `anonymize_lead`; encode in the LGPD runbook. |
 | 5 | Direct DB access | **No**; CRM only | RLS is out of scope. Composite FKs + least-privilege roles are the boundary. ADR-0001's RLS clause is superseded. |
-| 6 | Deployment target | **Self-hosted Coolify Postgres** | `btree_gist` installable; PITR must be added (WAL-G/pgBackRest or dumps); no `pg_partman` dependency (helper function in Appendix B). |
+| 6 | Deployment target | **Self-hosted Coolify Postgres** | Confirmed PostgreSQL **17.7**; `btree_gist` is not installed yet and must be created in Phase 1; PITR must be added (WAL-G/pgBackRest or dumps); no `pg_partman` dependency (helper function in Appendix B). |
 | 7 | Analytics DB | **One primary, read replica later** | Rollups on the primary; revisit at ~50M events or when chart latency regresses. |
 
 ### Remaining unknowns (resolve in Phase 0/1)
 
-- **Postgres major version on Coolify** — decides identity-vs-sequence for new
-  partitioned tables and confirms `btree_gist` availability.
+- **Duplicate Leads in production** — the dump is schema-only; run
+  `select count(*) - count(distinct (artist_id, telefone)) from leads;` before
+  the unique constraint is added. There are no live Artists, so a manual cleanup
+  is acceptable if the count is non-zero.
 - **Coolify backup story** — pick WAL-G vs nightly dump before cutover; "no
   backup" is not acceptable once real Leads exist.
 - **WAHA session capacity** — 1,000 Artists means ~1,000 WhatsApp sessions; size

@@ -1273,3 +1273,12 @@ BEGIN
   RETURN NEXT v_lead;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- ============================================================
+-- Reconcile columns the CRM writes but no earlier migration created.
+-- Confirmed missing from the deployed schema on 2026-10-28; without these the
+-- Settings screen fails with SQLSTATE 42703. Kept at the end so the generated
+-- n8n migration workflow only appends nodes.
+-- ============================================================
+ALTER TABLE artists ADD COLUMN IF NOT EXISTS pricing_extras JSONB;
+ALTER TABLE pricing ADD COLUMN IF NOT EXISTS region TEXT;

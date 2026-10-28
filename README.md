@@ -518,6 +518,10 @@ The Postgres schema is owned by `packages/crm/supabase/migrations` and
 The accepted schema for 1,000+ Artists is in
 [`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)
 (decision: [`docs/adr/0002-crm-schema-v2.md`](docs/adr/0002-crm-schema-v2.md)).
+The actual deployed schema is captured in
+[`packages/crm/db/baseline`](packages/crm/db/baseline), with the differences
+recorded in
+[`docs/design/crm-v1-production-drift.md`](docs/design/crm-v1-production-drift.md).
 A future automatic-deposit product is sketched in
 [`docs/ideas/signal-confirmation-platform.md`](docs/ideas/signal-confirmation-platform.md).
 
