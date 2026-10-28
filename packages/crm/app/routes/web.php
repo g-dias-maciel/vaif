@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\OnboardController;
+use App\Http\Controllers\PromotionAdminController;
 use App\Http\Controllers\SettingsController;
 use App\Models\Lead;
 use Illuminate\Support\Facades\Route;
@@ -75,5 +76,14 @@ Route::middleware('auth')->group(function () {
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');
         Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');
+
+        Route::get('/promotions', [PromotionAdminController::class, 'index'])->name('promotions.index');
+        Route::get('/promotions/create', [PromotionAdminController::class, 'create'])->name('promotions.create');
+        Route::post('/promotions', [PromotionAdminController::class, 'store'])->name('promotions.store');
+        Route::get('/promotions/{promotion}/edit', [PromotionAdminController::class, 'edit'])->name('promotions.edit');
+        Route::put('/promotions/{promotion}', [PromotionAdminController::class, 'update'])->name('promotions.update');
+        Route::post('/promotions/{promotion}/activate', [PromotionAdminController::class, 'activate'])->name('promotions.activate');
+        Route::post('/promotions/{promotion}/pause', [PromotionAdminController::class, 'pause'])->name('promotions.pause');
+        Route::post('/promotions/{promotion}/end', [PromotionAdminController::class, 'end'])->name('promotions.end');
     });
 });

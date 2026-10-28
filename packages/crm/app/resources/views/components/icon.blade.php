@@ -31,6 +31,11 @@
             <path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13A4 4 0 0 1 16 11"/>
             @break
 
+        @case('promo')
+            <path d="M20.6 13.4 13.4 20.6a2 2 0 0 1-2.8 0L2 12V2h10l8.6 8.6a2 2 0 0 1 0 2.8Z"/>
+            <circle cx="7" cy="7" r="1.5"/>
+            @break
+
         @case('switch')
             <path d="M4 8h13l-3-3M20 16H7l3 3"/>
             @break
