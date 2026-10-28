@@ -61,6 +61,7 @@ log "dumping cluster roles → $roles"
 docker exec "$PG_CONTAINER" pg_dumpall -U postgres --roles-only > "$roles"
 
 # Retention: only this directory, only our filenames.
+find "$DEST" -maxdepth 1 -type f -name '.vaif_crm-*.part' -mtime +1 -delete
 find "$DEST" -maxdepth 1 -type f \
   \( -name 'vaif_crm-*.dump' -o -name 'vaif_crm-*.dump.sha256' \
      -o -name 'roles-*.sql' \) \
