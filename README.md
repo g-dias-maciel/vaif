@@ -71,7 +71,6 @@ Instagram / WhatsApp ──► WAHA ──► n8n "Beatriz WhatsApp Agent"
                                       │
                                       ├─► Postgres: leads, calendar, events
                                       ├─► Telegram: handoff + deposit alerts
-                                      └─► Notion sync outbox
                                       │
                                       ▼
                               Laravel CRM (artist + staff)
@@ -170,13 +169,18 @@ All paths below are relative to `https://n8n.vaif.com.br`.
 | `POST` | `/webhook/calendar` | Artist Calendar Webhook | `list`, `block`, `unblock`, `suspend`, `resume`, `customers`, `import_customer`, `return_chat` |
 | `POST` | `/webhook/promotions` | Artist Promotions Webhook | `list_artists`, `list_promotions`, `create`, `activate`, `pause`, `end` |
 | `POST` | `/webhook/diagnostico` | Diagnóstico Gratuito | Receive diagnostic form, Telegram approval, send e-mail |
-| `POST` | `/webhook/notion-sync` | Notion Sync | Push a lead/project to Notion |
 | `POST` | `/webhook/reset-leads` | Admin Reset Leads | Destructive reset guarded by a confirm flag |
 | `POST` | `/webhook/db-migration` | DB Migration | Idempotent Postgres schema/function migration |
 | Form | `https://n8n.vaif.com.br/form/onboard` | Artist Onboarding Form | Create artist, pricing and WAHA session |
 
 Telegram-triggered workflows (`Beatriz Telegram + Postgres`, `Beatriz Ops
-Callback`) and the scheduled `Notion Sync Consumer` have no public HTTP route.
+Callback`) have no public HTTP route.
+
+Notion is used by VAIF for **internal** operations (invoicing, contracts,
+onboarding folders), not for Client data. The CRM no longer mirrors Artists,
+Leads or Projects to Notion: the `notion_sync_outbox` table, the `notion_*`
+columns and the Notion Sync workflows were removed (ADR-0002). Do not add a
+CRM→Notion sync back; the CRM is the only surface for Client data.
 
 ---
 
@@ -477,8 +481,6 @@ Core behavior:
   `aguardando_deposito` → `agendado`, plus `aguardando_artista`,
   `fechado`, `perdido`, `bloqueado`).
 - **Audit trail** — every state transition writes an `events` row.
-- **Notion sync** — enqueues rows in `notion_sync_outbox`; the scheduled
-  consumer pushes them to Notion.
 
 ### 6.2 Workflows
 
@@ -492,8 +494,6 @@ Core behavior:
 | `artist-promotions-webhook.json` | Artist Promotions Webhook | `/webhook/promotions` | Create/activate/pause/end promotions |
 | `artist-onboarding-form.json` | Artist Onboarding Form | n8n form `/form/onboard` | Create artist + pricing + WAHA session |
 | `diagnostico-gratuito.json` | Diagnóstico Gratuito | `/webhook/diagnostico` | Telegram approval → e-mail diagnostic |
-| `notion-sync.json` | Notion Sync | `/webhook/notion-sync` | Direct lead/project sync |
-| `notion-sync-consumer.json` | Notion Sync Consumer | schedule | Drain the outbox |
 | `admin-reset-leads.json` | Admin Reset Leads | `/webhook/reset-leads` | Destructive reset (guarded) |
 | `migration-beatriz.json` | DB Migration | `/webhook/db-migration` | Idempotent schema/functions |
 
@@ -513,7 +513,6 @@ The Postgres schema is owned by `packages/crm/supabase/migrations` and
 | `returning_customers` | Old clients per artist |
 | `chat_control` | Who owns a WhatsApp chat |
 | `message_buffer` | Debounce state |
-| `notion_sync_outbox` | Reliable Notion sync queue |
 
 The accepted schema for 1,000+ Artists is in
 [`docs/design/crm-data-model-v2.md`](docs/design/crm-data-model-v2.md)
@@ -797,7 +796,6 @@ The CRM links to the external member area through `MEMBER_AREA_URL`
 | `returning_customers` | SDR Postgres | Old-client registry |
 | `chat_control` | SDR Postgres | Who answers a WhatsApp chat |
 | `message_buffer` | SDR Postgres | Debounce buffer |
-| `notion_sync_outbox` | SDR Postgres | Reliable Notion queue |
 | `users`, `notes` | Laravel migrations | CRM identity + internal notes |
 | `intake_tokens` | LP MySQL | Single-use artist invite tokens |
 

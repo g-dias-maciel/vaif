@@ -103,7 +103,9 @@ php artisan crm:make-staff you@vaif.com.br --name="Your Name" --password='…'
   can't double-book or book outside the Artist's working hours.
 - Mark-lost / reschedule / note append to the `events` log (and `notes`), preserving
   the audit trail the rest of the system relies on.
-- Notion sync on these app-side edits is **out of MVP scope** (see the plan).
+- App-side edits (mark-lost, reschedule, notes) are written straight to Postgres.
+  There is no CRM→Notion sync: Notion is only used for VAIF's internal work
+  (invoicing, contracts, onboarding folders), never for Client data (ADR-0002).
 
 ## Deployment
 
