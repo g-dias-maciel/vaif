@@ -76,6 +76,12 @@ class ReferenceController extends Controller
 
     private function downloadWahaMedia(Project $project, string $url, ?string $mime): ?string
     {
+        // WAHA advertises media through `WAHA_PUBLIC_URL`, which can be stale
+        // (it currently points at the container's sslip.io host). Always use
+        // the configured API base and keep only the path.
+        $path = parse_url($url, PHP_URL_PATH) ?: '';
+        $url = rtrim((string) config('transport.waha_url'), '/').$path;
+
         try {
             $response = Http::withHeaders([
                 'X-Api-Key' => (string) config('transport.waha_api_key'),
