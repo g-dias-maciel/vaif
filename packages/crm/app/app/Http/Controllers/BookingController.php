@@ -101,6 +101,11 @@ class BookingController extends Controller
             $end = CarbonImmutable::parse($dateString.' 23:59:59', $tz);
         }
 
+        // PDO binds a datetime without its offset. Convert to UTC so Postgres
+        // stores the instant the artist typed, not the local wall time as UTC.
+        $start = $start->utc();
+        $end = $end->utc();
+
         if ($end->lessThanOrEqualTo($start)) {
             return back()->withErrors(['date' => 'O horário final deve ser depois do inicial.']);
         }
