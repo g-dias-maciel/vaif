@@ -1246,6 +1246,119 @@ end;
 $$;
 
 
+-- Human label for the two options the SDR offers: "Sexta-feira, dia 30/10
+-- às 12 horas". The weekdays are computed in the artist's timezone so the
+-- model never has to guess (and cannot say "domingo" for a Saturday).
+create or replace function booking_label(
+  p_start timestamptz,
+  p_tz    text
+)
+returns text
+language plpgsql stable
+set search_path = public, pg_temp
+as $$
+declare
+  v_tz      text := coalesce(nullif(p_tz, ''), 'UTC');
+  v_local   timestamp := p_start at time zone v_tz;
+  v_weekday text;
+begin
+  v_weekday := case extract(isodow from v_local)
+    when 1 then 'Segunda-feira'
+    when 2 then 'Terça-feira'
+    when 3 then 'Quarta-feira'
+    when 4 then 'Quinta-feira'
+    when 5 then 'Sexta-feira'
+    when 6 then 'Sábado'
+    when 7 then 'Domingo'
+  end;
+
+  if v_local::date = (now() at time zone v_tz)::date + 1 then
+    v_weekday := 'Amanhã';
+  end if;
+
+  return v_weekday || ', dia ' || to_char(v_local, 'DD/MM')
+    || ' às ' || to_char(v_local, 'HH24') || ' horas';
+end;
+$$;
+
+
+-- The agent's date offer: at most two options, one on the first available day
+-- and one on the next available day. When the lead asks for a specific day
+-- (after refusing the first two), pass p_day and get up to two slots that day.
+create or replace function booking_options(
+  p_artist_id    uuid,
+  p_from         timestamptz,
+  p_to           timestamptz,
+  p_duration_min integer default 120,
+  p_day          date default null
+)
+returns table (
+  start_at timestamptz,
+  end_at   timestamptz,
+  label    text
+)
+language plpgsql stable security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_tz   text;
+  v_from timestamptz;
+begin
+  select coalesce(nullif(a.timezone, ''), 'UTC')
+    into v_tz
+  from artists a
+  where a.id = p_artist_id;
+
+  if v_tz is null then
+    return;  -- unknown artist
+  end if;
+
+  -- A specific day requested by the lead: only that day, never today or past.
+  if p_day is not null then
+    if p_day <= (now() at time zone v_tz)::date then
+      return;
+    end if;
+
+    return query
+      select s.start_at, s.end_at, booking_label(s.start_at, v_tz)
+      from check_availability(
+        p_artist_id,
+        (p_day::timestamp at time zone v_tz),
+        ((p_day + 1)::timestamp at time zone v_tz),
+        p_duration_min
+      ) s
+      order by s.start_at
+      limit 2;
+    return;
+  end if;
+
+  -- Default offer: tomorrow onwards, first slot of each of the first two
+  -- available days. `greatest` keeps the caller's lower bound but never
+  -- starts in the local "today".
+  v_from := greatest(
+    p_from,
+    ((now() at time zone v_tz)::date + 1)::timestamp at time zone v_tz
+  );
+
+  return query
+    with slots as (
+      select * from check_availability(p_artist_id, v_from, p_to, p_duration_min)
+    ),
+    first_per_day as (
+      select distinct on ((sl.start_at at time zone v_tz)::date)
+        sl.start_at,
+        sl.end_at
+      from slots sl
+      order by (sl.start_at at time zone v_tz)::date, sl.start_at
+    )
+    select f.start_at, f.end_at, booking_label(f.start_at, v_tz)
+    from first_per_day f
+    order by f.start_at
+    limit 2;
+end;
+$$;
+
+
 create or replace function book_slot(
   p_artist_id    uuid,
   p_project_id   uuid,

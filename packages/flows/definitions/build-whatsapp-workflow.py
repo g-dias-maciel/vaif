@@ -166,7 +166,7 @@ AGENT_TEXT_EXPR = (
     "+ ' preco_negociado=' + ($('Start Turn').first().json.quoted_price_cents || '?') "
     "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Start Turn').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.quoted_price_cents || l.table_price_cents; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
     "+ ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_offered_cents || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() "
-    "+ ' data_hoje=' + new Date().toISOString().slice(0, 10) "
+    "+ ' data_hoje=' + (function(){ try { return new Date().toLocaleDateString('en-CA', { timeZone: $('Resolve Artist').first().json.timezone || 'America/Sao_Paulo' }); } catch (e) { return new Date().toISOString().slice(0, 10); } })() "
     "+ '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' "
     "+ ($('Debounce Resolve').first().json.combined_text || '') }}"
 )
@@ -1682,7 +1682,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT start_at, end_at FROM check_availability('{{ $('Resolve Artist').first().json.id }}'::uuid, date_trunc('day', now())::timestamptz + interval '1 day', now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120)) ORDER BY start_at LIMIT 10",
+                "query": "SELECT start_at, end_at, label FROM booking_options('{{ $('Resolve Artist').first().json.id }}'::uuid, now(), now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120), NULLIF(NULLIF('{{ $fromAI('preferred_day', 'Se o lead recusou as duas opções e pediu um dia específico, informe YYYY-MM-DD; caso contrário deixe vazio. NUNCA invente.', 'string') }}', ''), 'undefined')::date)",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",

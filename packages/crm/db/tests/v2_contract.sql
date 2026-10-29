@@ -342,6 +342,67 @@ $$;
 
 
 -- ---------------------------------------------------------------------------
+-- 8b. Agent date offers: two different days, or two slots on a requested day
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  o     record;
+  n     integer;
+  days  integer;
+begin
+  select count(*) into n
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120
+  );
+  perform pg_temp.ok(n = 2, 'booking_options returns exactly two options');
+
+  select count(distinct (start_at at time zone 'America/Sao_Paulo')::date) into days
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120
+  );
+  perform pg_temp.ok(days = 2, 'the two options are on different days');
+
+  select * into o
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120
+  )
+  limit 1;
+  perform pg_temp.ok(o.label like '%, dia __/__ às __ horas',
+    'booking_options returns a formatted label, got ' || coalesce(o.label, 'null'));
+
+  select count(*) into n
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120,
+    date '2027-04-02'
+  );
+  perform pg_temp.ok(n = 2, 'a requested day returns up to two slots');
+
+  select count(distinct (start_at at time zone 'America/Sao_Paulo')::date) into days
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120,
+    date '2027-04-02'
+  );
+  perform pg_temp.ok(days = 1, 'a requested day stays on that day');
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------------
 -- 9. Promotion: activation snapshots the price book, quote is a promotion
 -- ---------------------------------------------------------------------------
 do $$

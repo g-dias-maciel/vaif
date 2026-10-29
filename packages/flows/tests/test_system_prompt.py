@@ -203,6 +203,23 @@ check("first reply asks only the name",
       "Antes de começarmos, como posso te chamar?" in template
       and "pergunte APENAS o nome" in template)
 
+# ── 3d. Date offers: exactly two options, labels, preferred day fallback ──
+print("=== Date offer ===")
+check("Check Availability uses the two-option RPC",
+      "booking_options(" in nodes["Check Availability"]["parameters"]["query"]
+      and "label" in nodes["Check Availability"]["parameters"]["query"])
+check("Check Availability accepts a preferred day after refusal",
+      "preferred_day" in nodes["Check Availability"]["parameters"]["query"])
+check("prompt only offers two options",
+      "REGRA DAS DUAS OPÇÕES" in template
+      and "no máximo 2 opções" in template)
+check("prompt asks for a day only after the two options are refused",
+      "SE O LEAD RECUSAR AS DUAS OPÇÕES" in template
+      and "preferred_day" in template)
+check("data_hoje uses the artist timezone",
+      "toLocaleDateString('en-CA'" in AGENT_TEXT_JS
+      and "timeZone" in AGENT_TEXT_JS)
+
 # ── 3c. Rule 2: hard price gate ──
 print("=== Price gate ===")
 check("context exposes processo_explicado and preco_liberado",
