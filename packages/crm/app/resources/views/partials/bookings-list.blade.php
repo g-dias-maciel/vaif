@@ -25,7 +25,7 @@
             </div>
             @unless ($readonly)
                 <div class="actions-row">
-                    @if ($b->project && $b->project->deposit_status !== 'confirmado')
+                    @if ($b->project && $b->project->deposit_status === 'aguardando_confirmacao')
                         <form method="post" action="{{ route('bookings.confirm-deposit', $b) }}" class="inline">
                             @csrf
                             <button type="submit" class="btn btn--small">Confirmar sinal</button>

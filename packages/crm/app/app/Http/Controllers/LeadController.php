@@ -111,6 +111,30 @@ class LeadController extends Controller
     }
 
     /**
+     * Confirm the project's requested deposit from the platform. The agent
+     * asks for the signal; the artist confirms it here (lead page or the
+     * dashboard alert) after checking the PIX.
+     */
+    public function confirmDeposit(Project $project)
+    {
+        $this->authorize('view', $project->lead);
+
+        try {
+            DB::select('select * from confirm_deposit(?, ?, ?, ?, ?)', [
+                $project->artist_id,
+                $project->id,
+                'manual',
+                null,
+                auth()->user()->isStaff() ? 'staff' : 'artist',
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return back()->with('error', 'Não foi possível confirmar o sinal: nenhum sinal solicitado.');
+        }
+
+        return back()->with('status', 'Sinal confirmado. O agendamento está liberado.');
+    }
+
+    /**
      * Mark one of the Lead's Projects as lost (perdido).
      */
     public function markLost(Request $request, Project $project)

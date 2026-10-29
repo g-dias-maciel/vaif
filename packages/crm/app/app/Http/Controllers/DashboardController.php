@@ -55,6 +55,17 @@ class DashboardController extends Controller
             ->orderByDesc('updated_at')
             ->get();
 
+        // In-platform alert: requested signals the Artist still needs to
+        // confirm after checking the PIX.
+        $pendingDeposits = Project::with(['lead', 'payments', 'calendar'])
+            ->where('artist_id', $artist->id)
+            ->whereNotIn('stage_key', ['fechado', 'perdido'])
+            ->whereHas('payments', function ($query) {
+                $query->where('kind', 'deposit')->where('status', 'requested');
+            })
+            ->orderByDesc('updated_at')
+            ->get();
+
         $realizadoCents = 0; // fechado — finished
         $agendadoCents = 0;  // agendado — booked, upcoming
         $esperadoCents = 0;  // active, sinal not paid — floating
@@ -115,6 +126,7 @@ class DashboardController extends Controller
             'artist' => $artist,
             'activePromotion' => $artist->activePromotion,
             'projects' => $projects,
+            'pendingDeposits' => $pendingDeposits,
             'pipeline' => config('crm.pipeline_statuses'),
             'period' => $period,
             'periodOptions' => Periods::options(),

@@ -77,6 +77,14 @@
                 <div class="stat-card">
                     <div class="stat-label">Sinal</div>
                     <div class="stat-value" style="font-size: 1.2rem;">R$ {{ number_format($project->deposit->amount_cents / 100, 2, ',', '.') }}</div>
+                    @if ($project->deposit_status === 'aguardando_confirmacao')
+                        <form method="post" action="{{ route('projects.confirm-deposit', $project) }}" style="margin-top:10px;">
+                            @csrf
+                            <button type="submit" class="btn btn--small">Confirmar sinal</button>
+                        </form>
+                    @elseif ($project->deposit_status === 'confirmado')
+                        <span class="tag tag-success" style="margin-top:8px; margin-left:0;">Confirmado</span>
+                    @endif
                 </div>
             @endif
             @if ($project->booked_at)

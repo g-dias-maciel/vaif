@@ -29,6 +29,42 @@
     @endif
 </div>
 
+@if ($pendingDeposits->isNotEmpty())
+<div class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
+    <h2 class="section-title" style="margin-top:0;">
+        Sinais aguardando confirmação
+        <span class="tag">{{ $pendingDeposits->count() }}</span>
+    </h2>
+    <p class="meta">Confira o PIX recebido e confirme o sinal para liberar o agendamento.</p>
+
+    <ul class="slot-list" style="margin-top: 14px;">
+        @foreach ($pendingDeposits as $depositProject)
+            <li>
+                <div class="slot-main">
+                    <strong>
+                        @if ($depositProject->lead)
+                            <a href="{{ route('leads.show', $depositProject->lead) }}">{{ $depositProject->lead->displayName() }}</a>
+                        @else
+                            Cliente
+                        @endif
+                    </strong>
+                    <span>
+                        Sinal de R$ {{ number_format(($depositProject->deposit?->amount_cents ?? 0) / 100, 2, ',', '.') }}
+                        @if ($depositProject->booked_at)
+                            · {{ $depositProject->booked_at->format('d/m/Y H:i') }}
+                        @endif
+                    </span>
+                </div>
+                <form method="post" action="{{ route('projects.confirm-deposit', $depositProject) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="btn btn--small">Confirmar sinal</button>
+                </form>
+            </li>
+        @endforeach
+    </ul>
+</div>
+@endif
+
 <div class="panel" style="margin-bottom: 20px;">
     <h2 class="section-title" style="margin-top:0;">Faturamento — {{ $periodLabel }}</h2>
     <div class="stat-grid stat-grid--revenue">
