@@ -1797,7 +1797,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "method": "GET",
-                "url": "={{ (function(){ var raw = $('Debounce Start').first().json.audio_url || ''; try { var u = new URL(raw); return 'https://waha.vaif.com.br' + u.pathname; } catch (e) { return raw; } })() }}",
+                "url": "={{ (function(){ var raw = $('Debounce Start').first().json.audio_url || ''; return raw ? raw.replace(/^https?:\\/\\/[^/]+/, 'https://waha.vaif.com.br') : raw; })() }}",
                 "authentication": "predefinedCredentialType",
                 "nodeCredentialType": "wahaApi",
                 "options": {
@@ -1832,6 +1832,8 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "position": [3510, -420],
             "id": "audio-base64-0000-0000-0000-000000000001",
             "name": "Extract Audio Base64",
+            # A failed download must still let the agent ask for text.
+            "onError": "continueRegularOutput",
         },
         # 16c4. Build Audio Request — base64 + input_audio body.
         {
@@ -1844,6 +1846,35 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "position": [3640, -420],
             "id": "audio-build-0000-0000-0000-000000000001",
             "name": "Build Audio Request",
+        },
+        # 16c4b. Audio Ready? — skip Gemini when the download or base64 step
+        #        failed; the agent then asks the lead to send text instead.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "audio-ready-cond-0000",
+                            "leftValue": "={{ !!$json.body }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3770, -420],
+            "id": "audio-ready-0000-0000-0000-000000000001",
+            "name": "Audio Ready?",
         },
         # 16c5. Transcribe Audio — Gemini audio input through the existing
         #       OpenRouter credential.
@@ -2590,7 +2621,13 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Build Audio Request", "type": "main", "index": 0}]]
         },
         "Build Audio Request": {
-            "main": [[{"node": "Transcribe Audio", "type": "main", "index": 0}]]
+            "main": [[{"node": "Audio Ready?", "type": "main", "index": 0}]]
+        },
+        "Audio Ready?": {
+            "main": [
+                [{"node": "Transcribe Audio", "type": "main", "index": 0}],
+                [{"node": "Parse Audio", "type": "main", "index": 0}],
+            ]
         },
         "Transcribe Audio": {
             "main": [[{"node": "Parse Audio", "type": "main", "index": 0}]]

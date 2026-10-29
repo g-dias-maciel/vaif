@@ -168,10 +168,20 @@ check("audio turns are transcribed, text turns bypass audio and both reach Analy
       and [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][1]] == ["No Audio"]
       and wf["connections"]["Fetch Audio"]["main"][0][0]["node"] == "Extract Audio Base64"
       and wf["connections"]["Extract Audio Base64"]["main"][0][0]["node"] == "Build Audio Request"
-      and wf["connections"]["Build Audio Request"]["main"][0][0]["node"] == "Transcribe Audio"
+      and wf["connections"]["Build Audio Request"]["main"][0][0]["node"] == "Audio Ready?"
+      and [c["node"] for c in wf["connections"]["Audio Ready?"]["main"][0]] == ["Transcribe Audio"]
+      and [c["node"] for c in wf["connections"]["Audio Ready?"]["main"][1]] == ["Parse Audio"]
       and wf["connections"]["Transcribe Audio"]["main"][0][0]["node"] == "Parse Audio"
       and wf["connections"]["Parse Audio"]["main"][0][0]["node"] == "Analyze Reference?"
       and wf["connections"]["No Audio"]["main"][0][0]["node"] == "Analyze Reference?")
+check("a failed audio download still reaches the agent instead of killing the turn",
+      nodes["Fetch Audio"].get("onError") == "continueRegularOutput"
+      and nodes["Extract Audio Base64"].get("onError") == "continueRegularOutput"
+      and nodes["Transcribe Audio"].get("onError") == "continueRegularOutput")
+check("WAHA media URLs are rewritten without the URL global missing from expressions",
+      "new URL(" not in nodes["Fetch Audio"]["parameters"]["url"]
+      and "waha.vaif.com.br" in nodes["Fetch Audio"]["parameters"]["url"]
+      and "replace(" in nodes["Fetch Audio"]["parameters"]["url"])
 check("the agent text uses the audio transcript when available",
       "$json.transcript" in AGENT_TEXT_JS
       and "$('Parse Audio')" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])

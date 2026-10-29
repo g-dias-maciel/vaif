@@ -684,7 +684,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "={{ (function(){ var raw = $('Debounce Start').first().json.audio_url || ''; try { var u = new URL(raw); return 'https://waha.vaif.com.br' + u.pathname; } catch (e) { return raw; } })() }}",
+        "url": "={{ (function(){ var raw = $('Debounce Start').first().json.audio_url || ''; return raw ? raw.replace(/^https?:\\/\\/[^/]+/, 'https://waha.vaif.com.br') : raw; })() }}",
         "authentication": "predefinedCredentialType",
         "nodeCredentialType": "wahaApi",
         "options": {
@@ -729,7 +729,8 @@
         -420
       ],
       "id": "audio-base64-0000-0000-0000-000000000001",
-      "name": "Extract Audio Base64"
+      "name": "Extract Audio Base64",
+      "onError": "continueRegularOutput"
     },
     {
       "parameters": {
@@ -744,6 +745,39 @@
       ],
       "id": "audio-build-0000-0000-0000-000000000001",
       "name": "Build Audio Request"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "audio-ready-cond-0000",
+              "leftValue": "={{ !!$json.body }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3770,
+        -420
+      ],
+      "id": "audio-ready-0000-0000-0000-000000000001",
+      "name": "Audio Ready?"
     },
     {
       "parameters": {
@@ -1909,7 +1943,25 @@
       "main": [
         [
           {
+            "node": "Audio Ready?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Audio Ready?": {
+      "main": [
+        [
+          {
             "node": "Transcribe Audio",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Parse Audio",
             "type": "main",
             "index": 0
           }
