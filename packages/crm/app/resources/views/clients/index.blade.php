@@ -38,7 +38,7 @@
                     @foreach ($leads as $lead)
                         <tr data-client-row
                             data-client-search="{{ mb_strtolower($lead->displayName().' '.$lead->phone_e164) }}"
-                            data-client-status="{{ $lead->latestProject?->stage_key ?? 'none' }}">
+                            data-client-status="{{ $lead->projects->first()?->stage_key ?? 'none' }}">
                             <td>
                                 <a href="{{ route('leads.show', $lead) }}">{{ $lead->displayName() }}</a>
                                 @if (in_array($lead->phone_e164, $returningPhones, true))
@@ -48,9 +48,9 @@
                             <td class="phone">{{ $lead->phone_e164 }}</td>
                             <td>{{ $lead->last_message_at?->format('d/m/Y H:i') ?? '—' }}</td>
                             <td>
-                                @if ($lead->latestProject)
-                                    <span class="tag {{ $lead->latestProject->stage_key === 'fechado' ? 'tag-success' : ($lead->latestProject->stage_key === 'perdido' ? 'tag-muted' : '') }}">
-                                        {{ $lead->latestProject->stage_label }}
+                                @if ($lead->projects->first())
+                                    <span class="tag {{ $lead->projects->first()->stage_key === 'fechado' ? 'tag-success' : ($lead->projects->first()->stage_key === 'perdido' ? 'tag-muted' : '') }}">
+                                        {{ $lead->projects->first()->stage_label }}
                                     </span>
                                 @else
                                     <span class="meta">Sem projeto</span>

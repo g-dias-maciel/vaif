@@ -21,7 +21,9 @@ class ClientController extends Controller
 
         $leads = $artist->leads()
             ->whereNull('anonymized_at')
-            ->with('latestProject')
+            ->with(['projects' => fn ($query) => $query
+                ->orderByDesc('updated_at')
+                ->orderByDesc('created_at')])
             ->orderByDesc('last_message_at')
             ->orderByDesc('created_at')
             ->get();

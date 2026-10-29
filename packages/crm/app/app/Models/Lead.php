@@ -5,7 +5,6 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
-use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -50,11 +49,6 @@ class Lead extends Model
     public function projects(): HasMany
     {
         return $this->hasMany(Project::class, 'lead_id');
-    }
-
-    public function latestProject(): HasOne
-    {
-        return $this->hasOne(Project::class, 'lead_id')->latestOfMany('updated_at');
     }
 
     public function notes(): HasMany
