@@ -575,7 +575,7 @@
     {
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const start = $('Debounce Start').first().json || {};\nconst turn = $('Start Turn').first().json || {};\nconst artist = $('Resolve Artist').first().json || {};\n\nif (!turn.project_id || !artist.id) return [];\n\nconst refs = [];\nif (start.media_url) {\n  refs.push({ artist_id: artist.id, project_id: turn.project_id, url: start.media_url, mime: start.media_mime || null });\n}\nfor (const link of (start.links || [])) {\n  if (link && link !== start.media_url) {\n    refs.push({ artist_id: artist.id, project_id: turn.project_id, url: link, mime: null });\n  }\n}\n\nreturn refs.slice(0, 6).map(r => ({ json: r }));"
+        "jsCode": "const start = $('Debounce Start').first().json || {};\nconst turn = $('Start Turn').first().json || {};\nconst artist = $('Resolve Artist').first().json || {};\n\n// One batch item, not one item per reference: the main path waits for the CRM\n// to download/store the image before the vision step runs.\nif (!turn.project_id || !artist.id) {\n  return [{ json: { artist_id: artist.id || null, project_id: turn.project_id || null, references: [] } }];\n}\n\nconst refs = [];\nif (start.media_url) {\n  refs.push({ url: start.media_url, mime: start.media_mime || null });\n}\nfor (const link of (start.links || [])) {\n  if (link && link !== start.media_url) {\n    refs.push({ url: link, mime: null });\n  }\n}\n\nreturn [{ json: {\n  artist_id: artist.id,\n  project_id: turn.project_id,\n  references: refs.slice(0, 6),\n} }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -614,6 +614,110 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "analyze-ref-cond-0000",
+              "leftValue": "={{ !!($('Save References').first().json.image_url) }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        3120,
+        -60
+      ],
+      "id": "vision-if-0000-0000-0000-000000000001",
+      "name": "Analyze Reference?"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const imageUrl = $('Save References').first().json.image_url;\nconst body = {\n  model: 'openai/gpt-4o-mini',\n  messages: [\n    { role: 'system', content: \"Voc\\u00ea \\u00e9 um assistente de um est\\u00fadio de tatuagem. Analise a imagem que o cliente enviou como refer\\u00eancia.\\nResponda SOMENTE com um objeto JSON v\\u00e1lido, sem markdown, com estas chaves:\\n{\\n  \\\"referencia_de_tatuagem\\\": true ou false,\\n  \\\"resumo\\\": \\\"1 a 2 frases em portugu\\u00eas brasileiro descrevendo objetivamente o que aparece\\\",\\n  \\\"estilo\\\": \\\"realismo | fineline | old school | blackwork | geom\\u00e9trico | aquarela | oriental | lettering | outro | indefinido\\\",\\n  \\\"cores\\\": \\\"preto e cinza | colorido | indefinido\\\",\\n  \\\"complexidade\\\": \\\"baixa | media | alta\\\",\\n  \\\"tipo\\\": \\\"desenho | foto_de_tatuagem | flash | outra\\\",\\n  \\\"cobertura\\\": \\\"sim | nao | talvez | indefinido\\\",\\n  \\\"confianca\\\": \\\"alta | media | baixa\\\",\\n  \\\"observacoes\\\": \\\"detalhes \\u00fateis, ou string vazia\\\"\\n}\\nN\\u00e3o estime pre\\u00e7o. N\\u00e3o invente detalhes que n\\u00e3o d\\u00e1 para ver. Se a imagem n\\u00e3o for uma tatuagem ou refer\\u00eancia, marque referencia_de_tatuagem=false. Se for foto de uma tatuagem j\\u00e1 existente, indique em observacoes se parece cobertura ou reforma.\" },\n    { role: 'user', content: [\n      { type: 'text', text: \"Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que n\\u00e3o \\u00e9 refer\\u00eancia.\" },\n      { type: 'image_url', image_url: { url: imageUrl } }\n    ] }\n  ],\n  temperature: 0.2,\n  max_tokens: 500\n};\nreturn [{ json: { body } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        -180
+      ],
+      "id": "vision-build-0000-0000-0000-000000000001",
+      "name": "Build Vision Request"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://openrouter.ai/api/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openRouterApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        3640,
+        -180
+      ],
+      "id": "vision-http-0000-0000-0000-000000000001",
+      "name": "Analyze Reference",
+      "credentials": {
+        "openRouterApi": {
+          "id": "ow26hPDMir1dMfz0",
+          "name": "OpenRouter account"
+        }
+      },
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const response = $input.first().json || {};\nconst content = response.choices?.[0]?.message?.content || '';\nlet data = {};\ntry {\n  data = JSON.parse(content);\n} catch (e) {\n  const match = String(content).match(/\\{[\\s\\S]*\\}/);\n  if (match) {\n    try { data = JSON.parse(match[0]); } catch (e2) {}\n  }\n}\n\nconst base = $('Build System Prompt').first().json.system_message;\nconst summary = String(data.resumo || '').trim();\n\nif (!summary) {\n  return [{ json: { system_message: base, reference_analysis: null } }];\n}\n\nconst flag = (value) => value === false || value === 'nao' || value === 'não' ? 'não' : 'sim';\nconst lines = [\n  '',\n  '## Referência visual (análise automática)',\n  'A imagem recebida foi analisada automaticamente. Use como apoio, não como verdade absoluta.',\n  '- É referência de tatuagem: ' + flag(data.referencia_de_tatuagem),\n  '- Resumo: ' + summary,\n];\n\nif (data.estilo) lines.push('- Estilo provável: ' + data.estilo);\nif (data.cores) lines.push('- Cores: ' + data.cores);\nif (data.complexidade) lines.push('- Complexidade: ' + data.complexidade);\nif (data.tipo) lines.push('- Tipo de imagem: ' + data.tipo);\nif (data.cobertura) lines.push('- Cobertura/reforma: ' + data.cobertura);\nif (data.confianca) lines.push('- Confiança da análise: ' + data.confianca);\nif (data.observacoes) lines.push('- Observações: ' + data.observacoes);\n\nlines.push('');\nlines.push('Regras: elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');\n\nreturn [{ json: {\n  system_message: base + lines.join('\\n'),\n  reference_analysis: data,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3900,
+        -180
+      ],
+      "id": "vision-parse-0000-0000-0000-000000000001",
+      "name": "Parse Reference Analysis"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: {\n  system_message: $('Build System Prompt').first().json.system_message,\n  reference_analysis: null,\n} }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        3380,
+        60
+      ],
+      "id": "vision-none-0000-0000-0000-000000000001",
+      "name": "No Reference"
     },
     {
       "parameters": {
@@ -662,13 +766,13 @@
         "promptType": "define",
         "text": "={{ '[Contexto: pipeline=' + $('Start Turn').first().json.stage_key + ' nome=' + ($('Start Turn').first().json.name || 'desconhecido') + ' deposit=' + ($('Start Turn').first().json.deposit_status || 'nao_solicitado') + ' tipo=' + (function(){ var t = $('Start Turn').first().json.tattoo_type; return ({new: 'nova', cover_up: 'cobertura', rework: 'reforma'})[t] || '?'; })() + ' lead_id=' + $('Start Turn').first().json.lead_id + ' project_id=' + $('Start Turn').first().json.project_id + ' placement=' + ($('Start Turn').first().json.placement || '?') + ' zona=' + ($('Start Turn').first().json.body_zone || '?') + ' estilo=' + ($('Start Turn').first().json.style || '?') + ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) + ' significado=' + ($('Start Turn').first().json.meaning || '?') + ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') + ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') + ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') + ' aguardando_confirmacao_duvidas=' + ((($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas) ? 'sim' : 'nao') + ' primeira_mensagem=' + ($('Start Turn').first().json.is_new ? 'sim' : 'nao') + ' preco_tabela=' + ($('Start Turn').first().json.table_price_cents || '?') + ' preco_negociado=' + ($('Start Turn').first().json.quoted_price_cents || '?') + ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Start Turn').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.quoted_price_cents || l.table_price_cents; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() + ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_offered_cents || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() + ' data_hoje=' + new Date().toISOString().slice(0, 10) + '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' + ($('Debounce Resolve').first().json.combined_text || '') }}",
         "options": {
-          "systemMessage": "={{ $('Build System Prompt').first().json.system_message }}"
+          "systemMessage": "={{ $json.system_message }}"
         }
       },
       "type": "@n8n/n8n-nodes-langchain.agent",
       "typeVersion": 3.1,
       "position": [
-        2860,
+        4160,
         260
       ],
       "id": "d0e1f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
@@ -1411,11 +1515,6 @@
         [],
         [
           {
-            "node": "Load Offer",
-            "type": "main",
-            "index": 0
-          },
-          {
             "node": "Build References",
             "type": "main",
             "index": 0
@@ -1428,6 +1527,17 @@
         [
           {
             "node": "Save References",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save References": {
+      "main": [
+        [
+          {
+            "node": "Load Offer",
             "type": "main",
             "index": 0
           }
@@ -1457,6 +1567,68 @@
       ]
     },
     "Build System Prompt": {
+      "main": [
+        [
+          {
+            "node": "Analyze Reference?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Reference?": {
+      "main": [
+        [
+          {
+            "node": "Build Vision Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "No Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Vision Request": {
+      "main": [
+        [
+          {
+            "node": "Analyze Reference",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analyze Reference": {
+      "main": [
+        [
+          {
+            "node": "Parse Reference Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Reference Analysis": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "No Reference": {
       "main": [
         [
           {

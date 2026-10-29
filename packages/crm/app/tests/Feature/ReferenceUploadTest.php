@@ -60,6 +60,7 @@ class ReferenceUploadTest extends TestCase
         ]);
 
         $response->assertOk()->assertJsonPath('ok', true);
+        $response->assertJsonPath('image_url', $project->refresh()->reference_pics[0]);
 
         $project->refresh();
         $this->assertCount(1, $project->reference_pics);
@@ -89,6 +90,54 @@ class ReferenceUploadTest extends TestCase
 
         $this->assertSame(['https://pinterest.com/pin/123'], $project->refresh()->reference_pics);
         Http::assertNothingSent();
+    }
+
+    public function test_it_accepts_a_batch_and_returns_the_first_image(): void
+    {
+        Storage::fake('public');
+        Http::fake();
+
+        config([
+            'transport.crm_internal_token' => 'test-token',
+            'transport.waha_api_key' => 'waha-key',
+        ]);
+
+        $project = $this->project();
+
+        $response = $this->withHeader('X-Crm-Token', 'test-token')->postJson('/api/references', [
+            'artist_id' => $project->artist_id,
+            'project_id' => $project->id,
+            'references' => [
+                ['url' => 'https://pinterest.com/pin/123', 'mime' => null],
+                ['url' => 'https://example.com/reference.jpg', 'mime' => 'image/jpeg'],
+            ],
+        ]);
+
+        $response->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('image_url', 'https://example.com/reference.jpg');
+
+        $this->assertSame([
+            'https://pinterest.com/pin/123',
+            'https://example.com/reference.jpg',
+        ], $project->refresh()->reference_pics);
+        Http::assertNothingSent();
+    }
+
+    public function test_it_accepts_an_empty_batch_for_text_only_turns(): void
+    {
+        config(['transport.crm_internal_token' => 'test-token']);
+
+        $project = $this->project();
+
+        $this->withHeader('X-Crm-Token', 'test-token')->postJson('/api/references', [
+            'artist_id' => $project->artist_id,
+            'project_id' => $project->id,
+            'references' => [],
+        ])->assertOk()
+            ->assertJsonPath('ok', true)
+            ->assertJsonPath('image_url', null)
+            ->assertJsonPath('references', []);
     }
 
     public function test_it_rejects_an_invalid_internal_token(): void

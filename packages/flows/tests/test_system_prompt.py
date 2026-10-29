@@ -113,8 +113,8 @@ with open(os.path.join(FLOWS_ROOT, "prompts", "classify-conversation.md")) as f:
     CLASSIFY_TEMPLATE = f.read()
 
 agent = nodes["AI Agent"]
-check("AI Agent systemMessage references Build System Prompt",
-      agent["parameters"]["options"]["systemMessage"] == "={{ $('Build System Prompt').first().json.system_message }}")
+check("AI Agent systemMessage comes from the reference/vision step",
+      agent["parameters"]["options"]["systemMessage"] == "={{ $json.system_message }}")
 
 bsp = nodes["Build System Prompt"]
 check("Build System Prompt embeds the template",
@@ -145,15 +145,30 @@ check("Patch Chat State → humanize → Send WAHA Message → Stop Typing → h
       and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Send WAHA Message"
       and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
-check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Load Offer → Load Pricing → Build System Prompt → AI Agent",
+check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Reference?",
       wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
       and wf["connections"]["Chat Owned by Artist?"]["main"][1][0]["node"] == "Start Turn"
       and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Agent Blocked?"
       and wf["connections"]["Agent Blocked?"]["main"][0] == []
-      and [c["node"] for c in wf["connections"]["Agent Blocked?"]["main"][1]] == ["Load Offer", "Build References"]
+      and [c["node"] for c in wf["connections"]["Agent Blocked?"]["main"][1]] == ["Build References"]
+      and wf["connections"]["Build References"]["main"][0][0]["node"] == "Save References"
+      and wf["connections"]["Save References"]["main"][0][0]["node"] == "Load Offer"
       and wf["connections"]["Load Offer"]["main"][0][0]["node"] == "Load Pricing"
       and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Build System Prompt"
-      and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "AI Agent")
+      and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "Analyze Reference?")
+check("Analyze Reference? sends images through vision and text-only turns straight to the agent",
+      [c["node"] for c in wf["connections"]["Analyze Reference?"]["main"][0]] == ["Build Vision Request"]
+      and [c["node"] for c in wf["connections"]["Analyze Reference?"]["main"][1]] == ["No Reference"]
+      and wf["connections"]["Build Vision Request"]["main"][0][0]["node"] == "Analyze Reference"
+      and wf["connections"]["Analyze Reference"]["main"][0][0]["node"] == "Parse Reference Analysis"
+      and wf["connections"]["Parse Reference Analysis"]["main"][0][0]["node"] == "AI Agent"
+      and wf["connections"]["No Reference"]["main"][0][0]["node"] == "AI Agent")
+check("vision request uses the public CRM image URL and a multimodal model",
+      "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"]
+      and "gpt-4o-mini" in nodes["Build Vision Request"]["parameters"]["jsCode"]
+      and "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"])
+check("vision prompt forbids using the image to calculate price",
+      "NUNCA use esta análise para calcular preço" in nodes["Parse Reference Analysis"]["parameters"]["jsCode"])
 check("AI Agent → Build Classification Prompt → Classify → Parse → Build Project Patch → Patch Project",
       wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"

@@ -33,20 +33,61 @@ class ReferenceController extends Controller
         $data = $request->validate([
             'artist_id' => ['required', 'uuid'],
             'project_id' => ['required', 'uuid'],
-            'url' => ['required', 'url', 'max:2048'],
+            'url' => ['nullable', 'url', 'max:2048'],
             'mime' => ['nullable', 'string', 'max:100'],
+            'references' => ['nullable', 'array', 'max:20'],
+            'references.*.url' => ['required', 'url', 'max:2048'],
+            'references.*.mime' => ['nullable', 'string', 'max:100'],
         ]);
+
+        $inputs = $data['references'] ?? [];
+
+        if (! empty($data['url'])) {
+            $inputs[] = ['url' => $data['url'], 'mime' => $data['mime'] ?? null];
+        }
+
+        // Text-only turns still call this endpoint with an empty batch; answer
+        // cheaply instead of forcing n8n to branch around the reference step.
+        if ($inputs === []) {
+            return response()->json([
+                'ok' => true,
+                'reference' => null,
+                'references' => [],
+                'image_url' => null,
+            ]);
+        }
 
         $project = Project::query()
             ->where('artist_id', $data['artist_id'])
             ->findOrFail($data['project_id']);
 
-        $url = trim($data['url']);
-        $stored = $this->isWahaMedia($url)
-            ? $this->downloadWahaMedia($project, $url, $data['mime'] ?? null)
-            : $url;
+        $stored = [];
+        $images = [];
 
-        if ($stored === null) {
+        foreach ($inputs as $input) {
+            $url = trim((string) ($input['url'] ?? ''));
+            if ($url === '') {
+                continue;
+            }
+
+            $mime = $input['mime'] ?? null;
+            $isWaha = $this->isWahaMedia($url);
+            $result = $isWaha
+                ? $this->downloadWahaMedia($project, $url, $mime)
+                : $url;
+
+            if ($result === null) {
+                continue;
+            }
+
+            $stored[] = $result;
+
+            if ($isWaha || str_starts_with(strtolower((string) $mime), 'image/')) {
+                $images[] = $result;
+            }
+        }
+
+        if ($stored === []) {
             return response()->json([
                 'ok' => false,
                 'error' => 'download_failed',
@@ -64,20 +105,23 @@ class ReferenceController extends Controller
                 ->firstOrFail();
 
             $refs = $locked->reference_pics ?? [];
-            if (! in_array($stored, $refs, true)) {
-                $refs[] = $stored;
-                $refs = array_slice($refs, -self::MAX_REFERENCES);
-                $locked->reference_pics = $refs;
-                $locked->save();
+            foreach ($stored as $reference) {
+                if (! in_array($reference, $refs, true)) {
+                    $refs[] = $reference;
+                }
             }
+            $refs = array_slice($refs, -self::MAX_REFERENCES);
+            $locked->reference_pics = $refs;
+            $locked->save();
 
             return $locked;
         });
 
         return response()->json([
             'ok' => true,
-            'reference' => $stored,
+            'reference' => $stored[0],
             'references' => $project->reference_pics ?? [],
+            'image_url' => $images[0] ?? null,
         ]);
     }
 

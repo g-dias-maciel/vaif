@@ -221,19 +221,113 @@ BUILD_REFERENCES_JS = """const start = $('Debounce Start').first().json || {};
 const turn = $('Start Turn').first().json || {};
 const artist = $('Resolve Artist').first().json || {};
 
-if (!turn.project_id || !artist.id) return [];
+// One batch item, not one item per reference: the main path waits for the CRM
+// to download/store the image before the vision step runs.
+if (!turn.project_id || !artist.id) {
+  return [{ json: { artist_id: artist.id || null, project_id: turn.project_id || null, references: [] } }];
+}
 
 const refs = [];
 if (start.media_url) {
-  refs.push({ artist_id: artist.id, project_id: turn.project_id, url: start.media_url, mime: start.media_mime || null });
+  refs.push({ url: start.media_url, mime: start.media_mime || null });
 }
 for (const link of (start.links || [])) {
   if (link && link !== start.media_url) {
-    refs.push({ artist_id: artist.id, project_id: turn.project_id, url: link, mime: null });
+    refs.push({ url: link, mime: null });
   }
 }
 
-return refs.slice(0, 6).map(r => ({ json: r }));"""
+return [{ json: {
+  artist_id: artist.id,
+  project_id: turn.project_id,
+  references: refs.slice(0, 6),
+} }];"""
+
+# ── Vision: the customer's reference is downloaded by the CRM and exposed as a
+#    public URL (`image_url`). OpenRouter analyzes it before the agent replies.
+VISION_SYSTEM_PROMPT = """Você é um assistente de um estúdio de tatuagem. Analise a imagem que o cliente enviou como referência.
+Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
+{
+  "referencia_de_tatuagem": true ou false,
+  "resumo": "1 a 2 frases em português brasileiro descrevendo objetivamente o que aparece",
+  "estilo": "realismo | fineline | old school | blackwork | geométrico | aquarela | oriental | lettering | outro | indefinido",
+  "cores": "preto e cinza | colorido | indefinido",
+  "complexidade": "baixa | media | alta",
+  "tipo": "desenho | foto_de_tatuagem | flash | outra",
+  "cobertura": "sim | nao | talvez | indefinido",
+  "confianca": "alta | media | baixa",
+  "observacoes": "detalhes úteis, ou string vazia"
+}
+Não estime preço. Não invente detalhes que não dá para ver. Se a imagem não for uma tatuagem ou referência, marque referencia_de_tatuagem=false. Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma."""
+
+VISION_USER_PROMPT = """Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que não é referência."""
+
+BUILD_VISION_REQUEST_JS = """const imageUrl = $('Save References').first().json.image_url;
+const body = {
+  model: 'openai/gpt-4o-mini',
+  messages: [
+    { role: 'system', content: __VISION_SYSTEM__ },
+    { role: 'user', content: [
+      { type: 'text', text: __VISION_USER__ },
+      { type: 'image_url', image_url: { url: imageUrl } }
+    ] }
+  ],
+  temperature: 0.2,
+  max_tokens: 500
+};
+return [{ json: { body } }];"""
+BUILD_VISION_REQUEST_JS = (BUILD_VISION_REQUEST_JS
+    .replace('__VISION_SYSTEM__', json.dumps(VISION_SYSTEM_PROMPT))
+    .replace('__VISION_USER__', json.dumps(VISION_USER_PROMPT)))
+
+PARSE_REFERENCE_ANALYSIS_JS = """const response = $input.first().json || {};
+const content = response.choices?.[0]?.message?.content || '';
+let data = {};
+try {
+  data = JSON.parse(content);
+} catch (e) {
+  const match = String(content).match(/\{[\s\S]*\}/);
+  if (match) {
+    try { data = JSON.parse(match[0]); } catch (e2) {}
+  }
+}
+
+const base = $('Build System Prompt').first().json.system_message;
+const summary = String(data.resumo || '').trim();
+
+if (!summary) {
+  return [{ json: { system_message: base, reference_analysis: null } }];
+}
+
+const flag = (value) => value === false || value === 'nao' || value === 'não' ? 'não' : 'sim';
+const lines = [
+  '',
+  '## Referência visual (análise automática)',
+  'A imagem recebida foi analisada automaticamente. Use como apoio, não como verdade absoluta.',
+  '- É referência de tatuagem: ' + flag(data.referencia_de_tatuagem),
+  '- Resumo: ' + summary,
+];
+
+if (data.estilo) lines.push('- Estilo provável: ' + data.estilo);
+if (data.cores) lines.push('- Cores: ' + data.cores);
+if (data.complexidade) lines.push('- Complexidade: ' + data.complexidade);
+if (data.tipo) lines.push('- Tipo de imagem: ' + data.tipo);
+if (data.cobertura) lines.push('- Cobertura/reforma: ' + data.cobertura);
+if (data.confianca) lines.push('- Confiança da análise: ' + data.confianca);
+if (data.observacoes) lines.push('- Observações: ' + data.observacoes);
+
+lines.push('');
+lines.push('Regras: elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
+
+return [{ json: {
+  system_message: base + lines.join('\\n'),
+  reference_analysis: data,
+} }];"""
+
+NO_REFERENCE_JS = """return [{ json: {
+  system_message: $('Build System Prompt').first().json.system_message,
+  reference_analysis: null,
+} }];"""
 
 DEBOUNCE_RESOLVE_JS = """const state = $('Get Buffer State').first().json || {};
 const msgTs = $('Debounce Start').first().json.msg_ts;
@@ -1410,6 +1504,90 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "credentials": CRM_INTERNAL,
             "onError": "continueRegularOutput",
         },
+        # 16d. Analyze Reference? — only when the CRM stored an image URL.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "analyze-ref-cond-0000",
+                            "leftValue": "={{ !!($('Save References').first().json.image_url) }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3120, -60],
+            "id": "vision-if-0000-0000-0000-000000000001",
+            "name": "Analyze Reference?",
+        },
+        # 16e. Build Vision Request — OpenRouter multimodal body (public image URL).
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_VISION_REQUEST_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3380, -180],
+            "id": "vision-build-0000-0000-0000-000000000001",
+            "name": "Build Vision Request",
+        },
+        # 16f. Analyze Reference — gpt-4o-mini sees the customer's image.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 30000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [3640, -180],
+            "id": "vision-http-0000-0000-0000-000000000001",
+            "name": "Analyze Reference",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+        },
+        # 16g. Parse Reference Analysis — append the vision summary to the prompt.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_REFERENCE_ANALYSIS_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3900, -180],
+            "id": "vision-parse-0000-0000-0000-000000000001",
+            "name": "Parse Reference Analysis",
+        },
+        # 16h. No Reference — text-only turn: pass the prompt through unchanged.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": NO_REFERENCE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3380, 60],
+            "id": "vision-none-0000-0000-0000-000000000001",
+            "name": "No Reference",
+        },
         # 17. OpenRouter Chat Model (sub-node)
         {
             "parameters": {"model": "openai/gpt-4o-mini", "options": {}},
@@ -1441,12 +1619,12 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                 "promptType": "define",
                 "text": AGENT_TEXT_EXPR,
                 "options": {
-                    "systemMessage": "={{ $('Build System Prompt').first().json.system_message }}"
+                    "systemMessage": "={{ $json.system_message }}"
                 }
             },
             "type": "@n8n/n8n-nodes-langchain.agent",
             "typeVersion": 3.1,
-            "position": [2860, 260],
+            "position": [4160, 260],
             "id": "d0e1f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
             "name": "AI Agent",
         },
@@ -1918,14 +2096,14 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         "Agent Blocked?": {
             "main": [
                 [],
-                [
-                    {"node": "Load Offer", "type": "main", "index": 0},
-                    {"node": "Build References", "type": "main", "index": 0},
-                ],
+                [{"node": "Build References", "type": "main", "index": 0}],
             ]
         },
         "Build References": {
             "main": [[{"node": "Save References", "type": "main", "index": 0}]]
+        },
+        "Save References": {
+            "main": [[{"node": "Load Offer", "type": "main", "index": 0}]]
         },
         "Load Offer": {
             "main": [[{"node": "Load Pricing", "type": "main", "index": 0}]]
@@ -1934,6 +2112,24 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Build System Prompt", "type": "main", "index": 0}]]
         },
         "Build System Prompt": {
+            "main": [[{"node": "Analyze Reference?", "type": "main", "index": 0}]]
+        },
+        "Analyze Reference?": {
+            "main": [
+                [{"node": "Build Vision Request", "type": "main", "index": 0}],
+                [{"node": "No Reference", "type": "main", "index": 0}],
+            ]
+        },
+        "Build Vision Request": {
+            "main": [[{"node": "Analyze Reference", "type": "main", "index": 0}]]
+        },
+        "Analyze Reference": {
+            "main": [[{"node": "Parse Reference Analysis", "type": "main", "index": 0}]]
+        },
+        "Parse Reference Analysis": {
+            "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]
+        },
+        "No Reference": {
             "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]
         },
         "OpenRouter Chat Model": {
