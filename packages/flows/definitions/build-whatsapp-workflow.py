@@ -722,7 +722,7 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
   if (!/(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(trimmed)) {
     // Don't append a second question when this turn is already asking the lead
     // for missing information. The checkpoint is asked on a later turn.
-    if (!trimmed.includes('?')) trimmed = trimmed ? trimmed + '\\n\\nMais alguma dúvida?' : 'Mais alguma dúvida?';
+    if (!/\?\s*$/.test(trimmed)) trimmed = trimmed ? trimmed + '\\n\\nMais alguma dúvida?' : 'Mais alguma dúvida?';
   }
   // If the checkpoint is already the final question, keep it even when the
   // explanation contains a rhetorical question ("tudo bem?"). The old branch
