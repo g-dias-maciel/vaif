@@ -111,6 +111,7 @@ return new class extends Migration
             $table->text('meaning')->nullable();
             $table->string('tattoo_type')->nullable();
             $table->json('reference_pics')->nullable();
+            $table->json('reference_analysis')->nullable();
             $table->string('handoff_reason')->nullable();
             $table->uuid('accepted_quote_id')->nullable();
             $table->dateTime('closed_at')->nullable();

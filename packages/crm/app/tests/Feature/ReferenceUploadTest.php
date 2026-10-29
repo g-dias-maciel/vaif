@@ -140,6 +140,32 @@ class ReferenceUploadTest extends TestCase
             ->assertJsonPath('references', []);
     }
 
+    public function test_it_stores_the_vision_analysis_on_the_project(): void
+    {
+        config(['transport.crm_internal_token' => 'test-token']);
+
+        $project = $this->project();
+
+        $this->withHeader('X-Crm-Token', 'test-token')->postJson('/api/references/analysis', [
+            'artist_id' => $project->artist_id,
+            'project_id' => $project->id,
+            'image_url' => 'https://crm.vaif.com.br/storage/references/test.jpg',
+            'analysis' => [
+                'referencia_de_tatuagem' => true,
+                'resumo' => 'Lettering New York em preto e cinza.',
+                'estilo' => 'lettering',
+                'confianca' => 'alta',
+            ],
+        ])->assertOk()->assertJsonPath('ok', true);
+
+        $analysis = $project->refresh()->reference_analysis;
+
+        $this->assertSame('lettering', $analysis['estilo']);
+        $this->assertSame('Lettering New York em preto e cinza.', $analysis['resumo']);
+        $this->assertSame('https://crm.vaif.com.br/storage/references/test.jpg', $analysis['image_url']);
+        $this->assertNotNull($analysis['analyzed_at']);
+    }
+
     public function test_it_rejects_an_invalid_internal_token(): void
     {
         config(['transport.crm_internal_token' => 'test-token']);

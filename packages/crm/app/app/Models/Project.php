@@ -35,6 +35,7 @@ class Project extends Model
         'meaning',
         'tattoo_type',
         'reference_pics',
+        'reference_analysis',
         'handoff_reason',
         'accepted_quote_id',
         'closed_at',
@@ -42,6 +43,7 @@ class Project extends Model
 
     protected $casts = [
         'first_tattoo' => 'boolean',
+        'reference_analysis' => 'array',
         'closed_at' => 'datetime',
     ];
 

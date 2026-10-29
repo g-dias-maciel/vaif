@@ -125,6 +125,38 @@ class ReferenceController extends Controller
         ]);
     }
 
+    /**
+     * Persist the latest vision analysis for a Project's reference picture.
+     * The agent reads it back through `start_turn` on the following turns.
+     */
+    public function storeAnalysis(Request $request)
+    {
+        $expected = (string) config('transport.crm_internal_token');
+        $provided = (string) $request->header('X-Crm-Token');
+
+        abort_unless($expected !== '' && hash_equals($expected, $provided), 401);
+
+        $data = $request->validate([
+            'artist_id' => ['required', 'uuid'],
+            'project_id' => ['required', 'uuid'],
+            'image_url' => ['nullable', 'url', 'max:2048'],
+            'analysis' => ['required', 'array'],
+        ]);
+
+        $project = Project::query()
+            ->where('artist_id', $data['artist_id'])
+            ->findOrFail($data['project_id']);
+
+        $analysis = $data['analysis'];
+        $analysis['image_url'] = $data['image_url'] ?? null;
+        $analysis['analyzed_at'] = now()->toIso8601String();
+
+        $project->reference_analysis = $analysis;
+        $project->save();
+
+        return response()->json(['ok' => true]);
+    }
+
     private function isWahaMedia(string $url): bool
     {
         $path = parse_url($url, PHP_URL_PATH) ?: '';

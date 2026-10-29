@@ -691,6 +691,7 @@ returns table (
   table_price_cents  integer,
   quoted_price_cents integer,
   agent_state        jsonb,
+  reference_analysis jsonb,
   agent_blocked      boolean
 )
 language plpgsql security definer
@@ -779,6 +780,7 @@ begin
   table_price_cents  := v_table;
   quoted_price_cents := v_quoted;
   agent_state        := coalesce(v_state, '{}'::jsonb);
+  reference_analysis := v_project.reference_analysis;
   agent_blocked      := v_lead.agent_blocked_at is not null;
 
   return next;

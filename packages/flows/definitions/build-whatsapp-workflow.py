@@ -156,6 +156,7 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
+    "+ ' referencia_visual=' + (function(){ var r = $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; if (d.resumo) p.push(d.resumo); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
     "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
@@ -1576,6 +1577,27 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "vision-parse-0000-0000-0000-000000000001",
             "name": "Parse Reference Analysis",
         },
+        # 16g2. Save Reference Analysis — persist the vision result so
+        #      `start_turn` can expose it on the following turns.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://crm.vaif.com.br/api/references/analysis",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ artist_id: $('Resolve Artist').first().json.id, project_id: $('Start Turn').first().json.project_id, image_url: $('Save References').first().json.image_url, analysis: $json.reference_analysis }) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [4160, -180],
+            "id": "vision-save-0000-0000-0000-000000000001",
+            "name": "Save Reference Analysis",
+            "credentials": CRM_INTERNAL,
+            "onError": "continueRegularOutput",
+        },
         # 16h. No Reference — text-only turn: pass the prompt through unchanged.
         {
             "parameters": {
@@ -2127,7 +2149,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Parse Reference Analysis", "type": "main", "index": 0}]]
         },
         "Parse Reference Analysis": {
-            "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "AI Agent", "type": "main", "index": 0},
+                {"node": "Save Reference Analysis", "type": "main", "index": 0},
+            ]]
         },
         "No Reference": {
             "main": [[{"node": "AI Agent", "type": "main", "index": 0}]]

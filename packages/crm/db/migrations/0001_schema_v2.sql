@@ -200,6 +200,8 @@ create table projects (
   meaning           text,
   tattoo_type       text check (tattoo_type in ('new','cover_up','rework')),
   reference_pics    text[] not null default '{}',
+  -- Latest automated vision analysis of the reference picture.
+  reference_analysis jsonb,
   handoff_reason    text,
   accepted_quote_id uuid,                          -- FK added after quotes exists
   closed_at         timestamptz,

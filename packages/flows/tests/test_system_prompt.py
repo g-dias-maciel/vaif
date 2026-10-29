@@ -161,7 +161,7 @@ check("Analyze Reference? sends images through vision and text-only turns straig
       and [c["node"] for c in wf["connections"]["Analyze Reference?"]["main"][1]] == ["No Reference"]
       and wf["connections"]["Build Vision Request"]["main"][0][0]["node"] == "Analyze Reference"
       and wf["connections"]["Analyze Reference"]["main"][0][0]["node"] == "Parse Reference Analysis"
-      and wf["connections"]["Parse Reference Analysis"]["main"][0][0]["node"] == "AI Agent"
+      and [c["node"] for c in wf["connections"]["Parse Reference Analysis"]["main"][0]] == ["AI Agent", "Save Reference Analysis"]
       and wf["connections"]["No Reference"]["main"][0][0]["node"] == "AI Agent")
 check("vision request uses the public CRM image URL and a multimodal model",
       "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"]
@@ -169,6 +169,13 @@ check("vision request uses the public CRM image URL and a multimodal model",
       and "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"])
 check("vision prompt forbids using the image to calculate price",
       "NUNCA use esta análise para calcular preço" in nodes["Parse Reference Analysis"]["parameters"]["jsCode"])
+check("vision analysis is persisted for later turns",
+      nodes["Save Reference Analysis"]["parameters"]["url"].endswith("/api/references/analysis")
+      and "reference_analysis" in nodes["Save Reference Analysis"]["parameters"]["jsonBody"])
+check("agent context exposes referencia_visual from start_turn",
+      "referencia_visual=" in AGENT_TEXT_JS
+      and "reference_analysis" in AGENT_TEXT_JS
+      and "referencia_visual" in template)
 check("AI Agent → Build Classification Prompt → Classify → Parse → Build Project Patch → Patch Project",
       wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"

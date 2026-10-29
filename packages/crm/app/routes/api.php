@@ -23,6 +23,7 @@ Route::post('/onboard/login', [OnboardController::class, 'login']);
 
 // Internal automation (n8n): attach WhatsApp reference media/links.
 Route::post('/references', [ReferenceController::class, 'store']);
+Route::post('/references/analysis', [ReferenceController::class, 'storeAnalysis']);
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

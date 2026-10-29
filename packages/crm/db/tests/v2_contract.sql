@@ -157,10 +157,16 @@ begin
   select stage_key into stage from projects where id = p.id;
   perform pg_temp.ok(stage = 'orcamento_enviado', 'sending a quote advances the stage');
 
-  -- start_turn surfaces the live quote for the prompt.
+  -- start_turn surfaces the live quote and the persisted reference analysis.
+  update projects
+     set reference_analysis = '{"resumo": "Lettering New York", "estilo": "lettering"}'::jsonb
+   where id = p.id;
+
   select * into t from start_turn(
     pg_temp.artist_a(), 'slug-a:+5511987654321', '+5511987654321');
   perform pg_temp.ok(t.project_id = p.id, 'start_turn reuses the open Project');
+  perform pg_temp.ok(t.reference_analysis->>'estilo' = 'lettering',
+    'start_turn returns the last vision analysis');
   perform pg_temp.ok(t.quoted_price_cents = 50000,
     'start_turn returns the open quote price, got ' || coalesce(t.quoted_price_cents::text, 'null'));
 end;
