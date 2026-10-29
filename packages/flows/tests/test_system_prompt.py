@@ -182,7 +182,7 @@ check("AI Agent → Build Classification Prompt → Classify → Parse → Build
       wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
-      and wf["connections"]["Parse Classification"]["main"][0][0]["node"] == "Build Project Patch"
+      and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory"]
       and wf["connections"]["Build Project Patch"]["main"][0][0]["node"] == "Patch Project")
 check("Patch Project fans out to quote persistence, promotion quote and name patch",
       {c["node"] for c in wf["connections"]["Patch Project"]["main"][0]}
@@ -311,6 +311,14 @@ check("the per-paragraph sends are throttled and aggregated",
       nodes["Send WAHA Message"]["parameters"]["options"]["batching"]["batch"]["batchSize"] == 1
       and nodes["Send WAHA Message"]["parameters"]["options"]["batching"]["batch"]["batchInterval"] > 0
       and "Aggregate Sent" in nodes)
+check("the CRM memory is synced with the exact sent reply",
+      "Sync Chat Memory" in nodes
+      and "jsonb_set(message, '{content}'" in nodes["Sync Chat Memory"]["parameters"]["query"]
+      and "$json.final_reply" in nodes["Sync Chat Memory"]["parameters"]["options"]["queryReplacement"])
+check("the vision acknowledgement is short and skips the first-message intro",
+      "assunto" in nodes["Parse Reference Analysis"]["parameters"]["jsCode"]
+      and "slice(0, 90)" in parse_js
+      and "lead.is_new !== true" in parse_js)
 check("humanize scales to the guarded reply length",
       "$('Parse Classification').first().json.final_reply" in nodes["Build Humanize Delay"]["parameters"]["jsCode"])
 check("parse detects the creative-process text deterministically",

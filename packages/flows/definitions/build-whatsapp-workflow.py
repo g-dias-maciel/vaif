@@ -156,7 +156,7 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
-    "+ ' referencia_visual=' + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; if (d.resumo) p.push(d.resumo); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
+    "+ ' referencia_visual=' + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; var subject = d.assunto || (d.resumo ? String(d.resumo).split(/(?<=[.!?])\s+/)[0] : ''); if (subject) p.push(subject.slice(0, 120)); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
     "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
@@ -250,7 +250,8 @@ VISION_SYSTEM_PROMPT = """Você é um assistente de um estúdio de tatuagem. Ana
 Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
 {
   "referencia_de_tatuagem": true ou false,
-  "resumo": "1 a 2 frases em português brasileiro descrevendo objetivamente o que aparece",
+  "assunto": "2 a 5 palavras com o tema principal, sem detalhes (ex.: leão com bússola)",
+  "resumo": "1 frase curta, no máximo 120 caracteres, sem descrever boca, dentes, olhos ou detalhes minuciosos",
   "estilo": "realismo | fineline | old school | blackwork | geométrico | aquarela | oriental | lettering | outro | indefinido",
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
@@ -294,7 +295,7 @@ try {
 }
 
 const base = $('Build System Prompt').first().json.system_message;
-const summary = String(data.resumo || '').trim();
+const summary = String(data.assunto || data.resumo || '').split(/(?<=[.!?])\s+/)[0].trim();
 
 if (!summary) {
   return [{ json: { system_message: base, reference_analysis: null } }];
@@ -306,7 +307,7 @@ const lines = [
   '## Referência visual (análise automática)',
   'A imagem recebida foi analisada automaticamente. Use como apoio, não como verdade absoluta.',
   '- É referência de tatuagem: ' + flag(data.referencia_de_tatuagem),
-  '- Resumo: ' + summary,
+  '- Referência: ' + summary,
 ];
 
 if (data.estilo) lines.push('- Estilo provável: ' + data.estilo);
@@ -318,7 +319,7 @@ if (data.confianca) lines.push('- Confiança da análise: ' + data.confianca);
 if (data.observacoes) lines.push('- Observações: ' + data.observacoes);
 
 lines.push('');
-lines.push('Regras: na PRIMEIRA resposta após esta análise, comece reconhecendo a referência com um detalhe concreto; não aja como se não tivesse visto a imagem. Elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
+lines.push('Regras: na PRIMEIRA resposta após esta análise, reconheça a referência em uma frase curta usando o assunto (ex.: "um leão com bússola"); não descreva detalhes minuciosos como boca, dentes ou olhos; não aja como se não tivesse visto a imagem. Elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
 
 return [{ json: {
   system_message: base + lines.join('\\n'),
@@ -755,12 +756,17 @@ try {
 } catch (e) {
   visionTurn = false;
 }
-if (visionTurn) {
+if (visionTurn && lead.is_new !== true) {
   const vision = $('Parse Reference Analysis').first().json.reference_analysis || {};
-  const summary = String(vision.resumo || '').replace(/^A imagem (?:mostra|apresenta)\s*/i, '').trim();
+  const subject = String(vision.assunto || vision.resumo || '')
+    .split(/(?<=[.!?])\s+/)[0]
+    .replace(/^A imagem (?:mostra|apresenta)\s*/i, '')
+    .replace(/[.!?]+$/, '')
+    .trim()
+    .slice(0, 90);
   const already = /refer[êe]ncia|curti|(?:vi|recebi).{0,20}(?:foto|imagem)/i.test(finalReply);
-  if (summary && vision.referencia_de_tatuagem !== false && !already) {
-    finalReply = 'Vi a referência que você mandou: ' + summary + ' Curti! ' + finalReply;
+  if (subject && vision.referencia_de_tatuagem !== false && !already) {
+    finalReply = 'Vi a referência que você mandou: ' + subject + '. Curti! ' + finalReply;
   }
 }
 
@@ -1817,6 +1823,25 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "cl-parse-0000-0000-0000-000000000001",
             "name": "Parse Classification",
         },
+        # 27b. Sync Chat Memory — n8n's memory node saves the model output,
+        #      but the final reply may have been gated/prefixed/split. Store
+        #      the exact text the lead receives so the CRM panel matches.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "UPDATE agent_memory.chat_memory SET message = jsonb_set(message, '{content}', to_jsonb($2::text), true) WHERE id = (SELECT id FROM agent_memory.chat_memory WHERE session_id = $1::text AND message->>'type' = 'ai' ORDER BY id DESC LIMIT 1)",
+                "options": {
+                    "queryReplacement": "={{ [$('Start Turn').first().json.lead_id, $json.final_reply] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [3900, 420],
+            "id": "chat-sync-0000-0000-0000-000000000001",
+            "name": "Sync Chat Memory",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
         # 28. Build Project Patch — the deltas learned this turn, as RPC args.
         {
             "parameters": {
@@ -2284,7 +2309,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Parse Classification", "type": "main", "index": 0}]]
         },
         "Parse Classification": {
-            "main": [[{"node": "Build Project Patch", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "Build Project Patch", "type": "main", "index": 0},
+                {"node": "Sync Chat Memory", "type": "main", "index": 0},
+            ]]
         },
         "Build Project Patch": {
             "main": [[{"node": "Patch Project", "type": "main", "index": 0}]]
