@@ -715,8 +715,26 @@
     },
     {
       "parameters": {
+        "operation": "binaryToPropery",
+        "binaryPropertyName": "data",
+        "destinationKey": "audio_base64",
+        "options": {
+          "keepSource": "both"
+        }
+      },
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1.2,
+      "position": [
+        3510,
+        -420
+      ],
+      "id": "audio-base64-0000-0000-0000-000000000001",
+      "name": "Extract Audio Base64"
+    },
+    {
+      "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const binary = $input.first().binary && $input.first().binary.data;\nconst base = $('Build System Prompt').first().json.system_message;\nconst helpers = this.helpers;\n\nasync function build() {\n  if (!binary) {\n    return [{ json: { body: null, system_message: base } }];\n  }\n\n  let base64 = '';\n  if (binary.id) {\n    const stream = await helpers.getBinaryStream(binary.id);\n    const chunks = [];\n    for await (const chunk of stream) chunks.push(chunk);\n    base64 = Buffer.concat(chunks).toString('base64');\n  } else if (binary.data && binary.data !== 'filesystem-v2') {\n    base64 = binary.data;\n  }\n\n  if (!base64) {\n    return [{ json: { body: null, system_message: base } }];\n  }\n\n  const mime = String(binary.mimeType || $('Debounce Start').first().json.audio_mime || 'audio/ogg');\n  const format = mime.includes('mpeg') || mime.includes('mp3')\n    ? 'mp3'\n    : (mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : (mime.includes('wav') ? 'wav' : 'ogg'));\n\n  const body = {\n    model: 'google/gemini-2.5-flash',\n    messages: [\n      { role: 'system', content: \"Voc\\u00ea transcreve \\u00e1udios de clientes de um est\\u00fadio de tatuagem. Responda SOMENTE com a transcri\\u00e7\\u00e3o literal em portugu\\u00eas brasileiro, sem coment\\u00e1rios, sem markdown, sem aspas e sem r\\u00f3tulos. Se n\\u00e3o houver fala intelig\\u00edvel, responda com uma string vazia.\" },\n      { role: 'user', content: [\n        { type: 'text', text: \"Transcreva este \\u00e1udio.\" },\n        { type: 'input_audio', input_audio: { data: base64, format: format } }\n      ] }\n    ],\n    temperature: 0,\n    max_tokens: 800\n  };\n\n  return [{ json: { body, system_message: base } }];\n}\n\nreturn build();"
+        "jsCode": "const base = $('Build System Prompt').first().json.system_message;\nconst base64 = String($json.audio_base64 || '').trim();\n\nif (!base64) {\n  return [{ json: { body: null, system_message: base } }];\n}\n\nconst mime = String($('Debounce Start').first().json.audio_mime || 'audio/ogg');\nconst format = mime.includes('mpeg') || mime.includes('mp3')\n  ? 'mp3'\n  : (mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : (mime.includes('wav') ? 'wav' : 'ogg'));\n\nconst body = {\n  model: 'google/gemini-2.5-flash',\n  messages: [\n    { role: 'system', content: \"Voc\\u00ea transcreve \\u00e1udios de clientes de um est\\u00fadio de tatuagem. Responda SOMENTE com a transcri\\u00e7\\u00e3o literal em portugu\\u00eas brasileiro, sem coment\\u00e1rios, sem markdown, sem aspas e sem r\\u00f3tulos. Se n\\u00e3o houver fala intelig\\u00edvel, responda com uma string vazia.\" },\n    { role: 'user', content: [\n      { type: 'text', text: \"Transcreva este \\u00e1udio.\" },\n      { type: 'input_audio', input_audio: { data: base64, format: format } }\n    ] }\n  ],\n  temperature: 0,\n  max_tokens: 800\n};\n\nreturn [{ json: { body, system_message: base } }];"
       },
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
@@ -1866,6 +1884,17 @@
       ]
     },
     "Fetch Audio": {
+      "main": [
+        [
+          {
+            "node": "Extract Audio Base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Audio Base64": {
       "main": [
         [
           {

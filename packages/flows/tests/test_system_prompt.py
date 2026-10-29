@@ -166,7 +166,8 @@ check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → B
 check("audio turns are transcribed, text turns bypass audio and both reach Analyze Reference?",
       [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][0]] == ["Fetch Audio"]
       and [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][1]] == ["No Audio"]
-      and wf["connections"]["Fetch Audio"]["main"][0][0]["node"] == "Build Audio Request"
+      and wf["connections"]["Fetch Audio"]["main"][0][0]["node"] == "Extract Audio Base64"
+      and wf["connections"]["Extract Audio Base64"]["main"][0][0]["node"] == "Build Audio Request"
       and wf["connections"]["Build Audio Request"]["main"][0][0]["node"] == "Transcribe Audio"
       and wf["connections"]["Transcribe Audio"]["main"][0][0]["node"] == "Parse Audio"
       and wf["connections"]["Parse Audio"]["main"][0][0]["node"] == "Analyze Reference?"

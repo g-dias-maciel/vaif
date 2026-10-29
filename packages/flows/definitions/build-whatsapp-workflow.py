@@ -349,51 +349,32 @@ AUDIO_SYSTEM_PROMPT = """Você transcreve áudios de clientes de um estúdio de 
 
 AUDIO_USER_PROMPT = """Transcreva este áudio."""
 
-BUILD_AUDIO_REQUEST_JS = """const binary = $input.first().binary && $input.first().binary.data;
-const base = $('Build System Prompt').first().json.system_message;
-const helpers = this.helpers;
+BUILD_AUDIO_REQUEST_JS = """const base = $('Build System Prompt').first().json.system_message;
+const base64 = String($json.audio_base64 || '').trim();
 
-async function build() {
-  if (!binary) {
-    return [{ json: { body: null, system_message: base } }];
-  }
-
-  let base64 = '';
-  if (binary.id) {
-    const stream = await helpers.getBinaryStream(binary.id);
-    const chunks = [];
-    for await (const chunk of stream) chunks.push(chunk);
-    base64 = Buffer.concat(chunks).toString('base64');
-  } else if (binary.data && binary.data !== 'filesystem-v2') {
-    base64 = binary.data;
-  }
-
-  if (!base64) {
-    return [{ json: { body: null, system_message: base } }];
-  }
-
-  const mime = String(binary.mimeType || $('Debounce Start').first().json.audio_mime || 'audio/ogg');
-  const format = mime.includes('mpeg') || mime.includes('mp3')
-    ? 'mp3'
-    : (mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : (mime.includes('wav') ? 'wav' : 'ogg'));
-
-  const body = {
-    model: 'google/gemini-2.5-flash',
-    messages: [
-      { role: 'system', content: __AUDIO_SYSTEM__ },
-      { role: 'user', content: [
-        { type: 'text', text: __AUDIO_USER__ },
-        { type: 'input_audio', input_audio: { data: base64, format: format } }
-      ] }
-    ],
-    temperature: 0,
-    max_tokens: 800
-  };
-
-  return [{ json: { body, system_message: base } }];
+if (!base64) {
+  return [{ json: { body: null, system_message: base } }];
 }
 
-return build();"""
+const mime = String($('Debounce Start').first().json.audio_mime || 'audio/ogg');
+const format = mime.includes('mpeg') || mime.includes('mp3')
+  ? 'mp3'
+  : (mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : (mime.includes('wav') ? 'wav' : 'ogg'));
+
+const body = {
+  model: 'google/gemini-2.5-flash',
+  messages: [
+    { role: 'system', content: __AUDIO_SYSTEM__ },
+    { role: 'user', content: [
+      { type: 'text', text: __AUDIO_USER__ },
+      { type: 'input_audio', input_audio: { data: base64, format: format } }
+    ] }
+  ],
+  temperature: 0,
+  max_tokens: 800
+};
+
+return [{ json: { body, system_message: base } }];"""
 BUILD_AUDIO_REQUEST_JS = (BUILD_AUDIO_REQUEST_JS
     .replace('__AUDIO_SYSTEM__', json.dumps(AUDIO_SYSTEM_PROMPT))
     .replace('__AUDIO_USER__', json.dumps(AUDIO_USER_PROMPT)))
@@ -1837,6 +1818,21 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "credentials": WAHA,
             "onError": "continueRegularOutput",
         },
+        # 16c3b. Extract Audio Base64 — n8n's binary store is filesystem-backed,
+        #        so convert the audio binary to a base64 JSON field here.
+        {
+            "parameters": {
+                "operation": "binaryToPropery",
+                "binaryPropertyName": "data",
+                "destinationKey": "audio_base64",
+                "options": {"keepSource": "both"},
+            },
+            "type": "n8n-nodes-base.extractFromFile",
+            "typeVersion": 1.2,
+            "position": [3510, -420],
+            "id": "audio-base64-0000-0000-0000-000000000001",
+            "name": "Extract Audio Base64",
+        },
         # 16c4. Build Audio Request — base64 + input_audio body.
         {
             "parameters": {
@@ -2588,6 +2584,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             ]
         },
         "Fetch Audio": {
+            "main": [[{"node": "Extract Audio Base64", "type": "main", "index": 0}]]
+        },
+        "Extract Audio Base64": {
             "main": [[{"node": "Build Audio Request", "type": "main", "index": 0}]]
         },
         "Build Audio Request": {
