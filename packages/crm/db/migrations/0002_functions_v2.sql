@@ -89,6 +89,36 @@ $$;
 -- Leads and channels
 -- -----------------------------------------------------------------------------
 
+-- Names arrive from WhatsApp profile names ("JOSE"), typed answers ("jose"),
+-- or the classifier. Store one canonical shape: trimmed, single-spaced,
+-- title-cased. Used by upsert_lead so the agent and the CRM agree.
+create or replace function normalize_person_name(p_name text)
+returns text
+language plpgsql immutable
+set search_path = public, pg_temp
+as $$
+declare
+  v_name  text;
+  v_parts text[];
+  i       integer;
+begin
+  v_name := initcap(regexp_replace(btrim(coalesce(p_name, '')), '\s+', ' ', 'g'));
+  if v_name = '' then
+    return null;
+  end if;
+
+  v_parts := string_to_array(v_name, ' ');
+  for i in 2..coalesce(array_length(v_parts, 1), 1) loop
+    if lower(v_parts[i]) in ('da', 'de', 'do', 'das', 'dos', 'e') then
+      v_parts[i] := lower(v_parts[i]);
+    end if;
+  end loop;
+
+  return array_to_string(v_parts, ' ');
+end;
+$$;
+
+
 create or replace function upsert_lead(
   p_artist_id uuid,
   p_phone     text,
@@ -111,7 +141,7 @@ begin
   end if;
 
   insert into leads (artist_id, name, phone_e164, phone_raw, source, last_message_at)
-  values (p_artist_id, nullif(btrim(coalesce(p_name, '')), ''), v_phone,
+  values (p_artist_id, normalize_person_name(p_name), v_phone,
           nullif(btrim(coalesce(p_phone, '')), ''), p_source, now())
   on conflict (artist_id, phone_e164) do update set
     name            = coalesce(excluded.name, leads.name),

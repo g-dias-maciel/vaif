@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 /**
  * A person who contacted the Artist. A Lead is not a job: the same person can
@@ -75,11 +76,43 @@ class Lead extends Model
     }
 
     /**
+     * Canonical person name: trimmed, single-spaced, title-cased.
+     */
+    public static function normalizeName(?string $name): ?string
+    {
+        if ($name === null) {
+            return null;
+        }
+
+        $normalized = preg_replace('/\s+/u', ' ', trim($name)) ?? trim($name);
+
+        if ($normalized === '') {
+            return null;
+        }
+
+        $parts = explode(' ', Str::title($normalized));
+        $particles = ['Da', 'De', 'Do', 'Das', 'Dos', 'E'];
+
+        foreach ($parts as $index => $part) {
+            if ($index > 0 && in_array($part, $particles, true)) {
+                $parts[$index] = mb_strtolower($part);
+            }
+        }
+
+        return implode(' ', $parts);
+    }
+
+    public function setNameAttribute($value): void
+    {
+        $this->attributes['name'] = self::normalizeName($value);
+    }
+
+    /**
      * What to show as the Lead's name when they never gave one.
      */
     public function displayName(): string
     {
-        return $this->name ?: 'Sem nome';
+        return self::normalizeName($this->name) ?: 'Sem nome';
     }
 
     /**

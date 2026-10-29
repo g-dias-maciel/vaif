@@ -88,6 +88,13 @@ begin
   select * into l3 from upsert_lead(pg_temp.artist_b(), '11 98765-4321', 'Ana', 'whatsapp');
   perform pg_temp.ok(l3.id <> l1.id, 'the same phone is a different Lead for another Artist');
 
+  select * into l3 from upsert_lead(
+    pg_temp.artist_a(), '11 95555-0000', '  jOSE   DA  sILVA ', 'whatsapp');
+  perform pg_temp.ok(l3.name = 'Jose da Silva',
+    'upsert_lead normalises names, got ' || coalesce(l3.name, 'null'));
+  perform pg_temp.ok(normalize_person_name('  jOSE   DA  SILVA ') = 'Jose da Silva',
+    'normalize_person_name title-cases and collapses spaces');
+
   select count(*) - count(distinct (artist_id, phone_e164)) into d from leads;
   perform pg_temp.ok(d = 0, 'no duplicate (artist_id, phone_e164)');
 
