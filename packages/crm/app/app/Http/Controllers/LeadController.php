@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ChatMessage;
 use App\Models\Lead;
 use App\Models\Note;
 use App\Models\Project;
