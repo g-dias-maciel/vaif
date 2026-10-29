@@ -7,6 +7,7 @@ use App\Models\Project;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -52,6 +53,28 @@ class DashboardController extends Controller
                     $query->orWhereIn('stage_key', $closedStatuses);
                 }
             })
+            ->orderByDesc('updated_at')
+            ->get();
+
+        // In-platform alert: the agent handed this client to the Artist and
+        // the Artist has not taken over the WhatsApp chat yet.
+        $pendingHandoffsQuery = Project::with(['lead'])
+            ->where('artist_id', $artist->id)
+            ->where('stage_key', 'aguardando_artista');
+
+        // `chat_sessions` is Postgres-only (n8n owns it), so the "artist
+        // already replied" filter can only run against the real database.
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $pendingHandoffsQuery->whereNotExists(function ($query) use ($artist) {
+                $query->select(DB::raw(1))
+                    ->from('chat_sessions')
+                    ->whereColumn('chat_sessions.lead_id', 'projects.lead_id')
+                    ->where('chat_sessions.artist_id', $artist->id)
+                    ->where('chat_sessions.owner', 'artist');
+            });
+        }
+
+        $pendingHandoffs = $pendingHandoffsQuery
             ->orderByDesc('updated_at')
             ->get();
 
@@ -126,6 +149,7 @@ class DashboardController extends Controller
             'artist' => $artist,
             'activePromotion' => $artist->activePromotion,
             'projects' => $projects,
+            'pendingHandoffs' => $pendingHandoffs,
             'pendingDeposits' => $pendingDeposits,
             'pipeline' => config('crm.pipeline_statuses'),
             'period' => $period,

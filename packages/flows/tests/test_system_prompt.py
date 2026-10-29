@@ -277,6 +277,14 @@ check("a vision turn is guaranteed to acknowledge the reference",
 check("the final checkpoint is never sliced off after an earlier question",
       "const checkpointAt" not in parse_js
       and "Mais alguma dúvida?" in parse_js)
+check("false cover-up / artist-request handoffs are suppressed",
+      "leadSaysCover" in parse_js
+      and "leadRequestedArtist" in parse_js
+      and "handoffSuppressed" in parse_js)
+check("a corrected new tattoo recovers from aguardando_artista",
+      "recoveredFromHandoff" in parse_js
+      and "finalPipeline = 'qualificando'" in parse_js
+      and "nextDiscoveryQuestion" in parse_js)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse enforces the doubt-loop follow-up while pre-price",

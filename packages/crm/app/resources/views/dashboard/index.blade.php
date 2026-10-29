@@ -29,6 +29,59 @@
     @endif
 </div>
 
+@if ($pendingHandoffs->isNotEmpty())
+<div class="panel" style="margin-bottom: 20px; border-color: var(--danger);">
+    <h2 class="section-title" style="margin-top:0;">
+        Atendimentos aguardando você
+        <span class="tag">{{ $pendingHandoffs->count() }}</span>
+    </h2>
+    <p class="meta">O agente passou estes clientes para você. Abra a conversa ou responda pelo WhatsApp para assumir o atendimento.</p>
+
+    @php
+        $handoffLabels = [
+            'cover_up' => 'Cover-up',
+            'reforma' => 'Reforma',
+            'lead_requested_artist' => 'Pediu o artista',
+            'below_piso' => 'Abaixo do piso',
+            'vague' => 'Descrição vaga',
+            'audio_2x' => 'Áudio repetido',
+            'no_availability' => 'Sem horário disponível',
+        ];
+    @endphp
+
+    <ul class="slot-list" style="margin-top: 14px;">
+        @foreach ($pendingHandoffs as $handoff)
+            <li>
+                <div class="slot-main">
+                    <strong>
+                        @if ($handoff->lead)
+                            <a href="{{ route('leads.show', $handoff->lead) }}">{{ $handoff->lead->displayName() }}</a>
+                        @else
+                            Cliente
+                        @endif
+                    </strong>
+                    <span>
+                        {{ $handoffLabels[$handoff->handoff_reason] ?? ($handoff->handoff_reason ?: 'Atendimento solicitado') }}
+                        @if ($handoff->lead?->phone_e164)
+                            · {{ $handoff->lead->phone_e164 }}
+                        @endif
+                    </span>
+                    <span class="meta">Atualizado {{ $handoff->updated_at?->format('d/m H:i') }}</span>
+                </div>
+                <div class="actions-row">
+                    @if ($handoff->lead)
+                        <a href="{{ route('leads.show', $handoff->lead) }}" class="btn btn--ghost btn--small">Ver conversa</a>
+                        @if ($handoff->lead->whatsapp_url)
+                            <a href="{{ $handoff->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
+                        @endif
+                    @endif
+                </div>
+            </li>
+        @endforeach
+    </ul>
+</div>
+@endif
+
 @if ($pendingDeposits->isNotEmpty())
 <div class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
     <h2 class="section-title" style="margin-top:0;">

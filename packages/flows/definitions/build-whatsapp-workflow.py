@@ -470,13 +470,23 @@ const agentOutput = $('AI Agent').first().json.output || '';
 
 // ── Deterministic tipo_tatuagem guard ──
 const rawLead = ($('Debounce Resolve').first().json.combined_text || '').toLowerCase();
+const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
+const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\b(?:cover|cobertura)\b/.test(rawLead);
+const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\b(?:reforma|retoque)\b/.test(rawLead);
+const leadSaysCover = /cobertura|cobrir|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(rawLead) && !negativeCover;
+const leadSaysRework = /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework;
+const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
+
 function detectTipo(text) {
   if (/cobertura|cobrir|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(text)) return 'cobertura';
   if (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(text)) return 'reforma';
   if (/tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(text)) return 'nova';
   return null;
 }
-const tipoDeterministic = detectTipo(rawLead);
+let tipoDeterministic = detectTipo(rawLead);
+if (saysNew && (negativeCover || negativeRework)) {
+  tipoDeterministic = 'nova';
+}
 // The schema stores English enum values; the prompt/classifier vocabulary is PT.
 const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
 
@@ -560,6 +570,16 @@ function discoveryFallback(lead) {
   if (!lead.body_zone) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
   if (!lead.style) return 'E qual estilo você tem em mente?';
   return 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
+}
+function nextDiscoveryQuestion(lead) {
+  const ref = Array.isArray(lead.reference_analysis)
+    ? (lead.reference_analysis[lead.reference_analysis.length - 1] || {})
+    : (lead.reference_analysis || {});
+  if (!lead.placement) return 'Onde no corpo você quer fazer?';
+  if (!lead.body_zone) return 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?';
+  if (!lead.style && !(ref.estilo && ref.estilo !== 'indefinido')) return 'Qual estilo você tem em mente?';
+  if (lead.first_tattoo === null || lead.first_tattoo === undefined) return 'Essa seria a sua primeira tatuagem?';
+  return 'Me conta mais sobre a referência que você mandou.';
 }
 
 // ── Deterministic price-gate state ──
@@ -648,12 +668,39 @@ if (terminal.includes(current)) {
 }
 
 let finalHandoff = h.reason || null;
-if (tipoDeterministic === 'nova' && (finalHandoff === 'cover_up' || finalHandoff === 'reforma')) {
+let handoffSuppressed = false;
+let recoveredFromHandoff = false;
+
+// A cover-up/rework handoff is only legitimate when the LEAD explicitly said
+// it. "Queria no estilo da foto" is not a cover-up.
+if ((finalHandoff === 'cover_up' && !leadSaysCover)
+    || (finalHandoff === 'reforma' && !leadSaysRework)) {
   finalHandoff = null;
+  handoffSuppressed = true;
   if (finalPipeline === 'aguardando_artista') {
     finalPipeline = current;
     finalEvent = null;
   }
+}
+
+// The classifier can mistake Beatriz's own "vou passar pro artista" for a
+// request from the lead. Only trust it when the lead actually asked.
+if (finalHandoff === 'lead_requested_artist' && !leadRequestedArtist) {
+  finalHandoff = null;
+  handoffSuppressed = true;
+  if (finalPipeline === 'aguardando_artista') {
+    finalPipeline = current;
+    finalEvent = null;
+  }
+}
+
+// If the lead explicitly corrected the type to "nova", bring the Project back
+// from aguardando_artista and continue the qualification.
+if (tipoDeterministic === 'nova' && current === 'aguardando_artista') {
+  finalHandoff = null;
+  finalPipeline = 'qualificando';
+  finalEvent = null;
+  recoveredFromHandoff = true;
 }
 
 // ── Price gate: a quote transition only counts once the gate is open.
@@ -706,6 +753,25 @@ if (firstQuote) {
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?')
     : `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
+}
+
+// ── Handoff output guard: if the handoff was suppressed (false cover-up /
+//    invented artist request) or the lead corrected the type to "nova", do
+//    not send a "vou te passar" message. Continue the qualification instead.
+const handoffPhrase = /vou (?:te )?passar|passar (?:as )?informa(?:ç|c)(?:õ|o)es|deixa eu te passar|um momento/i;
+if ((handoffSuppressed || recoveredFromHandoff)
+    && (handoffPhrase.test(finalReply)
+        || (handoffSuppressed && /cover-?up|cobertura|reforma/i.test(finalReply)))) {
+  const newKnown = tipoDeterministic === 'nova' || lead.tattoo_type === 'new';
+  if (newKnown) {
+    finalReply = 'Perfeito, então é uma tatuagem nova! ' + nextDiscoveryQuestion(lead);
+    finalPipeline = 'qualificando';
+  } else {
+    finalReply = 'Só pra eu entender: você quer uma tatuagem nova ou cobrir/reformar uma tatuagem que já existe?';
+    finalPipeline = current;
+  }
+  finalEvent = null;
+  finalHandoff = null;
 }
 
 // Before the checkpoint is cleared, no model/classifier response may leak a
