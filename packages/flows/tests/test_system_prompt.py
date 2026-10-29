@@ -285,6 +285,10 @@ check("a corrected new tattoo recovers from aguardando_artista",
       "recoveredFromHandoff" in parse_js
       and "finalPipeline = 'qualificando'" in parse_js
       and "nextDiscoveryQuestion" in parse_js)
+check("multi-message acknowledgements clear the doubts gate",
+      "const acknowledgement" in parse_js
+      and "const noDoubt" in parse_js
+      and "const doubtTalk" in parse_js)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse enforces the doubt-loop follow-up while pre-price",

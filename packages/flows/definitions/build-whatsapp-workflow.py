@@ -555,6 +555,19 @@ function detectDuvidasZeradas(t) {
   const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
   const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
+  const acknowledgement = /^(?:beleza|blz|ok|okay|perfeito|combinado|entendi|claro|tranquilo|tranquila|show|demais|pode ser|isso|sim)[.!]?$/i;
+  const noDoubt = /^(?:n[aã]o|n|acho que n[aã]o|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|s[oó] o (?:pre[cç]o|valor)(?: mesmo)?|s[oó] isso|nada mais|mais nada)[.!]?$/i;
+  const doubtTalk = /(?:tenho|ficou|fiquei|surgiu|apareceu)[^.\\n]{0,25}(?:d[uú]vida|pergunta)/i;
+
+  // WhatsApp bursts often answer with several short messages: "beleza",
+  // "não", "acho que não", "só o preço mesmo". Any clear confirmation plus
+  // only acknowledgements/price requests (and no real doubt) clears the gate.
+  if (messages.some(m => acknowledgement.test(m) || noDoubt.test(m))
+      && messages.every(m => acknowledgement.test(m) || noDoubt.test(m) || priceRequest.test(m) || clearAnswer.test(m))
+      && !t.includes('?')
+      && !doubtTalk.test(t)) {
+    return true;
+  }
   if (clearAnswer.test(messages[0]) && (messages.length === 1 || messages.slice(1).every(m => priceRequest.test(m)))) return true;
   // WAHA debounce joins burst messages with newlines. A bare "não" followed
   // only by a price request is an explicit checkpoint answer plus a request,
