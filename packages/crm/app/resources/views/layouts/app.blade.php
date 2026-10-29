@@ -268,7 +268,7 @@
         .week-range { font-family: 'Montserrat', sans-serif; font-size: 1.25rem; color: var(--ink); }
         .week-scroll { overflow-x: auto; }
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 10px; }
-        .week-day { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 130px; }
+        .week-day { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 220px; }
         .week-day.today { border-color: var(--gold); }
         .week-day-head { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
         .week-day-head .date { color: var(--gold); font-weight: 700; font-size: 0.8rem; }
