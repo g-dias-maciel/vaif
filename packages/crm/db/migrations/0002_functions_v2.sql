@@ -1067,6 +1067,20 @@ begin
     raise exception 'request_deposit: amount must be positive' using errcode = '22023';
   end if;
 
+  -- The signal only makes sense after the desired slot is reserved. The agent
+  -- must call book_slot first; this also protects against a model that jumps
+  -- straight to the deposit.
+  if not exists (
+    select 1 from calendar_entries c
+     where c.artist_id = p_artist_id
+       and c.project_id = p_project_id
+       and c.kind = 'booking'
+       and c.active
+  ) then
+    raise exception 'request_deposit: book a slot before requesting the deposit'
+      using errcode = '22023';
+  end if;
+
   select * into v_row from payments
    where artist_id = p_artist_id and project_id = p_project_id
      and kind = 'deposit' and status = 'requested'

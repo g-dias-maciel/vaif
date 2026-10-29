@@ -696,6 +696,22 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
   finalReply = trimmed;
 }
 
+// ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
+//    `Book Slot` runs as a tool before this node; if it succeeded this turn,
+//    or the project is already agendado, the gate is open.
+let bookedThisTurn = false;
+try {
+  bookedThisTurn = $('Book Slot').isExecuted === true && !!$('Book Slot').first().json.id;
+} catch (e) {
+  bookedThisTurn = false;
+}
+const depositGateOpen = bookedThisTurn || current === 'agendado' || finalPipeline === 'agendado';
+if (hasDeposit && !depositGateOpen) {
+  finalReply = 'Primeiro vamos escolher o horário da sua tatuagem. Depois eu te passo o valor do sinal e o PIX. Quer ver os horários disponíveis?';
+  finalPipeline = current;
+  finalEvent = null;
+}
+
 const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());
 const hasEarlierQuestion = finalReply.slice(0, finalReply.lastIndexOf('?')).includes('?');
 const aguardandoConfirmacaoDuvidas = !duvidasEliminadas

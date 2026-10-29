@@ -179,6 +179,7 @@ $$;
 do $$
 declare
   p     projects;
+  b     calendar_entries;
   pay   payments;
   pay2  payments;
   stage text;
@@ -188,11 +189,24 @@ begin
    where artist_id = pg_temp.artist_a()
    order by created_at desc limit 1;
 
+  -- The deposit gate: no signal before the slot is actually booked.
+  begin
+    perform request_deposit(pg_temp.artist_a(), p.id, 18000, 'pix');
+    perform pg_temp.ok(false, 'a deposit before booking must fail');
+  exception when sqlstate '22023' then
+    perform pg_temp.ok(true, 'a deposit before booking is refused');
+  end;
+
+  select * into b from book_slot(
+    pg_temp.artist_a(), p.id, timestamptz '2027-05-10 10:00:00-03');
+  perform pg_temp.ok(b.id is not null, 'a slot is booked before the deposit');
+
   select * into pay from request_deposit(pg_temp.artist_a(), p.id, 18000, 'pix');
   perform pg_temp.ok(pay.status = 'requested', 'deposit starts as requested');
 
   select stage_key into stage from projects where id = p.id;
-  perform pg_temp.ok(stage = 'aguardando_deposito', 'requesting a deposit moves the stage');
+  perform pg_temp.ok(stage = 'agendado',
+    'the booked project stays agendado while the deposit is requested');
 
   select * into pay2 from confirm_deposit(pg_temp.artist_a(), p.id, 'pix', 'manual-1');
   perform pg_temp.ok(pay2.status = 'confirmed', 'deposit is confirmed');
@@ -336,7 +350,7 @@ begin
 
   select count(*) into n from calendar_entries
    where artist_id = pg_temp.artist_a() and kind = 'booking' and active;
-  perform pg_temp.ok(n = 1, 'only the non-cancelled booking remains active');
+  perform pg_temp.ok(n = 2, 'the non-cancelled bookings remain active');
 end;
 $$;
 
@@ -540,6 +554,7 @@ declare
   t1    record;
   t2    record;
   b     chat_buffers;
+  cal   calendar_entries;
   state jsonb;
   o     record;
   n     integer;
@@ -627,7 +642,11 @@ begin
   select count(*) into n from list_prices(pg_temp.artist_a());
   perform pg_temp.ok(n = 1, 'list_prices returns the current rows for the Artist');
 
-  -- Deposit state is surfaced to the prompt.
+  -- Deposit state is surfaced to the prompt, but only after booking.
+  select * into cal from book_slot(
+    pg_temp.artist_a(), t2.project_id, timestamptz '2027-06-01 10:00:00-03', 120, 'staff');
+  perform pg_temp.ok(cal.id is not null, 'the agent books a slot before the deposit');
+
   perform request_deposit(pg_temp.artist_a(), t2.project_id, 18000, 'pix');
   select * into t2 from start_turn(
     pg_temp.artist_a(), 'slug-a:5511911112222', '5511911112222');
