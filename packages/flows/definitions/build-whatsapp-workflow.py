@@ -723,12 +723,10 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
     // Don't append a second question when this turn is already asking the lead
     // for missing information. The checkpoint is asked on a later turn.
     if (!trimmed.includes('?')) trimmed = trimmed ? trimmed + '\\n\\nMais alguma dúvida?' : 'Mais alguma dúvida?';
-  } else {
-    const checkpointAt = trimmed.search(/(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i);
-    if (checkpointAt >= 0 && trimmed.slice(0, checkpointAt).includes('?')) {
-      trimmed = trimmed.slice(0, checkpointAt).trim().replace(/[.!?\\s]+$/, '?');
-    }
   }
+  // If the checkpoint is already the final question, keep it even when the
+  // explanation contains a rhetorical question ("tudo bem?"). The old branch
+  // here sliced at the checkpoint and truncated the reply to "Mais"/"ficou".
   finalReply = trimmed;
 }
 

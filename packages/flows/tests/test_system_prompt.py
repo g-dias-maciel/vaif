@@ -274,6 +274,9 @@ check("output gate replaces a premature sinal with a date prompt",
 check("a vision turn is guaranteed to acknowledge the reference",
       "Vision acknowledgement" in parse_js
       and "Vi a referência que você mandou" in parse_js)
+check("the final checkpoint is never sliced off after an earlier question",
+      "const checkpointAt" not in parse_js
+      and "Mais alguma dúvida?" in parse_js)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse enforces the doubt-loop follow-up while pre-price",
