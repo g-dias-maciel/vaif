@@ -385,7 +385,7 @@ begin
     timestamptz '2027-04-01 00:00:00-03',
     timestamptz '2027-04-10 00:00:00-03',
     120,
-    date '2027-04-02'
+    '2027-04-02'
   );
   perform pg_temp.ok(n = 2, 'a requested day returns up to two slots');
 
@@ -395,9 +395,30 @@ begin
     timestamptz '2027-04-01 00:00:00-03',
     timestamptz '2027-04-10 00:00:00-03',
     120,
-    date '2027-04-02'
+    '2027-04-02'
   );
   perform pg_temp.ok(days = 1, 'a requested day stays on that day');
+
+  select count(*) into n
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120,
+    'prefiro sábado'
+  )
+  where extract(isodow from start_at at time zone 'America/Sao_Paulo')::int <> 6;
+  perform pg_temp.ok(n = 0, 'a weekday word in the lead message resolves to that weekday');
+
+  select count(distinct (start_at at time zone 'America/Sao_Paulo')::date) into days
+  from booking_options(
+    pg_temp.artist_a(),
+    timestamptz '2027-04-01 00:00:00-03',
+    timestamptz '2027-04-10 00:00:00-03',
+    120,
+    'é minha segunda tatuagem'
+  );
+  perform pg_temp.ok(days = 2, '"segunda tatuagem" is not treated as Monday');
 end;
 $$;
 

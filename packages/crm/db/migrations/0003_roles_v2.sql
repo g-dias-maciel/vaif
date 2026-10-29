@@ -100,7 +100,7 @@ declare
     'request_deposit(uuid,uuid,integer,text,text)',
     'confirm_deposit(uuid,uuid,text,text,text)',
     'check_availability(uuid,timestamptz,timestamptz,integer)',
-    'booking_options(uuid,timestamptz,timestamptz,integer,date)',
+    'booking_options(uuid,timestamptz,timestamptz,integer,text)',
     'book_slot(uuid,uuid,timestamptz,integer,text)',
     'reschedule_booking(uuid,uuid,timestamptz,text)',
     'cancel_booking(uuid,uuid,text,text)',

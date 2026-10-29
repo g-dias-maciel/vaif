@@ -1290,7 +1290,7 @@ create or replace function booking_options(
   p_from         timestamptz,
   p_to           timestamptz,
   p_duration_min integer default 120,
-  p_day          date default null
+  p_day_text     text default null
 )
 returns table (
   start_at timestamptz,
@@ -1301,8 +1301,13 @@ language plpgsql stable security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_tz   text;
-  v_from timestamptz;
+  v_tz        text;
+  v_from      timestamptz;
+  v_today     date;
+  v_text      text;
+  v_day       date;
+  v_dow       integer;
+  v_date_text text;
 begin
   select coalesce(nullif(a.timezone, ''), 'UTC')
     into v_tz
@@ -1313,31 +1318,76 @@ begin
     return;  -- unknown artist
   end if;
 
-  -- A specific day requested by the lead: only that day, never today or past.
-  if p_day is not null then
-    if p_day <= (now() at time zone v_tz)::date then
-      return;
+  v_today := (now() at time zone v_tz)::date;
+  v_text := lower(translate(coalesce(p_day_text, ''), 'áàâãéêíóôõúüç', 'aaaaeeiooouuc'));
+
+  -- "minha segunda tatuagem" is not Monday. Strip those phrases before
+  -- looking for a weekday name.
+  v_text := regexp_replace(v_text, 'segunda\s+(tatuagem|tattoo|vez)', '', 'g');
+
+  if btrim(v_text) <> '' then
+    if position('amanha' in v_text) > 0 then
+      v_day := v_today + 1;
+    elsif position('domingo' in v_text) > 0 then
+      v_dow := 7;
+    elsif position('segunda' in v_text) > 0 then
+      v_dow := 1;
+    elsif position('terca' in v_text) > 0 then
+      v_dow := 2;
+    elsif position('quarta' in v_text) > 0 then
+      v_dow := 3;
+    elsif position('quinta' in v_text) > 0 then
+      v_dow := 4;
+    elsif position('sexta' in v_text) > 0 then
+      v_dow := 5;
+    elsif position('sabado' in v_text) > 0 then
+      v_dow := 6;
+    elsif v_text ~ '\d{4}-\d{2}-\d{2}' then
+      v_date_text := substring(v_text from '(\d{4}-\d{2}-\d{2})');
+      v_day := v_date_text::date;
+    elsif v_text ~ '\d{1,2}/\d{1,2}(/\d{2,4})?' then
+      v_date_text := substring(v_text from '(\d{1,2}/\d{1,2}(?:/\d{2,4})?)');
+      if v_date_text ~ '^\d{1,2}/\d{1,2}/\d{4}$' then
+        v_day := to_date(v_date_text, 'DD/MM/YYYY');
+      else
+        v_day := to_date(v_date_text || '/' || extract(year from v_today)::int, 'DD/MM/YYYY');
+        if v_day < v_today then
+          v_day := (v_day + interval '1 year')::date;
+        end if;
+      end if;
     end if;
 
-    return query
-      select s.start_at, s.end_at, booking_label(s.start_at, v_tz)
-      from check_availability(
-        p_artist_id,
-        (p_day::timestamp at time zone v_tz),
-        ((p_day + 1)::timestamp at time zone v_tz),
-        p_duration_min
-      ) s
-      order by s.start_at
-      limit 2;
-    return;
+    if v_dow is not null then
+      v_day := v_today + ((v_dow - extract(isodow from v_today)::int + 7) % 7);
+      if v_day <= v_today then
+        v_day := v_day + 7;
+      end if;
+    end if;
+
+    if v_day is not null then
+      if v_day <= v_today then
+        return;  -- never offer today or the past
+      end if;
+
+      return query
+        select s.start_at, s.end_at, booking_label(s.start_at, v_tz)
+        from check_availability(
+          p_artist_id,
+          (v_day::timestamp at time zone v_tz),
+          ((v_day + 1)::timestamp at time zone v_tz),
+          p_duration_min
+        ) s
+        order by s.start_at
+        limit 2;
+      return;
+    end if;
   end if;
 
-  -- Default offer: tomorrow onwards, first slot of each of the first two
-  -- available days. `greatest` keeps the caller's lower bound but never
-  -- starts in the local "today".
+  -- Default offer (also used before the lead names a day): the first slot of
+  -- each of the first two available days, from tomorrow in the artist's zone.
   v_from := greatest(
     p_from,
-    ((now() at time zone v_tz)::date + 1)::timestamp at time zone v_tz
+    (v_today + 1)::timestamp at time zone v_tz
   );
 
   return query

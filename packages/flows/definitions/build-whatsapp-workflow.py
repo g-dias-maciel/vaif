@@ -1682,7 +1682,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT start_at, end_at, label FROM booking_options('{{ $('Resolve Artist').first().json.id }}'::uuid, now(), now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120), NULLIF(NULLIF('{{ $fromAI('preferred_day', 'Se o lead recusou as duas opções e pediu um dia específico, informe YYYY-MM-DD; caso contrário deixe vazio. NUNCA invente.', 'string') }}', ''), 'undefined')::date)",
+                "query": "SELECT start_at, end_at, label FROM booking_options('{{ $('Resolve Artist').first().json.id }}'::uuid, now(), now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120), NULLIF('{{ ($('Debounce Resolve').first().json.combined_text || '').split(String.fromCharCode(39)).join(String.fromCharCode(39)+String.fromCharCode(39)) }}', ''))",
                 "options": {},
             },
             "type": "n8n-nodes-base.postgresTool",
