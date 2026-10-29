@@ -168,7 +168,7 @@ AGENT_TEXT_EXPR = (
     "+ ' oferta=' + (function(){ var o = $('Load Offer').first().json || {}; if (!o.promo_active && !o.open_quote_valid) return 'nenhuma'; var p = []; if (o.promo_active) p.push('ativa:' + (o.name || 'promocao') + ' x' + (Number(o.multiplier) || 1)); if (o.open_quote_valid) p.push('cotada:R$' + (Number(o.open_quote_offered_cents || 0) / 100).toFixed(2) + ' ate ' + String(o.open_quote_valid_until || '').slice(0, 10)); return p.join(' '); })() "
     "+ ' data_hoje=' + (function(){ try { return new Date().toLocaleDateString('en-CA', { timeZone: $('Resolve Artist').first().json.timezone || 'America/Sao_Paulo' }); } catch (e) { return new Date().toISOString().slice(0, 10); } })() "
     "+ '] [artist_id=' + $('Resolve Artist').first().json.id + '] ' "
-    "+ ($('Debounce Resolve').first().json.combined_text || '') }}"
+    "+ (($json.transcript || '').toString().trim() || ($('Debounce Resolve').first().json.combined_text || '')) }}"
 )
 
 # ── Debounce Start: extract chat/phone/text from the WAHA message. chat_id is
@@ -186,19 +186,25 @@ const phone = phoneJid.replace(/@.*$/, '').replace(/\D/g, '');
 const type = payload.type || 'chat';
 const media = payload.media || {};
 const rawText = String(payload.body || '');
+const isSticker = type === 'sticker' || payload.isSticker === true || media.isSticker === true;
 
 let text = rawText;
 if (!text) {
-  if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';
+  if (isSticker) text = '[STICKER RECEBIDO]';
+  else if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';
   else if (type === 'video') text = '[VÍDEO RECEBIDO]';
-  else if (type === 'image' || type === 'sticker' || payload.hasMedia) text = '[FOTO RECEBIDA]';
+  else if (type === 'image' || payload.hasMedia) text = '[FOTO RECEBIDA]';
   else text = '[MÍDIA RECEBIDA]';
 }
 
-// Reference media (WAHA download URL) and links the lead sent. Audio/video are
-// not references; only images/stickers with a downloadable URL.
+// Reference media (WAHA download URL) and links the lead sent. Audio, video
+// and stickers are not references; only real images with a downloadable URL.
 const mediaMime = String(media.mimetype || payload.mimetype || '');
-const mediaUrl = (payload.hasMedia && media.url && (mediaMime.startsWith('image/') || type === 'image' || type === 'sticker'))
+const mediaUrl = (!isSticker && payload.hasMedia && media.url
+  && (mediaMime.startsWith('image/') || type === 'image'))
+  ? media.url
+  : null;
+const audioUrl = (payload.hasMedia && media.url && (type === 'ptt' || type === 'audio'))
   ? media.url
   : null;
 
@@ -213,6 +219,8 @@ return [{ json: {
   msg_ts: Date.now(),
   media_url: mediaUrl,
   media_mime: mediaMime || null,
+  audio_url: audioUrl,
+  audio_mime: audioUrl ? (mediaMime || null) : null,
   links: links,
 } }];"""
 
@@ -321,13 +329,77 @@ if (data.observacoes) lines.push('- Observações: ' + data.observacoes);
 lines.push('');
 lines.push('Regras: na PRIMEIRA resposta após esta análise, reconheça a referência em uma frase curta usando o assunto (ex.: "um leão com bússola"); não descreva detalhes minuciosos como boca, dentes ou olhos; não aja como se não tivesse visto a imagem. Elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
 
+const transcript = (() => {
+  try { return $('No Audio').first().json.transcript || null; } catch (e) { return null; }
+})();
+
 return [{ json: {
   system_message: base + lines.join('\\n'),
   reference_analysis: data,
+  transcript: transcript,
 } }];"""
 
 NO_REFERENCE_JS = """return [{ json: {
   system_message: $('Build System Prompt').first().json.system_message,
+  reference_analysis: null,
+  transcript: $json.transcript || null,
+} }];"""
+
+AUDIO_SYSTEM_PROMPT = """Você transcreve áudios de clientes de um estúdio de tatuagem. Responda SOMENTE com a transcrição literal em português brasileiro, sem comentários, sem markdown, sem aspas e sem rótulos. Se não houver fala inteligível, responda com uma string vazia."""
+
+AUDIO_USER_PROMPT = """Transcreva este áudio."""
+
+BUILD_AUDIO_REQUEST_JS = """const binary = $input.first().binary && $input.first().binary.data;
+const base = $('Build System Prompt').first().json.system_message;
+
+if (!binary || !binary.data) {
+  return [{ json: { body: null, system_message: base } }];
+}
+
+const mime = String(binary.mimeType || $('Debounce Start').first().json.audio_mime || 'audio/ogg');
+const format = mime.includes('mpeg') || mime.includes('mp3')
+  ? 'mp3'
+  : (mime.includes('mp4') || mime.includes('m4a') ? 'm4a' : (mime.includes('wav') ? 'wav' : 'ogg'));
+
+const body = {
+  model: 'google/gemini-2.5-flash',
+  messages: [
+    { role: 'system', content: __AUDIO_SYSTEM__ },
+    { role: 'user', content: [
+      { type: 'text', text: __AUDIO_USER__ },
+      { type: 'input_audio', input_audio: { data: binary.data, format: format } }
+    ] }
+  ],
+  temperature: 0,
+  max_tokens: 800
+};
+
+return [{ json: { body, system_message: base } }];"""
+BUILD_AUDIO_REQUEST_JS = (BUILD_AUDIO_REQUEST_JS
+    .replace('__AUDIO_SYSTEM__', json.dumps(AUDIO_SYSTEM_PROMPT))
+    .replace('__AUDIO_USER__', json.dumps(AUDIO_USER_PROMPT)))
+
+PARSE_AUDIO_JS = """const base = $('Build System Prompt').first().json.system_message;
+const response = $input.first().json || {};
+let content = response.choices?.[0]?.message?.content || '';
+
+if (Array.isArray(content)) {
+  content = content.map((part) => (part && part.text) || '').join(' ');
+}
+
+const transcript = String(content)
+  .replace(/^["'“”]+|["'“”]+$/g, '')
+  .trim();
+
+return [{ json: {
+  system_message: base,
+  transcript: transcript || null,
+  reference_analysis: null,
+} }];"""
+
+NO_AUDIO_JS = """return [{ json: {
+  system_message: $('Build System Prompt').first().json.system_message,
+  transcript: null,
   reference_analysis: null,
 } }];"""
 
@@ -435,7 +507,9 @@ return chunks.map((text, index) => ({ json: { text, index, total: chunks.length 
 # ── Classification: same prompt + parse as the Telegram testbed. ──
 BUILD_CLASSIFICATION_PROMPT_JS = (
     "const currentPipeline = $('Start Turn').first().json.stage_key || 'novo';\n"
-    "const userMsg = $('Debounce Resolve').first().json.combined_text || '';\n"
+    "let audioTranscript = null;\n"
+    "try { audioTranscript = $('Parse Audio').first().json.transcript || null; } catch (e) {}\n"
+    "const userMsg = audioTranscript || $('Debounce Resolve').first().json.combined_text || '';\n"
     "const agentOutput = $('AI Agent').first().json.output || '';\n"
     "\n"
     "const sysPrompt = " + json.dumps(CLASSIFY_PROMPT_TEMPLATE) + ";\n"
@@ -469,7 +543,9 @@ const state = lead.agent_state || {};
 const agentOutput = $('AI Agent').first().json.output || '';
 
 // ── Deterministic tipo_tatuagem guard ──
-const rawLead = ($('Debounce Resolve').first().json.combined_text || '').toLowerCase();
+let audioTranscript = null;
+try { audioTranscript = $('Parse Audio').first().json.transcript || null; } catch (e) {}
+const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_text || '').toLowerCase();
 const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
 const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\b(?:cover|cobertura)\b/.test(rawLead);
 const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\b(?:reforma|retoque)\b/.test(rawLead);
@@ -858,7 +934,7 @@ const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && finalReplyAsksCheckpoint
   && !hasEarlierQuestion;
 const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
-const isAudio = rawCombined === '[ÁUDIO RECEBIDO]';
+const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
 const quoteActuallySent = !isAudio && (!!firstQuote || !!repeatedQuote || (priceGateOpen && !priceGateViolation && /R\\$\\s*\\d/.test(finalReply)));
 
 // Pipeline state must reflect the message that will actually be sent, not a
@@ -1688,6 +1764,117 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "credentials": CRM_INTERNAL,
             "onError": "continueRegularOutput",
         },
+        # 16c2. Analyze Audio? — voice notes are transcribed before the AI.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "audio-turn-cond-0000",
+                            "leftValue": "={{ !!($('Debounce Start').first().json.audio_url) }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3120, -300],
+            "id": "audio-turn-0000-0000-0000-000000000001",
+            "name": "Analyze Audio?",
+        },
+        # 16c3. Fetch Audio — WAHA media (use the configured host, not the
+        #       potentially stale public URL).
+        {
+            "parameters": {
+                "method": "GET",
+                "url": "={{ (function(){ var raw = $('Debounce Start').first().json.audio_url || ''; try { var u = new URL(raw); return 'https://waha.vaif.com.br' + u.pathname; } catch (e) { return raw; } })() }}",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "wahaApi",
+                "options": {
+                    "timeout": 30000,
+                    "response": {
+                        "response": {
+                            "responseFormat": "file",
+                            "outputPropertyName": "data"
+                        }
+                    },
+                },
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [3380, -420],
+            "id": "audio-fetch-0000-0000-0000-000000000001",
+            "name": "Fetch Audio",
+            "credentials": WAHA,
+            "onError": "continueRegularOutput",
+        },
+        # 16c4. Build Audio Request — base64 + input_audio body.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_AUDIO_REQUEST_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3640, -420],
+            "id": "audio-build-0000-0000-0000-000000000001",
+            "name": "Build Audio Request",
+        },
+        # 16c5. Transcribe Audio — Gemini audio input through the existing
+        #       OpenRouter credential.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 60000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [3900, -420],
+            "id": "audio-transcribe-0000-0000-0000-000000000001",
+            "name": "Transcribe Audio",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+        },
+        # 16c6. Parse Audio — extract the transcript.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_AUDIO_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [4160, -420],
+            "id": "audio-parse-0000-0000-0000-000000000001",
+            "name": "Parse Audio",
+        },
+        # 16c7. No Audio — text/image turns pass through unchanged.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": NO_AUDIO_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3380, -200],
+            "id": "audio-none-0000-0000-0000-000000000001",
+            "name": "No Audio",
+        },
         # 16d. Analyze Reference? — only when the CRM stored an image URL.
         {
             "parameters": {
@@ -2373,6 +2560,27 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Build System Prompt", "type": "main", "index": 0}]]
         },
         "Build System Prompt": {
+            "main": [[{"node": "Analyze Audio?", "type": "main", "index": 0}]]
+        },
+        "Analyze Audio?": {
+            "main": [
+                [{"node": "Fetch Audio", "type": "main", "index": 0}],
+                [{"node": "No Audio", "type": "main", "index": 0}],
+            ]
+        },
+        "Fetch Audio": {
+            "main": [[{"node": "Build Audio Request", "type": "main", "index": 0}]]
+        },
+        "Build Audio Request": {
+            "main": [[{"node": "Transcribe Audio", "type": "main", "index": 0}]]
+        },
+        "Transcribe Audio": {
+            "main": [[{"node": "Parse Audio", "type": "main", "index": 0}]]
+        },
+        "Parse Audio": {
+            "main": [[{"node": "Analyze Reference?", "type": "main", "index": 0}]]
+        },
+        "No Audio": {
             "main": [[{"node": "Analyze Reference?", "type": "main", "index": 0}]]
         },
         "Analyze Reference?": {

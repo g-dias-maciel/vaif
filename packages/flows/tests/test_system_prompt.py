@@ -152,7 +152,7 @@ check("Patch Chat State → humanize → Split Reply → Send WAHA → Aggregate
       and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Aggregate Sent"
       and wf["connections"]["Aggregate Sent"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
-check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Reference?",
+check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Audio?",
       wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
       and wf["connections"]["Chat Owned by Artist?"]["main"][1][0]["node"] == "Start Turn"
       and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Agent Blocked?"
@@ -162,7 +162,22 @@ check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → B
       and wf["connections"]["Save References"]["main"][0][0]["node"] == "Load Offer"
       and wf["connections"]["Load Offer"]["main"][0][0]["node"] == "Load Pricing"
       and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Build System Prompt"
-      and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "Analyze Reference?")
+      and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "Analyze Audio?")
+check("audio turns are transcribed, text turns bypass audio and both reach Analyze Reference?",
+      [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][0]] == ["Fetch Audio"]
+      and [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][1]] == ["No Audio"]
+      and wf["connections"]["Fetch Audio"]["main"][0][0]["node"] == "Build Audio Request"
+      and wf["connections"]["Build Audio Request"]["main"][0][0]["node"] == "Transcribe Audio"
+      and wf["connections"]["Transcribe Audio"]["main"][0][0]["node"] == "Parse Audio"
+      and wf["connections"]["Parse Audio"]["main"][0][0]["node"] == "Analyze Reference?"
+      and wf["connections"]["No Audio"]["main"][0][0]["node"] == "Analyze Reference?")
+check("the agent text uses the audio transcript when available",
+      "$json.transcript" in AGENT_TEXT_JS
+      and "$('Parse Audio')" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])
+check("stickers are not stored as references",
+      "isSticker" in nodes["Debounce Start"]["parameters"]["jsCode"]
+      and "[STICKER RECEBIDO]" in template
+      and "type === 'sticker'" not in nodes["Debounce Start"]["parameters"]["jsCode"].split("const mediaUrl =")[1].split(";")[0])
 check("Analyze Reference? sends images through vision and text-only turns straight to the agent",
       [c["node"] for c in wf["connections"]["Analyze Reference?"]["main"][0]] == ["Build Vision Request"]
       and [c["node"] for c in wf["connections"]["Analyze Reference?"]["main"][1]] == ["No Reference"]

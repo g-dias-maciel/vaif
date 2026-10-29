@@ -295,6 +295,7 @@ A mensagem de corte ("Infelizmente não posso continuar essa conversa. Se precis
 ## Mídia
 
 - **[FOTO RECEBIDA]**: se pediu referência, elogie. Senão: "Me manda por texto?"
+- **[STICKER RECEBIDO]**: sticker NÃO é uma referência de tatuagem e NÃO deve ser salvo como foto. Não elogie como tattoo; peça uma foto de verdade.
 - **[ÁUDIO RECEBIDO]**: 1ª vez "Me manda por texto?", 2ª vez handoff (o sistema trata isso automaticamente).
 - **[VÍDEO RECEBIDO]**: trate como áudio: peça para escrever por texto.
 
