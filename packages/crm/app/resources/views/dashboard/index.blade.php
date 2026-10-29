@@ -31,7 +31,7 @@
 
 <div class="panel" style="margin-bottom: 20px;">
     <h2 class="section-title" style="margin-top:0;">Faturamento — {{ $periodLabel }}</h2>
-    <div class="stat-grid">
+    <div class="stat-grid stat-grid--revenue">
         <div class="stat-card">
             <div class="stat-value">R$ {{ number_format($realizadoCents / 100, 2, ',', '.') }}</div>
             <div class="stat-label">Realizado</div>

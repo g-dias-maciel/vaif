@@ -257,6 +257,9 @@
         .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; }
         .stat-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 18px; }
         .stat-value { font-family: 'Montserrat', sans-serif; font-size: 1.8rem; font-weight: 600; color: var(--gold); line-height: 1.1; }
+        /* Revenue cards share the full row; their amounts must never wrap. */
+        .stat-grid--revenue { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+        .stat-grid--revenue .stat-value { font-size: clamp(1.2rem, 2vw, 1.8rem); white-space: nowrap; }
         .stat-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; margin-top: 6px; }
         .bar-row { margin-bottom: 14px; }
         .bar-label { display: flex; justify-content: space-between; font-size: 0.82rem; margin-bottom: 5px; }
@@ -421,8 +424,10 @@
             .board { grid-template-columns: 1fr; gap: 12px; }
             .week-grid { grid-template-columns: repeat(7, minmax(118px, 1fr)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
+            .stat-grid--revenue { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .stat-card { padding: 14px; }
             .stat-value { font-size: 1.4rem; }
+            .stat-grid--revenue .stat-value { font-size: 1.35rem; }
             .detail-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .slot-list li { flex-direction: column; align-items: stretch; }
             .artist-list li { flex-direction: column; align-items: stretch; }
