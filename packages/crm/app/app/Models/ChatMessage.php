@@ -44,6 +44,34 @@ class ChatMessage extends Model
         return $this->message_type === 'human' ? 'inbound' : 'outbound';
     }
 
+    public function getIsToolAttribute(): bool
+    {
+        return $this->message_type === 'tool';
+    }
+
+    /**
+     * Tool envelopes and the empty `[]` AI rows are internal LangChain
+     * bookkeeping, not messages the Artist should see.
+     */
+    public function getIsDisplayableAttribute(): bool
+    {
+        if (in_array($this->message_type, ['tool', 'system'], true)) {
+            return false;
+        }
+
+        if ($this->message_type !== 'ai') {
+            return true;
+        }
+
+        $content = $this->message['content'] ?? '';
+
+        if (is_array($content)) {
+            return $content !== [];
+        }
+
+        return trim((string) $content) !== '[]';
+    }
+
     /**
      * Human messages carry the `[Contexto: ...]` prefix the agent uses; strip
      * it for display. Content may be a string or LangChain content blocks.

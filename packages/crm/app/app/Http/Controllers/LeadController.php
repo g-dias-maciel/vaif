@@ -56,11 +56,17 @@ class LeadController extends Controller
             return collect();
         }
 
+        // n8n's LangChain memory stores tool envelopes alongside the real
+        // messages. They are internal JSON (availability rows, booking rows,
+        // etc.) and must never appear in the artist-facing transcript.
         return $lead->chatMessages()
             ->orderByDesc('id')
-            ->limit(50)
+            ->limit(120)
             ->get()
+            ->filter(fn (ChatMessage $message) => $message->is_displayable)
             ->reverse()
+            ->values()
+            ->take(-50)
             ->values();
     }
 
