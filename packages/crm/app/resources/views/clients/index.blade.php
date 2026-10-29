@@ -23,50 +23,45 @@
     @if ($leads->isEmpty())
         <p class="clients-empty">Nenhum cliente cadastrado ainda.</p>
     @else
-        <div class="clients-table-wrap">
-            <table class="clients-table">
-                <thead>
-                    <tr>
-                        <th>Cliente</th>
-                        <th>Telefone</th>
-                        <th>Último contato</th>
-                        <th>Status</th>
-                        <th></th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($leads as $lead)
-                        <tr data-client-row
-                            data-client-search="{{ mb_strtolower($lead->displayName().' '.$lead->phone_e164) }}"
-                            data-client-status="{{ $lead->projects->first()?->stage_key ?? 'none' }}">
-                            <td>
-                                <a href="{{ route('leads.show', $lead) }}">{{ $lead->displayName() }}</a>
-                                @if (in_array($lead->phone_e164, $returningPhones, true))
-                                    <span class="tag">Recorrente</span>
-                                @endif
-                            </td>
-                            <td class="phone">{{ $lead->phone_e164 }}</td>
-                            <td>{{ $lead->last_message_at?->format('d/m/Y H:i') ?? '—' }}</td>
-                            <td>
-                                @if ($lead->projects->first())
-                                    <span class="tag {{ $lead->projects->first()->stage_key === 'fechado' ? 'tag-success' : ($lead->projects->first()->stage_key === 'perdido' ? 'tag-muted' : '') }}">
-                                        {{ $lead->projects->first()->stage_label }}
-                                    </span>
-                                @else
-                                    <span class="meta">Sem projeto</span>
-                                @endif
-                            </td>
-                            <td class="actions-cell">
-                                <button type="button" class="btn btn--danger btn--small js-delete-client"
-                                    data-url="{{ route('clients.destroy', $lead) }}"
-                                    data-name="{{ $lead->displayName() }}">
-                                    Excluir
-                                </button>
-                            </td>
-                        </tr>
-                    @endforeach
-                </tbody>
-            </table>
+        <div class="clients-list">
+            @foreach ($leads as $lead)
+                @php($latestProject = $lead->projects->first())
+                <div class="client-item"
+                    data-client-row
+                    data-client-search="{{ mb_strtolower($lead->displayName().' '.$lead->phone_e164) }}"
+                    data-client-status="{{ $latestProject?->stage_key ?? 'none' }}">
+                    <div class="client-main">
+                        <div class="client-name">
+                            <a href="{{ route('leads.show', $lead) }}">{{ $lead->displayName() }}</a>
+                            @if (in_array($lead->phone_e164, $returningPhones, true))
+                                <span class="tag">Recorrente</span>
+                            @endif
+                            @if ($lead->agent_blocked)
+                                <span class="tag tag-muted">Agente silenciado</span>
+                            @endif
+                        </div>
+                        <div class="client-meta">
+                            <span>{{ $lead->phone_e164 }}</span>
+                            <span>Último contato: {{ $lead->last_message_at?->format('d/m/Y H:i') ?? '—' }}</span>
+                            @if ($latestProject)
+                                <span class="tag {{ $latestProject->stage_key === 'fechado' ? 'tag-success' : ($latestProject->stage_key === 'perdido' ? 'tag-muted' : '') }}">
+                                    {{ $latestProject->stage_label }}
+                                </span>
+                            @else
+                                <span>Sem projeto</span>
+                            @endif
+                        </div>
+                    </div>
+                    <div class="client-actions">
+                        <a href="{{ route('leads.show', $lead) }}" class="btn btn--ghost btn--small">Abrir</a>
+                        <button type="button" class="btn btn--danger btn--small js-delete-client"
+                            data-url="{{ route('clients.destroy', $lead) }}"
+                            data-name="{{ $lead->displayName() }}">
+                            Excluir
+                        </button>
+                    </div>
+                </div>
+            @endforeach
         </div>
         <p class="clients-empty" id="clients-empty" hidden>Nenhum cliente encontrado.</p>
     @endif

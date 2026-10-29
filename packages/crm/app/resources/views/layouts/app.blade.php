@@ -212,19 +212,23 @@
         .clients-toolbar input { flex: 1; min-width: 220px; }
         .clients-toolbar input:focus, .clients-toolbar select:focus { outline: none; border-color: var(--gold); }
         .clients-count { color: var(--muted); font-size: 0.75rem; margin-left: auto; white-space: nowrap; }
-        .clients-table-wrap { overflow-x: auto; }
-        .clients-table { width: 100%; border-collapse: collapse; min-width: 720px; }
-        .clients-table th {
-            text-align: left; font-size: 0.62rem; letter-spacing: 0.8px; text-transform: uppercase;
-            color: var(--muted); padding: 0 12px 10px; border-bottom: 1px solid var(--border);
+        .clients-list { display: flex; flex-direction: column; gap: 10px; }
+        .client-item {
+            display: flex; align-items: center; justify-content: space-between; gap: 14px;
+            padding: 14px 16px; background: var(--panel-2); border: 1px solid var(--border);
+            border-radius: 12px; min-width: 0;
         }
-        .clients-table td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.82rem; vertical-align: middle; }
-        .clients-table tr:last-child td { border-bottom: 0; }
-        .clients-table tr[hidden] { display: none; }
-        .clients-table a { color: var(--ink); font-weight: 600; }
-        .clients-table a:hover { color: var(--gold); }
-        .clients-table .phone { color: var(--muted); }
-        .clients-table .actions-cell { text-align: right; white-space: nowrap; }
+        .client-item[hidden] { display: none; }
+        .client-main { display: flex; flex-direction: column; gap: 5px; flex: 1; min-width: 0; }
+        .client-name { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; min-width: 0; }
+        .client-name a { color: var(--ink); font-weight: 600; overflow-wrap: anywhere; }
+        .client-name a:hover { color: var(--gold); }
+        .client-meta {
+            display: flex; align-items: center; gap: 6px 14px; flex-wrap: wrap;
+            color: var(--muted); font-size: 0.74rem; line-height: 1.45;
+        }
+        .client-meta .tag { margin-left: 0; }
+        .client-actions { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
         .clients-empty { color: var(--muted); font-size: 0.85rem; padding: 18px 4px; }
 
         .promo-pill {
@@ -476,6 +480,10 @@
             .stat-card { padding: 14px; }
             .stat-value { font-size: 1.4rem; }
             .stat-grid--revenue .stat-value { font-size: 1.35rem; }
+            .clients-toolbar input { min-width: 100%; }
+            .clients-count { margin-left: 0; }
+            .client-item { flex-direction: column; align-items: stretch; }
+            .client-actions { justify-content: flex-end; }
             .detail-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
             .slot-list li { flex-direction: column; align-items: stretch; }
             .artist-list li { flex-direction: column; align-items: stretch; }
