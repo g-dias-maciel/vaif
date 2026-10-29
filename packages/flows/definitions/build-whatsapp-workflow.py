@@ -156,7 +156,7 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
-    "+ ' referencia_visual=' + (function(){ var r = $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; if (d.resumo) p.push(d.resumo); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
+    "+ ' referencia_visual=' + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; if (d.resumo) p.push(d.resumo); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
     "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
@@ -714,6 +714,24 @@ if (hasDeposit && !depositGateOpen) {
   finalReply = 'Primeiro vamos escolher o horário da sua tatuagem. Depois eu te passo o valor do sinal e o PIX. Quer ver os horários disponíveis?';
   finalPipeline = current;
   finalEvent = null;
+}
+
+// ── Vision acknowledgement: the model has the image block in its system
+//    prompt, but it sometimes ignores it and asks again. On the turn that
+//    actually analyzed a photo, make sure the reply mentions the reference.
+let visionTurn = false;
+try {
+  visionTurn = $('Parse Reference Analysis').isExecuted === true;
+} catch (e) {
+  visionTurn = false;
+}
+if (visionTurn) {
+  const vision = $('Parse Reference Analysis').first().json.reference_analysis || {};
+  const summary = String(vision.resumo || '').replace(/^A imagem (?:mostra|apresenta)\s*/i, '').trim();
+  const already = /refer[êe]ncia|curti|(?:vi|recebi).{0,20}(?:foto|imagem)/i.test(finalReply);
+  if (summary && vision.referencia_de_tatuagem !== false && !already) {
+    finalReply = 'Vi a referência que você mandou: ' + summary + ' Curti! ' + finalReply;
+  }
 }
 
 const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());

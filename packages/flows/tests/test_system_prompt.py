@@ -269,6 +269,9 @@ check("output gate replaces a premature sinal with a date prompt",
       "bookedThisTurn" in parse_js
       and "depositGateOpen" in parse_js
       and "Primeiro vamos escolher o horário" in parse_js)
+check("a vision turn is guaranteed to acknowledge the reference",
+      "Vision acknowledgement" in parse_js
+      and "Vi a referência que você mandou" in parse_js)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse enforces the doubt-loop follow-up while pre-price",
