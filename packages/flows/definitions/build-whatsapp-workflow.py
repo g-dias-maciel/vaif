@@ -399,6 +399,38 @@ secs += (out.length % 7) / 10;             // variação leve e determinística
 
 return [{ json: { delay_seconds: Math.round(secs * 10) / 10 } }];"""
 
+# ── Split the reply into WhatsApp-sized paragraphs. Long messages get cut
+#    off (and are hard to read); each paragraph becomes its own sendText call.
+SPLIT_REPLY_JS = r"""const raw = ($('Parse Classification').first().json.final_reply || '').toString().trim();
+const paragraphs = raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
+const chunks = [];
+
+for (const paragraph of paragraphs) {
+  if (paragraph.length <= 700) {
+    chunks.push(paragraph);
+    continue;
+  }
+
+  // A very long paragraph is split at sentence boundaries, never mid-word.
+  const sentences = paragraph.match(/[^.!?]+[.!?]+(?:\s+|$)/g) || [paragraph];
+  let current = '';
+  for (const sentence of sentences) {
+    if (current && (current + ' ' + sentence).trim().length > 700) {
+      chunks.push(current.trim());
+      current = sentence;
+    } else {
+      current = (current + ' ' + sentence).trim();
+    }
+  }
+  if (current) chunks.push(current.trim());
+}
+
+if (chunks.length === 0) {
+  chunks.push('Desculpe, não consegui responder agora. Pode repetir?');
+}
+
+return chunks.map((text, index) => ({ json: { text, index, total: chunks.length } }));"""
+
 # ── Classification: same prompt + parse as the Telegram testbed. ──
 BUILD_CLASSIFICATION_PROMPT_JS = (
     "const currentPipeline = $('Start Turn').first().json.stage_key || 'novo';\n"
@@ -1650,7 +1682,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         },
         # 17. OpenRouter Chat Model (sub-node)
         {
-            "parameters": {"model": "openai/gpt-4o-mini", "options": {}},
+            "parameters": {"model": "openai/gpt-4o-mini", "options": {"maxTokens": 2000}},
             "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
             "typeVersion": 1,
             "position": [2600, -520],
@@ -1932,6 +1964,18 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "hu-wait-0000-0000-0000-000000000001",
             "name": "Humanize Delay",
         },
+        # 32e. Split Reply — one sentence/paragraph per WhatsApp message.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": SPLIT_REPLY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5200, 360],
+            "id": "hu-split-0000-0000-0000-000000000001",
+            "name": "Split Reply",
+        },
         # 33. Send WAHA Message — reply to the lead
         {
             "parameters": {
@@ -1952,12 +1996,18 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                         },
                         {
                             "name": "text",
-                            "value": "={{ $('Parse Classification').first().json.final_reply }}",
+                            "value": "={{ $json.text }}",
                         },
                     ]
                 },
                 "options": {
                     "timeout": 30000,
+                    "batching": {
+                        "batch": {
+                            "batchSize": 1,
+                            "batchInterval": 1200,
+                        }
+                    },
                 },
             },
             "type": "n8n-nodes-base.httpRequest",
@@ -1967,6 +2017,19 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Send WAHA Message",
             "credentials": WAHA,
             "onError": "continueRegularOutput",
+        },
+        # 33a2. Aggregate Sent — collapse the per-paragraph HTTP items back to
+        #       one so Stop Typing / the notification run exactly once.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": "return [{ json: { sent: $input.all().length } }];",
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5460, 260],
+            "id": "wa-sent-0000-0000-0000-000000000001",
+            "name": "Aggregate Sent",
         },
         # 33b. Stop Typing — clear the composing indicator after the send.
         {
@@ -2248,9 +2311,15 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Humanize Delay", "type": "main", "index": 0}]]
         },
         "Humanize Delay": {
+            "main": [[{"node": "Split Reply", "type": "main", "index": 0}]]
+        },
+        "Split Reply": {
             "main": [[{"node": "Send WAHA Message", "type": "main", "index": 0}]]
         },
         "Send WAHA Message": {
+            "main": [[{"node": "Aggregate Sent", "type": "main", "index": 0}]]
+        },
+        "Aggregate Sent": {
             "main": [[{"node": "Stop Typing", "type": "main", "index": 0}]]
         },
         "Stop Typing": {

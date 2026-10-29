@@ -751,7 +751,9 @@
     {
       "parameters": {
         "model": "openai/gpt-4o-mini",
-        "options": {}
+        "options": {
+          "maxTokens": 2000
+        }
       },
       "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
       "typeVersion": 1,
@@ -1137,6 +1139,20 @@
     },
     {
       "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const raw = ($('Parse Classification').first().json.final_reply || '').toString().trim();\nconst paragraphs = raw.split(/\\n\\s*\\n+/).map(s => s.trim()).filter(Boolean);\nconst chunks = [];\n\nfor (const paragraph of paragraphs) {\n  if (paragraph.length <= 700) {\n    chunks.push(paragraph);\n    continue;\n  }\n\n  // A very long paragraph is split at sentence boundaries, never mid-word.\n  const sentences = paragraph.match(/[^.!?]+[.!?]+(?:\\s+|$)/g) || [paragraph];\n  let current = '';\n  for (const sentence of sentences) {\n    if (current && (current + ' ' + sentence).trim().length > 700) {\n      chunks.push(current.trim());\n      current = sentence;\n    } else {\n      current = (current + ' ' + sentence).trim();\n    }\n  }\n  if (current) chunks.push(current.trim());\n}\n\nif (chunks.length === 0) {\n  chunks.push('Desculpe, não consegui responder agora. Pode repetir?');\n}\n\nreturn chunks.map((text, index) => ({ json: { text, index, total: chunks.length } }));"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5200,
+        360
+      ],
+      "id": "hu-split-0000-0000-0000-000000000001",
+      "name": "Split Reply"
+    },
+    {
+      "parameters": {
         "method": "POST",
         "url": "https://waha.vaif.com.br/api/sendText",
         "authentication": "predefinedCredentialType",
@@ -1154,12 +1170,18 @@
             },
             {
               "name": "text",
-              "value": "={{ $('Parse Classification').first().json.final_reply }}"
+              "value": "={{ $json.text }}"
             }
           ]
         },
         "options": {
-          "timeout": 30000
+          "timeout": 30000,
+          "batching": {
+            "batch": {
+              "batchSize": 1,
+              "batchInterval": 1200
+            }
+          }
         }
       },
       "type": "n8n-nodes-base.httpRequest",
@@ -1177,6 +1199,20 @@
         }
       },
       "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return [{ json: { sent: $input.all().length } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        5460,
+        260
+      ],
+      "id": "wa-sent-0000-0000-0000-000000000001",
+      "name": "Aggregate Sent"
     },
     {
       "parameters": {
@@ -1863,6 +1899,17 @@
       "main": [
         [
           {
+            "node": "Split Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split Reply": {
+      "main": [
+        [
+          {
             "node": "Send WAHA Message",
             "type": "main",
             "index": 0
@@ -1871,6 +1918,17 @@
       ]
     },
     "Send WAHA Message": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Sent": {
       "main": [
         [
           {

@@ -137,13 +137,15 @@ check("Debounce Resolve → Debounce Decision (process → Clear Buffer, wait �
       wf["connections"]["Debounce Resolve"]["main"][0][0]["node"] == "Debounce Decision"
       and wf["connections"]["Debounce Decision"]["main"][0][0]["node"] == "Clear Buffer"
       and wf["connections"]["Debounce Decision"]["main"][1][0]["node"] == "Wait")
-check("Patch Chat State → humanize → Send WAHA Message → Stop Typing → handoff",
+check("Patch Chat State → humanize → Split Reply → Send WAHA → Aggregate → Stop Typing → handoff",
       wf["connections"]["Ensure Quote"]["main"][0][0]["node"] == "Patch Chat State"
       and wf["connections"]["Patch Chat State"]["main"][0][0]["node"] == "Build Humanize Delay"
       and wf["connections"]["Build Humanize Delay"]["main"][0][0]["node"] == "Send Typing"
       and wf["connections"]["Send Typing"]["main"][0][0]["node"] == "Humanize Delay"
-      and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Send WAHA Message"
-      and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Stop Typing"
+      and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Split Reply"
+      and wf["connections"]["Split Reply"]["main"][0][0]["node"] == "Send WAHA Message"
+      and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Aggregate Sent"
+      and wf["connections"]["Aggregate Sent"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
 check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Reference?",
       wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
@@ -298,9 +300,14 @@ check("parse replaces premature price replies with the doubts question",
 check("premature replies don't persist pricing",
       "const quoteBaseCents = !quoteActuallySent" in parse_js
       and "const quoteOfferedCents = !quoteActuallySent" in parse_js)
-check("reply uses the guarded final_reply",
-      nodes["Send WAHA Message"]["parameters"]["bodyParameters"]["parameters"][2]["value"]
-      == "={{ $('Parse Classification').first().json.final_reply }}")
+check("the reply is split into paragraph-sized messages",
+      "$('Parse Classification').first().json.final_reply" in nodes["Split Reply"]["parameters"]["jsCode"]
+      and "split(/\\n\\s*\\n+/)" in nodes["Split Reply"]["parameters"]["jsCode"]
+      and nodes["Send WAHA Message"]["parameters"]["bodyParameters"]["parameters"][2]["value"] == "={{ $json.text }}")
+check("the per-paragraph sends are throttled and aggregated",
+      nodes["Send WAHA Message"]["parameters"]["options"]["batching"]["batch"]["batchSize"] == 1
+      and nodes["Send WAHA Message"]["parameters"]["options"]["batching"]["batch"]["batchInterval"] > 0
+      and "Aggregate Sent" in nodes)
 check("humanize scales to the guarded reply length",
       "$('Parse Classification').first().json.final_reply" in nodes["Build Humanize Delay"]["parameters"]["jsCode"])
 check("parse detects the creative-process text deterministically",
