@@ -318,7 +318,7 @@ if (data.confianca) lines.push('- Confiança da análise: ' + data.confianca);
 if (data.observacoes) lines.push('- Observações: ' + data.observacoes);
 
 lines.push('');
-lines.push('Regras: elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
+lines.push('Regras: na PRIMEIRA resposta após esta análise, comece reconhecendo a referência com um detalhe concreto; não aja como se não tivesse visto a imagem. Elogie apenas o que está na análise; se a confiança for baixa ou não for referência, peça outra foto; NUNCA use esta análise para calcular preço — o preço vem da tabela.');
 
 return [{ json: {
   system_message: base + lines.join('\\n'),
@@ -469,7 +469,11 @@ function detectPlacement(t) {
     ['peito', 'peito'], ['perna', 'perna'], ['coxa', 'coxa'],
     ['dedo', 'dedo'], ['mão', 'mao'], ['mao', 'mao'], ['pé', 'pe'], ['pe', 'pe'],
   ];
-  for (const [k, v] of map) if (text.includes(k)) return v;
+  for (const [k, v] of map) {
+    // Short words like "pe" (foot) must match a word, not "Pedro" or "peito".
+    if (k.length <= 3 && !text.split(/[^a-z0-9]+/).includes(k)) continue;
+    if (text.includes(k)) return v;
+  }
   return null;
 }
 function detectZone(t) {
