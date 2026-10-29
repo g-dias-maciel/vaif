@@ -57,6 +57,32 @@
     @endif
 </div>
 
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Sinal e PIX</h2>
+    <p class="meta">A Beatriz usa esta chave quando o lead escolhe pagar o sinal.</p>
+
+    <form method="post" action="{{ route('settings.payment') }}" style="margin-top:12px;">
+        @csrf
+        <div class="form-field" style="max-width:520px;">
+            <label for="pix-key">Chave PIX</label>
+            <input type="text" name="pix_key" id="pix-key"
+                value="{{ old('pix_key', $artist->settings?->pix_key) }}"
+                placeholder="CPF/CNPJ, e-mail, telefone ou chave aleatória"
+                maxlength="255">
+            @error('pix_key')
+                <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+            @enderror
+        </div>
+        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar chave PIX</button>
+    </form>
+
+    @if (blank($artist->settings?->pix_key))
+        <p class="meta" style="margin-top:10px;">
+            Sem chave PIX configurada, a Beatriz não vai pedir o sinal; ela passa o atendimento para você.
+        </p>
+    @endif
+</div>
+
 @if ($googleConfigured || auth()->user()->isStaff() || $artist->hasGoogleCalendar())
 <div class="panel" style="margin-bottom: 24px;">
     <h2 class="section-title" style="margin-top:0;">Google Agenda</h2>

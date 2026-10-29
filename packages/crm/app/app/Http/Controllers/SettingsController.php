@@ -122,6 +122,30 @@ class SettingsController extends Controller
     }
 
     /**
+     * Save the PIX key the agent uses when requesting the deposit.
+     */
+    public function updatePayment(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'pix_key' => ['nullable', 'string', 'max:255'],
+        ]);
+
+        $pixKey = trim((string) ($data['pix_key'] ?? ''));
+
+        $this->settings($artist)->update([
+            'pix_key' => $pixKey !== '' ? $pixKey : null,
+        ]);
+
+        return back()->with('status', $pixKey !== ''
+            ? 'Chave PIX salva.'
+            : 'Chave PIX removida.');
+    }
+
+    /**
      * Connect the Artist's shared Google Calendar after checking that the
      * service account can actually read/write it.
      */

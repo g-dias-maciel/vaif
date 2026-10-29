@@ -239,6 +239,8 @@ check("redundant Lookup Price tool removed from the agent",
                   for b in t.get("ai_tool", []) for c in b))
 check("prompt treats the price table as authoritative",
       "A tabela abaixo é a fonte oficial dos preços" in template)
+check("prompt blocks the deposit when the PIX key is missing",
+      "(informe a chave PIX)" in template and "NÃO peça sinal" in template)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse enforces the doubt-loop follow-up while pre-price",
