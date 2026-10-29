@@ -77,6 +77,39 @@
     },
     {
       "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "group-chat-cond-0000",
+              "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); return from.endsWith('@g.us') || p.isGroup === true; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        -180
+      ],
+      "id": "group-chat-0000-0000-0000-000000000001",
+      "name": "Group Chat?"
+    },
+    {
+      "parameters": {
         "mode": "expression",
         "numberOutputs": 3,
         "output": "={{ $('WAHA Webhook').first().json.body.event === 'presence.update' ? 0 : ($('WAHA Webhook').first().json.body.event === 'message' ? 1 : 2) }}",
@@ -1390,7 +1423,7 @@
       "main": [
         [
           {
-            "node": "Route Event",
+            "node": "Group Chat?",
             "type": "main",
             "index": 0
           }
@@ -1398,6 +1431,18 @@
         [
           {
             "node": "Missing Session Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Group Chat?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Route Event",
             "type": "main",
             "index": 0
           }

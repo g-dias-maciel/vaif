@@ -122,8 +122,13 @@ check("Build System Prompt embeds the template",
 check("Build System Prompt coerces NUMERIC strings",
       "Number(artist.floor_pct)" in bsp["parameters"]["jsCode"])
 
-check("Artist Found? routes through Route Event",
-      wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Route Event")
+check("Artist Found? routes through the group-chat guard and then Route Event",
+      wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Group Chat?"
+      and wf["connections"]["Group Chat?"]["main"][0] == []
+      and wf["connections"]["Group Chat?"]["main"][1][0]["node"] == "Route Event")
+check("group chats are detected by @g.us / isGroup and dropped",
+      "@g.us" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"]
+      and "isGroup" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"])
 check("Route Event routes presence → Presence Start and message → Check AI Window",
       wf["connections"]["Route Event"]["main"][0][0]["node"] == "Presence Start"
       and wf["connections"]["Route Event"]["main"][1][0]["node"] == "Check AI Window")

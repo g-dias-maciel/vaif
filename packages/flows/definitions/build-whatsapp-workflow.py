@@ -1178,6 +1178,36 @@ WF = {
             "id": "c3d4e5f6-7a8b-9c0d-1e2f-3a4b5c6d7e8f",
             "name": "Artist Found?",
         },
+        # 3a2. Group Chat? — ignore WhatsApp groups completely. The agent only
+        #      serves one-to-one conversations; group messages/presence never
+        #      create a Lead, a Project or a reply.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "group-chat-cond-0000",
+                            "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); return from.endsWith('@g.us') || p.isGroup === true; })() }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [780, -180],
+            "id": "group-chat-0000-0000-0000-000000000001",
+            "name": "Group Chat?",
+        },
         # 3b. Route Event — presence updates only feed the debounce buffer;
         #     messages continue through the AI window gate. Anything else
         #     (session.status, acks) is dropped on the unconnected 3rd output.
@@ -2249,8 +2279,14 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         },
         "Artist Found?": {
             "main": [
-                [{"node": "Route Event", "type": "main", "index": 0}],
+                [{"node": "Group Chat?", "type": "main", "index": 0}],
                 [{"node": "Missing Session Log", "type": "main", "index": 0}],
+            ]
+        },
+        "Group Chat?": {
+            "main": [
+                [],
+                [{"node": "Route Event", "type": "main", "index": 0}],
             ]
         },
         "Route Event": {
