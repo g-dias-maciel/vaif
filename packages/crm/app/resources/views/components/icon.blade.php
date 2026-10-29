@@ -25,6 +25,11 @@
             <circle cx="7" cy="18" r="2.2"/>
             @break
 
+        @case('user')
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+            <circle cx="12" cy="7" r="4"/>
+            @break
+
         @case('users')
             <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/>
             <circle cx="9" cy="7" r="4"/>

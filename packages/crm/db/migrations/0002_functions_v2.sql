@@ -1910,6 +1910,65 @@ end;
 $$;
 
 
+-- Hard delete: remove the person and everything attached to them. Used by the
+-- Artist from the Clients tab, after a lightbox confirmation. Events stay as
+-- an audit trail (they have no FK to leads) but carry no name/phone.
+create or replace function delete_lead(
+  p_artist_id uuid,
+  p_lead_id   uuid,
+  p_actor     text default 'artist'
+)
+returns boolean
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_lead     leads;
+  v_phone    text;
+  v_chat_ids text[];
+begin
+  select * into v_lead from leads
+   where id = p_lead_id and artist_id = p_artist_id;
+  if not found then
+    return false;
+  end if;
+
+  v_phone := v_lead.phone_e164;
+
+  select coalesce(array_agg(chat_id), '{}'::text[])
+    into v_chat_ids
+  from chat_sessions
+   where artist_id = p_artist_id and lead_id = p_lead_id;
+
+  delete from chat_buffers
+   where artist_id = p_artist_id and chat_id = any(v_chat_ids);
+
+  delete from agent_memory.chat_memory
+   where session_id = p_lead_id::text;
+
+  delete from chat_sessions
+   where artist_id = p_artist_id and lead_id = p_lead_id;
+
+  delete from lead_channels
+   where artist_id = p_artist_id and lead_id = p_lead_id;
+
+  if v_phone is not null then
+    delete from returning_customers
+     where artist_id = p_artist_id and phone_e164 = v_phone;
+  end if;
+
+  -- Projects, quotes, payments, calendar entries and notes cascade.
+  delete from leads
+   where id = p_lead_id and artist_id = p_artist_id;
+
+  perform log_event(p_artist_id, null, null, p_actor, 'lead_deleted',
+    jsonb_build_object('lead_id', p_lead_id));
+
+  return true;
+end;
+$$;
+
+
 -- -----------------------------------------------------------------------------
 -- Retention helpers (called by a scheduled task)
 -- -----------------------------------------------------------------------------

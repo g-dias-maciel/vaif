@@ -128,6 +128,10 @@ $$;
 -- Staff-only / maintenance functions: never granted to the agent.
 revoke all on function anonymize_lead(uuid,uuid,text) from public;
 grant execute on function anonymize_lead(uuid,uuid,text) to crm_app;
+
+-- Hard-delete a Lead and their history. Staff/artist app only.
+revoke all on function delete_lead(uuid,uuid,text) from public;
+grant execute on function delete_lead(uuid,uuid,text) to crm_app;
 revoke all on function purge_chat_memory(interval) from public;
 grant execute on function purge_chat_memory(interval) to crm_app;
 revoke all on function create_event_partitions(integer) from public;

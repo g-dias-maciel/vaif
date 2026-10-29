@@ -527,6 +527,66 @@ $$;
 
 
 -- ---------------------------------------------------------------------------
+-- 10b. Hard delete: removes the client and every attached identifier
+-- ---------------------------------------------------------------------------
+do $$
+declare
+  l       leads;
+  p       projects;
+  deleted boolean;
+  n       integer;
+begin
+  insert into leads (id, artist_id, name, phone_e164)
+  values (gen_random_uuid(), pg_temp.artist_a(), 'Delete Me', '+5511900000000')
+  returning * into l;
+
+  insert into projects (id, artist_id, lead_id, stage_key)
+  values (gen_random_uuid(), pg_temp.artist_a(), l.id, 'qualificando')
+  returning * into p;
+
+  insert into lead_channels (artist_id, lead_id, channel, external_id)
+  values (pg_temp.artist_a(), l.id, 'whatsapp', 'default:5511900000000');
+
+  insert into chat_sessions (artist_id, chat_id, lead_id)
+  values (pg_temp.artist_a(), 'default:5511900000000', l.id);
+
+  insert into chat_buffers (artist_id, chat_id, pending)
+  values (pg_temp.artist_a(), 'default:5511900000000', 'oi');
+
+  insert into agent_memory.chat_memory (session_id, message)
+  values (l.id::text, '{"type":"human","content":"oi"}'::jsonb);
+
+  insert into returning_customers (artist_id, phone_e164, name)
+  values (pg_temp.artist_a(), '+5511900000000', 'Delete Me')
+  on conflict (artist_id, phone_e164) do nothing;
+
+  deleted := delete_lead(pg_temp.artist_a(), l.id, 'artist');
+  perform pg_temp.ok(deleted, 'delete_lead returns true');
+
+  select count(*) into n from leads where id = l.id;
+  perform pg_temp.ok(n = 0, 'the Lead is deleted');
+  select count(*) into n from projects where lead_id = l.id;
+  perform pg_temp.ok(n = 0, 'the Projects are deleted');
+  select count(*) into n from lead_channels where lead_id = l.id;
+  perform pg_temp.ok(n = 0, 'the channel identifiers are deleted');
+  select count(*) into n from chat_sessions where lead_id = l.id;
+  perform pg_temp.ok(n = 0, 'the chat sessions are deleted');
+  select count(*) into n from chat_buffers
+   where artist_id = pg_temp.artist_a() and chat_id = 'default:5511900000000';
+  perform pg_temp.ok(n = 0, 'the debounce buffer is deleted');
+  select count(*) into n from agent_memory.chat_memory where session_id = l.id::text;
+  perform pg_temp.ok(n = 0, 'the agent memory is deleted');
+  select count(*) into n from returning_customers
+   where artist_id = pg_temp.artist_a() and phone_e164 = '+5511900000000';
+  perform pg_temp.ok(n = 0, 'the returning-customer entry is deleted');
+
+  deleted := delete_lead(pg_temp.artist_a(), l.id, 'artist');
+  perform pg_temp.ok(not deleted, 'deleting an unknown Lead returns false');
+end;
+$$;
+
+
+-- ---------------------------------------------------------------------------
 -- 11. Events are partitioned and carry the tenant
 -- ---------------------------------------------------------------------------
 do $$

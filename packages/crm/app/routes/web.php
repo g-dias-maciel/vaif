@@ -4,6 +4,7 @@ use App\Http\Controllers\ArtistController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\LeadController;
@@ -35,6 +36,9 @@ Route::middleware('auth')->group(function () {
     // ---- Artist tabs (artist + staff-with-selected-artist) ----
     Route::middleware(['role:artist,staff', 'artist.context'])->group(function () {
         Route::get('/analytics', [AnalyticsController::class, 'index'])->name('analytics.index');
+
+        Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
+        Route::delete('/clients/{lead}', [ClientController::class, 'destroy'])->name('clients.destroy');
 
         Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
         Route::post('/bookings/block', [BookingController::class, 'block'])->name('bookings.block');

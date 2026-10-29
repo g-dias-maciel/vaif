@@ -179,6 +179,54 @@
         }
         .toast button:hover { opacity: 1; }
 
+        /* Lightboxes: destructive confirmations and success notices. */
+        .lightbox {
+            position: fixed; inset: 0; z-index: 200;
+            display: flex; align-items: center; justify-content: center;
+            padding: 20px; background: rgba(0, 0, 0, 0.72);
+            backdrop-filter: blur(3px);
+        }
+        .lightbox[hidden] { display: none; }
+        .lightbox-card {
+            width: min(460px, 100%); background: var(--panel);
+            border: 1px solid var(--border); border-radius: 16px;
+            padding: 26px; box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+        }
+        .lightbox-card h2 { font-size: 1.15rem; margin: 0 0 8px; }
+        .lightbox-card p { color: var(--muted); font-size: 0.88rem; line-height: 1.6; margin: 0; }
+        .lightbox-card strong { color: var(--ink); }
+        .lightbox-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+        .lightbox-icon {
+            width: 42px; height: 42px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(74, 222, 128, 0.12); color: #4ade80;
+            font-size: 1.3rem; margin-bottom: 14px;
+        }
+
+        /* Clients tab */
+        .clients-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 16px; }
+        .clients-toolbar input, .clients-toolbar select {
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            color: var(--ink); padding: 9px 12px; font-family: 'Montserrat', sans-serif; font-size: 0.82rem;
+        }
+        .clients-toolbar input { flex: 1; min-width: 220px; }
+        .clients-toolbar input:focus, .clients-toolbar select:focus { outline: none; border-color: var(--gold); }
+        .clients-count { color: var(--muted); font-size: 0.75rem; margin-left: auto; white-space: nowrap; }
+        .clients-table-wrap { overflow-x: auto; }
+        .clients-table { width: 100%; border-collapse: collapse; min-width: 720px; }
+        .clients-table th {
+            text-align: left; font-size: 0.62rem; letter-spacing: 0.8px; text-transform: uppercase;
+            color: var(--muted); padding: 0 12px 10px; border-bottom: 1px solid var(--border);
+        }
+        .clients-table td { padding: 12px; border-bottom: 1px solid var(--border); font-size: 0.82rem; vertical-align: middle; }
+        .clients-table tr:last-child td { border-bottom: 0; }
+        .clients-table tr[hidden] { display: none; }
+        .clients-table a { color: var(--ink); font-weight: 600; }
+        .clients-table a:hover { color: var(--gold); }
+        .clients-table .phone { color: var(--muted); }
+        .clients-table .actions-cell { text-align: right; white-space: nowrap; }
+        .clients-empty { color: var(--muted); font-size: 0.85rem; padding: 18px 4px; }
+
         .promo-pill {
             display: inline-flex; align-items: center; gap: 6px;
             padding: 6px 12px; border-radius: 999px;
@@ -471,6 +519,9 @@
                             <a href="{{ route('bookings.index') }}" class="nav-item {{ request()->routeIs('bookings.*') ? 'is-active' : '' }}">
                                 <x-icon name="calendar" /> <span>Agenda</span>
                             </a>
+                            <a href="{{ route('clients.index') }}" class="nav-item {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
+                                <x-icon name="user" /> <span>Clientes</span>
+                            </a>
                             <a href="{{ route('analytics.index') }}" class="nav-item {{ request()->routeIs('analytics.*') ? 'is-active' : '' }}">
                                 <x-icon name="chart" /> <span>Análises</span>
                             </a>
@@ -505,6 +556,9 @@
                                 </a>
                                 <a href="{{ route('bookings.index') }}" class="nav-item {{ request()->routeIs('bookings.*') ? 'is-active' : '' }}">
                                     <x-icon name="calendar" /> <span>Agenda</span>
+                                </a>
+                                <a href="{{ route('clients.index') }}" class="nav-item {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
+                                    <x-icon name="user" /> <span>Clientes</span>
                                 </a>
                                 <a href="{{ route('analytics.index') }}" class="nav-item {{ request()->routeIs('analytics.*') ? 'is-active' : '' }}">
                                     <x-icon name="chart" /> <span>Análises</span>
@@ -630,6 +684,26 @@
                 var el = document.getElementById('app-error-toast');
                 if (el) el.remove();
             }, 7000);
+        </script>
+    @endif
+
+    @if (session('lightbox'))
+        <div class="lightbox" id="status-lightbox" role="dialog" aria-modal="true" aria-labelledby="status-lightbox-title">
+            <div class="lightbox-card">
+                <div class="lightbox-icon">&#10003;</div>
+                <h2 id="status-lightbox-title">{{ session('lightbox.title') }}</h2>
+                <p>{{ session('lightbox.message') }}</p>
+                <div class="lightbox-actions">
+                    <button type="button" class="btn btn--small"
+                        onclick="document.getElementById('status-lightbox').remove()">OK</button>
+                </div>
+            </div>
+        </div>
+        <script>
+            setTimeout(function () {
+                var el = document.getElementById('status-lightbox');
+                if (el) el.remove();
+            }, 8000);
         </script>
     @endif
 
