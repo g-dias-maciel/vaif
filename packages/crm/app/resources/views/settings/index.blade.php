@@ -83,6 +83,32 @@
     @endif
 </div>
 
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Negociação</h2>
+    @php
+        $maxDiscount = $artist->settings?->floor_pct !== null
+            ? 100 - (float) $artist->settings->floor_pct
+            : 20;
+    @endphp
+    <p class="meta">
+        A Beatriz pode negociar até este desconto. Acima dele, ela passa o atendimento para você.
+    </p>
+
+    <form method="post" action="{{ route('settings.negotiation') }}" style="margin-top:12px;">
+        @csrf
+        <div class="form-field" style="max-width:220px;">
+            <label for="max-discount">Desconto máximo (%)</label>
+            <input type="number" name="max_discount" id="max-discount"
+                value="{{ old('max_discount', number_format($maxDiscount, 2, '.', '')) }}"
+                min="0" max="100" step="0.01">
+            @error('max_discount')
+                <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+            @enderror
+        </div>
+        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar desconto máximo</button>
+    </form>
+</div>
+
 @if ($googleConfigured || auth()->user()->isStaff() || $artist->hasGoogleCalendar())
 <div class="panel" style="margin-bottom: 24px;">
     <h2 class="section-title" style="margin-top:0;">Google Agenda</h2>

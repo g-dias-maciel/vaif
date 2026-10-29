@@ -146,6 +146,27 @@ class SettingsController extends Controller
     }
 
     /**
+     * Save the maximum discount the SDR may negotiate. The database stores
+     * the inverse (`floor_pct`) because the quote floor is what the RPCs use.
+     */
+    public function updateNegotiation(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'max_discount' => ['required', 'numeric', 'min:0', 'max:100'],
+        ]);
+
+        $this->settings($artist)->update([
+            'floor_pct' => 100 - (float) $data['max_discount'],
+        ]);
+
+        return back()->with('status', 'Desconto máximo salvo.');
+    }
+
+    /**
      * Connect the Artist's shared Google Calendar after checking that the
      * service account can actually read/write it.
      */
