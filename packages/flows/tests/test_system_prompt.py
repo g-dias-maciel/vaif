@@ -174,8 +174,10 @@ check("audio turns are transcribed, text turns bypass audio and both reach Analy
 check("the agent text uses the audio transcript when available",
       "$json.transcript" in AGENT_TEXT_JS
       and "$('Parse Audio')" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])
-check("stickers are not stored as references",
-      "isSticker" in nodes["Debounce Start"]["parameters"]["jsCode"]
+check("stickers and audio are detected from WAHA message payloads, not only type",
+      "stickerMessage" in nodes["Debounce Start"]["parameters"]["jsCode"]
+      and "audioMessage" in nodes["Debounce Start"]["parameters"]["jsCode"]
+      and "isSticker" in nodes["Debounce Start"]["parameters"]["jsCode"]
       and "[STICKER RECEBIDO]" in template
       and "type === 'sticker'" not in nodes["Debounce Start"]["parameters"]["jsCode"].split("const mediaUrl =")[1].split(";")[0])
 check("Analyze Reference? sends images through vision and text-only turns straight to the agent",

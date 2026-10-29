@@ -185,28 +185,28 @@ const phoneJid = rawFrom.endsWith('@lid') && altJid ? altJid : rawFrom;
 const phone = phoneJid.replace(/@.*$/, '').replace(/\D/g, '');
 const type = payload.type || 'chat';
 const media = payload.media || {};
+const message = (payload._data && payload._data.message) || {};
 const rawText = String(payload.body || '');
-const isSticker = type === 'sticker' || payload.isSticker === true || media.isSticker === true;
+const mediaMime = String(media.mimetype || payload.mimetype || '');
+const isSticker = type === 'sticker' || payload.isSticker === true || media.isSticker === true
+  || !!message.stickerMessage;
+const isAudio = type === 'ptt' || type === 'audio' || !!message.audioMessage || !!message.pttMessage;
+const isVideo = type === 'video' || !!message.videoMessage;
+const isImage = !isSticker && (type === 'image' || !!message.imageMessage || mediaMime.startsWith('image/'));
 
 let text = rawText;
 if (!text) {
   if (isSticker) text = '[STICKER RECEBIDO]';
-  else if (type === 'ptt' || type === 'audio') text = '[ÁUDIO RECEBIDO]';
-  else if (type === 'video') text = '[VÍDEO RECEBIDO]';
-  else if (type === 'image' || payload.hasMedia) text = '[FOTO RECEBIDA]';
+  else if (isAudio) text = '[ÁUDIO RECEBIDO]';
+  else if (isVideo) text = '[VÍDEO RECEBIDO]';
+  else if (isImage || payload.hasMedia) text = '[FOTO RECEBIDA]';
   else text = '[MÍDIA RECEBIDA]';
 }
 
 // Reference media (WAHA download URL) and links the lead sent. Audio, video
 // and stickers are not references; only real images with a downloadable URL.
-const mediaMime = String(media.mimetype || payload.mimetype || '');
-const mediaUrl = (!isSticker && payload.hasMedia && media.url
-  && (mediaMime.startsWith('image/') || type === 'image'))
-  ? media.url
-  : null;
-const audioUrl = (payload.hasMedia && media.url && (type === 'ptt' || type === 'audio'))
-  ? media.url
-  : null;
+const mediaUrl = (isImage && payload.hasMedia && media.url) ? media.url : null;
+const audioUrl = (isAudio && payload.hasMedia && media.url) ? media.url : null;
 
 const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
   .map(u => u.replace(/[.,;:!?)\\]]+$/, ''))))
