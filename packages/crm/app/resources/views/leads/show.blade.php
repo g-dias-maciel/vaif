@@ -158,8 +158,14 @@
             </div>
         @endif
 
-        @if ($project->stage_key !== 'perdido')
-            <div style="margin-top: 20px;">
+        @if (! in_array($project->stage_key, ['fechado', 'perdido'], true))
+            <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
+                @if ($project->calendar->where('kind', 'booking')->where('active', true)->isNotEmpty())
+                    <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
+                        @csrf
+                        <button type="submit" class="btn btn--small" onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Tattoo concluída</button>
+                    </form>
+                @endif
                 <form method="post" action="{{ route('projects.mark-lost', $project) }}" class="inline">
                     @csrf
                     <button type="submit" class="btn btn--danger" onclick="return confirm('Marcar este projeto como perdido?');">Marcar perdido</button>

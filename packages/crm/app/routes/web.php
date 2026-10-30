@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
         Route::post('/projects/{project}/lost', [LeadController::class, 'markLost'])->name('projects.mark-lost');
         Route::post('/projects/{project}/confirm-deposit', [LeadController::class, 'confirmDeposit'])->name('projects.confirm-deposit');
+        Route::post('/projects/{project}/complete', [LeadController::class, 'completeProject'])->name('projects.complete');
 
         // Tattoos used to be a separate entity; a Lead is now the project.
         // Keep old links working with a permanent redirect.

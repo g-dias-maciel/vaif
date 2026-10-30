@@ -31,6 +31,12 @@
                             <button type="submit" class="btn btn--small">Confirmar sinal</button>
                         </form>
                     @endif
+                    @if ($b->project && ! in_array($b->project->stage_key, ['fechado', 'perdido'], true))
+                        <form method="post" action="{{ route('projects.complete', $b->project) }}" class="inline">
+                            @csrf
+                            <button type="submit" class="btn btn--small" onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Tattoo feita</button>
+                        </form>
+                    @endif
                     <a href="{{ route('bookings.reschedule', $b) }}" class="btn btn--ghost btn--small">Remarcar</a>
                     <form method="post" action="{{ route('bookings.cancel', $b) }}" class="inline">
                         @csrf

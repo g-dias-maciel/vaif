@@ -135,6 +135,27 @@ class LeadController extends Controller
     }
 
     /**
+     * Confirm the tattoo was finished. This is what marks the lead as a
+     * returning customer; confirming the sinal alone no longer does.
+     */
+    public function completeProject(Project $project)
+    {
+        $this->authorize('complete', $project);
+
+        try {
+            DB::select('select * from complete_project(?, ?, ?)', [
+                $project->artist_id,
+                $project->id,
+                auth()->user()->isStaff() ? 'staff' : 'artist',
+            ]);
+        } catch (\Illuminate\Database\QueryException $e) {
+            return back()->with('error', 'Não foi possível concluir: projeto perdido ou inexistente.');
+        }
+
+        return back()->with('status', 'Tattoo concluída. Cliente marcado como recorrente.');
+    }
+
+    /**
      * Mark one of the Lead's Projects as lost (perdido).
      */
     public function markLost(Request $request, Project $project)

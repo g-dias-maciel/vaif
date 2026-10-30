@@ -162,6 +162,7 @@ return [
         'promotion_ended' => 'Promoção encerrada',
         'handoff_triggered' => 'Encaminhado ao artista',
         'lead_anonymized' => 'Dados anonimizados (LGPD)',
+        'tattoo_completed' => 'Tattoo concluída',
     ],
 
     /*

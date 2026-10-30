@@ -55,6 +55,13 @@
                                 @if ($project->whatsapp_url)
                                     <a href="{{ $project->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
                                 @endif
+                                @if ($project->booked_at && ! in_array($project->stage_key, ['fechado', 'perdido'], true))
+                                    <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
+                                        @csrf
+                                        <button type="submit" class="btn btn--small"
+                                            onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Tattoo feita</button>
+                                    </form>
+                                @endif
                                 @if ($agentAction && $project->lead)
                                     @can('flagAgent', $project->lead)
                                         <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">

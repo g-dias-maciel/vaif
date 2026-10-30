@@ -225,11 +225,24 @@ begin
 
   select count(*) into n from returning_customers
    where artist_id = pg_temp.artist_a() and phone_e164 = '+5511987654321';
-  perform pg_temp.ok(n = 1, 'confirming a deposit registers a returning customer');
+  perform pg_temp.ok(n = 0, 'confirming a deposit does not mark the client as returning');
+
+  select * into p from complete_project(pg_temp.artist_a(), p.id);
+  perform pg_temp.ok(p.stage_key = 'fechado', 'completing the tattoo closes the project');
+  perform pg_temp.ok(p.closed_at is not null, 'completing the tattoo sets closed_at');
+
+  select count(*) into n from returning_customers
+   where artist_id = pg_temp.artist_a() and phone_e164 = '+5511987654321'
+     and source = 'tattoo_completed';
+  perform pg_temp.ok(n = 1, 'completing the tattoo marks the client as returning');
 
   select count(*) into n from events
    where project_id = p.id and type = 'deposit_confirmed';
-  perform pg_temp.ok(n = 1, 'the event was written');
+  perform pg_temp.ok(n = 1, 'the deposit event was written');
+
+  select count(*) into n from events
+   where project_id = p.id and type = 'tattoo_completed';
+  perform pg_temp.ok(n = 1, 'the completion event was written');
 end;
 $$;
 
@@ -254,8 +267,9 @@ begin
   select id into lead_b from leads
    where artist_id = pg_temp.artist_b() and phone_e164 = '+5511987654321';
 
-  select * into p1 from projects
-   where artist_id = pg_temp.artist_a() order by created_at desc limit 1;
+  -- A fresh project: the deposit test above closes its project with
+  -- complete_project(), so reusing it would stay fechado.
+  select * into p1 from create_project(pg_temp.artist_a(), lead_a, 'braco', 'pequeno');
   select * into p2 from create_project(pg_temp.artist_a(), lead_a, 'costas', 'grande');
   select * into p3 from create_project(pg_temp.artist_b(), lead_b, 'antebraco', 'medio');
 

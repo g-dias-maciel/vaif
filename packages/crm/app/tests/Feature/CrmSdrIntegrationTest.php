@@ -255,6 +255,9 @@ class CrmSdrIntegrationTest extends TestCase
     {
         $this->requiresPostgres();
         $this->seedArtist();
+        Http::fake();
+        config(['transport.waha_url' => 'https://waha.test']);
+
         $user = $this->artistUser();
 
         $lead = $this->sdrLead(['name' => 'Gustavo']);
@@ -265,9 +268,36 @@ class CrmSdrIntegrationTest extends TestCase
         $this->actingAs($user)->post("/bookings/{$slot->id}/confirm-deposit")->assertRedirect();
 
         $this->assertSame('confirmed', $payment->fresh()->status);
+        $this->assertSame('agendado', $project->fresh()->stage_key);
+
+        // A deposit is not a finished tattoo: the client is not returning yet.
+        $this->assertDatabaseMissing('returning_customers', [
+            'artist_id' => self::ARTIST_ID,
+            'phone_e164' => $lead->phone_e164,
+        ]);
+
+        Http::assertSent(fn ($request) => str_contains((string) $request['text'], 'Sinal recebido!'));
+    }
+
+    public function test_artist_completes_the_tattoo_and_marks_the_client_returning()
+    {
+        $this->requiresPostgres();
+        $this->seedArtist();
+        $user = $this->artistUser();
+
+        $lead = $this->sdrLead(['name' => 'Gustavo']);
+        $project = $this->sdrProject($lead, ['stage_key' => 'agendado']);
+
+        $this->actingAs($user)->post("/projects/{$project->id}/complete")->assertRedirect();
+
+        $fresh = $project->fresh();
+        $this->assertSame('fechado', $fresh->stage_key);
+        $this->assertNotNull($fresh->closed_at);
+
         $this->assertDatabaseHas('returning_customers', [
             'artist_id' => self::ARTIST_ID,
             'phone_e164' => $lead->phone_e164,
+            'source' => 'tattoo_completed',
         ]);
     }
 
