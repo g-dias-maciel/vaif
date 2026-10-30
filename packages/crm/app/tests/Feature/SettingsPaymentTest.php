@@ -48,6 +48,25 @@ class SettingsPaymentTest extends TestCase
         ]);
     }
 
+    public function test_an_artist_can_edit_the_signal_percentage(): void
+    {
+        $artist = $this->artist();
+        $user = $this->artistUser($artist);
+
+        $this->actingAs($user)
+            ->post('/config/payment', [
+                'pix_key' => 'artist@example.com',
+                'deposit_percentage' => 25,
+            ])
+            ->assertRedirect();
+
+        $settings = $artist->settings->refresh();
+
+        $this->assertSame('percent', $settings->deposit_type);
+        $this->assertEquals(25, (float) $settings->deposit_value);
+        $this->assertSame('artist@example.com', $settings->pix_key);
+    }
+
     public function test_an_artist_can_save_and_clear_the_pix_key(): void
     {
         $artist = $this->artist();

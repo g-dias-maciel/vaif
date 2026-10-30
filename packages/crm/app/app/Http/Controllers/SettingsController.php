@@ -132,17 +132,30 @@ class SettingsController extends Controller
 
         $data = $request->validate([
             'pix_key' => ['nullable', 'string', 'max:255'],
+            'deposit_percentage' => ['nullable', 'numeric', 'min:1', 'max:100'],
         ]);
 
         $pixKey = trim((string) ($data['pix_key'] ?? ''));
 
-        $this->settings($artist)->update([
+        $update = [
             'pix_key' => $pixKey !== '' ? $pixKey : null,
-        ]);
+        ];
 
-        return back()->with('status', $pixKey !== ''
-            ? 'Chave PIX salva.'
-            : 'Chave PIX removida.');
+        // The signal percentage is what the agent quotes and what feeds
+        // request_deposit. Saving the form always switches it to percentage.
+        if (($data['deposit_percentage'] ?? null) !== null) {
+            $update['deposit_type'] = 'percent';
+            $update['deposit_value'] = (float) $data['deposit_percentage'];
+        }
+
+        $this->settings($artist)->update($update);
+
+        $message = 'Configurações de sinal e PIX salvas.';
+        if (($data['deposit_percentage'] ?? null) === null && $pixKey === '') {
+            $message = 'Chave PIX removida.';
+        }
+
+        return back()->with('status', $message);
     }
 
     /**

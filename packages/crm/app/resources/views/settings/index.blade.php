@@ -73,7 +73,29 @@
                 <span class="meta" style="color: var(--danger);">{{ $message }}</span>
             @enderror
         </div>
-        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar chave PIX</button>
+
+        @php
+            $currentDepositType = $artist->settings?->deposit_type;
+            $currentDepositValue = $artist->settings?->deposit_value;
+        @endphp
+        <div class="form-field" style="max-width:220px; margin-top:12px;">
+            <label for="deposit-percentage">Sinal (%)</label>
+            <input type="number" name="deposit_percentage" id="deposit-percentage"
+                value="{{ old('deposit_percentage', $currentDepositType === 'percent' ? $currentDepositValue : '') }}"
+                min="1" max="100" step="0.5" required>
+            <span class="meta">Percentual do valor à vista. Ex.: 30 para 30%.</span>
+            @if ($currentDepositType === 'fixed')
+                <span class="meta" style="color: var(--gold);">
+                    O sinal atual é um valor fixo (R$ {{ number_format((float) $currentDepositValue, 2, ',', '.') }}).
+                    Salvar aqui passará a usar percentual.
+                </span>
+            @endif
+            @error('deposit_percentage')
+                <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+            @enderror
+        </div>
+
+        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar sinal e PIX</button>
     </form>
 
     @if (blank($artist->settings?->pix_key))
