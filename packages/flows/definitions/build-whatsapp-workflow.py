@@ -637,6 +637,20 @@ function detectDuvidasZeradas(t) {
   const acknowledgement = /^(?:beleza|blz|ok|okay|perfeito|combinado|entendi|claro|tranquilo|tranquila|show|demais|pode ser|isso|sim)[.!]?$/i;
   const noDoubt = /^(?:n[aã]o|n|acho que n[aã]o|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|s[oó] o (?:pre[cç]o|valor)(?: mesmo)?|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const doubtTalk = /(?:tenho|ficou|fiquei|surgiu|apareceu)[^.\\n]{0,25}(?:d[uú]vida|pergunta)/i;
+  const strongNoDoubt = /(?:s[oó] isso(?: mesmo)?|é isso(?: mesmo)?|sem (?:mais )?d[uú]vidas?|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|tudo certo)/i;
+  const priceTalk = /(?:valores?|pre[cç]os?|or[cç]amento|formas? de pagamento|quanto (?:fica|custa)|parcel)/i;
+
+  // A longer WhatsApp/audio sentence can confirm and ask for the price at the
+  // same time: "Perfeito, só isso mesmo. Agora queria saber os valores...".
+  if (strongNoDoubt.test(t) && !doubtTalk.test(t)) return true;
+  if (/(?:perfeito|beleza|ok|okay|combinado|entendi|pode ser)/i.test(t)
+      && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
+    return true;
+  }
+  if (/^(?:n[aã]o|n)\b/i.test(t) && !/n[aã]o sei/i.test(t)
+      && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
+    return true;
+  }
 
   // WhatsApp bursts often answer with several short messages: "beleza",
   // "não", "acho que não", "só o preço mesmo". Any clear confirmation plus
@@ -820,6 +834,23 @@ const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)
 const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist
   ? deterministicQuote(lead.quoted_price_cents || lead.table_price_cents)
   : null;
+
+// If the model quoted the standard price while a promotion is active, replace
+// the quote with the promotion price. This also removes scheduling questions
+// from the same message: the lead must accept the price first.
+const offer = $('Build System Prompt').first().json.offer || {};
+const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
+const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
+const hasPriceRow = pricingRows.some(p => p.placement === lead.placement && p.body_zone === lead.body_zone);
+const replyHasPrice = /R\$\s*\d/.test(finalReply);
+const standardQuote = !lead.quoted_price_cents
+  || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
+const offerAlreadyMentioned = /(?:promo[cç][aã]o|leve 2|segunda tatuagem|leva uma segunda|segunda de valor)/i.test(finalReply);
+const promotionQuote = !firstQuote && !repeatedQuote && priceGateOpen && offerLive
+  && replyHasPrice && standardQuote && !offerAlreadyMentioned && !goingToArtist
+  ? deterministicQuote()
+  : null;
+
 if (firstQuote) {
   // The first quote comes from the artist's pricing table, not generated model
   // output or classifier extraction. This prevents a cleared checkpoint from
@@ -834,6 +865,8 @@ if (firstQuote) {
   // separate turns, repeat the current authoritative quote instead of treating
   // the request as a negotiation objection.
   finalReply = repeatedQuote.reply;
+} else if (promotionQuote) {
+  finalReply = promotionQuote.reply;
 } else if (!precoLiberadoJa && gateJustOpened && !goingToArtist) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
@@ -845,6 +878,32 @@ if (firstQuote) {
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?')
     : `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
+  if (!genericPlacement) {
+    finalPipeline = 'aguardando_artista';
+    finalEvent = 'handoff_triggered';
+    finalHandoff = 'no_price_row';
+  }
+}
+
+// Never let the model invent a price for a placement/size that is not in the
+// artist's table. Ask for the missing detail, or hand off when the region is
+// already specific.
+const quoteMissingRow = !firstQuote && !repeatedQuote && !promotionQuote
+  && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist;
+if (quoteMissingRow) {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  if (!lead.body_zone) {
+    finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
+  } else if (['braco', 'perna'].includes(lead.placement)) {
+    finalReply = lead.placement === 'braco'
+      ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
+      : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?';
+  } else {
+    finalReply = `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
+    finalPipeline = 'aguardando_artista';
+    finalEvent = 'handoff_triggered';
+    finalHandoff = 'no_price_row';
+  }
 }
 
 // ── Handoff output guard: if the handoff was suppressed (false cover-up /
@@ -878,6 +937,13 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
   // quotes around a long process paragraph, on its own line or after a colon.
   trimmed = trimmed.replace(/(^|\\n)"([^"\\n]{40,})"(?=\\n|$)/g, '$1$2');
   trimmed = trimmed.replace(/:\s*"([^"\\n]{40,})"/g, ': $1');
+
+  // The model sometimes asks "posso te passar o orçamento?" or "você gostaria
+  // de saber os valores?" while the doubts checkpoint is still pending. That
+  // creates two questions and pushes the lead before the gate is open.
+  const priceProceed = /(?:agora[, ]*)?(?:falando sobre (?:a |sua )?tatuagem[, ]*)?(?:posso|quer|voc[eê] (?:gostaria|quer)|gostaria|podemos)[^.!?]{0,100}(?:passar|saber|ver|receber|falar)[^.!?]{0,60}(?:or[cç]amento|valores?|pre[cç]o)[^.!?]*[.!?]?/gi;
+  trimmed = trimmed.replace(priceProceed, ' ');
+  trimmed = trimmed.replace(/(?:vamos|podemos) prosseguir[^.!?]*[.!?]?/gi, ' ');
 
   // Indirect sign-offs ("se ficou alguma dúvida é só falar") are not a direct
   // question. Remove them anywhere in the reply.
@@ -1042,16 +1108,18 @@ if (isAudio) {
 const quoteBaseCents = !quoteActuallySent
   ? null
   : (firstQuote ? firstQuote.base_cents
-     : (repeatedQuote ? (lead.table_price_cents || repeatedQuote.base_cents) : (p.table_cents || null)));
+     : (repeatedQuote ? (lead.table_price_cents || repeatedQuote.base_cents)
+        : (promotionQuote ? promotionQuote.base_cents : (p.table_cents || null))));
 const quoteOfferedCents = !quoteActuallySent
   ? null
   : (firstQuote ? firstQuote.cents
-     : (repeatedQuote ? (lead.quoted_price_cents || repeatedQuote.cents) : (p.nego_cents || p.table_cents || null)));
+     : (repeatedQuote ? (lead.quoted_price_cents || repeatedQuote.cents)
+        : (promotionQuote ? promotionQuote.cents : (p.nego_cents || p.table_cents || null))));
 
 return [{ json: {
   lead_id: lead.lead_id,
   project_id: lead.project_id,
-  offer_quoted: !!(firstQuote && firstQuote.offer_active),
+  offer_quoted: !!((firstQuote && firstQuote.offer_active) || promotionQuote),
   stage_key: audioPipeline,
   event_type: audioEvent,
   processo_explicado_val: processoDeterministic || state.processo_explicado === true,
@@ -1199,6 +1267,7 @@ if (event === 'handoff_triggered' || saidHandoff) {
     vague: 'Descrição vaga',
     audio_2x: 'Áudio/sticker repetido',
     pix_missing: 'PIX não configurado',
+    no_price_row: 'Sem preço para o local',
     no_availability: 'Sem horário disponível no calendário',
   };
   const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'não especificado';

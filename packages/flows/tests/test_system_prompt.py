@@ -329,6 +329,40 @@ check("reported process reply loses the quotes and indirect sign-off",
       and "se ficou alguma dúvida" not in _clean.lower()
       and _clean.count("Mais alguma dúvida?") == 1)
 _cut = _trailing.sub("", "Antes de falarmos de valores, ficou alguma dúvida?").strip()
+# The exact audio transcript from the Alexandre conversation: a longer sentence
+# confirms and asks for the price in the same message.
+_strong = re.compile(r"(?:s[oó] isso(?: mesmo)?|é isso(?: mesmo)?|sem (?:mais )?d[uú]vidas?|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|tudo certo)", re.I)
+_price = re.compile(r"(?:valores?|pre[cç]os?|or[cç]amento|formas? de pagamento|quanto (?:fica|custa)|parcel)", re.I)
+_doubt = re.compile(r"(?:tenho|ficou|fiquei|surgiu|apareceu)[^.\n]{0,25}(?:d[uú]vida|pergunta)", re.I)
+_audio_text = "Perfeito, só isso mesmo. Agora eu gostaria de saber os valores e as formas de pagamento."
+check("a long audio confirmation plus price request clears the doubts gate",
+      bool(_strong.search(_audio_text)) and bool(_price.search(_audio_text)) and not _doubt.search(_audio_text))
+check("the parse removes price-proceed questions from the doubts turn",
+      "priceProceed" in parse_js and "gostaria" in parse_js)
+check("an invented price is blocked when the placement has no table row",
+      "quoteMissingRow" in parse_js
+      and "no_price_row" in parse_js
+      and "Sem preço para o local" in nodes["Build Handoff Message"]["parameters"]["jsCode"])
+# Exact accessibility reply reported by the user: the price-proceed questions
+# must be removed, leaving the answer and one direct checkpoint.
+_access = ("Alexandre, sim, nosso estúdio tem entrada adequada para deficientes. "
+           "Ficamos felizes em atender a todos com conforto e acessibilidade. "
+           "Agora, falando sobre a tatuagem, posso te passar o orçamento. "
+           "Você gostaria de saber os valores?\n\nMais alguma dúvida?")
+_pp = __import__("re").compile(
+    r"(?:agora[, ]*)?(?:falando sobre (?:a |sua )?tatuagem[, ]*)?(?:posso|quer|voc[eê] (?:gostaria|quer)|gostaria|podemos)[^.!?]{0,100}(?:passar|saber|ver|receber|falar)[^.!?]{0,60}(?:or[cç]amento|valores?|pre[cç]o)[^.!?]*[.!?]?",
+    __import__("re").IGNORECASE)
+_clean_access = _pp.sub(" ", _access)
+check("the doubts turn answers the question and asks only the checkpoint",
+      "posso te passar o orçamento" not in _clean_access.lower()
+      and "gostaria de saber os valores" not in _clean_access.lower()
+      and "acessibilidade" in _clean_access.lower())
+
+check("a standard quote is replaced by the active promotion",
+      "promotionQuote" in parse_js
+      and "promotionQuote.base_cents" in parse_js
+      and "offer_quoted: !!((firstQuote && firstQuote.offer_active) || promotionQuote)" in parse_js)
+
 check("the canonical checkpoint is removed as a whole, not cut in half",
       _cut == "" and parse_js.count("trailingCheckpoint") >= 2)
 check("rhetorical questions do not hide the doubts checkpoint",
