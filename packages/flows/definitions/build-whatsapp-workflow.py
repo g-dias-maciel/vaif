@@ -2109,7 +2109,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT id, start_at, end_at FROM calendar_entries WHERE artist_id = $1::uuid AND project_id = $2::uuid AND kind = 'booking' AND active ORDER BY start_at DESC LIMIT 1;",
+                # The agent role cannot read calendar_entries; this function is
+                # SECURITY DEFINER and always returns one row (NULLs when none).
+                "query": "SELECT * FROM get_active_booking($1::uuid, $2::uuid);",
                 "options": {
                     "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id] }}"
                 },

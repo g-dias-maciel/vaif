@@ -331,7 +331,7 @@ check("output gate replaces a premature sinal with a date prompt",
       and "Primeiro vamos escolher o horário" in parse_js)
 check("a successful Book Slot is read from the database, not the tool envelope",
       "Load Booking" in nodes
-      and "calendar_entries" in nodes["Load Booking"]["parameters"]["query"]
+      and "get_active_booking" in nodes["Load Booking"]["parameters"]["query"]
       and "$('Load Booking')" in parse_js)
 check("deposit is not requested when the artist has no PIX key",
       "pix_missing" in parse_js and "pixKey === ''" in parse_js)
