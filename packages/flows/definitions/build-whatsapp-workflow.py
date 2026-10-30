@@ -2075,8 +2075,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM write_quote('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, NULLIF('{{ $fromAI('base_price', 'Preço de tabela em centavos de real', 'number') }}', 'undefined')::integer, NULLIF('{{ $fromAI('offered_price', 'Preço final negociado em centavos de real. Sem desconto, use o mesmo valor de base_price', 'number') }}', 'undefined')::integer)",
-                "options": {},
+                "query": "SELECT * FROM write_quote($1::uuid, $2::uuid, NULLIF($3::text, 'undefined')::integer, NULLIF($4::text, 'undefined')::integer);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('base_price', 'Preço de tabela em centavos de real', 'number'), $fromAI('offered_price', 'Preço final negociado em centavos de real. Sem desconto, use o mesmo valor de base_price', 'number')] }}"
+                },
             },
             "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
@@ -2089,8 +2091,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM request_deposit('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, NULLIF('{{ $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number') }}', 'undefined')::integer)",
-                "options": {},
+                "query": "SELECT * FROM request_deposit($1::uuid, $2::uuid, NULLIF($3::text, 'undefined')::integer);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number')] }}"
+                },
             },
             "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
@@ -2103,8 +2107,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT start_at, end_at, label FROM booking_options('{{ $('Resolve Artist').first().json.id }}'::uuid, now(), now() + interval '60 days', COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number') }}', 'undefined')::integer, 120), NULLIF('{{ ($('Debounce Resolve').first().json.combined_text || '').split(String.fromCharCode(39)).join(String.fromCharCode(39)+String.fromCharCode(39)) }}', ''))",
-                "options": {},
+                "query": "SELECT start_at, end_at, label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), NULLIF($3::text, ''));",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $('Debounce Resolve').first().json.combined_text || ''] }}"
+                },
             },
             "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,
@@ -2117,8 +2123,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM book_slot('{{ $('Resolve Artist').first().json.id }}'::uuid, '{{ $('Start Turn').first().json.project_id }}'::uuid, '{{ $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00') }}'::timestamptz, COALESCE(NULLIF('{{ $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number') }}', 'undefined')::integer, 120))",
-                "options": {},
+                "query": "SELECT * FROM book_slot($1::uuid, $2::uuid, $3::timestamptz, COALESCE(NULLIF($4::text, 'undefined')::integer, 120));",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00'), $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number')] }}"
+                },
             },
             "type": "n8n-nodes-base.postgresTool",
             "typeVersion": 2.6,

@@ -248,7 +248,14 @@ check("Check Availability uses the two-option RPC",
       "booking_options(" in nodes["Check Availability"]["parameters"]["query"]
       and "label" in nodes["Check Availability"]["parameters"]["query"])
 check("Check Availability reads the lead's own message for the day",
-      "combined_text" in nodes["Check Availability"]["parameters"]["query"])
+      "combined_text" in nodes["Check Availability"]["parameters"]["query"]
+      or "combined_text" in str(nodes["Check Availability"]["parameters"].get("options", {}).get("queryReplacement", "")))
+check("agent tools parameterise every value (no SQL injection via $fromAI)",
+      all(
+          "$fromAI" not in nodes[name]["parameters"]["query"]
+          and "queryReplacement" in nodes[name]["parameters"].get("options", {})
+          for name in ["Write Quote", "Request Deposit", "Check Availability", "Book Slot"]
+      ))
 check("prompt only offers two options",
       "REGRA DAS DUAS OPÇÕES" in template
       and "no máximo 2 opções" in template)
