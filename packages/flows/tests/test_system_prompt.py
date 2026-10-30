@@ -316,7 +316,11 @@ _clean = __import__("re").sub(r'(^|\n)"([^"\n]{40,})"(?=\n|$)', r'\1\2', _user_r
 _clean = __import__("re").sub(
     r"(?:^|[\s\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\n]*(?:[.!?]|$)|se\s+precisar[^.!?\n]*(?:[.!?]|$))",
     " ", _clean, flags=__import__("re").IGNORECASE)
-_clean = __import__("re").sub(r"(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?", " ", _clean, flags=__import__("re").IGNORECASE)
+_trailing = __import__("re").compile(
+    r"(?:\s*(?:Antes de falarmos de valores,?\s*)?(?:(?:mais|ficou)\s+alguma|alguma(?:\s+outra)?)\s+(?:pergunta|d[uú]vida)\s*\?)\s*$",
+    __import__("re").IGNORECASE)
+while _trailing.search(_clean):
+    _clean = _trailing.sub("", _clean).strip()
 _clean = __import__("re").sub(r"[ \t]+([.,!?])", r"\1", _clean)
 _clean = __import__("re").sub(r"[ \t]+\n", "\n", _clean).strip()
 _clean = _clean + "\n\nMais alguma dúvida?"
@@ -324,6 +328,9 @@ check("reported process reply loses the quotes and indirect sign-off",
       '"' not in _clean
       and "se ficou alguma dúvida" not in _clean.lower()
       and _clean.count("Mais alguma dúvida?") == 1)
+_cut = _trailing.sub("", "Antes de falarmos de valores, ficou alguma dúvida?").strip()
+check("the canonical checkpoint is removed as a whole, not cut in half",
+      _cut == "" and parse_js.count("trailingCheckpoint") >= 2)
 check("rhetorical questions do not hide the doubts checkpoint",
       "rhetoricalQuestionCount" in parse_js
       and "tudo bem|tudo bom" in parse_js)

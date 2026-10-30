@@ -876,20 +876,24 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
 
   // The model sometimes copies the prompt's quoted sample verbatim. Strip
   // quotes around a long process paragraph, on its own line or after a colon.
-  trimmed = trimmed.replace(/(^|\n)"([^"\n]{40,})"(?=\n|$)/g, '$1$2');
-  trimmed = trimmed.replace(/:\s*"([^"\n]{40,})"/g, ': $1');
+  trimmed = trimmed.replace(/(^|\\n)"([^"\\n]{40,})"(?=\\n|$)/g, '$1$2');
+  trimmed = trimmed.replace(/:\s*"([^"\\n]{40,})"/g, ': $1');
 
   // Indirect sign-offs ("se ficou alguma dúvida é só falar") are not a direct
   // question. Remove them anywhere in the reply.
-  const indirect = /(?:^|[\s\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\n]*(?:[.!?]|$)|se\s+precisar[^.!?\n]*(?:[.!?]|$))/gi;
+  const indirect = /(?:^|[\s\\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\\n]*(?:[.!?]|$)|se\s+precisar[^.!?\\n]*(?:[.!?]|$))/gi;
   trimmed = trimmed.replace(indirect, ' ');
 
-  // Remove every checkpoint variant, then append exactly one direct question.
-  const checkpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?/gi;
-  trimmed = trimmed.replace(checkpoint, ' ');
+  // Remove only *trailing* checkpoint variants, then append exactly one direct
+  // question. Removing every occurrence would cut the canonical question in
+  // half ("Antes de falarmos de valores, ficou").
+  const trailingCheckpoint = /(?:\s*(?:Antes de falarmos de valores,?\s*)?(?:(?:mais|ficou)\s+alguma|alguma(?:\s+outra)?)\s+(?:pergunta|d[uú]vida)\s*\?)\s*$/i;
+  while (trailingCheckpoint.test(trimmed)) {
+    trimmed = trimmed.replace(trailingCheckpoint, '').trim();
+  }
   trimmed = trimmed.replace(/[ \t]+([.,!?])/g, '$1')
-    .replace(/[ \t]+\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
+    .replace(/[ \t]+\\n/g, '\\n')
+    .replace(/\\n{3,}/g, '\\n\\n')
     .trim()
     .replace(/[,;:]\s*$/, '')
     .trim();
@@ -897,7 +901,7 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
   const directQuestion = processoDeterministic
     ? 'Antes de falarmos de valores, ficou alguma dúvida?'
     : 'Mais alguma dúvida?';
-  trimmed = trimmed ? trimmed + '\n\n' + directQuestion : directQuestion;
+  trimmed = trimmed ? trimmed + '\\n\\n' + directQuestion : directQuestion;
   finalReply = trimmed;
 }
 
