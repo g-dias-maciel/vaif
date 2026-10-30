@@ -87,9 +87,13 @@ class DepositConfirmationTest extends TestCase
         $this->actingAs($user)->get('/')
             ->assertOk()
             ->assertSee('Sinais aguardando confirmação')
+            ->assertSee('1 sinal PIX aguardando confirmação')
             ->assertSee($lead->displayName())
             ->assertSee('R$ 50,00')
-            ->assertSee('Confirmar sinal');
+            ->assertSee('Confirmar sinal')
+            ->assertSee('id="dash-alerts"', false)
+            ->assertSee('id="dash-updated"', false)
+            ->assertSee('setInterval(refresh, 15000)', false);
     }
 
     public function test_the_lead_page_has_a_confirm_signal_button(): void

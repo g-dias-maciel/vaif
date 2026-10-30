@@ -220,7 +220,7 @@ check("AI Agent → Load Booking → Build Classification Prompt → Classify �
       and wf["connections"]["Load Booking"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
-      and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory"]
+      and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory", "Deposit Requested?"]
       and wf["connections"]["Build Project Patch"]["main"][0][0]["node"] == "Patch Project")
 check("Patch Project fans out to quote persistence, promotion quote and name patch",
       {c["node"] for c in wf["connections"]["Patch Project"]["main"][0]}
@@ -290,6 +290,11 @@ check("classifier emits price_gate.duvidas_eliminadas",
 check("classifier only needs duvidas before the first quote",
       "o gate já foi aberto" in CLASSIFY_TEMPLATE)
 parse_js = nodes["Parse Classification"]["parameters"]["jsCode"]
+check("a requested sinal creates the dashboard payment row",
+      wf["connections"]["Deposit Requested?"]["main"][0][0]["node"] == "Ensure Deposit"
+      and "request_deposit" in nodes["Ensure Deposit"]["parameters"]["query"]
+      and "deposit_requested_val: depositRequested" in parse_js)
+
 check("parse gate is sticky once opened",
       "precoLiberadoJa" in parse_js and "priceGateOpen = precoLiberadoJa || gateJustOpened" in parse_js)
 check("rhetorical questions do not hide the doubts checkpoint",

@@ -5,7 +5,11 @@
 @section('content')
 <h1 class="page-title">Dashboard — {{ $artist?->displayName() }}</h1>
 
-<div class="panel" style="margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
+<p class="meta" style="margin: -12px 0 18px;">
+    Atualização automática · <span id="dash-updated">agora</span>
+</p>
+
+<div id="dash-status" class="panel" style="margin-bottom: 20px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap;">
     @if ($artist && ($artist->status === 'live' || $artist->status === 'onboarding'))
         <div class="flash" style="display:inline-block; margin:0;">&#x25CF; Atendimento ativo</div>
         <form method="post" action="{{ route('settings.toggle') }}" class="inline">
@@ -28,6 +32,19 @@
         <div class="promo-pill">Sem promoção ativa</div>
     @endif
 </div>
+
+<div id="dash-alerts">
+@if ($pendingDeposits->isNotEmpty())
+<a href="#pending-deposits" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--gold); background: rgba(212, 176, 76, 0.10); text-decoration: none; color: inherit;">
+    <span>
+        <strong style="display: block; color: var(--gold);">
+            {{ $pendingDeposits->count() }} {{ $pendingDeposits->count() === 1 ? 'sinal PIX aguardando' : 'sinais PIX aguardando' }} confirmação
+        </strong>
+        <span class="meta">Confira o comprovante e confirme para liberar o agendamento.</span>
+    </span>
+    <span class="btn btn--small">Ver sinais</span>
+</a>
+@endif
 
 @if ($pendingHandoffs->isNotEmpty())
 <div class="panel" style="margin-bottom: 20px; border-color: var(--danger);">
@@ -83,7 +100,7 @@
 @endif
 
 @if ($pendingDeposits->isNotEmpty())
-<div class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
+<div id="pending-deposits" class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
     <h2 class="section-title" style="margin-top:0;">
         Sinais aguardando confirmação
         <span class="tag">{{ $pendingDeposits->count() }}</span>
@@ -117,8 +134,9 @@
     </ul>
 </div>
 @endif
+</div>
 
-<div class="panel" style="margin-bottom: 20px;">
+<div id="dash-revenue" class="panel" style="margin-bottom: 20px;">
     <h2 class="section-title" style="margin-top:0;">Faturamento — {{ $periodLabel }}</h2>
     <div class="stat-grid stat-grid--revenue">
         <div class="stat-card">
@@ -136,6 +154,7 @@
     </div>
 </div>
 
+<div id="dash-agenda">
 <h2 class="section-title" style="margin-top: 8px;">Agenda da semana</h2>
 
 <div class="week-nav">
@@ -173,7 +192,9 @@
         @endforeach
     </div>
 </div>
+</div>
 
+<div id="dash-pipeline">
 <div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 28px 0 14px;">
     <h2 class="section-title" style="margin: 0;">Pipeline</h2>
     <form method="get" action="{{ route('dashboard') }}" class="period-form" style="margin: 0;">
@@ -189,4 +210,53 @@
     </form>
 </div>
 @include('partials.project-board', ['projects' => $projects, 'pipeline' => $pipeline, 'readonly' => false, 'agentAction' => true])
+</div>
+
+@push('scripts')
+<script>
+(function () {
+    const sections = ['dash-status', 'dash-alerts', 'dash-revenue', 'dash-agenda', 'dash-pipeline'];
+    const stamp = document.getElementById('dash-updated');
+
+    async function refresh() {
+        if (document.hidden) return;
+        const active = document.activeElement;
+        if (active && active.closest && active.closest('form')) return;
+
+        const url = new URL(window.location.href);
+        url.searchParams.set('_live', Date.now());
+
+        try {
+            const res = await fetch(url.toString(), {
+                credentials: 'same-origin',
+                cache: 'no-store',
+                headers: { 'X-Requested-With': 'XMLHttpRequest' },
+            });
+            if (!res.ok) return;
+
+            const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+            sections.forEach(function (id) {
+                const next = doc.getElementById(id);
+                const current = document.getElementById(id);
+                if (next && current) current.innerHTML = next.innerHTML;
+            });
+
+            if (stamp) {
+                stamp.textContent = new Date().toLocaleTimeString('pt-BR', {
+                    hour: '2-digit',
+                    minute: '2-digit',
+                });
+            }
+        } catch (e) {
+            // A transient network error must not break the dashboard.
+        }
+    }
+
+    setInterval(refresh, 15000);
+    document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) refresh();
+    });
+})();
+</script>
+@endpush
 @endsection

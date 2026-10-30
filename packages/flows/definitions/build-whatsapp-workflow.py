@@ -930,6 +930,17 @@ if (hasDeposit && depositGateOpen && pixKey === '') {
   finalHandoff = 'pix_missing';
 }
 
+// Deterministic deposit record: whenever a sinal is actually requested, the
+// slot is booked and the artist has a PIX key, create/update the open payment
+// so the dashboard alert exists even if the model forgot Request Deposit.
+const depositType = String(($('Resolve Artist').first().json || {}).deposit_type || 'percent');
+const depositValue = Number(($('Resolve Artist').first().json || {}).deposit_value || 0);
+const depositBase = Number((firstQuote && firstQuote.cents) || (repeatedQuote && repeatedQuote.cents) || lead.quoted_price_cents || lead.table_price_cents || 0);
+const computedDepositCents = depositType === 'fixed'
+  ? Math.round(depositValue * 100)
+  : (depositBase > 0 && depositValue > 0 ? Math.ceil(depositBase * depositValue / 100) : 0);
+const depositRequested = hasDeposit && hasActiveBooking && pixKey !== '' && computedDepositCents > 0;
+
 // ── Vision acknowledgement: the model has the image block in its system
 //    prompt, but it sometimes ignores it and asks again. On the turn that
 //    actually analyzed a photo, make sure the reply mentions the reference.
@@ -1049,7 +1060,8 @@ return [{ json: {
 
   // Deposits are persisted by the Request Deposit tool; this is only the
   // amount the classifier saw, used by the ops notification.
-  deposit_amount_cents: priceGateViolation || !/sinal|pix/i.test(audioFinalReply) ? null : (d.amount_cents || null),
+  deposit_amount_cents: depositRequested ? computedDepositCents : null,
+  deposit_requested_val: depositRequested,
 
   handoff_reason: audioHandoff,
   name_val: parsed.name || null,
@@ -2347,6 +2359,51 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Patch Chat State",
             "credentials": POSTGRES,
         },
+        # 29e. Deposit Requested? — create the payment row that feeds the
+        #      dashboard "sinal aguardando confirmação" alert.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "deposit-requested-cond-0000",
+                            "leftValue": "={{ $json.deposit_requested_val === true }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [4900, 520],
+            "id": "deposit-requested-0000-0000-0000-000000000001",
+            "name": "Deposit Requested?",
+        },
+        # 29f. Ensure Deposit — idempotent request_deposit call.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM request_deposit($1::uuid, $2::uuid, $3::integer);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Parse Classification').first().json.deposit_amount_cents] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [5120, 520],
+            "id": "ensure-deposit-0000-0000-0000-000000000001",
+            "name": "Ensure Deposit",
+            "credentials": POSTGRES,
+        },
         # 32b. Build Humanize Delay — reply-time proportional to reply length.
         {
             "parameters": {
@@ -2758,7 +2815,14 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[
                 {"node": "Build Project Patch", "type": "main", "index": 0},
                 {"node": "Sync Chat Memory", "type": "main", "index": 0},
+                {"node": "Deposit Requested?", "type": "main", "index": 0},
             ]]
+        },
+        "Deposit Requested?": {
+            "main": [
+                [{"node": "Ensure Deposit", "type": "main", "index": 0}],
+                [],
+            ]
         },
         "Build Project Patch": {
             "main": [[{"node": "Patch Project", "type": "main", "index": 0}]]
