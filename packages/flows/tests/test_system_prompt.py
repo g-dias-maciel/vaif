@@ -297,6 +297,33 @@ check("a requested sinal creates the dashboard payment row",
 
 check("parse gate is sticky once opened",
       "precoLiberadoJa" in parse_js and "priceGateOpen = precoLiberadoJa || gateJustOpened" in parse_js)
+check("the process sample is not wrapped in quotes",
+      '"Então, [NOME], o processo' not in template
+      and "NUNCA coloque essa explicação entre aspas" in template)
+check("parse strips indirect doubt sign-offs and keeps one direct question",
+      "const indirect" in parse_js
+      and "const directQuestion" in parse_js
+      and "const checkpoint" in parse_js)
+# Behavioural check with the exact shape reported by the user.
+_user_reply = (
+    "Então, Jojo, vou explicar como funciona o processo de criação do Gabriel para a sua tatuagem:\n"
+    '"Então, Jojo, o processo de criação do Gabriel acontece da seguinte forma: no dia da sua tatuagem, '
+    "ele vai sentar junto com você, tudo bem? Durante essa conversa, ele vai criar um projeto exclusivo junto com você.\"\n"
+    "Se ficou alguma dúvida sobre o processo, é só me falar!\n"
+    "Mais alguma dúvida?"
+)
+_clean = __import__("re").sub(r'(^|\n)"([^"\n]{40,})"(?=\n|$)', r'\1\2', _user_reply)
+_clean = __import__("re").sub(
+    r"(?:^|[\s\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\n]*(?:[.!?]|$)|se\s+precisar[^.!?\n]*(?:[.!?]|$))",
+    " ", _clean, flags=__import__("re").IGNORECASE)
+_clean = __import__("re").sub(r"(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?", " ", _clean, flags=__import__("re").IGNORECASE)
+_clean = __import__("re").sub(r"[ \t]+([.,!?])", r"\1", _clean)
+_clean = __import__("re").sub(r"[ \t]+\n", "\n", _clean).strip()
+_clean = _clean + "\n\nMais alguma dúvida?"
+check("reported process reply loses the quotes and indirect sign-off",
+      '"' not in _clean
+      and "se ficou alguma dúvida" not in _clean.lower()
+      and _clean.count("Mais alguma dúvida?") == 1)
 check("rhetorical questions do not hide the doubts checkpoint",
       "rhetoricalQuestionCount" in parse_js
       and "tudo bem|tudo bom" in parse_js)

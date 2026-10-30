@@ -873,19 +873,31 @@ const preGateDoubtLoop = !priceGateOpen && processoExplicado && !duvidasEliminad
 if (preGateDoubtLoop && !priceGateViolation && !hasPrice
     && !goingToArtist && finalReply.trim()) {
   let trimmed = finalReply.trim();
-  trimmed = trimmed.replace(
-    /(?:\\s*(?:se\\s+(?:voc[eê]\\s+)?(?:precisar|quiser|tiver\\s+(?:mais\\s+|qualquer\\s+)?alguma\\s+(?:d[uú]vida|pergunta|quest[aã]o|informa[cç][aã]o))\\s*,?\\s*(?:[eé]\\s*s[oó]|pode)\\s*(?:me\\s*)?(?:falar|fala|chamar|chama)|qualquer\\s+(?:coisa|d[uú]vida)\\s*[,.]?\\s*(?:[eé]\\s*s[oó]\\s*)?(?:me\\s*)?(?:falar|fala|chamar|chama)|(?:estou|estamos|tô|to)\\s*(?:sempre\\s*)?[àa]\\s*(?:sua\\s*)?disposi[cç][aã]o|fique?\\s*[àa]\\s*vontade)\\s*[.!]?\\s*)$/i,
-    ''
-  );
-  trimmed = trimmed.replace(/[,;:]\\s*$/, '').trim();
-  if (!/(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(trimmed)) {
-    // Don't append a second question when this turn is already asking the lead
-    // for missing information. The checkpoint is asked on a later turn.
-    if (!/\?\s*$/.test(trimmed)) trimmed = trimmed ? trimmed + '\\n\\nMais alguma dúvida?' : 'Mais alguma dúvida?';
-  }
-  // If the checkpoint is already the final question, keep it even when the
-  // explanation contains a rhetorical question ("tudo bem?"). The old branch
-  // here sliced at the checkpoint and truncated the reply to "Mais"/"ficou".
+
+  // The model sometimes copies the prompt's quoted sample verbatim. Strip
+  // quotes around a long process paragraph, on its own line or after a colon.
+  trimmed = trimmed.replace(/(^|\n)"([^"\n]{40,})"(?=\n|$)/g, '$1$2');
+  trimmed = trimmed.replace(/:\s*"([^"\n]{40,})"/g, ': $1');
+
+  // Indirect sign-offs ("se ficou alguma dúvida é só falar") are not a direct
+  // question. Remove them anywhere in the reply.
+  const indirect = /(?:^|[\s\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\n]*(?:[.!?]|$)|se\s+precisar[^.!?\n]*(?:[.!?]|$))/gi;
+  trimmed = trimmed.replace(indirect, ' ');
+
+  // Remove every checkpoint variant, then append exactly one direct question.
+  const checkpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?/gi;
+  trimmed = trimmed.replace(checkpoint, ' ');
+  trimmed = trimmed.replace(/[ \t]+([.,!?])/g, '$1')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim()
+    .replace(/[,;:]\s*$/, '')
+    .trim();
+
+  const directQuestion = processoDeterministic
+    ? 'Antes de falarmos de valores, ficou alguma dúvida?'
+    : 'Mais alguma dúvida?';
+  trimmed = trimmed ? trimmed + '\n\n' + directQuestion : directQuestion;
   finalReply = trimmed;
 }
 
