@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Artist;
+use App\Models\CalendarEntry;
 use App\Models\Lead;
 use App\Models\Payment;
 use App\Models\Project;
@@ -96,6 +97,29 @@ class DepositConfirmationTest extends TestCase
             ->assertSee('setInterval(refresh, 15000)', false);
 
         $this->assertSame(1, substr_count($response->getContent(), 'Sinais aguardando confirmação'));
+    }
+
+    public function test_the_lead_page_offers_tattoo_completion_after_a_booking(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        [$lead, $project] = $this->pendingDeposit($artist);
+
+        CalendarEntry::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'kind' => 'booking',
+            'project_id' => $project->id,
+            'lead_id' => $lead->id,
+            'start_at' => now()->subHour(),
+            'end_at' => now(),
+            'active' => true,
+            'created_by' => 'agent',
+        ]);
+
+        $this->actingAs($user)->get("/leads/{$lead->id}")
+            ->assertOk()
+            ->assertSee('Tattoo concluída');
     }
 
     public function test_the_lead_page_has_a_confirm_signal_button(): void
