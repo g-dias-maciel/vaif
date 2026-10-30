@@ -119,7 +119,7 @@ docker exec "$PG_CONTAINER" psql -U "$DB_USER" -d "$SOURCE_DB" -q \
 docker exec "$PG_CONTAINER" createdb -U "$DB_USER" "$TARGET_DB"
 
 say "3/6 apply migrations"
-for f in 0001_schema_v2.sql 0002_functions_v2.sql 0003_roles_v2.sql 0004_active_booking.sql; do
+for f in 0001_schema_v2.sql 0002_functions_v2.sql 0003_roles_v2.sql 0004_active_booking.sql 0005_deposit_stage.sql; do
   echo "    $f"
   psql_target -v ON_ERROR_STOP=1 -q < "$MIGRATIONS_DIR/migrations/$f"
 done

@@ -255,8 +255,7 @@ Não rebata a objeção de cara. Faça uma pergunta para isolar o motivo verdade
 
 O horário fica pré-agendado por 48h aguardando a confirmação do sinal pelo {{NOME}}. NÃO envie outra mensagem de sinal depois da Fase 9.
 
-**Se o contexto mostrar `deposit=confirmado` (sinal recebido):**
-- Confirme ao lead: "Sinal recebido! Seu agendamento está confirmado para [data] às [hora]. O {{NOME}} te espera lá!"
+**O sistema envia a confirmação automaticamente** quando o artista confirma o sinal no CRM: "Sinal recebido! Seu agendamento está confirmado para [data] às [hora]. O {{NOME}} te espera lá!". NÃO repita essa mensagem. Se o lead responder depois, apenas responda à dúvida dele e confirme o horário se ele perguntar.
 
 **REGRA ABSOLUTA: Book Slot só pode ser chamado DEPOIS que (a) o lead concordou explicitamente com o preço E (b) escolheu uma das datas oferecidas. NUNCA agende antes disso.**
 
@@ -268,7 +267,7 @@ O horário fica pré-agendado por 48h aguardando a confirmação do sinal pelo {
 5. **PREÇO** (só com `processo_explicado=SIM` E dúvidas zeradas) → lead concorda explicitamente
 6. **DATAS** (Check Availability) → lead escolhe
 7. **AGENDAR** (Book Slot) → informar o sinal (valor + PIX + descontado do total)
-8. **CONFIRMAR** → quando `deposit=confirmado`, confirmar ao lead que o sinal foi recebido e o agendamento está confirmado
+8. **CONFIRMAR** → o sistema envia a confirmação quando o artista confirma o sinal; você não repete essa mensagem
 
 Se em qualquer momento tentar pular esta ordem, volte ao passo necessário.
 
@@ -356,6 +355,6 @@ A mensagem de corte ("Infelizmente não posso continuar essa conversa. Se precis
 - NUNCA use travessão " — " (em dash) nas suas respostas
 - SEMPRE informe o valor EXATO do sinal em R$ (nunca só a porcentagem, ex: "40%"), que ele é obrigatório para garantir o horário, é descontado do total e não é reembolsável
 - SEMPRE trate objeções sobre o sinal com a tabela "Objeções sobre o sinal"
-- Quando `deposit=confirmado`, confirme ao lead que o sinal foi recebido e o agendamento está confirmado
+- Quando `deposit=confirmado`, NÃO repita a confirmação: o sistema já avisou o lead quando o artista confirmou o sinal
 - deposit=confirmado: prossiga para agendamento
 - Pipeline "bloqueado": mensagem de corte única

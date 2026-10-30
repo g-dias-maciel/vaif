@@ -212,13 +212,16 @@ begin
   perform pg_temp.ok(pay.status = 'requested', 'deposit starts as requested');
 
   select stage_key into stage from projects where id = p.id;
-  perform pg_temp.ok(stage = 'agendado',
-    'the booked project stays agendado while the deposit is requested');
+  perform pg_temp.ok(stage = 'aguardando_deposito',
+    'the booked project waits for the deposit');
 
   select * into pay2 from confirm_deposit(pg_temp.artist_a(), p.id, 'pix', 'manual-1');
   perform pg_temp.ok(pay2.status = 'confirmed', 'deposit is confirmed');
   perform pg_temp.ok(pay2.confirmed_at is not null, 'confirmed_at is set');
   perform pg_temp.ok(pay2.external_ref = 'manual-1', 'external_ref is stored (future Pix seam)');
+
+  select stage_key into stage from projects where id = p.id;
+  perform pg_temp.ok(stage = 'agendado', 'confirming the deposit advances to agendado');
 
   select count(*) into n from returning_customers
    where artist_id = pg_temp.artist_a() and phone_e164 = '+5511987654321';
@@ -263,7 +266,7 @@ begin
   perform pg_temp.ok(b1.kind = 'booking', 'entry kind is booking');
 
   select stage_key into stage from projects where id = p1.id;
-  perform pg_temp.ok(stage = 'agendado', 'booking advances the stage to agendado');
+  perform pg_temp.ok(stage = 'aguardando_deposito', 'booking waits for the deposit');
 
   -- Same Artist, overlapping window: must be refused, not raise.
   select * into b2 from book_slot(pg_temp.artist_a(), p2.id, timestamptz '2027-03-01 11:00:00-03');

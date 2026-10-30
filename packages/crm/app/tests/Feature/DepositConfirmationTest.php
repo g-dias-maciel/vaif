@@ -84,16 +84,18 @@ class DepositConfirmationTest extends TestCase
         $user = $this->user($artist);
         [$lead] = $this->pendingDeposit($artist);
 
-        $this->actingAs($user)->get('/')
-            ->assertOk()
+        $response = $this->actingAs($user)->get('/');
+
+        $response->assertOk()
             ->assertSee('Sinais aguardando confirmação')
-            ->assertSee('1 sinal PIX aguardando confirmação')
             ->assertSee($lead->displayName())
             ->assertSee('R$ 50,00')
             ->assertSee('Confirmar sinal')
             ->assertSee('id="dash-alerts"', false)
             ->assertSee('id="dash-updated"', false)
             ->assertSee('setInterval(refresh, 15000)', false);
+
+        $this->assertSame(1, substr_count($response->getContent(), 'Sinais aguardando confirmação'));
     }
 
     public function test_the_lead_page_has_a_confirm_signal_button(): void

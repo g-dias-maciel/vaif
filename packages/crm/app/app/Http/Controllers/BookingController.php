@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\CalendarEntry;
 use App\Services\BookingService;
+use App\Services\DepositService;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -137,27 +138,23 @@ class BookingController extends Controller
     /**
      * Mark the booking's sinal (deposit) as received.
      */
-    public function confirmDeposit(Request $request, CalendarEntry $slot)
+    public function confirmDeposit(Request $request, CalendarEntry $slot, DepositService $deposits)
     {
         $this->authorize('reschedule', $slot);
 
-        if (! $slot->project_id) {
+        if (! $slot->project_id || ! $slot->project) {
             return back()->with('error', 'Este agendamento não tem um projeto associado.');
         }
 
         try {
-            DB::select('select * from confirm_deposit(?, ?, ?, ?, ?)', [
-                $slot->artist_id,
-                $slot->project_id,
-                'manual',
-                null,
-                'artist',
-            ]);
+            $notified = $deposits->confirm($slot->project, 'artist');
         } catch (\Illuminate\Database\QueryException $e) {
             return back()->with('error', 'Não foi possível confirmar o sinal: nenhum sinal solicitado.');
         }
 
-        return back()->with('status', 'Sinal confirmado.');
+        return back()->with($notified ? 'status' : 'error', $notified
+            ? 'Sinal confirmado.'
+            : 'Sinal confirmado, mas não foi possível avisar o cliente pelo WhatsApp.');
     }
 
     /**

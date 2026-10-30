@@ -6,6 +6,7 @@ use App\Models\ChatMessage;
 use App\Models\Lead;
 use App\Models\Note;
 use App\Models\Project;
+use App\Services\DepositService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
@@ -115,23 +116,22 @@ class LeadController extends Controller
      * asks for the signal; the artist confirms it here (lead page or the
      * dashboard alert) after checking the PIX.
      */
-    public function confirmDeposit(Project $project)
+    public function confirmDeposit(Project $project, DepositService $deposits)
     {
         $this->authorize('view', $project->lead);
 
         try {
-            DB::select('select * from confirm_deposit(?, ?, ?, ?, ?)', [
-                $project->artist_id,
-                $project->id,
-                'manual',
-                null,
+            $notified = $deposits->confirm(
+                $project,
                 auth()->user()->isStaff() ? 'staff' : 'artist',
-            ]);
+            );
         } catch (\Illuminate\Database\QueryException $e) {
             return back()->with('error', 'Não foi possível confirmar o sinal: nenhum sinal solicitado.');
         }
 
-        return back()->with('status', 'Sinal confirmado. O agendamento está liberado.');
+        return back()->with($notified ? 'status' : 'error', $notified
+            ? 'Sinal confirmado. O agendamento está liberado.'
+            : 'Sinal confirmado, mas não foi possível avisar o cliente pelo WhatsApp.');
     }
 
     /**

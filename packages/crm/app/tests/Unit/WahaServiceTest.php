@@ -71,6 +71,21 @@ class WahaServiceTest extends TestCase
         });
     }
 
+    public function test_send_text_posts_to_the_session()
+    {
+        Http::fake();
+        config(['transport.waha_url' => 'https://waha.test']);
+
+        $ok = WahaService::make()->sendText($this->artist(), '5511999999999@c.us', 'Oi');
+
+        $this->assertTrue($ok);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://waha.test/api/sendText'
+            && $request['session'] === 'default'
+            && $request['chatId'] === '5511999999999@c.us'
+            && $request['text'] === 'Oi');
+    }
+
     public function test_restart_posts_to_restart_endpoint()
     {
         Http::fake();

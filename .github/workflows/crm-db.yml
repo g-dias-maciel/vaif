@@ -78,6 +78,7 @@ jobs:
           $PSQL -f packages/crm/db/migrations/0002_functions_v2.sql
           $PSQL -f packages/crm/db/migrations/0003_roles_v2.sql
           $PSQL -f packages/crm/db/migrations/0004_active_booking.sql
+          $PSQL -f packages/crm/db/migrations/0005_deposit_stage.sql
 
       - name: Contract tests
         env:

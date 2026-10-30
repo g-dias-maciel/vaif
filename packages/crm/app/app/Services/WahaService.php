@@ -195,6 +195,28 @@ class WahaService
         return $resp->successful();
     }
 
+    /**
+     * Send a plain-text WhatsApp message through the Artist's session.
+     */
+    public function sendText(Artist $artist, string $chatId, string $text): bool
+    {
+        if (! $artist->wa_session_slug || $chatId === '' || $text === '') {
+            return false;
+        }
+
+        try {
+            $resp = $this->client()->post('/api/sendText', [
+                'session' => $artist->wa_session_slug,
+                'chatId' => $chatId,
+                'text' => $text,
+            ]);
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $resp->successful();
+    }
+
     private function client(): PendingRequest
     {
         $client = Http::baseUrl($this->baseUrl)->acceptJson()->timeout(5);

@@ -17,6 +17,7 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 | `0002_functions_v2.sql` | The RPC surface the agent and the CRM call; no direct table writes |
 | `0003_roles_v2.sql` | `migrator` / `crm_app` / `agent_rw` / `analytics_ro` and grants |
 | `0004_active_booking.sql` | `get_active_booking()` used by the SDR deposit gate |
+| `0005_deposit_stage.sql` | `book_slot` waits in `aguardando_deposito`; `confirm_deposit` sets `agendado` |
 
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.
@@ -87,6 +88,7 @@ psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0001_schema_v2.sql
 psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0002_functions_v2.sql
 psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0003_roles_v2.sql
 psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0004_active_booking.sql
+psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0005_deposit_stage.sql
 psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f tests/v2_contract.sql
 ```
 

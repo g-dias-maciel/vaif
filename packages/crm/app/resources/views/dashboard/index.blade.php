@@ -34,18 +34,6 @@
 </div>
 
 <div id="dash-alerts">
-@if ($pendingDeposits->isNotEmpty())
-<a href="#pending-deposits" style="display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 20px; padding: 16px 18px; border-radius: 12px; border: 1px solid var(--gold); background: rgba(212, 176, 76, 0.10); text-decoration: none; color: inherit;">
-    <span>
-        <strong style="display: block; color: var(--gold);">
-            {{ $pendingDeposits->count() }} {{ $pendingDeposits->count() === 1 ? 'sinal PIX aguardando' : 'sinais PIX aguardando' }} confirmação
-        </strong>
-        <span class="meta">Confira o comprovante e confirme para liberar o agendamento.</span>
-    </span>
-    <span class="btn btn--small">Ver sinais</span>
-</a>
-@endif
-
 @if ($pendingHandoffs->isNotEmpty())
 <div class="panel" style="margin-bottom: 20px; border-color: var(--danger);">
     <h2 class="section-title" style="margin-top:0;">
