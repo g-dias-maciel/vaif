@@ -215,8 +215,9 @@ check("agent context exposes referencia_visual from start_turn",
       "referencia_visual=" in AGENT_TEXT_JS
       and "reference_analysis" in AGENT_TEXT_JS
       and "referencia_visual" in template)
-check("AI Agent → Build Classification Prompt → Classify → Parse → Build Project Patch → Patch Project",
-      wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Build Classification Prompt"
+check("AI Agent → Load Booking → Build Classification Prompt → Classify → Parse",
+      wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Load Booking"
+      and wf["connections"]["Load Booking"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
       and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory"]
@@ -325,9 +326,15 @@ check("prompt has a hard deposit gate after booking",
       and "depois que o lead escolheu um horário E o Book Slot confirmou" in template
       and "NUNCA peça sinal na mesma mensagem" in template)
 check("output gate replaces a premature sinal with a date prompt",
-      "bookedThisTurn" in parse_js
+      "hasActiveBooking" in parse_js
       and "depositGateOpen" in parse_js
       and "Primeiro vamos escolher o horário" in parse_js)
+check("a successful Book Slot is read from the database, not the tool envelope",
+      "Load Booking" in nodes
+      and "calendar_entries" in nodes["Load Booking"]["parameters"]["query"]
+      and "$('Load Booking')" in parse_js)
+check("deposit is not requested when the artist has no PIX key",
+      "pix_missing" in parse_js and "pixKey === ''" in parse_js)
 check("a vision turn is guaranteed to acknowledge the reference",
       "Vision acknowledgement" in parse_js
       and "Vi a referência que você mandou" in parse_js)

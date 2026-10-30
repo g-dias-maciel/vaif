@@ -892,17 +892,42 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
 // ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
 //    `Book Slot` runs as a tool before this node; if it succeeded this turn,
 //    or the project is already agendado, the gate is open.
-let bookedThisTurn = false;
+// The Book Slot tool returns its result under `ai_tool`, not `main`, so
+// `$('Book Slot').first().json` is empty. Read the calendar row that the tool
+// wrote instead; otherwise a successful booking is treated as "no slot" and
+// the lead is asked for a time they just chose.
+let hasActiveBooking = false;
 try {
-  bookedThisTurn = $('Book Slot').isExecuted === true && !!$('Book Slot').first().json.id;
+  hasActiveBooking = !!$('Load Booking').first().json.id;
 } catch (e) {
-  bookedThisTurn = false;
+  hasActiveBooking = false;
 }
-const depositGateOpen = bookedThisTurn || current === 'agendado' || finalPipeline === 'agendado';
+const depositGateOpen = hasActiveBooking || current === 'agendado' || finalPipeline === 'agendado';
 if (hasDeposit && !depositGateOpen) {
   finalReply = 'Primeiro vamos escolher o horário da sua tatuagem. Depois eu te passo o valor do sinal e o PIX. Quer ver os horários disponíveis?';
   finalPipeline = current;
   finalEvent = null;
+}
+
+// The prompt says not to request the deposit when the artist has no PIX key,
+// but enforce it: a booking confirmation with an empty key would ask the lead
+// to pay to a placeholder.
+const pixKey = String(($('Resolve Artist').first().json || {}).pix_key || '').trim();
+if (hasDeposit && depositGateOpen && pixKey === '') {
+  let bookingLabel = '';
+  try {
+    const b = $('Load Booking').first().json;
+    if (b.start_at) {
+      const tz = ($('Resolve Artist').first().json || {}).timezone || 'America/Sao_Paulo';
+      const date = new Date(b.start_at).toLocaleDateString('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit' });
+      const time = new Date(b.start_at).toLocaleTimeString('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+      bookingLabel = ` para ${date} às ${time}`;
+    }
+  } catch (e) {}
+  finalReply = `Fechado! Seu horário está pré-agendado${bookingLabel}. Vou pedir pro Gabriel te passar o valor do sinal e a chave PIX para confirmar.`;
+  finalPipeline = 'aguardando_artista';
+  finalEvent = 'handoff_triggered';
+  finalHandoff = 'pix_missing';
 }
 
 // ── Vision acknowledgement: the model has the image block in its system
@@ -1145,6 +1170,7 @@ if (event === 'handoff_triggered' || saidHandoff) {
     below_piso: 'Contraproposta abaixo do piso',
     vague: 'Descrição vaga',
     audio_2x: 'Áudio/sticker repetido',
+    pix_missing: 'PIX não configurado',
     no_availability: 'Sem horário disponível no calendário',
   };
   const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'não especificado';
@@ -2078,6 +2104,23 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "d0e1f2a3-4b5c-6d7e-8f9a-0b1c2d3e4f5a",
             "name": "AI Agent",
         },
+        # 20b. Load Booking — the Book Slot tool result lives under `ai_tool`,
+        #      so read the authoritative calendar row from Postgres instead.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT id, start_at, end_at FROM calendar_entries WHERE artist_id = $1::uuid AND project_id = $2::uuid AND kind = 'booking' AND active ORDER BY start_at DESC LIMIT 1;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [4350, 260],
+            "id": "load-booking-0000-0000-0000-000000000001",
+            "name": "Load Booking",
+            "credentials": POSTGRES,
+        },
         # 21. Write Quote Tool
         {
             "parameters": {
@@ -2698,6 +2741,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
         },
         "AI Agent": {
+            "main": [[{"node": "Load Booking", "type": "main", "index": 0}]]
+        },
+        "Load Booking": {
             "main": [[{"node": "Build Classification Prompt", "type": "main", "index": 0}]]
         },
         "Build Classification Prompt": {
