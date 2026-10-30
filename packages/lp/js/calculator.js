@@ -290,7 +290,15 @@ function pularAgendamento() {
     mostrarTelaSucessoFinal(nomeForm, null);
 }
 
+function escapeHtmlText(value) {
+    return String(value).replace(/[&<>"']/g, function (c) {
+        return ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'})[c];
+    });
+}
+
 function mostrarTelaSucessoFinal(nome, horario) {
+    const nomeSafe = escapeHtmlText(nome);
+    const horarioSafe = escapeHtmlText(horario || '');
     document.getElementById('nativeCalendarBlock').style.display = 'none';
     document.getElementById('successMessage').style.display = 'block';
 
@@ -302,10 +310,10 @@ function mostrarTelaSucessoFinal(nome, horario) {
 
     if (horario) {
         titleElement.textContent = "Horário Confirmado!";
-        textElement.innerHTML = `Excelente, <strong>${nome}</strong>! Sua reunião está agendada para <strong>${horario}</strong>.<br><br>Nosso especialista vai te enviar uma mensagem no WhatsApp em breve com o link de acesso da nossa sala.`;
+        textElement.innerHTML = `Excelente, <strong>${nomeSafe}</strong>! Sua reunião está agendada para <strong>${horarioSafe}</strong>.<br><br>Nosso especialista vai te enviar uma mensagem no WhatsApp em breve com o link de acesso da nossa sala.`;
     } else {
         titleElement.textContent = "Diagnóstico Salvo!";
-        textElement.innerHTML = `Excelente, <strong>${nome}</strong>! Recebemos os seus dados.<br><br>Como você optou por não escolher um horário agora, nosso especialista vai te chamar no WhatsApp para combinarmos o melhor momento para conversarmos.`;
+        textElement.innerHTML = `Excelente, <strong>${nomeSafe}</strong>! Recebemos os seus dados.<br><br>Como você optou por não escolher um horário agora, nosso especialista vai te chamar no WhatsApp para combinarmos o melhor momento para conversarmos.`;
     }
 
     scrollToSection(document.getElementById('successMessage'));

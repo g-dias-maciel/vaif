@@ -88,7 +88,7 @@ class ArtistController extends Controller
     {
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'unique:users,email'],
+            'email' => ['required', 'email', 'max:255', 'not_regex:/[\r\n]/', 'unique:users,email'],
             'timezone' => ['nullable', 'string', 'max:64'],
             'whatsapp_number' => ['nullable', 'string', 'max:32'],
             'instagram_handle' => ['nullable', 'string', 'max:255'],

@@ -19,13 +19,13 @@ class OnboardController extends Controller
         $token = $request->bearerToken() ?: $request->input('token');
         $expected = (string) config('crm.onboard_webhook_token');
 
-        if ($expected === '' || $token === null || ! hash_equals($expected, $token)) {
+        if ($expected === '' || ! is_string($token) || ! hash_equals($expected, $token)) {
             return response()->json(['error' => 'unauthorized'], 401);
         }
 
         $data = $request->validate([
             'artist_id' => ['required', 'uuid'],
-            'email' => ['required', 'email'],
+            'email' => ['required', 'email', 'max:255', 'not_regex:/[\r\n]/'],
             'password' => ['nullable', 'string', 'min:6'],
             'nome' => ['nullable', 'string', 'max:255'],
         ]);

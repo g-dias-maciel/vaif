@@ -107,6 +107,10 @@ check("installment derivation note present", "6x = valor à vista / 6" in render
 print("=== Workflow wiring ===")
 wf = load_json("beatriz-whatsapp-agent.json")
 nodes = {n["name"]: n for n in wf["nodes"]}
+
+check("the WAHA webhook requires header authentication",
+      nodes["WAHA Webhook"]["parameters"].get("authentication") == "headerAuth"
+      and nodes["WAHA Webhook"].get("credentials", {}).get("httpHeaderAuth", {}).get("name") == "VAIF Webhook Auth")
 AGENT_TEXT_JS = nodes["AI Agent"]["parameters"]["text"]
 
 with open(os.path.join(FLOWS_ROOT, "prompts", "classify-conversation.md")) as f:

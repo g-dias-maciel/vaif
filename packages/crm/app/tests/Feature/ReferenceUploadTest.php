@@ -124,6 +124,49 @@ class ReferenceUploadTest extends TestCase
         Http::assertNothingSent();
     }
 
+    public function test_it_rejects_javascript_links_that_pass_the_url_rule(): void
+    {
+        Storage::fake('public');
+        Http::fake();
+
+        config(['transport.crm_internal_token' => 'test-token']);
+
+        $project = $this->project();
+
+        // The `url` rule accepts ftp://; without the scheme guard it would be
+        // stored and rendered as an <a href>. Only http(s) may be stored.
+        $this->withHeader('X-Crm-Token', 'test-token')->postJson('/api/references', [
+            'artist_id' => $project->artist_id,
+            'project_id' => $project->id,
+            'url' => 'ftp://example.com/reference.jpg',
+        ])->assertStatus(422)->assertJsonPath('ok', false);
+
+        $this->assertEmpty($project->refresh()->reference_pics);
+        Http::assertNothingSent();
+    }
+
+    public function test_it_keeps_safe_links_and_drops_unsafe_ones_in_a_batch(): void
+    {
+        Storage::fake('public');
+        Http::fake();
+
+        config(['transport.crm_internal_token' => 'test-token']);
+
+        $project = $this->project();
+
+        $this->withHeader('X-Crm-Token', 'test-token')->postJson('/api/references', [
+            'artist_id' => $project->artist_id,
+            'project_id' => $project->id,
+            'references' => [
+                ['url' => 'ftp://example.com/reference.jpg', 'mime' => null],
+                ['url' => 'https://pinterest.com/pin/123', 'mime' => null],
+            ],
+        ])->assertOk();
+
+        $this->assertSame(['https://pinterest.com/pin/123'], $project->refresh()->reference_pics);
+        Http::assertNothingSent();
+    }
+
     public function test_it_accepts_an_empty_batch_for_text_only_turns(): void
     {
         config(['transport.crm_internal_token' => 'test-token']);

@@ -22,11 +22,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [LoginController::class, 'show'])->name('login');
-    Route::post('/login', [LoginController::class, 'store']);
+    Route::post('/login', [LoginController::class, 'store'])->middleware('throttle:5,1');
 
     // First-password invite (artist created by staff).
     Route::get('/password/set/{token}', [PasswordSetupController::class, 'show'])->name('password.set');
-    Route::post('/password/set', [PasswordSetupController::class, 'store'])->name('password.set.store');
+    Route::post('/password/set', [PasswordSetupController::class, 'store'])->middleware('throttle:5,1')->name('password.set.store');
 });
 
 Route::middleware('auth')->group(function () {

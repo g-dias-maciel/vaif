@@ -262,9 +262,14 @@ if ($igPosts !== []) {
 $location = [];
 foreach (['street' => 'street', 'neighborhood' => 'neighborhood', 'city' => 'city', 'state' => 'state', 'zip' => 'zip', 'maps_embed_url' => 'maps_embed_url', 'studio_name' => 'studio_name'] as $field => $key) {
     $v = intake_str($field);
-    if ($v !== '') {
-        $location[$key] = $v;
+    if ($v === '') {
+        continue;
     }
+    // An iframe src must never be a javascript:/data: URL.
+    if ($key === 'maps_embed_url' && !preg_match('#^https://#i', $v)) {
+        continue;
+    }
+    $location[$key] = $v;
 }
 if ($location !== []) {
     $data['location'] = $location;

@@ -7,7 +7,8 @@
         "httpMethod": "POST",
         "path": "waha-webhook",
         "responseMode": "onReceived",
-        "options": {}
+        "options": {},
+        "authentication": "headerAuth"
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -17,7 +18,13 @@
       ],
       "id": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
       "name": "WAHA Webhook",
-      "webhookId": "ef3df1a1-7f34-47a1-aadb-4fb9d1de5e39"
+      "webhookId": "ef3df1a1-7f34-47a1-aadb-4fb9d1de5e39",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9NTpZcrSRN7spEbE",
+          "name": "VAIF Webhook Auth"
+        }
+      }
     },
     {
       "parameters": {

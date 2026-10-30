@@ -79,7 +79,8 @@ $httpCode    = curl_getinfo($ch, CURLINFO_HTTP_CODE);
 curl_close($ch);
 
 if ($n8nResponse === false) {
-    echo json_encode(['success' => false, 'error' => 'Falha ao notificar n8n: ' . $curlError]);
+    error_log('Error: failed to notify n8n: ' . $curlError);
+    echo json_encode(['success' => false, 'error' => 'Não foi possível enviar o diagnóstico agora. Tente novamente.']);
     exit;
 }
 

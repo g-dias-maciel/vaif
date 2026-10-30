@@ -13,7 +13,7 @@ if (!$apiKey) {
     exit;
 }
 
-if ($apiKey !== $expectedKey) {
+if ($expectedKey === false || $expectedKey === '' || !hash_equals((string) $expectedKey, (string) $apiKey)) {
     http_response_code(401);
     echo json_encode(['success' => false, 'error' => 'API key inválida.']);
     error_log('[artists/create] 401: Invalid API key');

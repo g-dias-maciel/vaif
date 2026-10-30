@@ -12,6 +12,11 @@
 
 declare(strict_types=1);
 
+// Token pages must never be cached or leak the token via Referer.
+header('Cache-Control: no-store, private');
+header('Referrer-Policy: no-referrer');
+header('X-Robots-Tag: noindex, nofollow');
+
 // --- Helpers (same pattern as the onboarding portal) ---
 
 function call_n8n(string $url, array $data = []): ?array

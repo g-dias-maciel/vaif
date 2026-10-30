@@ -10,6 +10,11 @@
 
 declare(strict_types=1);
 
+// Token pages must never be cached or leak the token via Referer.
+header('Cache-Control: no-store, private');
+header('Referrer-Policy: no-referrer');
+header('X-Robots-Tag: noindex, nofollow');
+
 require_once __DIR__ . '/../lib/artists/store.php';
 require_once __DIR__ . '/../lib/artists/intake-form.php';
 

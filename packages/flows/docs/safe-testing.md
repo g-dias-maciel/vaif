@@ -2,6 +2,21 @@
 
 Never send a test message to a number that might belong to a real person.
 
+## Webhook authentication
+
+Every internal n8n webhook (`/webhook/waha-webhook`, `/webhook/reset-leads`,
+`/webhook/calendar`, `/webhook/onboard-api`, `/webhook/promotions`) requires
+the shared header:
+
+```
+X-VAIF-Webhook-Token: <value of the "VAIF Webhook Auth" n8n credential>
+```
+
+WAHA sends it automatically for each session (`customHeaders`). If you replay a
+WAHA payload by hand, include the header or n8n returns `403 Authorization data
+is wrong!`. The public lead forms (`/webhook/novo-lead`, `/webhook/diagnostico`,
+`/webhook/agendamento-confirmado`) stay open by design and are rate limited.
+
 ## Rules
 
 1. Use only numbers that are guaranteed not to exist on WhatsApp.

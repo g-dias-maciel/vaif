@@ -1,6 +1,8 @@
 /* VAIF Interactive AI SDR Chat Simulator & Qualifying Form */
 
 const ChatSimulator = (function() {
+    const escapeHtmlText = (value) => String(value).replace(/[&<>"']/g, (c) => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+
     const messagesContainer = document.getElementById('chat-messages');
     const typingIndicator = document.getElementById('typing-indicator');
     const chatForm = document.getElementById('chat-send-form');
@@ -18,7 +20,8 @@ const ChatSimulator = (function() {
     const addMessage = (sender, text) => {
         const div = document.createElement('div');
         div.className = `chat-message ${sender}`;
-        div.innerHTML = `<div class="message-bubble">${text}<span class="msg-time">${getTime()}</span></div>`;
+        const safeText = sender === 'user' ? escapeHtmlText(text) : text;
+        div.innerHTML = `<div class="message-bubble">${safeText}<span class="msg-time">${getTime()}</span></div>`;
         messagesContainer.insertBefore(div, typingIndicator);
         messagesContainer.scrollTop = messagesContainer.scrollHeight;
     };
@@ -168,7 +171,7 @@ const ChatSimulator = (function() {
 
                 leadCapture.innerHTML = `
                     <h4 style="color:var(--accent-green);">✅ Diagnóstico Solicitado!</h4>
-                    <p style="color:var(--text-main);">Obrigado, <strong>${nome}</strong>! Nosso especialista vai te chamar no <strong>WhatsApp</strong> em instantes com seu raio-X completo.</p>
+                    <p style="color:var(--text-main);">Obrigado, <strong>${escapeHtmlText(nome)}</strong>! Nosso especialista vai te chamar no <strong>WhatsApp</strong> em instantes com seu raio-X completo.</p>
                     <div style="text-align:center;margin-top:15px;">
                         <span style="font-size:10px;color:var(--text-muted);letter-spacing:1px;">🔔 FIQUE DE OLHO NO ZAP</span>
                     </div>
@@ -300,7 +303,7 @@ const QualifyingForm = (function() {
                 successMsg.style.display = 'block';
                 successMsg.innerHTML = `
                     <h3>Diagnóstico Solicitado!</h3>
-                    <p>Obrigado, <strong>${payload['f-name'].split(' ')[0]}</strong>! Nosso especialista vai analisar seus dados e enviar seu diagnóstico completo por e-mail em até <strong>24 horas</strong>.</p>
+                    <p>Obrigado, <strong>${escapeHtmlText(payload['f-name'].split(' ')[0])}</strong>! Nosso especialista vai analisar seus dados e enviar seu diagnóstico completo por e-mail em até <strong>24 horas</strong>.</p>
                     <a href="https://wa.me/5521999553136" class="success-cta" target="_blank">Prefere falar agora? Chame no WhatsApp →</a>
                 `;
             })
@@ -310,7 +313,7 @@ const QualifyingForm = (function() {
                 successMsg.style.display = 'block';
                 successMsg.innerHTML = `
                     <h3>Diagnóstico Solicitado!</h3>
-                    <p>Recebemos seus dados, <strong>${payload['f-name'].split(' ')[0]}</strong>! Nosso especialista vai enviar seu diagnóstico por e-mail em até 24 horas.</p>
+                    <p>Recebemos seus dados, <strong>${escapeHtmlText(payload['f-name'].split(' ')[0])}</strong>! Nosso especialista vai enviar seu diagnóstico por e-mail em até 24 horas.</p>
                     <a href="https://wa.me/5521999553136" class="success-cta" target="_blank">Prefere falar agora? Chame no WhatsApp →</a>
                 `;
             });

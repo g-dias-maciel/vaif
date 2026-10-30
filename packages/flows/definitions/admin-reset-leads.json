@@ -7,7 +7,8 @@
         "httpMethod": "POST",
         "path": "reset-leads",
         "responseMode": "lastNode",
-        "options": {}
+        "options": {},
+        "authentication": "headerAuth"
       },
       "type": "n8n-nodes-base.webhook",
       "typeVersion": 2,
@@ -17,7 +18,13 @@
       ],
       "id": "arl-webhook-0000-0000-0000-000000000001",
       "name": "Reset Webhook",
-      "webhookId": "arl-webhook-0000-0000-0000-000000000001"
+      "webhookId": "arl-webhook-0000-0000-0000-000000000001",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "9NTpZcrSRN7spEbE",
+          "name": "VAIF Webhook Auth"
+        }
+      }
     },
     {
       "parameters": {

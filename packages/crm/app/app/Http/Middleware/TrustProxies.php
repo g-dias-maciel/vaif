@@ -33,8 +33,12 @@ class TrustProxies extends Middleware
         // trusted, Laravel builds http:// URLs and non-secure cookies while the
         // browser is on https://, which breaks logins and assets.
         //
-        // Defaults to "*" because the app is only reachable through the proxy;
-        // set TRUSTED_PROXIES to an allow-list if that ever stops being true.
-        $this->proxies = config('app.trusted_proxies', '*');
+        // Only the Docker/private networks are trusted: trusting "*" would let
+        // any client spoof X-Forwarded-For and bypass IP rate limits.
+        $configured = config('app.trusted_proxies');
+
+        $this->proxies = is_string($configured) && $configured !== ''
+            ? array_values(array_filter(array_map('trim', explode(',', $configured))))
+            : ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16', '127.0.0.1', '::1'];
     }
 }

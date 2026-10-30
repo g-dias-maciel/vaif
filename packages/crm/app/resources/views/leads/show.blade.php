@@ -131,6 +131,14 @@
             <div class="ref-grid">
                 @foreach ($project->reference_pics as $ref)
                     @php
+                        // Defense in depth: only web links are rendered. The API
+                        // already rejects javascript:/data: URLs, but old rows
+                        // must never become a stored XSS.
+                        $safeLink = (bool) preg_match('#^https?://#i', (string) $ref);
+                    @endphp
+                    @continue(! $safeLink)
+
+                    @php
                         $isImage = preg_match('/\.(jpe?g|png|webp|gif)(\?|$)/i', $ref)
                             || str_contains($ref, '/storage/references/');
                         $host = parse_url($ref, PHP_URL_HOST);

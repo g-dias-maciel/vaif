@@ -19,11 +19,11 @@ use Illuminate\Support\Facades\Route;
 
 Route::get('/up', HealthController::class);
 
-Route::post('/onboard/login', [OnboardController::class, 'login']);
+Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('throttle:30,1');
 
 // Internal automation (n8n): attach WhatsApp reference media/links.
-Route::post('/references', [ReferenceController::class, 'store']);
-Route::post('/references/analysis', [ReferenceController::class, 'storeAnalysis']);
+Route::post('/references', [ReferenceController::class, 'store'])->middleware('throttle:120,1');
+Route::post('/references/analysis', [ReferenceController::class, 'storeAnalysis'])->middleware('throttle:120,1');
 
 Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
     return $request->user();

@@ -75,5 +75,6 @@ try {
     echo json_encode(['success' => true]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => 'Erro Real: ' . $e->getMessage()]);
+    error_log('Error: booking update failed: ' . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Erro ao atualizar os dados. Tente novamente.']);
 }

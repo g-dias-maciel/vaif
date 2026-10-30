@@ -52,6 +52,9 @@ POSTGRES = {"postgres": {"id": "Fw3dgkcXV7Bblry5", "name": "agent-db"}}
 CRM_INTERNAL = {"httpHeaderAuth": {"id": "Y5cnEcS1lT3hwZrS", "name": "crm-internal"}}
 OPENROUTER = {"openRouterApi": {"id": "ow26hPDMir1dMfz0", "name": "OpenRouter account"}}
 WAHA = {"wahaApi": {"id": "uQsr20PaYqbQUAGD", "name": "WAHA account"}}
+# Shared header secret for the public n8n webhooks. WAHA sends it as
+# `X-VAIF-Webhook-Token` (see packages/flows/docs/safe-testing.md).
+WEBHOOK_AUTH = {"httpHeaderAuth": {"id": "9NTpZcrSRN7spEbE", "name": "VAIF Webhook Auth"}}
 # Dedicated ops bot — receives the deposit/handoff confirm buttons (callback_query)
 # handled by the "Beatriz Ops Callback" workflow. Kept separate from "Telegram
 # account 2" (VAIF Agent) because Telegram allows one webhook per bot.
@@ -1199,6 +1202,7 @@ WF = {
                 "path": "waha-webhook",
                 "responseMode": "onReceived",
                 "options": {},
+                "authentication": "headerAuth",
             },
             "type": "n8n-nodes-base.webhook",
             "typeVersion": 2,
@@ -1206,6 +1210,7 @@ WF = {
             "id": "a1b2c3d4-5e6f-7a8b-9c0d-1e2f3a4b5c6d",
             "name": "WAHA Webhook",
             "webhookId": "ef3df1a1-7f34-47a1-aadb-4fb9d1de5e39",
+            "credentials": WEBHOOK_AUTH,
         },
         # 2. Resolve Artist
         {

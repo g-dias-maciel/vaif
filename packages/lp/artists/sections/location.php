@@ -14,8 +14,25 @@ if ($show_location) {
     $city_state = h(($loc['city'] ?? '') . ' — ' . ($loc['state'] ?? ''));
     $zip = h($loc['zip'] ?? '');
     $maps_url = h($loc['maps_embed_url'] ?? '');
+    // Only embed real https maps; never a javascript:/data: iframe document.
+    $show_map = (bool) preg_match('#^https://#i', $loc['maps_embed_url'] ?? '');
 
     $address_html = "{$street}<br>\n                    {$neighborhood}, {$city_state}<br>\n                    CEP: {$zip}";
+
+    $map_html = '';
+    if ($show_map) {
+        $map_html = <<<HTML
+            <div class="map-frame">
+                <iframe
+                    title="Mapa do estúdio {$studio_name}"
+                    src="{$maps_url}"
+                    allowfullscreen=""
+                    loading="lazy"
+                    referrerpolicy="no-referrer-when-downgrade">
+                </iframe>
+            </div>
+HTML;
+    }
 
     $header = render_section_header('Localização', 'Onde', 'me encontrar');
     $location_html = <<<HTML
@@ -43,16 +60,7 @@ if ($show_location) {
                     </div>
                 </div>
             </div>
-            <div class="map-frame">
-                <iframe
-                    title="Mapa do estúdio {$studio_name}"
-                    src="{$maps_url}"
-                    allowfullscreen=""
-                    loading="lazy"
-                    referrerpolicy="no-referrer-when-downgrade">
-                </iframe>
-            </div>
-        </div>
+{$map_html}        </div>
     </section>
 
 HTML;

@@ -197,10 +197,29 @@ function artist_db_delete(PDO $pdo, int $id): bool
  */
 function artist_delete_media_dir(string $slug): void
 {
-    $dir = ARTISTS_DIR . '/' . $slug;
-    if (is_dir($dir)) {
-        exec('rm -rf ' . escapeshellarg($dir) . ' 2>/dev/null');
+    // Slugs are generated with artist_slugify(), but guard the path anyway:
+    // this function removes a directory tree.
+    if (!preg_match('/^[a-z0-9][a-z0-9-]*$/', $slug)) {
+        return;
     }
+
+    $dir = ARTISTS_DIR . '/' . $slug;
+    if (!is_dir($dir)) {
+        return;
+    }
+
+    $items = new RecursiveIteratorIterator(
+        new RecursiveDirectoryIterator($dir, FilesystemIterator::SKIP_DOTS),
+        RecursiveIteratorIterator::CHILD_FIRST
+    );
+    foreach ($items as $item) {
+        if ($item->isDir()) {
+            @rmdir($item->getPathname());
+        } else {
+            @unlink($item->getPathname());
+        }
+    }
+    @rmdir($dir);
 }
 
 // ================================================================

@@ -36,17 +36,17 @@ try {
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)";
         $stmt = $pdo->prepare($sql);
         return $stmt->execute([
-            $data['nome'],
-            $data['whatsapp'],
-            $data['instagram'],
-            $data['faturamento'],
-            $data['ticket'],
-            $data['sessoes'],
-            $data['horas_admin'],
-            $data['valor_hora'],
-            $data['horas_secretario'],
-            $data['prejuizo_mensal'],
-            $data['potencial_lucro']
+            (string) ($data['nome'] ?? ''),
+            (string) ($data['whatsapp'] ?? ''),
+            (string) ($data['instagram'] ?? ''),
+            $data['faturamento'] ?? null,
+            $data['ticket'] ?? null,
+            $data['sessoes'] ?? null,
+            $data['horas_admin'] ?? null,
+            $data['valor_hora'] ?? null,
+            $data['horas_secretario'] ?? null,
+            $data['prejuizo_mensal'] ?? null,
+            $data['potencial_lucro'] ?? null
         ]);
     }
 
@@ -74,6 +74,8 @@ curl_close($ch);
 echo json_encode(['success' => true]);
 
 } catch (PDOException $e) {
-    echo json_encode(['success' => false, 'error' => 'Erro Real: ' . $e->getMessage()]);
+    // Never expose driver messages (host names, SQL, credentials) to clients.
+    error_log('Error: lead insert failed: ' . $e->getMessage());
+    echo json_encode(['success' => false, 'error' => 'Erro ao salvar os dados. Tente novamente.']);
 }
 ?>

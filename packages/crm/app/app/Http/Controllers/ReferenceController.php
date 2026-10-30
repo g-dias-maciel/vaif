@@ -66,7 +66,7 @@ class ReferenceController extends Controller
 
         foreach ($inputs as $input) {
             $url = trim((string) ($input['url'] ?? ''));
-            if ($url === '') {
+            if ($url === '' || ! $this->isSafeLink($url)) {
                 continue;
             }
 
@@ -162,6 +162,19 @@ class ReferenceController extends Controller
         $path = parse_url($url, PHP_URL_PATH) ?: '';
 
         return str_contains($path, '/api/files/');
+    }
+
+    /**
+     * Only http(s) links may be stored. Laravel's `url` rule accepts
+     * `javascript://…`, which would become a stored XSS when the lead page
+     * renders the link as an <a href>.
+     */
+    private function isSafeLink(string $url): bool
+    {
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+
+        return in_array($scheme, ['http', 'https'], true)
+            && filter_var($url, FILTER_VALIDATE_URL) !== false;
     }
 
     private function downloadWahaMedia(Project $project, string $url, ?string $mime): ?string
