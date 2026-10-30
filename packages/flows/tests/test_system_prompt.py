@@ -291,6 +291,19 @@ check("classifier only needs duvidas before the first quote",
 parse_js = nodes["Parse Classification"]["parameters"]["jsCode"]
 check("parse gate is sticky once opened",
       "precoLiberadoJa" in parse_js and "priceGateOpen = precoLiberadoJa || gateJustOpened" in parse_js)
+check("rhetorical questions do not hide the doubts checkpoint",
+      "rhetoricalQuestionCount" in parse_js
+      and "tudo bem|tudo bom" in parse_js)
+# Behavioural check of the same rule: "tudo bem?" before the checkpoint must not
+# count as an earlier discovery question, otherwise "não" never clears the gate.
+_rhetorical = re.compile(r"(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu)\s*\?", re.I)
+_process = ("Agora, vou te explicar como funciona o processo de criação: "
+            "ele vai conversar com você, tudo bem? "
+            "Antes de falarmos de valores, ficou alguma dúvida?")
+_earlier = _process[: _process.rfind("?")]
+check("process explanation ends with a recognised checkpoint question",
+      re.search(r"(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?\s*$", _process, re.I) is not None
+      and (_earlier.count("?") - len(_rhetorical.findall(_earlier))) == 0)
 check("parse deterministically records a sent quote even if classifier missed it",
       "Deterministic quote state" in parse_js
       and "finalPipeline = 'orcamento_enviado'" in parse_js)

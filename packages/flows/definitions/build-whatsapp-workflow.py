@@ -929,7 +929,14 @@ if (visionTurn && lead.is_new !== true) {
 }
 
 const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());
-const hasEarlierQuestion = finalReply.slice(0, finalReply.lastIndexOf('?')).includes('?');
+// Rhetorical questions ("tudo bem?", "pode ser?") are part of the process
+// explanation, not real discovery questions. Counting them as an earlier
+// question used to suppress the checkpoint flag, so the lead's "não" was
+// never recognized and Beatriz asked the same question again.
+const earlierText = finalReply.slice(0, finalReply.lastIndexOf('?'));
+const earlierQuestionCount = (earlierText.match(/\?/g) || []).length;
+const rhetoricalQuestionCount = (earlierText.match(/(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu)\s*\?/gi) || []).length;
+const hasEarlierQuestion = earlierQuestionCount > rhetoricalQuestionCount;
 const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && !precoLiberadoJa
   && !goingToArtist
