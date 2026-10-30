@@ -3,7 +3,6 @@
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\ReferenceController;
-use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -24,7 +23,3 @@ Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('
 // Internal automation (n8n): attach WhatsApp reference media/links.
 Route::post('/references', [ReferenceController::class, 'store'])->middleware('throttle:120,1');
 Route::post('/references/analysis', [ReferenceController::class, 'storeAnalysis'])->middleware('throttle:120,1');
-
-Route::middleware('auth:sanctum')->get('/user', function (Request $request) {
-    return $request->user();
-});
