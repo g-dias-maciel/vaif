@@ -92,7 +92,7 @@ class ArtistController extends Controller
             'timezone' => ['nullable', 'string', 'max:64'],
             'whatsapp_number' => ['nullable', 'string', 'max:32'],
             'instagram_handle' => ['nullable', 'string', 'max:255'],
-            'wa_session_slug' => ['nullable', 'string', 'max:255', 'unique:artists,wa_session_slug'],
+            'wa_session_slug' => ['nullable', 'string', 'max:255', 'regex:/^[a-z0-9][a-z0-9-]*$/', 'unique:artists,wa_session_slug'],
             'deposit_value' => ['nullable', 'integer', 'min:0', 'max:100'],
         ]);
 

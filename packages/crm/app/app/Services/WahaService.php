@@ -117,14 +117,27 @@ class WahaService
      */
     public function create(Artist $artist): bool
     {
+        $webhook = [
+            'url' => (string) config('transport.waha_webhook_url'),
+            'events' => ['message', 'presence.update'],
+        ];
+
+        // n8n now rejects unauthenticated webhook calls. A recreated session
+        // must keep sending the shared header or every message is dropped.
+        $webhookToken = (string) config('transport.waha_webhook_token');
+
+        if ($webhookToken !== '') {
+            $webhook['customHeaders'] = [[
+                'name' => 'X-VAIF-Webhook-Token',
+                'value' => $webhookToken,
+            ]];
+        }
+
         try {
             $resp = $this->client()->post('/api/sessions', [
                 'name' => $artist->wa_session_slug,
                 'config' => [
-                    'webhooks' => [[
-                        'url' => (string) config('transport.waha_webhook_url'),
-                        'events' => ['message', 'presence.update'],
-                    ]],
+                    'webhooks' => [$webhook],
                 ],
             ]);
         } catch (ConnectionException) {

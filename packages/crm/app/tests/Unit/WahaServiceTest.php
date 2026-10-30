@@ -52,8 +52,11 @@ class WahaServiceTest extends TestCase
     public function test_create_posts_session_with_webhook()
     {
         Http::fake();
-        config(['transport.waha_url' => 'https://waha.test']);
-        config(['transport.waha_webhook_url' => 'https://n8n.test/webhook/waha-webhook']);
+        config([
+            'transport.waha_url' => 'https://waha.test',
+            'transport.waha_webhook_url' => 'https://n8n.test/webhook/waha-webhook',
+            'transport.waha_webhook_token' => 'shared-secret',
+        ]);
 
         $ok = WahaService::make()->create($this->artist());
 
@@ -62,7 +65,9 @@ class WahaServiceTest extends TestCase
         Http::assertSent(function ($request) {
             return $request->url() === 'https://waha.test/api/sessions'
                 && $request['name'] === 'default'
-                && $request['config']['webhooks'][0]['url'] === 'https://n8n.test/webhook/waha-webhook';
+                && $request['config']['webhooks'][0]['url'] === 'https://n8n.test/webhook/waha-webhook'
+                && $request['config']['webhooks'][0]['customHeaders'][0]['name'] === 'X-VAIF-Webhook-Token'
+                && $request['config']['webhooks'][0]['customHeaders'][0]['value'] === 'shared-secret';
         });
     }
 

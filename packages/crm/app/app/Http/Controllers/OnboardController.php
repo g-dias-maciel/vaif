@@ -26,7 +26,7 @@ class OnboardController extends Controller
         $data = $request->validate([
             'artist_id' => ['required', 'uuid'],
             'email' => ['required', 'email', 'max:255', 'not_regex:/[\r\n]/'],
-            'password' => ['nullable', 'string', 'min:6'],
+            'password' => ['nullable', 'string', 'min:8'],
             'nome' => ['nullable', 'string', 'max:255'],
         ]);
 
