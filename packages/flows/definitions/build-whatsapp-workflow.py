@@ -75,6 +75,7 @@ SELECT (r->'artist'->>'id')::uuid                                        AS id,
        COALESCE(r->'settings'->'ai_active_hours', '{}'::jsonb)           AS ai_active_hours,
        COALESCE(r->'settings'->'specialties', '[]'::jsonb)               AS specialties,
        COALESCE(r->'settings'->'excluded_styles', '[]'::jsonb)           AS excluded_styles,
+       COALESCE((r->'settings'->>'full_selling')::boolean, true)         AS full_selling,
        (r->'settings'->>'floor_pct')::numeric                            AS floor_pct,
        COALESCE(r->'settings'->>'deposit_type', 'percent')               AS deposit_type,
        (r->'settings'->>'deposit_value')::integer                        AS deposit_value,
@@ -114,6 +115,18 @@ BUILD_SYSTEM_PROMPT_JS = (
     "const estilos = Array.isArray(artist.specialties) ? artist.specialties : [];\n"
     "const naoFaz = Array.isArray(artist.excluded_styles) ? artist.excluded_styles : [];\n"
     "\n"
+    "// Per-artist sales mode. Missing/legacy rows keep the full flow.\n"
+    "const fullSelling = artist.full_selling !== false && artist.full_selling !== 'false';\n"
+    "const modoVenda = fullSelling\n"
+    "  ? 'MODO VENDA COMPLETA: você conduz o atendimento inteiro — qualificação, explicação do processo, orçamento, negociação, agendamento e sinal — seguindo as fases abaixo.'\n"
+    "  : 'MODO TRIAGEM (venda completa DESATIVADA): você faz SOMENTE a triagem e passa o lead para o artista antes de falar de preço ou horário. Estas regras substituem as Fases 3 a 10 abaixo.\\n'\n"
+    "    + '- Siga apenas a Fase 1 (saudação) e a Fase 2 (descoberta).\\n'\n"
+    "    + '- Colete, uma pergunta por vez: tipo (nova/cobertura/reforma), primeira tatuagem, local, cobertura do local, estilo, referência (foto) e significado.\\n'\n"
+    "    + '- NUNCA explique o processo de criação, NUNCA fale de preço, valor, parcelas, sinal ou PIX, NUNCA ofereça horários e NUNCA chame Check Availability ou Book Slot.\\n'\n"
+    "    + '- Se o lead pedir preço ou horário antes da hora, diga que o artista vai passar o valor e combinar o horário pessoalmente.\\n'\n"
+    "    + '- Quando tiver as informações principais (tipo, local, cobertura e estilo), avise que vai passar o atendimento e encerre a triagem com uma frase como: \"Perfeito, já tenho o que preciso. Vou te passar pro ' + (artist.name || 'artista') + ' para ele passar o valor e combinar o horário.\"\\n'\n"
+    "    + '- Depois do handoff, não continue a conversa de venda: se o lead insistir em preço ou horário, reforce que o artista vai responder.';\n"
+    "\n"
     "// ── Active promotion + open-quote price protection (from Load Offer) ──\n"
     "const offer = $('Load Offer').first().json || {};\n"
     "const promoActive = offer.promo_active === true;\n"
@@ -139,6 +152,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  '{{OFFER}}': offerBlock,\n"
     "  '{{ESTILOS}}': estilos.length ? estilos.join(', ') : '(não informado)',\n"
     "  '{{NAO_FAZ}}': naoFaz.length ? naoFaz.join(', ') : '(não informado)',\n"
+    "  '{{MODO_VENDA}}': modoVenda,\n"
     "};\n"
     "\n"
     "let prompt = " + json.dumps(SYSTEM_PROMPT_TEMPLATE) + ";\n"
@@ -519,8 +533,13 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "const userMsg = audioTranscript || $('Debounce Resolve').first().json.combined_text || '';\n"
     "const agentOutput = $('AI Agent').first().json.output || '';\n"
     "\n"
+    "const artist = $('Resolve Artist').first().json;\n"
+    "const triageMode = artist.full_selling === false || artist.full_selling === 'false';\n"
+    "const modo = triageMode\n"
+    "  ? 'MODO TRIAGEM ATIVO: a venda completa está desativada. Quando Beatriz passar o lead para o artista depois de concluir a triagem, use handoff.reason=\"triage_only\".'\n"
+    "  : 'MODO VENDA COMPLETA: não use o motivo triage_only.';\n"
     "const sysPrompt = " + json.dumps(CLASSIFY_PROMPT_TEMPLATE) + ";\n"
-    "const filled = sysPrompt.split('{{pipeline}}').join(currentPipeline);\n"
+    "const filled = sysPrompt.split('{{pipeline}}').join(currentPipeline).split('{{MODO}}').join(modo);\n"
     "\n"
     "return [{ json: {\n"
     "  body: {\n"
@@ -1273,6 +1292,7 @@ if (event === 'handoff_triggered' || saidHandoff) {
     pix_missing: 'PIX não configurado',
     no_price_row: 'Sem preço para o local',
     no_availability: 'Sem horário disponível no calendário',
+    triage_only: 'Triagem concluída (venda completa desativada)',
   };
   const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'não especificado';
 

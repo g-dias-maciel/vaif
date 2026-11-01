@@ -42,9 +42,13 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 
 ## Motivos de handoff
 
-cover_up, reforma, lead_requested_artist, below_piso, vague, audio_2x, no_availability
+cover_up, reforma, lead_requested_artist, below_piso, vague, audio_2x, no_availability, triage_only
 
 ⚠ cover_up e reforma SÓ quando o LEAD explicitamente pediu cobertura/reforma ("quero cobrir", "reformar", "retocar"). As palavras "cobertura"/"reforma" na pergunta da Beatriz NÃO disparam handoff.
+
+⚠ triage_only SÓ quando o modo de atendimento for triagem e Beatriz passar o lead depois de concluir a triagem (sem falar de preço nem de horário).
+
+{{MODO}}
 
 ## REGRA CRÍTICA
 

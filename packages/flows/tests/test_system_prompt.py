@@ -39,7 +39,7 @@ with open(os.path.join(FLOWS_ROOT, "prompts", "beatriz-system.md")) as f:
     template = f.read()
 
 print("=== Template placeholders ===")
-expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}"]
+expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}", "{{MODO_VENDA}}"]
 for ph in expected:
     check(f"placeholder {ph} present", ph in template)
 
@@ -65,6 +65,7 @@ artist = {
     "floor_pct": "80.00",           # NUMERIC may arrive as a string
     "specialties": ["realismo", "blackwork"],
     "excluded_styles": ["rosto"],
+    "full_selling": True,
 }
 pricing = [
     {"placement": "antebraco", "body_zone": "pequeno", "table_price": "30000"},
@@ -91,6 +92,7 @@ repl = {
     "{{OFFER}}": "_Nenhuma promoção ativa no momento._",
     "{{ESTILOS}}": ", ".join(artist["specialties"]),
     "{{NAO_FAZ}}": ", ".join(artist["excluded_styles"]),
+    "{{MODO_VENDA}}": "MODO VENDA COMPLETA: siga todas as fases.",
 }
 rendered = template
 for k, v in repl.items():
@@ -108,6 +110,7 @@ check("price table row rendered (R$ 2.000,00)", "| costas | fechamento | R$ 2.00
 check("installment derivation note present", "6x = valor à vista / 6" in rendered)
 check("styles injected", "faz: realismo, blackwork" in rendered)
 check("excluded styles injected", "NÃO faz: rosto" in rendered)
+check("sales mode injected", "MODO VENDA COMPLETA" in rendered)
 
 # ── 3. WhatsApp workflow wires the dynamic prompt ──
 print("=== Workflow wiring ===")
@@ -134,6 +137,9 @@ check("Build System Prompt coerces NUMERIC strings",
 check("Build System Prompt injects the artist's style lists",
       "{{ESTILOS}}" in bsp["parameters"]["jsCode"]
       and "{{NAO_FAZ}}" in bsp["parameters"]["jsCode"])
+check("Build System Prompt injects the sales mode",
+      "{{MODO_VENDA}}" in bsp["parameters"]["jsCode"]
+      and "artist.full_selling" in bsp["parameters"]["jsCode"])
 
 check("Artist Found? routes through the group-chat guard and then Route Event",
       wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Group Chat?"
@@ -298,6 +304,11 @@ check("classifier emits price_gate.duvidas_eliminadas",
       '"duvidas_eliminadas": true or false' in CLASSIFY_TEMPLATE)
 check("classifier only needs duvidas before the first quote",
       "o gate já foi aberto" in CLASSIFY_TEMPLATE)
+check("classifier knows the triage-only handoff reason",
+      "triage_only" in CLASSIFY_TEMPLATE)
+check("classifier prompt fills the sales-mode placeholder",
+      "{{MODO}}" in CLASSIFY_TEMPLATE
+      and "{{MODO}}" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])
 parse_js = nodes["Parse Classification"]["parameters"]["jsCode"]
 check("a requested sinal creates the dashboard payment row",
       wf["connections"]["Deposit Requested?"]["main"][0][0]["node"] == "Ensure Deposit"
