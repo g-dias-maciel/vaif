@@ -39,7 +39,7 @@ with open(os.path.join(FLOWS_ROOT, "prompts", "beatriz-system.md")) as f:
     template = f.read()
 
 print("=== Template placeholders ===")
-expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}"]
+expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}"]
 for ph in expected:
     check(f"placeholder {ph} present", ph in template)
 
@@ -63,6 +63,8 @@ artist = {
     "deposit_type": "percent",
     "deposit_value": "30",          # NUMERIC/INTEGER may arrive as strings
     "floor_pct": "80.00",           # NUMERIC may arrive as a string
+    "specialties": ["realismo", "blackwork"],
+    "excluded_styles": ["rosto"],
 }
 pricing = [
     {"placement": "antebraco", "body_zone": "pequeno", "table_price": "30000"},
@@ -87,6 +89,8 @@ repl = {
     "{{DESCONTO_MAX}}": desconto_max,
     "{{TABELA_PRECOS}}": table,
     "{{OFFER}}": "_Nenhuma promoção ativa no momento._",
+    "{{ESTILOS}}": ", ".join(artist["specialties"]),
+    "{{NAO_FAZ}}": ", ".join(artist["excluded_styles"]),
 }
 rendered = template
 for k, v in repl.items():
@@ -102,6 +106,8 @@ check("max discount derived from floor_pct", "Desconto MÁXIMO: 20%" in rendered
 check("price table row rendered (R$ 300,00)", "| antebraco | pequeno | R$ 300,00 |" in rendered)
 check("price table row rendered (R$ 2.000,00)", "| costas | fechamento | R$ 2.000,00 |" in rendered)
 check("installment derivation note present", "6x = valor à vista / 6" in rendered)
+check("styles injected", "faz: realismo, blackwork" in rendered)
+check("excluded styles injected", "NÃO faz: rosto" in rendered)
 
 # ── 3. WhatsApp workflow wires the dynamic prompt ──
 print("=== Workflow wiring ===")
@@ -125,6 +131,9 @@ check("Build System Prompt embeds the template",
       "assistente do tatuador {{NOME}}" in bsp["parameters"]["jsCode"])
 check("Build System Prompt coerces NUMERIC strings",
       "Number(artist.floor_pct)" in bsp["parameters"]["jsCode"])
+check("Build System Prompt injects the artist's style lists",
+      "{{ESTILOS}}" in bsp["parameters"]["jsCode"]
+      and "{{NAO_FAZ}}" in bsp["parameters"]["jsCode"])
 
 check("Artist Found? routes through the group-chat guard and then Route Event",
       wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Group Chat?"
