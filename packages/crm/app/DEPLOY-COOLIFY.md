@@ -175,6 +175,17 @@ and `storage/logs` inside the volume on every boot, so a fresh (empty) volume is
 safe. Without the volume the app still works; artists are simply logged out on
 each redeploy and logs vanish with the container.
 
+> **Do not add a Coolify Scheduled Task that runs `php artisan schedule:run`.**
+> Coolify executes scheduled tasks as **root** inside the container. The file
+> cache creates hashed subdirectories under `storage/framework/cache/data/`
+> (used by the rate limiter and scheduler mutexes), so those directories end up
+> owned by `root:root` and PHP-FPM (`www-data`) can no longer write into them.
+> The result is a `500` on every rate-limited POST (`/login`, `/password/set`,
+> …) whose key hashes into a root-owned prefix, with
+> `fopen(/app/storage/framework/cache/data/xx/yy/…): Failed to open stream` in
+> the log. The entrypoint already runs `schedule:work` as `www-data`; that is
+> the only scheduler this container needs.
+
 ---
 
 ## 6. First deploy
@@ -240,6 +251,7 @@ Then in the browser:
 | Login form posts, then bounces back to `/login` | Cookie/proxy issue: `APP_URL` must be the `https://` URL, `SESSION_SECURE_COOKIE=true`, and `TRUSTED_PROXIES` must cover the proxy (`*` by default). |
 | Mixed-content warnings / assets over `http://` | Same as above — `APP_URL` or the proxy trust setting. |
 | `419 Page Expired` on login | `SESSION_DRIVER` misconfigured, or the volume's `storage/framework/sessions` is not writable. Check `chown` in the entrypoint log. |
+| `500` on login / set-password, log shows `fopen(/app/storage/framework/cache/data/…): Failed to open stream` | A root process wrote the file cache (usually a Coolify Scheduled Task running `php artisan schedule:run`). Fix the ownership (`docker exec <container> chown -R www-data:www-data /app/storage`) and remove the scheduled task — see §5. |
 | Migration fails: `relation "artists" does not exist` | The Supabase schema in `packages/crm/supabase/migrations` was never applied to this project. Apply it first (`supabase db push` or the SQL in `000_coolify_full_migration.sql`). |
 | Migrations run on every boot | Expected: `migrate` is idempotent (Laravel's `migrations` table). Set `RUN_MIGRATIONS=false` to skip. |
 | Deploy log: `composer install` fails on memory | Raise the build memory in Coolify, or set `COMPOSER_MEMORY_LIMIT=-1`. |
