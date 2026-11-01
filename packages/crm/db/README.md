@@ -20,6 +20,7 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 | `0005_deposit_stage.sql` | `book_slot` waits in `aguardando_deposito`; `confirm_deposit` sets `agendado` |
 | `0006_tattoo_completed.sql` | `complete_project()` closes the job and marks the lead as returning only after the tattoo |
 | `0007_artist_notifications.sql` | Dedup columns/indexes for the artist attention e-mails |
+| `0008_agent_mode.sql` | `artist_settings.full_selling` — full sales flow vs. triage-only |
 
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.
