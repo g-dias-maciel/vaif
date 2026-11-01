@@ -132,6 +132,38 @@
 </div>
 
 @php
+    $fullSelling = $artist->settings?->full_selling ?? true;
+@endphp
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Modo de atendimento</h2>
+    <p class="meta">
+        Define até onde a Beatriz conduz a conversa. Com a venda completa desativada, ela faz só a triagem:
+        coleta os dados da tatuagem e passa o atendimento para você antes de falar de preço e horário.
+    </p>
+
+    <form method="post" action="{{ route('settings.selling') }}" style="margin-top:12px;">
+        @csrf
+        <input type="hidden" name="full_selling" value="0">
+        <label for="full-selling" style="display:flex; gap:10px; align-items:flex-start; cursor:pointer;">
+            <input type="checkbox" name="full_selling" id="full-selling" value="1"
+                @checked($fullSelling) style="margin-top:4px;">
+            <span>
+                <strong>Venda completa</strong>
+                <span class="meta" style="display:block;">
+                    Ativa: a Beatriz apresenta preço, negocia, agenda e pede o sinal.<br>
+                    Desativada: a Beatriz faz a triagem e te passa o lead para você passar o valor e combinar o horário.
+                </span>
+            </span>
+        </label>
+        @error('full_selling')
+            <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+        @enderror
+
+        <button type="submit" class="btn btn--small" style="margin-top:12px;">Salvar modo de atendimento</button>
+    </form>
+</div>
+
+@php
     $oldSpecialties = old('specialties');
     $specialties = is_string($oldSpecialties)
         ? array_filter(array_map('trim', explode(',', $oldSpecialties)))

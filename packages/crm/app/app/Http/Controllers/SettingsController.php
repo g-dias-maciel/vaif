@@ -223,6 +223,33 @@ class SettingsController extends Controller
     }
 
     /**
+     * Switch the SDR agent between the full sales flow and triage-only.
+     *
+     * The flag is consumed by the agent prompt: when off, Beatriz collects the
+     * lead's details and hands off before quoting a price or offering a slot.
+     */
+    public function updateSelling(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'full_selling' => ['nullable', 'boolean'],
+        ]);
+
+        $fullSelling = (bool) ($data['full_selling'] ?? false);
+
+        $this->settings($artist)->update([
+            'full_selling' => $fullSelling,
+        ]);
+
+        return back()->with('status', $fullSelling
+            ? 'Venda completa ativada. A Beatriz volta a apresentar preço, negociar e agendar.'
+            : 'Modo triagem ativado. A Beatriz coleta os dados e passa o atendimento para você antes do preço.');
+    }
+
+    /**
      * Turn the comma-separated input into a clean, de-duplicated list.
      *
      * @return list<string>
