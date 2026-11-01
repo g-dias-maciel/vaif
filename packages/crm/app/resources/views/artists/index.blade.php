@@ -16,14 +16,17 @@
                     <span class="meta">{{ $a->leads_count }} lead(s)</span>
                     <span class="badge">{{ $a->status }}</span>
                 </a>
-                <form method="post" action="{{ route('artists.toggle', $a) }}" class="inline">
-                    @csrf
-                    @if ($a->status === 'live' || $a->status === 'onboarding')
-                        <button type="submit" class="btn btn--danger btn--small">Pausar agente</button>
-                    @elseif ($a->status === 'suspended')
-                        <button type="submit" class="btn btn--small">Reativar agente</button>
-                    @endif
-                </form>
+                <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <a href="{{ route('artists.edit', $a) }}" class="btn btn--ghost btn--small" style="flex:0 0 auto;">Editar</a>
+                    <form method="post" action="{{ route('artists.toggle', $a) }}" class="inline">
+                        @csrf
+                        @if ($a->status === 'live' || $a->status === 'onboarding')
+                            <button type="submit" class="btn btn--danger btn--small">Pausar agente</button>
+                        @elseif ($a->status === 'suspended')
+                            <button type="submit" class="btn btn--small">Reativar agente</button>
+                        @endif
+                    </form>
+                </div>
             </li>
         @empty
             <li class="empty">Nenhum artista cadastrado.</li>

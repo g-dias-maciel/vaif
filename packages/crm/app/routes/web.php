@@ -86,6 +86,9 @@ Route::middleware('auth')->group(function () {
         Route::get('/artists/create', [ArtistController::class, 'create'])->name('artists.create');
         Route::post('/artists', [ArtistController::class, 'store'])->name('artists.store');
         Route::get('/artists/{artist}/select', [ArtistController::class, 'select'])->name('artists.select');
+        Route::get('/artists/{artist}/edit', [ArtistController::class, 'edit'])->name('artists.edit');
+        Route::put('/artists/{artist}', [ArtistController::class, 'update'])->name('artists.update');
+        Route::delete('/artists/{artist}', [ArtistController::class, 'destroy'])->name('artists.destroy');
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');
         Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');

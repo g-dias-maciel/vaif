@@ -7,6 +7,9 @@
 <h1 class="page-title">{{ $artist->displayName() }}</h1>
 
 <div style="display:flex; gap:10px; flex-wrap:wrap; margin: -8px 0 24px;">
+    <a href="{{ route('artists.edit', $artist) }}" class="btn btn--ghost">
+        Editar artista
+    </a>
     <form method="post" action="{{ route('artists.invite', $artist) }}">
         @csrf
         <button type="submit" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--muted);">

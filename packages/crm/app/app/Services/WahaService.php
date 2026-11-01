@@ -182,6 +182,24 @@ class WahaService
     }
 
     /**
+     * Remove the Artist's WAHA session when the Artist is deleted.
+     */
+    public function deleteSession(Artist $artist): bool
+    {
+        if (! $artist->wa_session_slug) {
+            return false;
+        }
+
+        try {
+            $resp = $this->client()->delete("/api/sessions/{$artist->wa_session_slug}");
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $resp->successful() || $resp->status() === 404;
+    }
+
+    /**
      * Restart the session (fix a stuck / bugged session).
      */
     public function restart(Artist $artist): bool
