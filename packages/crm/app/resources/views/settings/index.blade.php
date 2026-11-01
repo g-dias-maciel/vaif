@@ -131,6 +131,78 @@
     </form>
 </div>
 
+@php
+    $oldSpecialties = old('specialties');
+    $specialties = is_string($oldSpecialties)
+        ? array_filter(array_map('trim', explode(',', $oldSpecialties)))
+        : ($artist->settings?->specialties ?? []);
+
+    $oldExcluded = old('excluded_styles');
+    $excludedStyles = is_string($oldExcluded)
+        ? array_filter(array_map('trim', explode(',', $oldExcluded)))
+        : ($artist->settings?->excluded_styles ?? []);
+@endphp
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Estilos</h2>
+    <p class="meta">
+        A Beatriz usa estas listas na conversa: ela conecta o pedido do lead com os estilos que você faz e passa o
+        atendimento para você quando o pedido é de um estilo que você não faz.
+    </p>
+
+    <form method="post" action="{{ route('settings.styles') }}" style="margin-top:12px;">
+        @csrf
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px;">
+            <div>
+                <label class="tag-field__label" for="specialties-entry">Estilos que faço</label>
+                <div class="tag-field" data-tag-field data-name="specialties">
+                    <span data-tag-chips style="display:contents;">
+                        @foreach ($specialties as $style)
+                            <span class="tag-field__chip" data-value="{{ $style }}">
+                                {{ $style }}
+                                <button type="button" data-tag-remove aria-label="Remover {{ $style }}">&times;</button>
+                            </span>
+                        @endforeach
+                    </span>
+                    <input type="text" id="specialties-entry" data-tag-entry list="style-suggestions"
+                        placeholder="Ex.: realismo" autocomplete="off">
+                </div>
+                <input type="hidden" name="specialties" data-tag-value value="{{ implode(',', $specialties) }}">
+                @error('specialties')
+                    <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+                @enderror
+            </div>
+
+            <div>
+                <label class="tag-field__label" for="excluded-styles-entry">Estilos que não faço</label>
+                <div class="tag-field" data-tag-field data-name="excluded_styles">
+                    <span data-tag-chips style="display:contents;">
+                        @foreach ($excludedStyles as $style)
+                            <span class="tag-field__chip" data-value="{{ $style }}">
+                                {{ $style }}
+                                <button type="button" data-tag-remove aria-label="Remover {{ $style }}">&times;</button>
+                            </span>
+                        @endforeach
+                    </span>
+                    <input type="text" id="excluded-styles-entry" data-tag-entry list="style-suggestions"
+                        placeholder="Ex.: rosto, blackwork" autocomplete="off">
+                </div>
+                <input type="hidden" name="excluded_styles" data-tag-value value="{{ implode(',', $excludedStyles) }}">
+                @error('excluded_styles')
+                    <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+                @enderror
+            </div>
+        </div>
+
+        <datalist id="style-suggestions">
+            @foreach (config('crm.tattoo_styles', []) as $style)
+                <option value="{{ $style }}"></option>
+            @endforeach
+        </datalist>
+
+        <button type="submit" class="btn btn--small" style="margin-top:12px;">Salvar estilos</button>
+    </form>
+</div>
+
 @if ($googleConfigured || auth()->user()->isStaff() || $artist->hasGoogleCalendar())
 <div class="panel" style="margin-bottom: 24px;">
     <h2 class="section-title" style="margin-top:0;">Google Agenda</h2>
@@ -342,6 +414,91 @@
 @endsection
 
 @push('scripts')
+<script>
+(function () {
+    document.querySelectorAll('[data-tag-field]').forEach(function (field) {
+        var entry = field.querySelector('[data-tag-entry]');
+        var chips = field.querySelector('[data-tag-chips]');
+        var hidden = field.parentElement.querySelector('[data-tag-value]');
+
+        if (!entry || !chips || !hidden) {
+            return;
+        }
+
+        function values() {
+            return Array.prototype.map.call(
+                chips.querySelectorAll('.tag-field__chip'),
+                function (chip) { return chip.dataset.value; }
+            );
+        }
+
+        function sync() {
+            hidden.value = values().join(',');
+        }
+
+        function add(raw) {
+            var value = String(raw || '').replace(/\s+/g, ' ').trim().replace(/^[.\-\s]+|[.\-\s]+$/g, '');
+            if (value === '') {
+                return;
+            }
+
+            var duplicate = values().some(function (existing) {
+                return existing.toLowerCase() === value.toLowerCase();
+            });
+            if (duplicate) {
+                return;
+            }
+
+            var chip = document.createElement('span');
+            chip.className = 'tag-field__chip';
+            chip.dataset.value = value;
+            chip.appendChild(document.createTextNode(value + ' '));
+
+            var remove = document.createElement('button');
+            remove.type = 'button';
+            remove.setAttribute('data-tag-remove', '');
+            remove.setAttribute('aria-label', 'Remover ' + value);
+            remove.innerHTML = '&times;';
+            chip.appendChild(remove);
+
+            chips.appendChild(chip);
+            sync();
+        }
+
+        entry.addEventListener('keydown', function (event) {
+            if (event.key === 'Enter' || event.key === ',') {
+                event.preventDefault();
+                add(entry.value);
+                entry.value = '';
+            } else if (event.key === 'Backspace' && entry.value === '') {
+                var last = chips.querySelector('.tag-field__chip:last-of-type');
+                if (last) {
+                    last.remove();
+                    sync();
+                }
+            }
+        });
+
+        entry.addEventListener('blur', function () {
+            add(entry.value);
+            entry.value = '';
+        });
+
+        field.addEventListener('click', function (event) {
+            var remove = event.target.closest('[data-tag-remove]');
+            if (remove) {
+                var chip = remove.closest('.tag-field__chip');
+                if (chip) {
+                    chip.remove();
+                    sync();
+                }
+            }
+        });
+
+        sync();
+    });
+})();
+</script>
 <script>
 (function () {
     var tabs = document.querySelectorAll('.pricing-tab');

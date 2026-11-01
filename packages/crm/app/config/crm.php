@@ -167,6 +167,40 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Tattoo styles — suggestions for the Artist's style lists
+    |--------------------------------------------------------------------------
+    |
+    | Only a datalist hint in the CRM UI: the Artist can type any style, and
+    | the saved values are free text. `specialties` (what they do) and
+    | `excluded_styles` (what they do not do) are consumed by the SDR agent.
+    |
+    */
+
+    'tattoo_styles' => [
+        'realismo',
+        'micro realismo',
+        'blackwork',
+        'fine line',
+        'old school',
+        'neo traditional',
+        'new school',
+        'aquarela',
+        'oriental',
+        'tribal',
+        'maori',
+        'geometria',
+        'pontilhismo',
+        'lettering',
+        'floral',
+        'minimalista',
+        'trash polka',
+        'chicano',
+        'cartoon',
+        'anime',
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Member area link
     |--------------------------------------------------------------------------
     |

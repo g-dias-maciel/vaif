@@ -444,6 +444,15 @@
         .form-field input, .form-field select { background: var(--bg); border: 1px solid var(--border); border-radius: 8px; color: var(--ink); padding: 10px 12px; font-family: 'Montserrat', sans-serif; font-size: 0.9rem; }
         .form-field input:focus, .form-field select:focus { outline: none; border-color: var(--gold); }
 
+        .tag-field__label { display: block; font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+        .tag-field { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; min-height: 46px; }
+        .tag-field:focus-within { border-color: var(--gold); }
+        .tag-field__chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 8px; border-radius: 10px; font-size: 0.72rem; letter-spacing: 0.3px; background: var(--panel); color: var(--gold); border: 1px solid var(--gold); }
+        .tag-field__chip button { background: none; border: none; padding: 0; color: inherit; font-size: 0.95rem; line-height: 1; cursor: pointer; }
+        .tag-field__chip button:hover { color: var(--danger); }
+        .tag-field input[type="text"] { flex: 1 1 160px; min-width: 140px; border: none; background: transparent; color: var(--ink); padding: 4px 2px; font-family: 'Montserrat', sans-serif; font-size: 0.85rem; }
+        .tag-field input[type="text"]:focus { outline: none; }
+
         .nav-toggle { display: none; background: none; border: none; color: var(--ink); font-size: 1.6rem; line-height: 1; cursor: pointer; padding: 4px 8px; }
         .nav-toggle:hover { color: var(--gold); }
 

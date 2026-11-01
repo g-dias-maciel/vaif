@@ -10,6 +10,7 @@ use App\Services\Google\GoogleCalendarSync;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use Throwable;
 
 class SettingsController extends Controller
@@ -177,6 +178,99 @@ class SettingsController extends Controller
         ]);
 
         return back()->with('status', 'Desconto máximo salvo.');
+    }
+
+    /**
+     * Save the styles the Artist does and does not tattoo.
+     *
+     * Both lists feed the SDR agent's qualification, so the same style cannot
+     * appear in both: that would make the agent's handoff rule ambiguous.
+     */
+    public function updateStyles(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'specialties' => ['nullable', 'string', 'max:2000'],
+            'excluded_styles' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $specialties = $this->parseStyles($data['specialties'] ?? '');
+        $excluded = $this->parseStyles($data['excluded_styles'] ?? '');
+
+        $this->assertStylesAreValid('specialties', $specialties);
+        $this->assertStylesAreValid('excluded_styles', $excluded);
+
+        $conflicts = array_values(array_intersect(
+            array_map(fn (string $style) => mb_strtolower($style), $specialties),
+            array_map(fn (string $style) => mb_strtolower($style), $excluded),
+        ));
+
+        if ($conflicts !== []) {
+            throw ValidationException::withMessages([
+                'excluded_styles' => 'Um estilo não pode estar nas duas listas: '.implode(', ', $conflicts).'.',
+            ]);
+        }
+
+        $this->settings($artist)->update([
+            'specialties' => $specialties,
+            'excluded_styles' => $excluded,
+        ]);
+
+        return back()->with('status', 'Estilos salvos.');
+    }
+
+    /**
+     * Turn the comma-separated input into a clean, de-duplicated list.
+     *
+     * @return list<string>
+     */
+    private function parseStyles(string $value): array
+    {
+        $parts = preg_split('/[,;\n]+/u', $value) ?: [];
+        $seen = [];
+        $styles = [];
+
+        foreach ($parts as $part) {
+            $style = trim((string) preg_replace('/\s+/u', ' ', $part));
+            $style = trim($style, " \t\n\r\0\x0B.-");
+
+            if ($style === '') {
+                continue;
+            }
+
+            $key = mb_strtolower($style);
+            if (isset($seen[$key])) {
+                continue;
+            }
+
+            $seen[$key] = true;
+            $styles[] = $style;
+        }
+
+        return $styles;
+    }
+
+    /**
+     * @param  list<string>  $styles
+     */
+    private function assertStylesAreValid(string $field, array $styles): void
+    {
+        if (count($styles) > 30) {
+            throw ValidationException::withMessages([
+                $field => 'Informe no máximo 30 estilos.',
+            ]);
+        }
+
+        foreach ($styles as $style) {
+            if (mb_strlen($style) > 40) {
+                throw ValidationException::withMessages([
+                    $field => 'Cada estilo deve ter no máximo 40 caracteres.',
+                ]);
+            }
+        }
     }
 
     /**

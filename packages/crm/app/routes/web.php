@@ -49,6 +49,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/config/waha/restart', [SettingsController::class, 'restartWaha'])->name('settings.waha.restart');
         Route::post('/config/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment');
         Route::post('/config/negotiation', [SettingsController::class, 'updateNegotiation'])->name('settings.negotiation');
+        Route::post('/config/styles', [SettingsController::class, 'updateStyles'])->name('settings.styles');
         Route::post('/config/google', [SettingsController::class, 'connectGoogle'])->name('settings.google.connect');
         Route::post('/config/google/detect', [SettingsController::class, 'detectGoogleCalendars'])->name('settings.google.detect');
         Route::post('/config/google/sync', [SettingsController::class, 'syncGoogle'])->name('settings.google.sync');
