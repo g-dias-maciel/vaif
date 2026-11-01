@@ -80,6 +80,7 @@ jobs:
           $PSQL -f packages/crm/db/migrations/0004_active_booking.sql
           $PSQL -f packages/crm/db/migrations/0005_deposit_stage.sql
           $PSQL -f packages/crm/db/migrations/0006_tattoo_completed.sql
+          $PSQL -f packages/crm/db/migrations/0007_artist_notifications.sql
 
       - name: Contract tests
         env:

@@ -17,6 +17,12 @@ class Kernel extends ConsoleKernel
         $schedule->command('calendar:sync-google')
             ->everyMinute()
             ->withoutOverlapping(10);
+
+        // E-mail the artist when a lead is waiting for a handoff or a PIX
+        // confirmation. The notified_at columns dedupe each item.
+        $schedule->command('crm:notify-artist-attention')
+            ->everyMinute()
+            ->withoutOverlapping(10);
     }
 
     /**

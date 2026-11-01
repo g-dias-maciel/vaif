@@ -113,6 +113,7 @@ return new class extends Migration
             $table->json('reference_pics')->nullable();
             $table->json('reference_analysis')->nullable();
             $table->string('handoff_reason')->nullable();
+            $table->dateTime('handoff_notified_at')->nullable();
             $table->uuid('accepted_quote_id')->nullable();
             $table->dateTime('closed_at')->nullable();
             $table->timestamps();
@@ -220,6 +221,7 @@ return new class extends Migration
             $table->string('external_ref')->nullable();
             $table->dateTime('requested_at');
             $table->dateTime('confirmed_at')->nullable();
+            $table->dateTime('deposit_notified_at')->nullable();
             $table->text('notes')->nullable();
 
             $table->index(['artist_id', 'project_id']);

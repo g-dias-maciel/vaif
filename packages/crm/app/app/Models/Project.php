@@ -38,12 +38,14 @@ class Project extends Model
         'reference_analysis',
         'handoff_reason',
         'accepted_quote_id',
+        'handoff_notified_at',
         'closed_at',
     ];
 
     protected $casts = [
         'first_tattoo' => 'boolean',
         'reference_analysis' => 'array',
+        'handoff_notified_at' => 'datetime',
         'closed_at' => 'datetime',
     ];
 

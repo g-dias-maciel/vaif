@@ -31,6 +31,7 @@ class Payment extends Model
         'external_ref',
         'requested_at',
         'confirmed_at',
+        'deposit_notified_at',
         'notes',
     ];
 
@@ -38,6 +39,7 @@ class Payment extends Model
         'amount_cents' => 'integer',
         'requested_at' => 'datetime',
         'confirmed_at' => 'datetime',
+        'deposit_notified_at' => 'datetime',
     ];
 
     public function project(): BelongsTo
