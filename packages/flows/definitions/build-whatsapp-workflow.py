@@ -1164,15 +1164,23 @@ if (visionTurn && lead.is_new !== true) {
 // ── Discount counterpart: every negotiated discount is conditional on an
 //    Instagram post. The model sometimes drops it when it repeats the final
 //    price, so enforce it deterministically.
-const agreedCents = Number(p.nego_cents || 0);
-const tableCents = Number(p.table_cents || lead.table_price_cents || 0);
+const standardRow = priceRowFor(pricingRows, placementNow, bodyZoneNow);
+const standardMultiplier = offerLive ? (Number(offer.multiplier) || 1) : 1;
+const rowPriceCents = standardRow ? Math.round(Number(standardRow.table_price) * standardMultiplier) : 0;
+// Prefer the artist's table (with the active promotion) over the classifier's
+// table_cents: when the model quotes a discounted amount, it often reports
+// that same amount as "table_cents", which would hide the discount.
+const tableCents = rowPriceCents || Number(p.table_cents || lead.table_price_cents || 0);
 const replyPriceMatch = finalReply.match(/R\$\s*([\d.]+,\d{2})/);
 const replyPriceCents = replyPriceMatch
   ? Math.round(Number(replyPriceMatch[1].replace(/\./g, '').replace(',', '.')) * 100)
   : 0;
+// The price actually shown in the reply is the source of truth; the
+// classifier's nego_cents is only a fallback. Otherwise the first promotion
+// quote (reply R$ 200, classifier table R$ 100) would look like a discount.
+const agreedCents = replyPriceCents > 0 ? replyPriceCents : Number(p.nego_cents || 0);
 const discountApplied = !goingToArtist && tableCents > 0
-  && ((agreedCents > 0 && agreedCents < tableCents)
-    || (replyPriceCents > 0 && replyPriceCents < tableCents));
+  && agreedCents > 0 && agreedCents < tableCents;
 if (discountApplied && !/instagram|insta\b|post|publica|marcand/i.test(finalReply)) {
   const handleRaw = String(($('Resolve Artist').first().json || {}).instagram_handle || '').trim();
   const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';

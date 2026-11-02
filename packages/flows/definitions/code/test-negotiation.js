@@ -96,6 +96,33 @@ check('negotiated price is persisted as the offer', r.quote_offered_cents === 16
 check('stage stays orcamento_enviado', r.stage_key === 'orcamento_enviado', r.stage_key);
 check('discount mentions the Instagram counterpart', /@teste/i.test(r.final_reply), r.final_reply);
 
+// ── 1b. The classifier often reports the discounted amount as "table_cents"
+//        (16000/16000). The counterpart must still be detected from the
+//        artist's price table + active promotion.
+console.log('=== Classifier reports the discounted price as table ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'braco',
+    body_zone: 'fechamento',
+    style: 'realismo',
+    first_tattoo: true,
+    table_price_cents: null,
+    quoted_price_cents: null,
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: true,
+      aguardando_confirmacao_duvidas: false,
+      preco_liberado: true,
+    },
+  },
+  leadText: 'seria o valor mesmo',
+  agentOutput: 'Entendi! Se você fechar agora, fica R$ 160,00 à vista ou em até 6x de R$ 26,67 sem juros. O que você acha?',
+  classifier: classifier({ table_cents: 16000, nego_cents: 16000 }),
+});
+check('counterpart still detected from the price table', /@teste/i.test(r.final_reply), r.final_reply);
+
 // ── 2. The first quote still normalises the table reply to the promotion. ──
 console.log('=== First quote still uses the promotion price ===');
 r = runParse({
