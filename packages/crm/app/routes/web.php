@@ -66,6 +66,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/leads/{lead}/agent', [LeadController::class, 'toggleAgent'])->name('leads.agent.toggle');
         Route::get('/leads/{lead}/conversation', [LeadController::class, 'conversation'])->name('leads.conversation');
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
+        Route::post('/projects/{project}/schedule', [LeadController::class, 'scheduleProject'])->name('projects.schedule');
         Route::post('/projects/{project}/lost', [LeadController::class, 'markLost'])->name('projects.mark-lost');
         Route::post('/projects/{project}/confirm-deposit', [LeadController::class, 'confirmDeposit'])->name('projects.confirm-deposit');
         Route::post('/projects/{project}/complete', [LeadController::class, 'completeProject'])->name('projects.complete');

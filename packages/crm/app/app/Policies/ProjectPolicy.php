@@ -36,6 +36,27 @@ class ProjectPolicy
     }
 
     /**
+     * Whether the user can manually move this Project to `agendado`.
+     */
+    public function schedule(User $user, Project $project): bool
+    {
+        // Manual scheduling exists for triage-only artists: the agent never
+        // quotes or books for them, so they move the pipeline themselves.
+        if ($project->artist?->settings?->full_selling !== false) {
+            return false;
+        }
+
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        return $user->isArtist()
+            && $user->artist_id !== null
+            && $project->artist_id === $user->artist_id
+            && ! in_array($project->stage_key, ['fechado', 'perdido'], true);
+    }
+
+    /**
      * Whether the user can mark this Project as lost (perdido).
      */
     public function markLost(User $user, Project $project): bool

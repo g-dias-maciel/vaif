@@ -29,11 +29,14 @@ class LeadController extends Controller
             'events',
         ]);
 
+        $artist = $this->activeArtist();
+
         return view('leads.show', [
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
             'chatMessages' => $this->latestChatMessages($lead),
             'eventLabels' => config('crm.event_labels'),
+            'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
         ]);
     }
 
@@ -153,6 +156,28 @@ class LeadController extends Controller
         }
 
         return back()->with('status', 'Tattoo concluída. Cliente marcado como recorrente.');
+    }
+
+    /**
+     * Manually move a Project to `agendado`.
+     *
+     * Triage-only artists schedule outside the CRM (the agent never books a
+     * slot), so they need a way to advance the pipeline themselves.
+     */
+    public function scheduleProject(Project $project)
+    {
+        $this->authorize('schedule', $project);
+
+        if (! in_array($project->stage_key, ['agendado', 'fechado', 'perdido'], true)) {
+            DB::select('select * from set_project_stage(?, ?, ?, ?)', [
+                $project->artist_id,
+                $project->id,
+                'agendado',
+                auth()->user()->isStaff() ? 'staff' : 'artist',
+            ]);
+        }
+
+        return back()->with('status', 'Lead marcado como agendado.');
     }
 
     /**

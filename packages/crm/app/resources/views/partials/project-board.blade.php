@@ -3,6 +3,8 @@
     // The dashboard offers the agent silence toggle; staff/admin boards keep
     // the mark-lost action.
     $agentAction = $agentAction ?? false;
+    // Triage-only artists schedule and close leads manually.
+    $triageOnly = isset($artist) && ! ($artist->settings?->full_selling ?? true);
 @endphp
 
 <div class="board">
@@ -55,7 +57,22 @@
                                 @if ($project->whatsapp_url)
                                     <a href="{{ $project->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
                                 @endif
-                                @if ($project->booked_at && ! in_array($project->stage_key, ['fechado', 'perdido'], true))
+                                @if ($triageOnly)
+                                    @if (! in_array($project->stage_key, ['agendado', 'fechado', 'perdido'], true))
+                                        <form method="post" action="{{ route('projects.schedule', $project) }}" class="inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn--small"
+                                                onclick="return confirm('Marcar este lead como agendado?');">Agendar</button>
+                                        </form>
+                                    @endif
+                                    @if (! in_array($project->stage_key, ['fechado', 'perdido'], true))
+                                        <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
+                                            @csrf
+                                            <button type="submit" class="btn btn--small"
+                                                onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Finalizar</button>
+                                        </form>
+                                    @endif
+                                @elseif ($project->booked_at && ! in_array($project->stage_key, ['fechado', 'perdido'], true))
                                     <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
                                         @csrf
                                         <button type="submit" class="btn btn--small"
