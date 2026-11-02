@@ -615,12 +615,23 @@ const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_
 const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
 const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\b(?:cover|cobertura)\b/.test(rawLead);
 const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\b(?:reforma|retoque)\b/.test(rawLead);
-const leadSaysCover = /cobertura|cobrir|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(rawLead) && !negativeCover;
+const leadSaysCover = saysCoverUp(rawLead) && !negativeCover;
 const leadSaysRework = /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework;
 const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
 
+// "Cobrir" is ambiguous in Portuguese: it is cover-up when it refers to an
+// existing tattoo, but it is the AREA when the lead says "queria cobrir do
+// ombro ao cotovelo" (that is body_zone=fechamento, not tipo=cover_up).
+function saysCoverUp(text) {
+  const t = String(text || '').toLowerCase();
+  if (/cobertura|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(t)) return true;
+  if (/^\s*(?:quero\s+|vou\s+|pode\s+ser\s+|seria\s+)?cobrir\s*[.!]?$/.test(t)) return true;
+  return /\\bcobrir\\b/.test(t)
+    && /(tatuagem|tattoo|antig[ao]|existent[e]|j[áa] (?:tenho|existe)|por cima)/.test(t);
+}
+
 function detectTipo(text) {
-  if (/cobertura|cobrir|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(text)) return 'cobertura';
+  if (saysCoverUp(text)) return 'cobertura';
   if (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(text)) return 'reforma';
   if (/tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(text)) return 'nova';
   return null;
@@ -642,10 +653,17 @@ function normalizeText(t) {
 function detectPlacement(t) {
   const text = normalizeText(t);
   const map = [
+    // Answers to "parte de fora / de dentro?" when the lead already said
+    // "braço". Must come before the generic "ombro"/"braço" matches.
+    ['parte externa', 'braco_externo'], ['parte de fora', 'braco_externo'], ['lado de fora', 'braco_externo'],
+    ['parte interna', 'braco_interno'], ['parte de dentro', 'braco_interno'], ['lado de dentro', 'braco_interno'],
+    // "Do ombro ao cotovelo" is the upper arm (a coverage answer), not the
+    // shoulder itself.
+    ['ombro ao cotovelo', 'braco'], ['ombro ate o cotovelo', 'braco'],
     ['braço externo', 'braco_externo'], ['braco externo', 'braco_externo'],
     ['braço interno', 'braco_interno'], ['braco interno', 'braco_interno'],
     ['antebraço', 'antebraco'], ['antebraco', 'antebraco'],
-    ['panturrilha', 'panturrilha'], ['tornozelo', 'tornozelo'],
+    ['panturrilha', 'panturrilha'], ['canela', 'canela'], ['tornozelo', 'tornozelo'],
     ['pescoço', 'pescoco'], ['pescoco', 'pescoco'],
     ['costela', 'costela'], ['costas', 'costas'],
     ['barriga', 'barriga'], ['abdomen', 'barriga'], ['abdômen', 'barriga'],
@@ -663,7 +681,7 @@ function detectPlacement(t) {
 }
 function detectZone(t) {
   const text = normalizeText(t);
-  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo/.test(text)) return 'fechamento';
+  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo|ombro ao cotovelo|ombro ate o cotovelo/.test(text)) return 'fechamento';
   if (/quase tudo|a maior parte|maior parte|grande/.test(text)) return 'grande';
   if (/area media|metade|medi[oa]/.test(text)) return 'medio';
   if (/partinha|pedacinho|so um detalhe|pequen[oa]/.test(text)) return 'pequeno';
@@ -732,21 +750,32 @@ function detectDuvidasZeradas(t) {
   // Also accept the same two-part answer when sent as one WhatsApp message.
   return /^(?:n[aã]o|n)[,;:]?\\s+(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i.test(messages.join(' '));
 }
+// Qualification values for THIS turn: the lead's current message wins over
+// the persisted state. A generic "braco" never downgrades a more specific
+// persisted "braco_externo"/"braco_interno"/"antebraco".
+const specificArm = ['braco_externo', 'braco_interno', 'antebraco'];
+const rawPlacement = detectPlacement(rawLead);
+const placementNow = rawPlacement
+  ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
+  : (lead.placement || null);
+const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
+const styleNow = detectStyle(rawLead) || lead.style || null;
+
 function discoveryFallback(lead) {
   if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
   if (lead.first_tattoo == null) return 'Essa seria a sua primeira tatuagem?';
-  if (!lead.placement) return 'E onde no corpo você quer fazer?';
-  if (!lead.body_zone) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
-  if (!lead.style) return 'E qual estilo você tem em mente?';
+  if (!placementNow) return 'E onde no corpo você quer fazer?';
+  if (!bodyZoneNow) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
+  if (!styleNow) return 'E qual estilo você tem em mente?';
   return 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
 }
 function nextDiscoveryQuestion(lead) {
   const ref = Array.isArray(lead.reference_analysis)
     ? (lead.reference_analysis[lead.reference_analysis.length - 1] || {})
     : (lead.reference_analysis || {});
-  if (!lead.placement) return 'Onde no corpo você quer fazer?';
-  if (!lead.body_zone) return 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?';
-  if (!lead.style && !(ref.estilo && ref.estilo !== 'indefinido')) return 'Qual estilo você tem em mente?';
+  if (!placementNow) return 'Onde no corpo você quer fazer?';
+  if (!bodyZoneNow) return 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?';
+  if (!styleNow && !(ref.estilo && ref.estilo !== 'indefinido')) return 'Qual estilo você tem em mente?';
   if (lead.first_tattoo === null || lead.first_tattoo === undefined) return 'Essa seria a sua primeira tatuagem?';
   return 'Me conta mais sobre a referência que você mandou.';
 }
@@ -770,7 +799,7 @@ const priceGateOpen = precoLiberadoJa || gateJustOpened;
 
 function deterministicQuote(centsOverride = null) {
   const rows = $('Build System Prompt').first().json.pricing_rows || [];
-  const row = rows.find(p => p.placement === lead.placement && p.body_zone === lead.body_zone);
+  const row = rows.find(p => p.placement === placementNow && p.body_zone === bodyZoneNow);
   const baseCents = Number(centsOverride || (row && row.table_price) || 0);
   if (!baseCents) return null;
   const offer = $('Build System Prompt').first().json.offer || {};
@@ -788,8 +817,8 @@ function deterministicQuote(centsOverride = null) {
     barriga: 'na barriga', ombro: 'no ombro', pulso: 'no pulso', dedo: 'no dedo', mao: 'na mão', pe: 'no pé',
   };
   const zones = { pequeno: 'uma tatuagem pequena', medio: 'uma tatuagem média', grande: 'uma tatuagem grande', fechamento: 'fechamento' };
-  const local = places[lead.placement] || `em ${lead.placement}`;
-  const zona = zones[lead.body_zone] || lead.body_zone;
+  const local = places[placementNow] || `em ${placementNow}`;
+  const zona = zones[bodyZoneNow] || bodyZoneNow;
   const description = `${zona} ${local}`;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
@@ -904,7 +933,7 @@ const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingTo
 const offer = $('Build System Prompt').first().json.offer || {};
 const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
-const hasPriceRow = pricingRows.some(p => p.placement === lead.placement && p.body_zone === lead.body_zone);
+const hasPriceRow = pricingRows.some(p => p.placement === placementNow && p.body_zone === bodyZoneNow);
 const replyHasPrice = /R\$\s*\d/.test(finalReply);
 const standardQuote = !lead.quoted_price_cents
   || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
@@ -934,10 +963,10 @@ if (firstQuote) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
-  const genericPlacement = ['braco', 'perna'].includes(lead.placement);
+  const genericPlacement = ['braco', 'perna'].includes(placementNow);
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   finalReply = genericPlacement
-    ? (lead.placement === 'braco'
+    ? (placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?')
     : `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
@@ -955,10 +984,10 @@ const quoteMissingRow = !firstQuote && !repeatedQuote && !promotionQuote
   && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist;
 if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
-  if (!lead.body_zone) {
+  if (!bodyZoneNow) {
     finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
-  } else if (['braco', 'perna'].includes(lead.placement)) {
-    finalReply = lead.placement === 'braco'
+  } else if (['braco', 'perna'].includes(placementNow)) {
+    finalReply = placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?';
   } else {
@@ -1193,9 +1222,14 @@ return [{ json: {
   audio_count_val: audioCountNext,
   final_reply: audioFinalReply,
 
-  placement_val: detectPlacement(q.placement) || detectPlacement(rawLead) || null,
-  body_zone_val: detectZone(q.body_zone) || detectZone(rawLead) || null,
-  style_val: detectStyle(q.style) || detectStyle(rawLead) || null,
+  // The lead's current message wins over the classifier, which often repeats
+  // the previous turn's value (e.g. "braco") and would hide a new, more
+  // specific answer ("parte externa" / "ombro ao cotovelo"). Only send a value
+  // when it actually changes, so a generic restatement cannot downgrade the
+  // persisted specific placement.
+  placement_val: (placementNow && placementNow !== lead.placement) ? placementNow : null,
+  body_zone_val: (bodyZoneNow && bodyZoneNow !== lead.body_zone) ? bodyZoneNow : null,
+  style_val: (styleNow && styleNow !== lead.style) ? styleNow : null,
   first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
     ? q.first_tattoo
     : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),

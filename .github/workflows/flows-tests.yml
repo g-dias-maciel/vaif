@@ -43,5 +43,8 @@ jobs:
       - name: Tattoo type only from the lead
         run: node packages/flows/definitions/code/test-tattoo-type.js
 
+      - name: Placement extraction and price lookup
+        run: node packages/flows/definitions/code/test-placement.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js
