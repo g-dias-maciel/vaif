@@ -301,8 +301,8 @@ VISION_SYSTEM_PROMPT = """Você é um assistente de um estúdio de tatuagem. Ana
 Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
 {
   "referencia_de_tatuagem": true ou false,
-  "assunto": "2 a 5 palavras com o tema principal, sem detalhes (ex.: leão com bússola)",
-  "resumo": "1 frase curta, no máximo 120 caracteres, sem descrever boca, dentes, olhos ou detalhes minuciosos",
+  "assunto": "2 a 5 palavras com o tema principal, sem detalhes (ex.: leão com bússola) — SEMPRE preencha",
+  "resumo": "1 frase curta, no máximo 120 caracteres, sem descrever boca, dentes, olhos ou detalhes minuciosos — SEMPRE preencha",
   "estilo": "realismo | fineline | old school | blackwork | geométrico | aquarela | oriental | lettering | outro | indefinido",
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
@@ -311,7 +311,7 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "confianca": "alta | media | baixa",
   "observacoes": "detalhes úteis, ou string vazia"
 }
-Não estime preço. Não invente detalhes que não dá para ver. Se a imagem não for uma tatuagem ou referência, marque referencia_de_tatuagem=false. Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma."""
+Não estime preço. Não invente detalhes que não dá para ver. `referencia_de_tatuagem` é TRUE para qualquer imagem que possa servir de referência para uma tatuagem: desenho, flash, foto de tatuagem, animal, objeto, paisagem, personagem, foto de comida, etc. Marque FALSE somente para imagens claramente sem relação (captura de tela de texto, documento, meme, selfie, conversa). Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma. NUNCA devolva assunto ou resumo vazios: descreva o que aparece na imagem mesmo quando referencia_de_tatuagem=false."""
 
 VISION_USER_PROMPT = """Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que não é referência."""
 
@@ -346,11 +346,11 @@ try {
 }
 
 const base = $('Build System Prompt').first().json.system_message;
-const summary = String(data.assunto || data.resumo || '').split(/(?<=[.!?])\s+/)[0].trim();
+const summary = String(data.assunto || data.resumo || 'imagem recebida').split(/(?<=[.!?])\s+/)[0].trim();
 
-if (!summary) {
-  return [{ json: { system_message: base, reference_analysis: null } }];
-}
+// The customer sent a picture; even when the model cannot describe it, keep a
+// minimal analysis so the agent does not ask for the same reference again.
+data.assunto = data.assunto || summary;
 
 const flag = (value) => value === false || value === 'nao' || value === 'não' ? 'não' : 'sim';
 const lines = [
@@ -1159,6 +1159,25 @@ if (visionTurn && lead.is_new !== true) {
   if (subject && vision.referencia_de_tatuagem !== false && !already) {
     finalReply = 'Vi a referência que você mandou: ' + subject + '. Curti! ' + finalReply;
   }
+}
+
+// ── Discount counterpart: every negotiated discount is conditional on an
+//    Instagram post. The model sometimes drops it when it repeats the final
+//    price, so enforce it deterministically.
+const agreedCents = Number(p.nego_cents || 0);
+const tableCents = Number(p.table_cents || lead.table_price_cents || 0);
+const replyPriceMatch = finalReply.match(/R\$\s*([\d.]+,\d{2})/);
+const replyPriceCents = replyPriceMatch
+  ? Math.round(Number(replyPriceMatch[1].replace(/\./g, '').replace(',', '.')) * 100)
+  : 0;
+const discountApplied = !goingToArtist && tableCents > 0
+  && ((agreedCents > 0 && agreedCents < tableCents)
+    || (replyPriceCents > 0 && replyPriceCents < tableCents));
+if (discountApplied && !/instagram|insta\b|post|publica|marcand/i.test(finalReply)) {
+  const handleRaw = String(($('Resolve Artist').first().json || {}).instagram_handle || '').trim();
+  const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';
+  finalReply = finalReply.trim() + ' Só te peço uma coisa: depois da tatuagem, você posta uma foto'
+    + (handle ? ' marcando o ' + handle : ' no Instagram') + '.';
 }
 
 const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());

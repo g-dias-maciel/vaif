@@ -49,5 +49,8 @@ jobs:
       - name: Negotiated discounts on later turns
         run: node packages/flows/definitions/code/test-negotiation.js
 
+      - name: Reference image vision analysis
+        run: node packages/flows/definitions/code/test-vision.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js

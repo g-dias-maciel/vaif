@@ -48,7 +48,7 @@ function runParse({ start, leadText, agentOutput, classifier }) {
       if (name === 'Build System Prompt') return { json: { pricing_rows: ROWS, offer: OFFER } };
       if (name === 'Parse Audio') return { json: {} };
       if (name === 'Parse Reference Analysis') return { json: {} };
-      if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel' } };
+      if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel', instagram_handle: '@teste' } };
       return { json: {} };
     },
   });
@@ -94,6 +94,7 @@ check('negotiated price is kept', /R\$\s*160,00/.test(r.final_reply), r.final_re
 check('promotion price does not replace it', !/R\$\s*200,00/.test(r.final_reply), r.final_reply);
 check('negotiated price is persisted as the offer', r.quote_offered_cents === 16000, String(r.quote_offered_cents));
 check('stage stays orcamento_enviado', r.stage_key === 'orcamento_enviado', r.stage_key);
+check('discount mentions the Instagram counterpart', /@teste/i.test(r.final_reply), r.final_reply);
 
 // ── 2. The first quote still normalises the table reply to the promotion. ──
 console.log('=== First quote still uses the promotion price ===');
@@ -120,6 +121,7 @@ r = runParse({
 });
 check('first quote shows the promotion price', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
 check('promotion is persisted as the first offer', r.quote_offered_cents === 20000, String(r.quote_offered_cents));
+check('first quote does not add the discount counterpart', !/@teste/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
