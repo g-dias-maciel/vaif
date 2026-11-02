@@ -34,5 +34,8 @@ jobs:
       - name: Price gate truth table
         run: node packages/flows/definitions/code/test-price-gate.js
 
+      - name: Debounce media across the burst
+        run: node packages/flows/definitions/code/test-debounce-media.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js

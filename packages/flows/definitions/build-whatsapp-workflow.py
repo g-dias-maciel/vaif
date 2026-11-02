@@ -229,6 +229,12 @@ if (!text) {
 const mediaUrl = (isImage && payload.hasMedia && media.url) ? media.url : null;
 const audioUrl = (isAudio && payload.hasMedia && media.url) ? media.url : null;
 
+// The debounce buffer stores text only, and the execution that ends up
+// replying is usually not the one that received the picture. Carry the image
+// URL through the buffer as a marker; Debounce Resolve strips it and exposes
+// media_urls, so a photo sent earlier in the same burst is never lost.
+const bufferText = mediaUrl ? text + '\\n[[REF_FOTO:' + mediaUrl + ']]' : text;
+
 const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
   .map(u => u.replace(/[.,;:!?)\\]]+$/, ''))))
   .slice(0, 5);
@@ -236,7 +242,7 @@ const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
 return [{ json: {
   chat_id: session + ':' + rawFrom,
   phone: phone,
-  msg_text: text,
+  msg_text: bufferText,
   msg_ts: Date.now(),
   media_url: mediaUrl,
   media_mime: mediaMime || null,
@@ -248,6 +254,7 @@ return [{ json: {
 # Side branch after Start Turn: attach the inbound reference picture and any
 # links to the Project. The CRM downloads WAHA media with its own API key.
 BUILD_REFERENCES_JS = """const start = $('Debounce Start').first().json || {};
+const resolve = $('Debounce Resolve').first().json || {};
 const turn = $('Start Turn').first().json || {};
 const artist = $('Resolve Artist').first().json || {};
 
@@ -258,13 +265,28 @@ if (!turn.project_id || !artist.id) {
 }
 
 const refs = [];
-if (start.media_url) {
-  refs.push({ url: start.media_url, mime: start.media_mime || null });
+const seen = new Set();
+const push = (url, mime) => {
+  const value = String(url || '').trim();
+  if (!value || seen.has(value)) return;
+  seen.add(value);
+  refs.push({ url: value, mime: mime || null });
+};
+
+// Images received anywhere in the burst. Debounce Resolve extracts them from
+// the buffer markers, so a photo sent before the last text message still
+// reaches the CRM/vision step.
+for (const url of (resolve.media_urls || [])) {
+  push(url, null);
 }
+
+// Current message fallback (same execution resolved the burst).
+if (start.media_url) {
+  push(start.media_url, start.media_mime || null);
+}
+
 for (const link of (start.links || [])) {
-  if (link && link !== start.media_url) {
-    refs.push({ url: link, mime: null });
-  }
+  push(link, null);
 }
 
 return [{ json: {
@@ -448,9 +470,27 @@ const lastActivity = Math.max(lastMsgAt, lastTypingAt);
 const quiet = (now - lastActivity) >= QUIET_MS;
 
 const decision = isStale ? 'stop' : (typingActive || !quiet) ? 'wait' : 'process';
-const combined = (state.pending || '').trim();
 
-return [{ json: { decision: decision, is_stale: isStale, combined_text: combined, chat_id: chatId } }];"""
+// Media URLs travel through the buffer as [[REF_FOTO:<url>]] markers (see
+// Debounce Start). Extract them for Build References and remove them from the
+// text the agent reads.
+const rawCombined = (state.pending || '').trim();
+const mediaUrls = Array.from(new Set(
+  Array.from(rawCombined.matchAll(/\\[\\[REF_FOTO:(https?:\\/\\/[^\\]]+)\\]\\]/g)).map(m => m[1])
+));
+const combined = rawCombined
+  .replace(/\\[\\[REF_FOTO:[^\\]]+\\]\\]/g, '')
+  .replace(/[ \\t]+\\n/g, '\\n')
+  .replace(/\\n{3,}/g, '\\n\\n')
+  .trim();
+
+return [{ json: {
+  decision: decision,
+  is_stale: isStale,
+  combined_text: combined,
+  media_urls: mediaUrls,
+  chat_id: chatId,
+} }];"""
 
 # ── Presence: WAHA sends presence.update with the lead's typing state. We only
 #    record it against the debounce buffer so the resolve loop above can hold
