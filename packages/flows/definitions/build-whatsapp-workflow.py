@@ -697,7 +697,7 @@ function detectDuvidasZeradas(t) {
   const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
   const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
-  const acknowledgement = /^(?:beleza|blz|ok|okay|perfeito|combinado|entendi|claro|tranquilo|tranquila|show|demais|pode ser|isso|sim)[.!]?$/i;
+  const acknowledgement = /^(?:beleza|blz|ok|okay|perfeito|combinado|entendi|claro|tranquil[oa]|show|demais|pode ser|isso|sim|legal|massa|top|boa|tudo (?:bem|tranquilo|certo|joia|ótimo|otimo))[.!]?$/i;
   const noDoubt = /^(?:n[aã]o|n|acho que n[aã]o|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|s[oó] o (?:pre[cç]o|valor)(?: mesmo)?|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const doubtTalk = /(?:tenho|ficou|fiquei|surgiu|apareceu)[^.\\n]{0,25}(?:d[uú]vida|pergunta)/i;
   const strongNoDoubt = /(?:s[oó] isso(?: mesmo)?|é isso(?: mesmo)?|sem (?:mais )?d[uú]vidas?|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|tudo certo)/i;
@@ -1116,7 +1116,7 @@ const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?
 // never recognized and Beatriz asked the same question again.
 const earlierText = finalReply.slice(0, finalReply.lastIndexOf('?'));
 const earlierQuestionCount = (earlierText.match(/\?/g) || []).length;
-const rhetoricalQuestionCount = (earlierText.match(/(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu)\s*\?/gi) || []).length;
+const rhetoricalQuestionCount = (earlierText.match(/(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu|n[ée]|n[ãa]o [ée]|viu|t[áa]|n[ãa]o acha)\s*\?/gi) || []).length;
 const hasEarlierQuestion = earlierQuestionCount > rhetoricalQuestionCount;
 const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && !precoLiberadoJa

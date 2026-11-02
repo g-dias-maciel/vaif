@@ -37,5 +37,8 @@ jobs:
       - name: Debounce media across the burst
         run: node packages/flows/definitions/code/test-debounce-media.js
 
+      - name: Doubt checkpoint (rhetorical questions + burst answers)
+        run: node packages/flows/definitions/code/test-doubt-checkpoint.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js
