@@ -122,6 +122,40 @@ check("the WAHA webhook requires header authentication",
       and nodes["WAHA Webhook"].get("credentials", {}).get("httpHeaderAuth", {}).get("name") == "VAIF Webhook Auth")
 AGENT_TEXT_JS = nodes["AI Agent"]["parameters"]["text"]
 
+
+def _select_columns(sql):
+    """Count the expressions in a SELECT list (commas outside parens/quotes)."""
+    depth = 0
+    in_quote = False
+    commas = 0
+    for char in sql:
+        if in_quote:
+            if char == "'":
+                in_quote = False
+        elif char == "'":
+            in_quote = True
+        elif char in "([":
+            depth += 1
+        elif char in ")]":
+            depth -= 1
+        elif char == "," and depth == 0:
+            commas += 1
+    return commas + 1
+
+
+# The Resolve Artist query unions the found row with a one-row "not found"
+# fallback. Adding a column to one side without the other makes PostgreSQL
+# reject the whole query ("each UNION query must have the same number of
+# columns") and breaks every inbound message.
+resolve_sql = nodes["Resolve Artist"]["parameters"]["query"]
+head, tail = resolve_sql.split("UNION ALL", 1)
+head_list = head[head.rfind("SELECT") + len("SELECT"):head.find("\nFROM ")]
+tail_list = tail.split("\nWHERE ", 1)[0]
+tail_list = tail_list[tail_list.find("SELECT") + len("SELECT"):]
+check("Resolve Artist UNION halves have the same column count",
+      _select_columns(head_list) == _select_columns(tail_list),
+      f"({_select_columns(head_list)} vs {_select_columns(tail_list)})")
+
 with open(os.path.join(FLOWS_ROOT, "prompts", "classify-conversation.md")) as f:
     CLASSIFY_TEMPLATE = f.read()
 

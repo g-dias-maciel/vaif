@@ -87,7 +87,7 @@ SELECT (r->'artist'->>'id')::uuid                                        AS id,
 FROM found
 UNION ALL
 SELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,
-       '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, NULL::numeric, 'percent',
+       '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',
        NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text,
        false
 WHERE NOT EXISTS (SELECT 1 FROM found)
