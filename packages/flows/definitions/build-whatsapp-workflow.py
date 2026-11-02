@@ -957,8 +957,12 @@ const replyHasPrice = /R\$\s*\d/.test(finalReply);
 const standardQuote = !lead.quoted_price_cents
   || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
 const offerAlreadyMentioned = /(?:promo[cç][aã]o|leve 2|segunda tatuagem|leva uma segunda|segunda de valor)/i.test(finalReply);
-const promotionQuote = !firstQuote && !repeatedQuote && priceGateOpen && offerLive
-  && replyHasPrice && standardQuote && !offerAlreadyMentioned && !goingToArtist
+// The promotion quote only normalises the FIRST quote (when the model quoted
+// the table price while a promotion is live). Once the price is liberated, a
+// later reply may contain a negotiated discount ("pode ser" after 20% off);
+// replacing it with the promotion price would silently undo the negotiation.
+const promotionQuote = !firstQuote && !repeatedQuote && gateJustOpened && !precoLiberadoJa
+  && offerLive && replyHasPrice && standardQuote && !offerAlreadyMentioned && !goingToArtist
   ? deterministicQuote()
   : null;
 

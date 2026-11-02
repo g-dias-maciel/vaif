@@ -46,5 +46,8 @@ jobs:
       - name: Placement extraction and price lookup
         run: node packages/flows/definitions/code/test-placement.js
 
+      - name: Negotiated discounts on later turns
+        run: node packages/flows/definitions/code/test-negotiation.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js
