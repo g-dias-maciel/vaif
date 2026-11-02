@@ -181,6 +181,12 @@
         atendimento para você quando o pedido é de um estilo que você não faz.
     </p>
 
+    @if (empty($specialties) && empty($excludedStyles))
+        <p class="meta" style="color: var(--gold);">
+            Nenhum estilo cadastrado: a Beatriz não filtra por estilo e segue a conversa normalmente.
+        </p>
+    @endif
+
     <form method="post" action="{{ route('settings.styles') }}" style="margin-top:12px;">
         @csrf
         <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:16px;">

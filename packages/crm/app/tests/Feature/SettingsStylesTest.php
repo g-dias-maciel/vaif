@@ -75,6 +75,26 @@ class SettingsStylesTest extends TestCase
             ->assertSee('value="rosto,partes íntimas"', false);
     }
 
+    public function test_the_page_explains_when_no_styles_are_set(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+
+        $this->actingAs($user)->get('/config')
+            ->assertOk()
+            ->assertSee('Nenhum estilo cadastrado');
+
+        $artist->settings->update(['specialties' => ['realismo']]);
+
+        // The test keeps the same User instance across requests; drop the
+        // cached artist relation so the next request sees the new settings.
+        $user->unsetRelation('artist');
+
+        $this->actingAs($user)->get('/config')
+            ->assertOk()
+            ->assertDontSee('Nenhum estilo cadastrado');
+    }
+
     public function test_styles_are_trimmed_and_de_duplicated_case_insensitively(): void
     {
         $artist = $this->artist();
