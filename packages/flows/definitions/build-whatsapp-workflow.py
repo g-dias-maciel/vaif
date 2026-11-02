@@ -760,6 +760,8 @@ const placementNow = rawPlacement
   : (lead.placement || null);
 const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
 const styleNow = detectStyle(rawLead) || lead.style || null;
+// The lead already described the whole upper arm; asking outer/inner again is a loop.
+const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(normalizeText(rawLead));
 
 function discoveryFallback(lead) {
   if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
@@ -797,9 +799,26 @@ const precoLiberadoJa = state.preco_liberado === true || ['orcamento_enviado', '
 const gateJustOpened = processoExplicado && duvidasEliminadas;
 const priceGateOpen = precoLiberadoJa || gateJustOpened;
 
+// A generic region can still be priced when its sides cost the same. For
+// example "ombro ao cotovelo" is the whole upper arm; if braco_externo and
+// braco_interno share a price, that price is unambiguous. If they differ,
+// return null so the agent asks (or hands off) instead of inventing one.
+function priceRowFor(rows, placement, zone) {
+  const exact = rows.find(p => p.placement === placement && p.body_zone === zone);
+  if (exact) return exact;
+  const pair = placement === 'braco'
+    ? ['braco_externo', 'braco_interno']
+    : (placement === 'perna' ? ['coxa', 'panturrilha'] : null);
+  if (!pair) return null;
+  const a = rows.find(p => p.placement === pair[0] && p.body_zone === zone);
+  const b = rows.find(p => p.placement === pair[1] && p.body_zone === zone);
+  if (a && b) return Number(a.table_price) === Number(b.table_price) ? a : null;
+  return a || b || null;
+}
+
 function deterministicQuote(centsOverride = null) {
   const rows = $('Build System Prompt').first().json.pricing_rows || [];
-  const row = rows.find(p => p.placement === placementNow && p.body_zone === bodyZoneNow);
+  const row = priceRowFor(rows, placementNow, bodyZoneNow);
   const baseCents = Number(centsOverride || (row && row.table_price) || 0);
   if (!baseCents) return null;
   const offer = $('Build System Prompt').first().json.offer || {};
@@ -933,7 +952,7 @@ const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingTo
 const offer = $('Build System Prompt').first().json.offer || {};
 const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
-const hasPriceRow = pricingRows.some(p => p.placement === placementNow && p.body_zone === bodyZoneNow);
+const hasPriceRow = !!priceRowFor(pricingRows, placementNow, bodyZoneNow);
 const replyHasPrice = /R\$\s*\d/.test(finalReply);
 const standardQuote = !lead.quoted_price_cents
   || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
@@ -963,7 +982,7 @@ if (firstQuote) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
-  const genericPlacement = ['braco', 'perna'].includes(placementNow);
+  const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   finalReply = genericPlacement
     ? (placementNow === 'braco'
@@ -986,7 +1005,7 @@ if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   if (!bodyZoneNow) {
     finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
-  } else if (['braco', 'perna'].includes(placementNow)) {
+  } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea) {
     finalReply = placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?';

@@ -146,5 +146,40 @@ r = runParse({
 });
 check('explicit cover-up is persisted', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
 
+// ── 7. "Ombro ao cotovelo" is the whole upper arm. If outer/inner cost the
+//       same, quote instead of asking the region again. ──
+console.log('=== Shoulder-to-elbow with equal outer/inner prices ===');
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'fechamento', style: 'realismo', agent_state: {
+    processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true,
+  } }),
+  leadText: 'como falei, do ombro ao cotovelo',
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 } }),
+  agentOutput: 'Para a tatuagem de águia no braço, do ombro ao cotovelo, fica R$ 100,00 à vista ou em até 6x de R$ 16,67 sem juros.',
+});
+check('quote is kept when both sides cost the same', /R\$\s*100,00/.test(r.final_reply), r.final_reply);
+check('region question is not repeated', !/parte de fora do braço/i.test(r.final_reply), r.final_reply);
+check('stage stays orcamento_enviado', r.stage_key === 'orcamento_enviado', r.stage_key);
+
+// ── 8. If outer/inner prices differ, do not invent a price and do not ask the
+//       same region question again: hand off to the artist. ──
+console.log('=== Shoulder-to-elbow with different outer/inner prices ===');
+const differentRows = [
+  { placement: 'braco_externo', body_zone: 'fechamento', table_price: 10000 },
+  { placement: 'braco_interno', body_zone: 'fechamento', table_price: 15000 },
+];
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'fechamento', style: 'realismo', agent_state: {
+    processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true,
+  } }),
+  leadText: 'como falei, do ombro ao cotovelo',
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 } }),
+  agentOutput: 'Fica R$ 100,00 à vista.',
+  rows: differentRows,
+});
+check('ambiguous sides do not emit an invented price', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+check('region question is not repeated', !/parte de fora do braço/i.test(r.final_reply), r.final_reply);
+check('handoff happens instead', /confirmar o valor/i.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
