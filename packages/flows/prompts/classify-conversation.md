@@ -29,6 +29,8 @@ Pipeline atual: {{pipeline}}
 
 ⚠ **FALSO POSITIVO PROIBIDO:** A pergunta da Beatriz "uma tatuagem nova, uma cobertura (cover-up) ou uma reforma" NÃO é resposta do lead. Se "cobertura"/"reforma"/"cover-up" só aparecem na fala da Beatriz (a pergunta dela), isso NÃO define o tipo_tatuagem. Extraia o tipo APENAS do que o LEAD disse. Exemplo: lead diz "quero fazer uma tatuagem nova" e Beatriz pergunta "nova, cobertura ou reforma?" → tipo_tatuagem = "nova", NUNCA "cobertura" nem "reforma".
 
+⚠ **A PERGUNTA DE ÁREA TAMBÉM NÃO É TIPO:** quando a Beatriz pergunta "nesse local você quer cobrir só uma partinha, uma área média ou o [local] inteiro (fechamento)?", ela está perguntando a **body_zone**, não o tipo_tatuagem. Se o lead respondeu apenas o significado, a primeira tatuagem ou outra coisa, mantenha tipo_tatuagem = null. Exemplo: Beatriz pergunta a cobertura do braço e o lead responde "seria um significado pessoal" → tipo_tatuagem = null (NUNCA "cobertura").
+
 ## Campos de preço (extraia da resposta da Beatriz)
 
 Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.

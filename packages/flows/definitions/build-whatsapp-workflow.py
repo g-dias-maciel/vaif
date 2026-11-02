@@ -1200,7 +1200,11 @@ return [{ json: {
     ? q.first_tattoo
     : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),
   meaning_val: q.significado || null,
-  tattoo_type_val: TIPO_DB[tipoDeterministic || q.tipo_tatuagem] || null,
+  // Only the lead's own words may set the type. The classifier used to flip a
+  // persisted "new" to "cover_up" after Beatriz asked the coverage question
+  // ("você quer cobrir...?"), which then triggered a cover-up handoff and made
+  // her ask the type question again. An explicit correction still wins.
+  tattoo_type_val: TIPO_DB[tipoDeterministic] || null,
 
   quote_base_cents: quoteBaseCents,
   quote_offered_cents: quoteOfferedCents,
