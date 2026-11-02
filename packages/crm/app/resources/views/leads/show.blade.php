@@ -303,10 +303,24 @@
             if (html.trim() === body.innerHTML.trim()) return;
 
             var t = thread();
-            var atBottom = !t || (t.scrollHeight - t.scrollTop - t.clientHeight < 60);
+            var oldHeight = t ? t.scrollHeight : 0;
+            var oldTop = t ? t.scrollTop : 0;
+            var oldClient = t ? t.clientHeight : 0;
+            var distanceFromBottom = Math.max(0, oldHeight - oldTop - oldClient);
+            var atBottom = !t || distanceFromBottom < 60;
 
             body.innerHTML = html;
-            if (atBottom) scrollToBottom();
+
+            // Replacing the thread destroys its scroll position. Keep the
+            // reader where they were when they are scrolling through history;
+            // only jump to the newest message when they were already at the
+            // bottom.
+            var next = thread();
+            if (next) {
+                next.scrollTop = atBottom
+                    ? next.scrollHeight
+                    : Math.max(0, next.scrollHeight - next.clientHeight - distanceFromBottom);
+            }
         } catch (e) {
             // keep the last rendered conversation
         } finally {

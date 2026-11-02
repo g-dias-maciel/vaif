@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Read-only view of n8n's LangChain memory (`agent_memory.chat_memory`).
@@ -29,6 +30,35 @@ class ChatMessage extends Model
     public function getCreatedAtAttribute($value): ?Carbon
     {
         return $value ? Carbon::parse($value)->setTimezone(config('app.timezone')) : null;
+    }
+
+    /**
+     * Record a message the CRM sends outside n8n (for example the deposit
+     * confirmation) so it appears in the Lead's conversation panel and in the
+     * agent's memory. n8n owns this table; the CRM only has INSERT on it.
+     */
+    public static function recordOutbound(string $leadId, string $text): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return; // agent_memory is Postgres-only (tests use SQLite).
+        }
+
+        try {
+            DB::table('agent_memory.chat_memory')->insert([
+                'session_id' => $leadId,
+                'message' => json_encode([
+                    'type' => 'ai',
+                    'content' => $text,
+                    'tool_calls' => [],
+                    'additional_kwargs' => (object) [],
+                    'response_metadata' => (object) [],
+                    'invalid_tool_calls' => [],
+                ], JSON_UNESCAPED_UNICODE),
+            ]);
+        } catch (\Throwable $e) {
+            // A transcript write must never break the WhatsApp confirmation.
+            report($e);
+        }
     }
 
     /**

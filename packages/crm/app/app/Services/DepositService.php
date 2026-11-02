@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\CalendarEntry;
+use App\Models\ChatMessage;
 use App\Models\Project;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -67,7 +68,13 @@ class DepositService
             ? "Sinal recebido! Seu agendamento está confirmado para {$when}. O {$name} te espera lá!"
             : "Sinal recebido! Seu agendamento está confirmado. O {$name} te espera lá!";
 
-        return WahaService::make()->sendText($artist, $this->chatId($project), $text);
+        $sent = WahaService::make()->sendText($artist, $this->chatId($project), $text);
+
+        if ($sent) {
+            ChatMessage::recordOutbound($lead->id, $text);
+        }
+
+        return $sent;
     }
 
     private function chatId(Project $project): string
