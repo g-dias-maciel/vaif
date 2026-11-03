@@ -288,6 +288,11 @@ check("Resolve Artist exposes the studio address and city",
       "AS address" in nodes["Resolve Artist"]["parameters"]["query"]
       and "AS city" in nodes["Resolve Artist"]["parameters"]["query"])
 
+check("artist replies are recorded in the transcript with an author marker",
+      "Record Artist Message" in nodes
+      and "'author','artist'" in nodes["Record Artist Message"]["parameters"]["query"]
+      and wf["connections"]["Take Chat Control"]["main"][0][0]["node"] == "Record Artist Message")
+
 check("the Notion mirror is gone (RPCs write the audit trail)",
       "Log Event" not in nodes and "Enqueue Notion Sync" not in nodes
       and "Build Notion Sync Payload" not in nodes)

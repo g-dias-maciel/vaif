@@ -1810,6 +1810,24 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Take Chat Control",
             "credentials": POSTGRES,
         },
+        # 5d. Record Artist Message — store the artist's own reply in the CRM
+        #     transcript so the Conversa panel shows it as "Artista".
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "INSERT INTO agent_memory.chat_memory (session_id, message) SELECT cs.lead_id, jsonb_build_object('type','ai','content',$3,'additional_kwargs',jsonb_build_object('author','artist'),'response_metadata','{}'::jsonb,'tool_calls','[]'::jsonb,'invalid_tool_calls','[]'::jsonb) FROM chat_sessions cs WHERE cs.artist_id = $1::uuid AND cs.chat_id = $2::text RETURNING id;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $json.chat_id, $('WAHA Webhook').first().json.body.payload.body || '[MÍDIA ENVIADA]'] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1560, -420],
+            "id": "artist-record-0000-0000-0000-000000000001",
+            "name": "Record Artist Message",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
         # 6. In AI Window?
         {
             "parameters": {
@@ -3002,6 +3020,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                 [{"node": "Take Chat Control", "type": "main", "index": 0}],
                 [{"node": "In AI Window?", "type": "main", "index": 0}],
             ]
+        },
+        "Take Chat Control": {
+            "main": [[{"node": "Record Artist Message", "type": "main", "index": 0}]]
         },
         "In AI Window?": {
             "main": [
