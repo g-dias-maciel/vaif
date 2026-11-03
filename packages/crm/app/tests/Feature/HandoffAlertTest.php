@@ -78,6 +78,24 @@ class HandoffAlertTest extends TestCase
             ->assertSee('Ver conversa');
     }
 
+    public function test_the_handoff_list_is_a_collapsible_accordion(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $this->handoff($artist);
+
+        $response = $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('data-accordion="handoffs"', false)
+            ->assertSee('<details', false)
+            ->assertSee('<summary>', false);
+
+        // Collapsed by default: no `open` attribute on the handoff accordion.
+        $this->assertStringNotContainsString('data-accordion="handoffs" open', $response->getContent());
+        // The summary carries the count and a reason breakdown.
+        $this->assertStringContainsString('Cover-up 1', $response->getContent());
+    }
+
     public function test_the_alert_disappears_after_the_artist_takes_over_the_chat(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {

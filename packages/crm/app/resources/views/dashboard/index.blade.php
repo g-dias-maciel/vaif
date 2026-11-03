@@ -35,56 +35,63 @@
 
 <div id="dash-alerts">
 @if ($pendingHandoffs->isNotEmpty())
-<div class="panel" style="margin-bottom: 20px; border-color: var(--danger);">
-    <h2 class="section-title" style="margin-top:0;">
-        Atendimentos aguardando você
+@php
+    $handoffLabels = [
+        'cover_up' => 'Cover-up',
+        'reforma' => 'Reforma',
+        'lead_requested_artist' => 'Pediu o artista',
+        'below_piso' => 'Abaixo do piso',
+        'vague' => 'Descrição vaga',
+        'audio_2x' => 'Áudio repetido',
+        'no_availability' => 'Sem horário disponível',
+    ];
+    $handoffSummary = $pendingHandoffs
+        ->groupBy(fn ($handoff) => $handoffLabels[$handoff->handoff_reason] ?? 'Atendimento')
+        ->map(fn ($group, $label) => $label.' '.$group->count())
+        ->take(3)
+        ->implode(' · ');
+@endphp
+<details class="panel accordion" data-accordion="handoffs" style="margin-bottom: 20px; border-color: var(--danger);">
+    <summary>
+        <h2 class="section-title">Atendimentos aguardando você</h2>
         <span class="tag">{{ $pendingHandoffs->count() }}</span>
-    </h2>
-    <p class="meta">O agente passou estes clientes para você. Abra a conversa ou responda pelo WhatsApp para assumir o atendimento.</p>
+        <span class="accordion-hint">{{ $handoffSummary }}</span>
+    </summary>
+    <div class="accordion-body">
+        <p class="meta">O agente passou estes clientes para você. Abra a conversa ou responda pelo WhatsApp para assumir o atendimento.</p>
 
-    @php
-        $handoffLabels = [
-            'cover_up' => 'Cover-up',
-            'reforma' => 'Reforma',
-            'lead_requested_artist' => 'Pediu o artista',
-            'below_piso' => 'Abaixo do piso',
-            'vague' => 'Descrição vaga',
-            'audio_2x' => 'Áudio repetido',
-            'no_availability' => 'Sem horário disponível',
-        ];
-    @endphp
-
-    <ul class="slot-list" style="margin-top: 14px;">
-        @foreach ($pendingHandoffs as $handoff)
-            <li>
-                <div class="slot-main">
-                    <strong>
+        <ul class="slot-list">
+            @foreach ($pendingHandoffs as $handoff)
+                <li>
+                    <div class="slot-main">
+                        <strong>
+                            @if ($handoff->lead)
+                                <a href="{{ route('leads.show', $handoff->lead) }}">{{ $handoff->lead->displayName() }}</a>
+                            @else
+                                Cliente
+                            @endif
+                        </strong>
+                        <span>
+                            {{ $handoffLabels[$handoff->handoff_reason] ?? ($handoff->handoff_reason ?: 'Atendimento solicitado') }}
+                            @if ($handoff->lead?->phone_e164)
+                                · {{ $handoff->lead->phone_e164 }}
+                            @endif
+                        </span>
+                        <span class="meta">Atualizado {{ $handoff->updated_at?->format('d/m H:i') }}</span>
+                    </div>
+                    <div class="actions-row">
                         @if ($handoff->lead)
-                            <a href="{{ route('leads.show', $handoff->lead) }}">{{ $handoff->lead->displayName() }}</a>
-                        @else
-                            Cliente
+                            <a href="{{ route('leads.show', $handoff->lead) }}" class="btn btn--ghost btn--small">Ver conversa</a>
+                            @if ($handoff->lead->whatsapp_url)
+                                <a href="{{ $handoff->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
+                            @endif
                         @endif
-                    </strong>
-                    <span>
-                        {{ $handoffLabels[$handoff->handoff_reason] ?? ($handoff->handoff_reason ?: 'Atendimento solicitado') }}
-                        @if ($handoff->lead?->phone_e164)
-                            · {{ $handoff->lead->phone_e164 }}
-                        @endif
-                    </span>
-                    <span class="meta">Atualizado {{ $handoff->updated_at?->format('d/m H:i') }}</span>
-                </div>
-                <div class="actions-row">
-                    @if ($handoff->lead)
-                        <a href="{{ route('leads.show', $handoff->lead) }}" class="btn btn--ghost btn--small">Ver conversa</a>
-                        @if ($handoff->lead->whatsapp_url)
-                            <a href="{{ $handoff->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
-                        @endif
-                    @endif
-                </div>
-            </li>
-        @endforeach
-    </ul>
-</div>
+                    </div>
+                </li>
+            @endforeach
+        </ul>
+    </div>
+</details>
 @endif
 
 @if ($pendingDeposits->isNotEmpty())
@@ -223,10 +230,23 @@
             if (!res.ok) return;
 
             const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
+
+            // The alerts section is replaced wholesale, so remember which
+            // accordions the artist opened or the list would collapse under
+            // them every 15 seconds.
+            const openAccordions = Array.from(
+                document.querySelectorAll('#dash-alerts details[data-accordion][open]')
+            ).map(function (el) { return el.dataset.accordion; });
+
             sections.forEach(function (id) {
                 const next = doc.getElementById(id);
                 const current = document.getElementById(id);
                 if (next && current) current.innerHTML = next.innerHTML;
+            });
+
+            openAccordions.forEach(function (key) {
+                const el = document.querySelector('#dash-alerts details[data-accordion="' + key + '"]');
+                if (el) el.open = true;
             });
 
             if (stamp) {

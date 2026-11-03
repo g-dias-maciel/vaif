@@ -404,6 +404,32 @@
         .panel { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 24px; }
         .back { display: inline-block; margin-bottom: 16px; font-size: 0.8rem; }
 
+        /* Collapsible alert sections: the handoff list can grow large, so it
+           starts closed and keeps its open state across the 15s live refresh. */
+        details.accordion { padding: 0; }
+        details.accordion > summary {
+            display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
+            padding: 18px 24px; cursor: pointer; list-style: none; user-select: none;
+            border-radius: 14px;
+        }
+        details.accordion > summary::-webkit-details-marker { display: none; }
+        details.accordion > summary::after {
+            content: ''; width: 8px; height: 8px; margin-left: auto;
+            border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+            transform: rotate(45deg); transition: transform 0.15s ease;
+        }
+        details.accordion[open] > summary::after { transform: rotate(-135deg); }
+        details.accordion[open] > summary {
+            border-bottom: 1px solid var(--border); border-radius: 14px 14px 0 0;
+        }
+        details.accordion > summary:hover { background: var(--panel-2); }
+        details.accordion > summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+        details.accordion > summary h2 { margin: 0; }
+        details.accordion .accordion-hint { color: var(--muted); font-size: 0.8rem; }
+        details.accordion .accordion-body { padding: 16px 24px 24px; }
+        details.accordion .accordion-body .slot-list { margin-top: 0; }
+        details.accordion .accordion-body > .meta:first-child { margin-top: 0; }
+
         .slots { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; max-height: 420px; overflow-y: auto; }
         .slot-option {
             display: block; padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border);
@@ -483,6 +509,8 @@
             h1.page-title, .panel h1 { font-size: 1.5rem; margin-bottom: 14px; }
             h2.section-title { font-size: 1.15rem; margin: 22px 0 12px; }
             .panel { padding: 16px; }
+            details.accordion > summary { padding: 14px 16px; }
+            details.accordion .accordion-body { padding: 12px 16px 18px; }
             .board { grid-template-columns: 1fr; gap: 12px; }
             .week-grid { grid-template-columns: repeat(7, minmax(118px, 1fr)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }
