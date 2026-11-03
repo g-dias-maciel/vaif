@@ -22,6 +22,7 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 | `0007_artist_notifications.sql` | Dedup columns/indexes for the artist attention e-mails |
 | `0008_agent_mode.sql` | `artist_settings.full_selling` — full sales flow vs. triage-only |
 | `0009_chat_memory_write.sql` | `crm_app` INSERT on `agent_memory.chat_memory` for CRM-sent messages |
+| `0010_handoff_silence.sql` | `set_agent_blocked()` — silence the SDR when a Lead is handed off |
 
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.

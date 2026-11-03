@@ -161,6 +161,8 @@ return [
         'promotion_paused' => 'Promoção pausada',
         'promotion_ended' => 'Promoção encerrada',
         'handoff_triggered' => 'Encaminhado ao artista',
+        'agent_blocked' => 'Agente silenciado (handoff)',
+        'agent_unblocked' => 'Agente reativado',
         'lead_anonymized' => 'Dados anonimizados (LGPD)',
         'tattoo_completed' => 'Tattoo concluída',
     ],
