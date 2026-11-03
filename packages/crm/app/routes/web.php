@@ -50,6 +50,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/config/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment');
         Route::post('/config/negotiation', [SettingsController::class, 'updateNegotiation'])->name('settings.negotiation');
         Route::post('/config/styles', [SettingsController::class, 'updateStyles'])->name('settings.styles');
+        Route::post('/config/studio', [SettingsController::class, 'updateStudio'])->name('settings.studio');
         Route::post('/config/selling', [SettingsController::class, 'updateSelling'])->name('settings.selling');
         Route::post('/config/google', [SettingsController::class, 'connectGoogle'])->name('settings.google.connect');
         Route::post('/config/google/detect', [SettingsController::class, 'detectGoogleCalendars'])->name('settings.google.detect');

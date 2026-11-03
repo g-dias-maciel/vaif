@@ -23,6 +23,8 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 | `0008_agent_mode.sql` | `artist_settings.full_selling` — full sales flow vs. triage-only |
 | `0009_chat_memory_write.sql` | `crm_app` INSERT on `agent_memory.chat_memory` for CRM-sent messages |
 | `0010_handoff_silence.sql` | `set_agent_blocked()` — silence the SDR when a Lead is handed off |
+| `0011_booking_gates.sql` | Booking qualification guard, deposit gate, time-window availability |
+| `0012_artist_address.sql` | `artist_settings.address` / `city` for the SDR studio answer |
 
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.

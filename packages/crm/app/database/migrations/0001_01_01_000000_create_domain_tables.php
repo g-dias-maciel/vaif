@@ -51,6 +51,8 @@ return new class extends Migration
             $table->string('pix_key')->nullable();
             $table->string('instagram_handle')->nullable();
             $table->string('whatsapp_number')->nullable();
+            $table->string('address')->nullable();
+            $table->string('city')->nullable();
             $table->string('telegram_group_id')->nullable();
             $table->json('working_hours')->nullable();
             $table->json('ai_active_hours')->nullable();

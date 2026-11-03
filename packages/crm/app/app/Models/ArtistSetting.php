@@ -27,6 +27,8 @@ class ArtistSetting extends Model
         'pix_key',
         'instagram_handle',
         'whatsapp_number',
+        'address',
+        'city',
         'telegram_group_id',
         'working_hours',
         'ai_active_hours',

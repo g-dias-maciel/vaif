@@ -163,6 +163,39 @@
     </form>
 </div>
 
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Estúdio</h2>
+    <p class="meta">
+        A Beatriz usa estes dados quando o lead pergunta onde fica o estúdio. Se o endereço ficar em branco,
+        ela avisa que você envia o endereço completo — ela não inventa cidade nem endereço.
+    </p>
+
+    <form method="post" action="{{ route('settings.studio') }}" style="margin-top:12px;">
+        @csrf
+        <div class="form-grid">
+            <div class="form-field">
+                <label for="studio-city">Cidade</label>
+                <input type="text" name="city" id="studio-city"
+                    value="{{ old('city', $artist->settings?->city) }}" maxlength="120"
+                    placeholder="Ex.: Poços de Caldas">
+                @error('city')
+                    <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+                @enderror
+            </div>
+            <div class="form-field">
+                <label for="studio-address">Endereço completo</label>
+                <input type="text" name="address" id="studio-address"
+                    value="{{ old('address', $artist->settings?->address) }}" maxlength="255"
+                    placeholder="Rua, número, bairro">
+                @error('address')
+                    <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+                @enderror
+            </div>
+        </div>
+        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar estúdio</button>
+    </form>
+</div>
+
 @php
     $oldSpecialties = old('specialties');
     $specialties = is_string($oldSpecialties)

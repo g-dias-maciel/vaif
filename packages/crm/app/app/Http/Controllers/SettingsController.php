@@ -301,6 +301,31 @@ class SettingsController extends Controller
     }
 
     /**
+     * Save the studio address the SDR agent may quote to leads.
+     *
+     * Empty is deliberate: the agent must then say the artist will send the
+     * address, never invent a city or emit a placeholder.
+     */
+    public function updateStudio(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'address' => ['nullable', 'string', 'max:255'],
+            'city' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        $this->settings($artist)->update([
+            'address' => trim((string) ($data['address'] ?? '')) ?: null,
+            'city' => trim((string) ($data['city'] ?? '')) ?: null,
+        ]);
+
+        return back()->with('status', 'Endereço do estúdio salvo.');
+    }
+
+    /**
      * Connect the Artist's shared Google Calendar after checking that the
      * service account can actually read/write it.
      */
