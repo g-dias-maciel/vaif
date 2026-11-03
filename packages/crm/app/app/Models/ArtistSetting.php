@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Casts\PgTextArray;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -37,9 +38,9 @@ class ArtistSetting extends Model
     ];
 
     protected $casts = [
-        'specialties' => 'array',
-        'excluded_styles' => 'array',
-        'blocked_numbers' => 'array',
+        'specialties' => PgTextArray::class,
+        'excluded_styles' => PgTextArray::class,
+        'blocked_numbers' => PgTextArray::class,
         'full_selling' => 'boolean',
         'working_hours' => 'array',
         'ai_active_hours' => 'array',
