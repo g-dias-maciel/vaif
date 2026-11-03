@@ -83,12 +83,14 @@ SELECT (r->'artist'->>'id')::uuid                                        AS id,
        r->'settings'->>'instagram_handle'                                AS instagram_handle,
        r->'settings'->>'whatsapp_number'                                 AS whatsapp_number,
        r->'settings'->>'telegram_group_id'                               AS telegram_group_id,
+       r->'settings'->>'address'                                         AS address,
+       r->'settings'->>'city'                                            AS city,
        true                                                              AS found
 FROM found
 UNION ALL
 SELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,
        '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',
-       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text,
+       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text,
        false
 WHERE NOT EXISTS (SELECT 1 FROM found)
 LIMIT 1;"""
@@ -114,6 +116,8 @@ BUILD_SYSTEM_PROMPT_JS = (
     "const descontoMax = artist.floor_pct != null ? (100 - Number(artist.floor_pct)) + '%' : '20%';\n"
     "const estilos = Array.isArray(artist.specialties) ? artist.specialties : [];\n"
     "const naoFaz = Array.isArray(artist.excluded_styles) ? artist.excluded_styles : [];\n"
+    "const cidade = String(artist.city || '').trim();\n"
+    "const endereco = String(artist.address || '').trim();\n"
     "\n"
     "// Per-artist sales mode. Missing/legacy rows keep the full flow.\n"
     "const fullSelling = artist.full_selling !== false && artist.full_selling !== 'false';\n"
@@ -153,6 +157,8 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  '{{ESTILOS}}': estilos.length ? estilos.join(', ') : '(não informado)',\n"
     "  '{{NAO_FAZ}}': naoFaz.length ? naoFaz.join(', ') : '(não informado)',\n"
     "  '{{MODO_VENDA}}': modoVenda,\n"
+    "  '{{CIDADE}}': cidade || '(não informado)',\n"
+    "  '{{ENDERECO}}': endereco || '(não informado)',\n"
     "};\n"
     "\n"
     "let prompt = " + json.dumps(SYSTEM_PROMPT_TEMPLATE) + ";\n"
@@ -652,6 +658,10 @@ function normalizeText(t) {
 }
 function detectPlacement(t) {
   const text = normalizeText(t);
+  // "parte de fora e de dentro" is the whole upper arm, not only the first side.
+  if (/(?:fora|externa).{0,18}(?:e|mais).{0,18}(?:dentro|interna)|(?:dentro|interna).{0,18}(?:e|mais).{0,18}(?:fora|externa)/.test(text)) {
+    return 'braco';
+  }
   const map = [
     // Answers to "parte de fora / de dentro?" when the lead already said
     // "braço". Must come before the generic "ombro"/"braço" matches.
@@ -766,6 +776,8 @@ const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
 const styleNow = detectStyle(rawLead) || lead.style || null;
 // The lead already described the whole upper arm; asking outer/inner again is a loop.
 const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(normalizeText(rawLead));
+// "parte de fora e de dentro" means BOTH sides, not the first one mentioned.
+const leadGaveBothSides = /(?:fora|externa).{0,18}(?:e|mais).{0,18}(?:dentro|interna)|(?:dentro|interna).{0,18}(?:e|mais).{0,18}(?:fora|externa)|os dois lados|ambos os lados/.test(normalizeText(rawLead));
 
 function discoveryFallback(lead) {
   if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
@@ -822,8 +834,16 @@ function priceRowFor(rows, placement, zone) {
 
 function deterministicQuote(centsOverride = null) {
   const rows = $('Build System Prompt').first().json.pricing_rows || [];
-  const row = priceRowFor(rows, placementNow, bodyZoneNow);
-  const baseCents = Number(centsOverride || (row && row.table_price) || 0);
+  let row = priceRowFor(rows, placementNow, bodyZoneNow);
+  let bothCents = null;
+  if (leadGaveBothSides && placementNow === 'braco') {
+    const ext = rows.find(p => p.placement === 'braco_externo' && p.body_zone === bodyZoneNow);
+    const int = rows.find(p => p.placement === 'braco_interno' && p.body_zone === bodyZoneNow);
+    if (!ext || !int) return null; // one side missing: let the artist confirm
+    bothCents = Number(ext.table_price) + Number(int.table_price);
+    row = ext;
+  }
+  const baseCents = Number(centsOverride || bothCents || (row && row.table_price) || 0);
   if (!baseCents) return null;
   const offer = $('Build System Prompt').first().json.offer || {};
   const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
@@ -840,7 +860,9 @@ function deterministicQuote(centsOverride = null) {
     barriga: 'na barriga', ombro: 'no ombro', pulso: 'no pulso', dedo: 'no dedo', mao: 'na mão', pe: 'no pé',
   };
   const zones = { pequeno: 'uma tatuagem pequena', medio: 'uma tatuagem média', grande: 'uma tatuagem grande', fechamento: 'fechamento' };
-  const local = places[placementNow] || `em ${placementNow}`;
+  const local = (leadGaveBothSides && placementNow === 'braco')
+    ? 'no braço (partes externa e interna)'
+    : (places[placementNow] || `em ${placementNow}`);
   const zona = zones[bodyZoneNow] || bodyZoneNow;
   const description = `${zona} ${local}`;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
@@ -956,7 +978,15 @@ const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingTo
 const offer = $('Build System Prompt').first().json.offer || {};
 const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
-const hasPriceRow = !!priceRowFor(pricingRows, placementNow, bodyZoneNow);
+const bothSidesRows = leadGaveBothSides && placementNow === 'braco'
+  ? [
+      pricingRows.find(p => p.placement === 'braco_externo' && p.body_zone === bodyZoneNow),
+      pricingRows.find(p => p.placement === 'braco_interno' && p.body_zone === bodyZoneNow),
+    ]
+  : null;
+const hasPriceRow = bothSidesRows
+  ? (!!bothSidesRows[0] && !!bothSidesRows[1])
+  : !!priceRowFor(pricingRows, placementNow, bodyZoneNow);
 const replyHasPrice = /R\$\s*\d/.test(finalReply);
 const standardQuote = !lead.quoted_price_cents
   || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
@@ -990,7 +1020,7 @@ if (firstQuote) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
-  const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea;
+  const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   finalReply = genericPlacement
     ? (placementNow === 'braco'
@@ -1013,7 +1043,7 @@ if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   if (!bodyZoneNow) {
     finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
-  } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea) {
+  } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides) {
     finalReply = placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?';
@@ -1058,6 +1088,25 @@ if ((handoffSuppressed || recoveredFromHandoff)
 // Before the checkpoint is cleared, no model/classifier response may leak a
 // quote. Even when the model only gives a generic sign-off, keep the checkpoint
 // as the final question. Once cleared, never ask it again.
+// ── Don't re-ask a field the CRM already knows ─────────────────────────────
+// The model repeats "onde no corpo?", "qual estilo?", "primeira tatuagem?"
+// even when the context already has the answer. Replace a known-field question
+// with the next missing discovery question.
+const typeKnownForGuard = tipoDeterministic || lead.tattoo_type || null;
+const asksKnownField =
+  (typeKnownForGuard && /(?:tatuagem\s+)?nova.*cobertura|cobertura.*reforma|nova ou cobrir/i.test(finalReply))
+  || (placementNow && /onde\s+(?:no corpo|voc[eê]\s+(?:gostaria|quer))|qual\s+(?:o\s+)?local/i.test(finalReply))
+  || (bodyZoneNow && /partinha|área média|area media|fechamento/i.test(finalReply))
+  || (styleNow && /qual\s+(?:o\s+)?estilo/i.test(finalReply))
+  || (lead.first_tattoo != null && /primeira tatuagem/i.test(finalReply))
+  || (lead.meaning && /significado/i.test(finalReply));
+if (!processoExplicado && !priceGateOpen && asksKnownField) {
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
+}
+
 // The doubts question is a ONE-SHOT checkpoint: ask once after the process
 // explanation, then answer the lead's questions without repeating it. A loop
 // here used to trap leads who had already said "não tenho dúvidas".
@@ -1109,6 +1158,24 @@ if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
 if (goingToArtist && /^(?:antes de falarmos de valores,?\s*)?(?:mais|ficou) alguma d[uú]vida\?\s*$/i.test(finalReply.trim())) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   finalReply = 'Entendi! Vou passar seu atendimento para o ' + artistName + ' avaliar e te retornar, combinado?';
+}
+
+// If the checkpoint is already pending, do not keep asking the same question.
+// The model sometimes repeats it even after the one-shot instruction; strip a
+// trailing repeat from a substantive reply, and replace a bare repeat with an
+// acknowledgement of the lead's actual message.
+const bareCheckpoint = /^(?:antes de falarmos de valores,?\s*)?(?:mais|ficou) alguma d[uú]vida\?\s*$/i;
+if (checkpointWasPending && !explicitClearThisTurn) {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  if (bareCheckpoint.test(finalReply.trim())) {
+    finalReply = /[?]|^(?:onde|qual|quanto|como|quando|voc[eê]s?|tem|pode)/i.test(rawLead)
+      ? 'Boa pergunta! Vou confirmar com o ' + artistName + ' e já te retorno.'
+      : 'Entendi! Pode me contar um pouco mais sobre o que você tem em mente?';
+  } else {
+    finalReply = finalReply
+      .replace(/\s*(?:Antes de falarmos de valores,?\s*)?(?:Mais|Ficou) alguma d[uú]vida\?\s*$/i, '')
+      .trim();
+  }
 }
 
 // ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
@@ -1573,7 +1640,7 @@ WF = {
                     "conditions": [
                         {
                             "id": "group-chat-cond-0000",
-                            "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); return from.endsWith('@g.us') || p.isGroup === true; })() }}",
+                            "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); return from.endsWith('@g.us') || from === 'status@broadcast' || from.endsWith('@broadcast') || from.endsWith('@newsletter') || p.isGroup === true; })() }}",
                             "rightValue": True,
                             "operator": {"type": "boolean", "operation": "equals"},
                         }
@@ -2425,9 +2492,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT start_at, end_at, label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')));",
+                "query": "SELECT o.start_at, o.end_at, o.label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')), COALESCE(NULLIF(NULLIF($5::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined'))) o WHERE EXISTS (SELECT 1 FROM projects p WHERE p.id = $6::uuid AND p.artist_id = $1::uuid AND p.tattoo_type IS NOT NULL AND p.placement IS NOT NULL AND p.body_zone IS NOT NULL);",
                 "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $fromAI('preferred_day', 'Dia ou data que o lead pediu (ex.: sábado, 07/11, 2026-11-07). Preencha quando ele recusar as opções e disser um dia.', 'string'), $('Debounce Resolve').first().json.combined_text || ''] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $fromAI('preferred_day', 'Dia ou data que o lead pediu (ex.: sábado, 07/11, 2026-11-07). Preencha quando ele recusar as opções e disser um dia.', 'string'), $('Debounce Resolve').first().json.combined_text || '', $fromAI('preferred_time', 'Horário/janela que o lead pediu (ex.: depois das 14h, de manhã, 16h). Preencha quando ele disser um horário.', 'string'), $('Start Turn').first().json.project_id] }}"
                 },
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -3147,6 +3214,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
     },
     "settings": {
         "executionOrder": "v1",
+        "errorWorkflow": "vFVWbhRkVyhBFEy192YPV",
     },
 }
 

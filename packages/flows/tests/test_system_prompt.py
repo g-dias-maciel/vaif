@@ -39,7 +39,7 @@ with open(os.path.join(FLOWS_ROOT, "prompts", "beatriz-system.md")) as f:
     template = f.read()
 
 print("=== Template placeholders ===")
-expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}", "{{MODO_VENDA}}"]
+expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}", "{{MODO_VENDA}}", "{{CIDADE}}", "{{ENDERECO}}"]
 for ph in expected:
     check(f"placeholder {ph} present", ph in template)
 
@@ -93,6 +93,8 @@ repl = {
     "{{ESTILOS}}": ", ".join(artist["specialties"]),
     "{{NAO_FAZ}}": ", ".join(artist["excluded_styles"]),
     "{{MODO_VENDA}}": "MODO VENDA COMPLETA: siga todas as fases.",
+    "{{CIDADE}}": "Poços de Caldas",
+    "{{ENDERECO}}": "Rua das Flores, 123",
 }
 rendered = template
 for k, v in repl.items():
@@ -277,6 +279,15 @@ check("Patch Project fans out to quote persistence, promotion quote, name patch 
 check("handoff silence sets agent_blocked through the RPC",
       "set_agent_blocked" in nodes["Silence Agent on Handoff"]["parameters"]["query"]
       and "stage_key === 'aguardando_artista'" in nodes["Silence Agent on Handoff"]["parameters"]["options"]["queryReplacement"])
+check("status/broadcast/newsletter events are dropped before Start Turn",
+      "status@broadcast" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"]
+      and "@newsletter" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"])
+check("workflow routes errors to the error workflow",
+      wf["settings"].get("errorWorkflow") == "vFVWbhRkVyhBFEy192YPV")
+check("Resolve Artist exposes the studio address and city",
+      "AS address" in nodes["Resolve Artist"]["parameters"]["query"]
+      and "AS city" in nodes["Resolve Artist"]["parameters"]["query"])
+
 check("the Notion mirror is gone (RPCs write the audit trail)",
       "Log Event" not in nodes and "Enqueue Notion Sync" not in nodes
       and "Build Notion Sync Payload" not in nodes)
@@ -291,9 +302,9 @@ check("prompt requires intro even if the lead already described the tattoo",
       "AINDA QUE o lead já tenha descrito a tatuagem na primeira mensagem" in template)
 check("agent text threads primeira_mensagem",
       "primeira_mensagem=" in AGENT_TEXT_JS and "is_new" in AGENT_TEXT_JS)
-check("first reply asks only the name",
+check("first reply asks the name and acknowledges the lead's request",
       "Antes de começarmos, como posso te chamar?" in template
-      and "pergunte APENAS o nome" in template)
+      and "reconheça em UMA frase curta o que o lead já pediu" in template)
 
 # ── 3d. Date offers: exactly two options, labels, preferred day fallback ──
 print("=== Date offer ===")
@@ -303,6 +314,16 @@ check("Check Availability uses the two-option RPC",
 check("Check Availability reads the lead's own message for the day",
       "combined_text" in nodes["Check Availability"]["parameters"]["query"]
       or "combined_text" in str(nodes["Check Availability"]["parameters"].get("options", {}).get("queryReplacement", "")))
+check("Check Availability accepts a time window",
+      "preferred_time" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"]
+      and "$5" in nodes["Check Availability"]["parameters"]["query"])
+check("Check Availability is gated by qualification",
+      "p.tattoo_type IS NOT NULL" in nodes["Check Availability"]["parameters"]["query"]
+      and "p.body_zone IS NOT NULL" in nodes["Check Availability"]["parameters"]["query"])
+check("prompt injects the studio city and address",
+      "{{CIDADE}}" in template and "{{ENDERECO}}" in template)
+check("prompt allows at most one question per message",
+      "No máximo UMA pergunta por mensagem" in template)
 check("Check Availability accepts an explicit preferred_day (audio transcript)",
       "preferred_day" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"])
 check("agent tools parameterise every value (no SQL injection via $fromAI)",

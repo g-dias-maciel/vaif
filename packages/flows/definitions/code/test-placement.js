@@ -146,6 +146,19 @@ r = runParse({
 });
 check('explicit cover-up is persisted', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
 
+// ── 6b. "Parte de fora e de dentro" means BOTH sides, not the first one. ──
+console.log('=== Both sides of the arm ===');
+r = runParse({
+  start: start({ stage_key: 'qualificando', placement: 'braco', body_zone: 'fechamento', style: 'realismo', agent_state: {
+    processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'parte de fora e de dentro',
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 20000 } }),
+  agentOutput: 'Fica R$ 200,00 à vista.',
+});
+check('both sides are summed', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+check('description names both sides', /partes externa e interna/.test(r.final_reply), r.final_reply);
+
 // ── 7. "Ombro ao cotovelo" is the whole upper arm. If outer/inner cost the
 //       same, quote instead of asking the region again. ──
 console.log('=== Shoulder-to-elbow with equal outer/inner prices ===');
