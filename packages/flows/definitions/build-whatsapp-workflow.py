@@ -140,10 +140,11 @@ BUILD_SYSTEM_PROMPT_JS = (
     "let offerBlock = '_Nenhuma promoção ativa no momento. Apresente apenas o preço normal da tabela._';\n"
     "if (promoActive) {\n"
     "  offerBlock = 'PROMOÇÃO ATIVA: \"' + (offer.name || 'promoção') + '\". ' + (offer.description || '') + '\\n'\n"
-    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL. A segunda é agendada depois, com o artista. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
+    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL.\n'\n"
+    "    + 'A SEGUNDA tatuagem é confirmada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário para a segunda, não prometa a mesma sessão e não diga que o lead e outra pessoa podem tatuar juntos ou ao mesmo tempo. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
     "}\n"
     "if (openQuote) {\n"
-    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada.';\n"
+    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada ou que o preço da promoção seja diferente.';\n"
     "}\n"
     "\n"
     "const replacements = {\n"
@@ -871,7 +872,7 @@ function deterministicQuote(centsOverride = null) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
   if (offerLive) {
-    reply += ` E com a promoção "${offer.name || 'leve 2'}", nesse mesmo valor você leva uma segunda tatuagem de valor igual ou menor, que pode até ser para outra pessoa ou outro local. A segunda a gente agenda depois com o ${artistName}.`;
+    reply += ` E com a promoção "${offer.name || 'leve 2'}", nesse mesmo valor você leva uma segunda tatuagem de valor igual ou menor, que pode até ser para outra pessoa ou outro local. A segunda é confirmada depois direto com o ${artistName}; eu não agendo a segunda.`;
   }
   reply += ` Como fica esse valor para você?`;
   return { cents, reply, offer_active: offerLive, base_cents: baseCents };
@@ -979,19 +980,26 @@ let finalReply = priceGateViolation
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
 // ── Deterministic quote state: the model may not have quoted at all, so the
 //    price table decides whether a first/repeat quote goes out. ──
-const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework
+const offer = $('Build System Prompt').first().json.offer || {};
+const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
+// A live quote keeps its price: re-quoting the promotion price would silently
+// raise a number the lead already received.
+const openQuote = offer.open_quote === true;
+const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
   ? deterministicQuote()
   : null;
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
 const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
-  ? deterministicQuote(lead.quoted_price_cents || lead.table_price_cents)
+  ? deterministicQuote(
+      lead.quoted_price_cents
+      || lead.table_price_cents
+      || (openQuote ? Number(offer.open_quote_first_price) || null : null)
+    )
   : null;
 
 // If the model quoted the standard price while a promotion is active, replace
 // the quote with the promotion price. This also removes scheduling questions
 // from the same message: the lead must accept the price first.
-const offer = $('Build System Prompt').first().json.offer || {};
-const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
 const bothSidesRows = leadGaveBothSides && placementNow === 'braco'
   ? [
@@ -1003,15 +1011,28 @@ const hasPriceRow = bothSidesRows
   ? (!!bothSidesRows[0] && !!bothSidesRows[1])
   : !!priceRowFor(pricingRows, placementNow, bodyZoneNow);
 const replyHasPrice = /R\$\s*\d/.test(finalReply);
-const standardQuote = !lead.quoted_price_cents
-  || Number(lead.quoted_price_cents) === Number(lead.table_price_cents);
-const offerAlreadyMentioned = /(?:promo[cç][aã]o|leve 2|segunda tatuagem|leva uma segunda|segunda de valor)/i.test(finalReply);
-// The promotion quote only normalises the FIRST quote (when the model quoted
-// the table price while a promotion is live). Once the price is liberated, a
-// later reply may contain a negotiated discount ("pode ser" after 20% off);
-// replacing it with the promotion price would silently undo the negotiation.
-const promotionQuote = !firstQuote && !repeatedQuote && gateJustOpened && !precoLiberadoJa && !isCoverOrRework
-  && offerLive && replyHasPrice && standardQuote && !offerAlreadyMentioned && !goingToArtist
+// Amount actually written in the reply (the discount guard parses it again
+// later; this one decides whether the promotion price must replace it).
+const replyQuoteMatch = finalReply.match(/R\$\s*([\d.]+,\d{2})/);
+const replyQuoteCents = replyQuoteMatch
+  ? Math.round(Number(replyQuoteMatch[1].replace(/\./g, '').replace(',', '.')) * 100)
+  : 0;
+const promoRow = priceRowFor(pricingRows, placementNow, bodyZoneNow);
+const promoTableCents = promoRow ? Number(promoRow.table_price) : 0;
+const promoPriceCents = offerLive && promoTableCents > 0
+  ? Math.ceil(promoTableCents * Number(offer.multiplier))
+  : 0;
+// The promotion price is authoritative whenever the reply shows the table
+// price: the model quotes the table and only *mentions* the promotion, which
+// undercharges the pair. A negotiated discount stays untouched, and a live
+// open quote keeps price protection.
+const promotionQuote = !firstQuote && !repeatedQuote && !isCoverOrRework
+  && offerLive && replyHasPrice && !openQuote && !goingToArtist
+  && promoPriceCents > 0
+  // Only the raw table price (the model ignored the promotion) or a price
+  // above the promotion is rewritten; a negotiated discount below it is kept.
+  && (replyQuoteCents === promoTableCents || replyQuoteCents >= promoPriceCents)
+  && replyQuoteCents !== promoPriceCents
   ? deterministicQuote()
   : null;
 
@@ -1037,6 +1058,11 @@ if (firstQuote) {
   // artist will confirm the price.
   const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
+  const openQuotePrice = openQuote ? Number(offer.open_quote_first_price) || 0 : 0;
+  const openQuoteReply = openQuotePrice > 0 ? deterministicQuote(openQuotePrice) : null;
+  if (openQuoteReply) {
+    finalReply = openQuoteReply.reply;
+  } else {
   finalReply = genericPlacement
     ? (placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
@@ -1046,6 +1072,7 @@ if (firstQuote) {
     finalPipeline = 'aguardando_artista';
     finalEvent = 'handoff_triggered';
     finalHandoff = 'no_price_row';
+  }
   }
 }
 
@@ -1316,6 +1343,24 @@ if (discountApplied && !/instagram|insta\b|post|publica|marcand/i.test(finalRepl
     + (handle ? ' marcando o ' + handle : ' no Instagram') + '.';
 }
 
+// The second tattoo of a promotion belongs to the artist. The model keeps
+// promising the same session / booking both at once, which the artist then has
+// to undo. Drop those sentences and state the rule.
+if (offerLive && !goingToArtist) {
+  const secondNoun = /(?:segunda (?:tatuagem|tattoo)|segunda tattoo|primo|prima|amig[oa]|namorad[oa]|esposa|marido|acompanhante)/i;
+  const together = /(?:mesma sess[aã]o|mesmo hor[aá]rio|mesma hora|ao mesmo tempo|juntos|juntas|vir junto)/i;
+  if (secondNoun.test(finalReply) && together.test(finalReply)) {
+    const artistName = $('Resolve Artist').first().json.name || 'artista';
+    finalReply = finalReply
+      .split(/(?<=[.!?])\s+/)
+      .filter(sentence => !(secondNoun.test(sentence) && together.test(sentence)))
+      .join(' ')
+      .trim();
+    finalReply = (finalReply ? finalReply + '\\n\\n' : '')
+      + 'A segunda tatuagem é confirmada direto com o ' + artistName + ', eu não agendo a segunda.';
+  }
+}
+
 // The flag is driven by the one-shot decision, not by whether the model
 // happened to end the reply with a question mark.
 const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
@@ -1325,7 +1370,8 @@ const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && (checkpointWasPending || shouldAskDoubts);
 const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
 const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
-const quoteActuallySent = !isAudio && (!!firstQuote || !!repeatedQuote || (priceGateOpen && !priceGateViolation && /R\\$\\s*\\d/.test(finalReply)));
+const quoteActuallySent = !isAudio && /R\\$\\s*\\d/.test(finalReply)
+  && (!!firstQuote || !!repeatedQuote || !!promotionQuote || priceGateOpen);
 
 // Pipeline state must reflect the message that will actually be sent, not a
 // classifier's prediction about a reply that was replaced by the hard gate.
@@ -2575,7 +2621,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT o.start_at, o.end_at, o.label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')), COALESCE(NULLIF(NULLIF($5::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined'))) o WHERE EXISTS (SELECT 1 FROM projects p WHERE p.id = $6::uuid AND p.artist_id = $1::uuid AND p.tattoo_type IS NOT NULL AND p.placement IS NOT NULL AND p.body_zone IS NOT NULL);",
+                "query": "SELECT o.start_at, o.end_at, o.label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')), COALESCE(NULLIF(NULLIF($5::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined'))) o WHERE project_booking_ready($6::uuid, $1::uuid);",
                 "options": {
                     "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $fromAI('preferred_day', 'Dia ou data que o lead pediu (ex.: sábado, 07/11, 2026-11-07). Preencha quando ele recusar as opções e disser um dia.', 'string'), $('Debounce Resolve').first().json.combined_text || '', $fromAI('preferred_time', 'Horário/janela que o lead pediu (ex.: depois das 14h, de manhã, 16h). Preencha quando ele disser um horário.', 'string'), $('Start Turn').first().json.project_id] }}"
                 },

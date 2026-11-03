@@ -329,8 +329,7 @@ check("Check Availability accepts a time window",
       "preferred_time" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"]
       and "$5" in nodes["Check Availability"]["parameters"]["query"])
 check("Check Availability is gated by qualification",
-      "p.tattoo_type IS NOT NULL" in nodes["Check Availability"]["parameters"]["query"]
-      and "p.body_zone IS NOT NULL" in nodes["Check Availability"]["parameters"]["query"])
+      "project_booking_ready(" in nodes["Check Availability"]["parameters"]["query"])
 check("prompt injects the studio city and address",
       "{{CIDADE}}" in template and "{{ENDERECO}}" in template)
 check("prompt allows at most one question per message",
