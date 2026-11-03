@@ -810,6 +810,8 @@ const explicitClearThisTurn = checkpointWasPending && detectDuvidasZeradas(rawLe
 const duvidasEliminadas = state.duvidas_eliminadas === true || explicitClearThisTurn;
 
 const current = lead.stage_key || 'novo';
+const currentType = lead.tattoo_type || TIPO_DB[tipoDeterministic] || null;
+const isCoverOrRework = currentType === 'cover_up' || currentType === 'rework';
 const precoLiberadoJa = state.preco_liberado === true || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
 // Clearing doubts authorizes a quote, but the price is not considered
 // liberated until an actual quote has been sent.
@@ -947,6 +949,16 @@ if (tipoDeterministic === 'nova' && current === 'aguardando_artista') {
   recoveredFromHandoff = true;
 }
 
+// Cover-up/rework must not hand off before the process is explained; the
+// classifier still labels the type on the first mention.
+if (isCoverOrRework && !processoExplicado) {
+  finalHandoff = null;
+  if (finalPipeline === 'aguardando_artista') {
+    finalPipeline = current;
+    finalEvent = null;
+  }
+}
+
 // ── Price gate: a quote transition only counts once the gate is open.
 //    Otherwise the pipeline stays where it was and any explicit price in the
 //    reply is replaced by the safe doubts question (hard output gate). ──
@@ -959,17 +971,19 @@ const hasPrice = /R\\$\\s*\\d|\\b\\d+(?:[.,]\\d{2})?\\s*(?:reais|à vista|a vist
 const hasDeposit = /sinal|pix/i.test(agentOutput);
 const priceGateViolation = (hasPrice || hasDeposit) && !priceGateOpen;
 let finalReply = priceGateViolation
-  ? (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead))
+  ? (isCoverOrRework
+      ? (processoExplicado ? agentOutput : discoveryFallback(lead))
+      : (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead)))
   : agentOutput;
 
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
 // ── Deterministic quote state: the model may not have quoted at all, so the
 //    price table decides whether a first/repeat quote goes out. ──
-const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist
+const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework
   ? deterministicQuote()
   : null;
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
-const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist
+const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   ? deterministicQuote(lead.quoted_price_cents || lead.table_price_cents)
   : null;
 
@@ -996,7 +1010,7 @@ const offerAlreadyMentioned = /(?:promo[cç][aã]o|leve 2|segunda tatuagem|leva 
 // the table price while a promotion is live). Once the price is liberated, a
 // later reply may contain a negotiated discount ("pode ser" after 20% off);
 // replacing it with the promotion price would silently undo the negotiation.
-const promotionQuote = !firstQuote && !repeatedQuote && gateJustOpened && !precoLiberadoJa
+const promotionQuote = !firstQuote && !repeatedQuote && gateJustOpened && !precoLiberadoJa && !isCoverOrRework
   && offerLive && replyHasPrice && standardQuote && !offerAlreadyMentioned && !goingToArtist
   ? deterministicQuote()
   : null;
@@ -1039,7 +1053,7 @@ if (firstQuote) {
 // artist's table. Ask for the missing detail, or hand off when the region is
 // already specific.
 const quoteMissingRow = !firstQuote && !repeatedQuote && !promotionQuote
-  && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist;
+  && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist && !isCoverOrRework;
 if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   if (!bodyZoneNow) {
@@ -1108,10 +1122,31 @@ if (!processoExplicado && !priceGateOpen && asksKnownField) {
   });
 }
 
+// Cover-up/rework: once the process is explained, hand off for pricing and
+// scheduling. No price, no doubts question.
+// Only on the turn that actually hands off; a lead already with the artist
+// keeps the generic handoff guard below.
+if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista') {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  const handoffMsg = 'Vou te passar para o ' + artistName + ' para ele avaliar a tatuagem atual, passar o valor e combinar o horário.';
+  let body = finalReply
+    .replace(/R\$\s*[\d.,]+[^\\n]*/g, '')
+    .replace(/\s*(?:Antes de falarmos de valores,?\s*)?(?:Mais|Ficou) alguma d[uú]vida\?\s*$/i, '')
+    .replace(/\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
+    .trim();
+  if (!handoffPhrase.test(body)) {
+    body = body ? body + '\\n\\n' + handoffMsg : handoffMsg;
+  }
+  finalReply = body;
+  finalPipeline = 'aguardando_artista';
+  finalEvent = 'handoff_triggered';
+  finalHandoff = finalHandoff || (currentType === 'rework' ? 'reforma' : 'cover_up');
+}
+
 // The doubts question is a ONE-SHOT checkpoint: ask once after the process
 // explanation, then answer the lead's questions without repeating it. A loop
 // here used to trap leads who had already said "não tenho dúvidas".
-const shouldAskDoubts = !duvidasEliminadas && !precoLiberadoJa && !goingToArtist
+const shouldAskDoubts = !duvidasEliminadas && !precoLiberadoJa && !goingToArtist && !isCoverOrRework
   && processoExplicado && !checkpointWasPending;
 if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
   let trimmed = finalReply.trim();

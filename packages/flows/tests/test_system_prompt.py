@@ -509,6 +509,11 @@ check("multi-message acknowledgements clear the doubts gate",
       "const acknowledgement" in parse_js
       and "const noDoubt" in parse_js
       and "const doubtTalk" in parse_js)
+check("prompt has the cover-up/rework qualify-process-handoff flow",
+      "## Cobertura e reforma" in template
+      and "NUNCA dê preço" in template
+      and "peça UMA foto da tatuagem atual" in template
+      and "NÃO faça a pergunta de dúvidas" in template)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
 check("parse asks the doubts question only once",
