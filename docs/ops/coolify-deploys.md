@@ -31,9 +31,32 @@ Set per application in **General → Build → Watch Paths**.
 
 Server → **Advanced**:
 
-- **Concurrent builds: 1.** The box has no swap; two parallel PHP/composer
-  builds exhausted RAM and took down every container.
+- **Concurrent builds: 1.** Two parallel PHP/composer builds exhausted RAM and
+  took down every container (2026-11-03).
 - **Deployment timeout:** leave at the default.
+
+## Swap
+
+The server has 8 GB of RAM and, until 2026-11-03, **no swap** — a build spike
+went straight to memory exhaustion and the whole box stopped answering (kernel
+accepting TCP, no userspace). Provision 4 GB of swap on any server that builds
+images here:
+
+```sh
+fallocate -l 4G /swapfile
+chmod 600 /swapfile
+mkswap /swapfile
+swapon /swapfile
+echo "/swapfile none swap sw 0 0" >> /etc/fstab
+
+printf "vm.swappiness = 10\nvm.vfs_cache_pressure = 50\n" \
+  > /etc/sysctl.d/99-vaif-swap.conf
+sysctl -p /etc/sysctl.d/99-vaif-swap.conf
+```
+
+`swappiness = 10` keeps the box on RAM and only spills cold pages. Verify with
+`swapon --show` and `free -h`; swap that stays in the gigabytes after a build
+means the build no longer fits the machine.
 
 ## Verifying a deploy
 
