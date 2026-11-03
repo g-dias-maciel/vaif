@@ -52,5 +52,8 @@ jobs:
       - name: Reference image vision analysis
         run: node packages/flows/definitions/code/test-vision.js
 
+      - name: Per-artist blocked numbers
+        run: node packages/flows/definitions/code/test-blocked-number.js
+
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js

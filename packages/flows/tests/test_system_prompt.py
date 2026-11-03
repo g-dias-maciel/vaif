@@ -177,10 +177,16 @@ check("Build System Prompt injects the sales mode",
       "{{MODO_VENDA}}" in bsp["parameters"]["jsCode"]
       and "artist.full_selling" in bsp["parameters"]["jsCode"])
 
-check("Artist Found? routes through the group-chat guard and then Route Event",
+check("Artist Found? routes through the group-chat and blocked-number guards to Route Event",
       wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Group Chat?"
       and wf["connections"]["Group Chat?"]["main"][0] == []
-      and wf["connections"]["Group Chat?"]["main"][1][0]["node"] == "Route Event")
+      and wf["connections"]["Group Chat?"]["main"][1][0]["node"] == "Blocked Number?"
+      and wf["connections"]["Blocked Number?"]["main"][0] == []
+      and wf["connections"]["Blocked Number?"]["main"][1][0]["node"] == "Route Event")
+check("blocked numbers are loaded and compared as digits",
+      "blocked_numbers" in nodes["Resolve Artist"]["parameters"]["query"]
+      and "blocked_numbers" in nodes["Blocked Number?"]["parameters"]["conditions"]["conditions"][0]["leftValue"]
+      and "remoteJidAlt" in nodes["Blocked Number?"]["parameters"]["conditions"]["conditions"][0]["leftValue"])
 check("group chats are detected by @g.us / isGroup and dropped",
       "@g.us" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"]
       and "isGroup" in nodes["Group Chat?"]["parameters"]["conditions"]["conditions"][0]["leftValue"])

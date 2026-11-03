@@ -29,7 +29,7 @@
     {
       "parameters": {
         "operation": "executeQuery",
-        "query": "WITH found AS (\n  SELECT r FROM resolve_artist($1) r\n)\nSELECT (r->'artist'->>'id')::uuid                                        AS id,\n       COALESCE(NULLIF(r->'settings'->>'display_name', ''),\n                r->'artist'->>'name')                                    AS name,\n       r->'artist'->>'wa_session_slug'                                   AS wa_session_slug,\n       r->'artist'->>'status'                                            AS status,\n       r->'artist'->>'timezone'                                          AS timezone,\n       COALESCE(r->'settings'->'ai_active_hours', '{}'::jsonb)           AS ai_active_hours,\n       COALESCE(r->'settings'->'specialties', '[]'::jsonb)               AS specialties,\n       COALESCE(r->'settings'->'excluded_styles', '[]'::jsonb)           AS excluded_styles,\n       COALESCE((r->'settings'->>'full_selling')::boolean, true)         AS full_selling,\n       (r->'settings'->>'floor_pct')::numeric                            AS floor_pct,\n       COALESCE(r->'settings'->>'deposit_type', 'percent')               AS deposit_type,\n       (r->'settings'->>'deposit_value')::integer                        AS deposit_value,\n       r->'settings'->>'pix_key'                                         AS pix_key,\n       r->'settings'->>'instagram_handle'                                AS instagram_handle,\n       r->'settings'->>'whatsapp_number'                                 AS whatsapp_number,\n       r->'settings'->>'telegram_group_id'                               AS telegram_group_id,\n       r->'settings'->>'address'                                         AS address,\n       r->'settings'->>'city'                                            AS city,\n       true                                                              AS found\nFROM found\nUNION ALL\nSELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,\n       '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',\n       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text,\n       false\nWHERE NOT EXISTS (SELECT 1 FROM found)\nLIMIT 1;",
+        "query": "WITH found AS (\n  SELECT r FROM resolve_artist($1) r\n)\nSELECT (r->'artist'->>'id')::uuid                                        AS id,\n       COALESCE(NULLIF(r->'settings'->>'display_name', ''),\n                r->'artist'->>'name')                                    AS name,\n       r->'artist'->>'wa_session_slug'                                   AS wa_session_slug,\n       r->'artist'->>'status'                                            AS status,\n       r->'artist'->>'timezone'                                          AS timezone,\n       COALESCE(r->'settings'->'ai_active_hours', '{}'::jsonb)           AS ai_active_hours,\n       COALESCE(r->'settings'->'specialties', '[]'::jsonb)               AS specialties,\n       COALESCE(r->'settings'->'excluded_styles', '[]'::jsonb)           AS excluded_styles,\n       COALESCE((r->'settings'->>'full_selling')::boolean, true)         AS full_selling,\n       (r->'settings'->>'floor_pct')::numeric                            AS floor_pct,\n       COALESCE(r->'settings'->>'deposit_type', 'percent')               AS deposit_type,\n       (r->'settings'->>'deposit_value')::integer                        AS deposit_value,\n       r->'settings'->>'pix_key'                                         AS pix_key,\n       r->'settings'->>'instagram_handle'                                AS instagram_handle,\n       r->'settings'->>'whatsapp_number'                                 AS whatsapp_number,\n       r->'settings'->>'telegram_group_id'                               AS telegram_group_id,\n       r->'settings'->>'address'                                         AS address,\n       r->'settings'->>'city'                                            AS city,\n       COALESCE(r->'settings'->'blocked_numbers', '[]'::jsonb)           AS blocked_numbers,\n       true                                                              AS found\nFROM found\nUNION ALL\nSELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,\n       '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',\n       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, '[]'::jsonb,\n       false\nWHERE NOT EXISTS (SELECT 1 FROM found)\nLIMIT 1;",
         "options": {
           "queryReplacement": "={{ [$json.body.session] }}"
         }
@@ -114,6 +114,39 @@
       ],
       "id": "group-chat-0000-0000-0000-000000000001",
       "name": "Group Chat?"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "blocked-number-cond-0000",
+              "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; if (p.fromMe === true) return false; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); var alt = String(k.remoteJidAlt || k.senderPn || ''); var jid = (from.endsWith('@lid') && alt) ? alt : from; var digits = jid.replace(/@.*$/, '').replace(/\\D/g, ''); if (!digits) return false; var list = $('Resolve Artist').first().json.blocked_numbers || []; for (var i = 0; i < list.length; i++) { if (String(list[i]).replace(/\\D/g, '') === digits) return true; } return false; })() }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        780,
+        -60
+      ],
+      "id": "blocked-number-0000-0000-0000-000000000001",
+      "name": "Blocked Number?"
     },
     {
       "parameters": {
@@ -1768,6 +1801,18 @@
       ]
     },
     "Group Chat?": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Blocked Number?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Blocked Number?": {
       "main": [
         [],
         [

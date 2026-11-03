@@ -85,12 +85,13 @@ SELECT (r->'artist'->>'id')::uuid                                        AS id,
        r->'settings'->>'telegram_group_id'                               AS telegram_group_id,
        r->'settings'->>'address'                                         AS address,
        r->'settings'->>'city'                                            AS city,
+       COALESCE(r->'settings'->'blocked_numbers', '[]'::jsonb)           AS blocked_numbers,
        true                                                              AS found
 FROM found
 UNION ALL
 SELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,
        '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',
-       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text,
+       NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, '[]'::jsonb,
        false
 WHERE NOT EXISTS (SELECT 1 FROM found)
 LIMIT 1;"""
@@ -1655,6 +1656,35 @@ WF = {
             "id": "group-chat-0000-0000-0000-000000000001",
             "name": "Group Chat?",
         },
+        # 3a3. Blocked Number? — per-artist blocklist. Drop before Route Event,
+        #      so a blocked number never creates a Lead, buffer or reply.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "blocked-number-cond-0000",
+                            "leftValue": "={{ (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; if (p.fromMe === true) return false; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); var alt = String(k.remoteJidAlt || k.senderPn || ''); var jid = (from.endsWith('@lid') && alt) ? alt : from; var digits = jid.replace(/@.*$/, '').replace(/\D/g, ''); if (!digits) return false; var list = $('Resolve Artist').first().json.blocked_numbers || []; for (var i = 0; i < list.length; i++) { if (String(list[i]).replace(/\D/g, '') === digits) return true; } return false; })() }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [780, -60],
+            "id": "blocked-number-0000-0000-0000-000000000001",
+            "name": "Blocked Number?",
+        },
         # 3b. Route Event — presence updates only feed the debounce buffer;
         #     messages continue through the AI window gate. Anything else
         #     (session.status, acks) is dropped on the unconnected 3rd output.
@@ -2997,6 +3027,12 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             ]
         },
         "Group Chat?": {
+            "main": [
+                [],
+                [{"node": "Blocked Number?", "type": "main", "index": 0}],
+            ]
+        },
+        "Blocked Number?": {
             "main": [
                 [],
                 [{"node": "Route Event", "type": "main", "index": 0}],
