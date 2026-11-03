@@ -44,6 +44,7 @@ return new class extends Migration
             $table->string('display_name')->nullable();
             $table->json('specialties')->nullable();
             $table->json('excluded_styles')->nullable();
+            $table->json('blocked_numbers')->nullable();
             $table->boolean('full_selling')->default(true);
             $table->decimal('floor_pct', 5, 2)->nullable();
             $table->string('deposit_type')->default('percent');

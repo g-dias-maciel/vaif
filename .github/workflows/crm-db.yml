@@ -86,6 +86,7 @@ jobs:
           $PSQL -f packages/crm/db/migrations/0010_handoff_silence.sql
           $PSQL -f packages/crm/db/migrations/0011_booking_gates.sql
           $PSQL -f packages/crm/db/migrations/0012_artist_address.sql
+          $PSQL -f packages/crm/db/migrations/0013_blocked_numbers.sql
 
       - name: Contract tests
         env:

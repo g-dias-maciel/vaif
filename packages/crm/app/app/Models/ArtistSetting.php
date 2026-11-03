@@ -21,6 +21,7 @@ class ArtistSetting extends Model
         'specialties',
         'excluded_styles',
         'full_selling',
+        'blocked_numbers',
         'floor_pct',
         'deposit_type',
         'deposit_value',
@@ -38,6 +39,7 @@ class ArtistSetting extends Model
     protected $casts = [
         'specialties' => 'array',
         'excluded_styles' => 'array',
+        'blocked_numbers' => 'array',
         'full_selling' => 'boolean',
         'working_hours' => 'array',
         'ai_active_hours' => 'array',

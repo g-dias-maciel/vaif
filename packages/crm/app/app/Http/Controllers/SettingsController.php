@@ -223,6 +223,70 @@ class SettingsController extends Controller
     }
 
     /**
+     * Numbers the SDR agent must silently ignore.
+     *
+     * Stored as digits only (DDI + DDD + number). The workflow normalizes the
+     * WhatsApp JID, including LID addressing, to the same form.
+     */
+    public function updateBlockedNumbers(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist, 403);
+
+        $data = $request->validate([
+            'blocked_numbers' => ['nullable', 'string', 'max:6000'],
+        ]);
+
+        $numbers = $this->parseBlockedNumbers($data['blocked_numbers'] ?? '');
+
+        if (count($numbers) > 200) {
+            throw ValidationException::withMessages([
+                'blocked_numbers' => 'Informe no máximo 200 números.',
+            ]);
+        }
+
+        foreach ($numbers as $number) {
+            if (strlen($number) < 8 || strlen($number) > 15) {
+                throw ValidationException::withMessages([
+                    'blocked_numbers' => 'Cada número deve ter entre 8 e 15 dígitos (inclua o DDI).',
+                ]);
+            }
+        }
+
+        $this->settings($artist)->update([
+            'blocked_numbers' => $numbers,
+        ]);
+
+        return back()->with('status', $numbers === []
+            ? 'Lista de números bloqueados limpa.'
+            : 'Números bloqueados salvos.');
+    }
+
+    /**
+     * @return list<string>
+     */
+    private function parseBlockedNumbers(string $value): array
+    {
+        $parts = preg_split('/[,;\n]+/u', $value) ?: [];
+        $seen = [];
+        $numbers = [];
+
+        foreach ($parts as $part) {
+            $digits = preg_replace('/\D+/', '', $part) ?? '';
+
+            if ($digits === '' || isset($seen[$digits])) {
+                continue;
+            }
+
+            $seen[$digits] = true;
+            $numbers[] = $digits;
+        }
+
+        return $numbers;
+    }
+
+    /**
      * Switch the SDR agent between the full sales flow and triage-only.
      *
      * The flag is consumed by the agent prompt: when off, Beatriz collects the

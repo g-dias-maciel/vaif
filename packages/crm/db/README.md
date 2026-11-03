@@ -25,6 +25,7 @@ a **cutover**, not a layered migration: apply it to an empty `public` schema.
 | `0010_handoff_silence.sql` | `set_agent_blocked()` — silence the SDR when a Lead is handed off |
 | `0011_booking_gates.sql` | Booking qualification guard, deposit gate, time-window availability |
 | `0012_artist_address.sql` | `artist_settings.address` / `city` for the SDR studio answer |
+| `0013_blocked_numbers.sql` | `artist_settings.blocked_numbers` — numbers the SDR must ignore |
 
 Apply in that order. `0003` creates NOLOGIN group roles; the login roles (with
 passwords from Coolify env) are created per environment, outside the repo.

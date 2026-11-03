@@ -197,6 +197,42 @@
 </div>
 
 @php
+    $oldBlocked = old('blocked_numbers');
+    $blockedNumbers = is_string($oldBlocked)
+        ? array_filter(array_map('trim', explode(',', $oldBlocked)))
+        : ($artist->settings?->blocked_numbers ?? []);
+@endphp
+<div class="panel" style="margin-bottom: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Números bloqueados</h2>
+    <p class="meta">
+        A Beatriz ignora estes números: não responde, não cria lead e não agenda. Use DDI + DDD + número.
+    </p>
+
+    <form method="post" action="{{ route('settings.blocked-numbers') }}" style="margin-top:12px;">
+        @csrf
+        <div class="form-field" style="max-width:520px;">
+            <div class="tag-field" data-tag-field data-name="blocked_numbers">
+                <span data-tag-chips style="display:contents;">
+                    @foreach ($blockedNumbers as $number)
+                        <span class="tag-field__chip" data-value="{{ $number }}">
+                            {{ $number }}
+                            <button type="button" data-tag-remove aria-label="Remover {{ $number }}">&times;</button>
+                        </span>
+                    @endforeach
+                </span>
+                <input type="text" data-tag-entry inputmode="tel" autocomplete="off"
+                    placeholder="+55 11 99999-0001">
+            </div>
+            <input type="hidden" name="blocked_numbers" data-tag-value value="{{ implode(',', $blockedNumbers) }}">
+            @error('blocked_numbers')
+                <span class="meta" style="color: var(--danger);">{{ $message }}</span>
+            @enderror
+        </div>
+        <button type="submit" class="btn btn--small" style="margin-top:10px;">Salvar números bloqueados</button>
+    </form>
+</div>
+
+@php
     $oldSpecialties = old('specialties');
     $specialties = is_string($oldSpecialties)
         ? array_filter(array_map('trim', explode(',', $oldSpecialties)))
