@@ -30,8 +30,9 @@ function check(label, cond, detail) {
   }
 }
 
-function run({ start, leadText, ai, classifier }) {
+function run({ start, leadText, ai, classifier, photo = false }) {
   const $ = (name) => ({
+    isExecuted: name === 'Parse Reference Analysis' ? !!photo : undefined,
     first: () => {
       if (name === 'Start Turn') return { json: start };
       if (name === 'AI Agent') return { json: { output: ai } };
@@ -40,6 +41,9 @@ function run({ start, leadText, ai, classifier }) {
         return { json: { pricing_rows: [{ placement: 'braco_externo', body_zone: 'fechamento', table_price: 10000 }], offer: { promo_active: false } } };
       }
       if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Adriano' } };
+      if (name === 'Parse Reference Analysis') {
+        return { json: { reference_analysis: { assunto: 'tatuagem antiga no braço', confianca: 'alta' } } };
+      }
       return { json: {} };
     },
   });
@@ -85,13 +89,51 @@ let r = run({
   classifier: classifier({ handoff: { reason: 'cover_up' } }),
 });
 check('no handoff before the process', r.stage_key === 'qualificando' && !r.handoff_reason, JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
+check('asks for a photo of the existing tattoo', /manda uma foto/i.test(r.final_reply), r.final_reply);
+check('does not ask for the size', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
 check('no price before the process', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+
+// ── 1b. With the photo, the size question is replaced and the process comes. ──
+console.log('=== Cover-up: photo received, no size question ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', placement: 'braco' }),
+  leadText: 'quero cobrir uma tattoo no braço',
+  ai: 'Nesse braço, você quer cobrir só uma partinha, uma área média ou o braço inteiro?',
+  classifier: classifier(),
+  photo: true,
+});
+check('does not ask for the size once the photo arrived', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
+check('moves on to the process', /processo de criação/i.test(r.final_reply), r.final_reply);
+
+// ── 1c. A later size question is replaced too, while the photo is missing. ──
+console.log('=== Cover-up: size question after the process is blocked ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', placement: 'braco', agent_state: {
+    processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'pode ser',
+  ai: 'Nesse braço, você quer cobrir só uma partinha, uma área média ou o braço inteiro?',
+  classifier: classifier(),
+});
+check('no size question for cover-up', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
+check('asks for the photo instead', /manda uma foto/i.test(r.final_reply), r.final_reply);
+
+// ── 1d. Rework asks for a photo of the tattoo to be reworked. ──
+console.log('=== Rework: photo wording ===');
+r = run({
+  start: start({ tattoo_type: 'rework' }),
+  leadText: 'quero reformar uma tatuagem',
+  ai: 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?',
+  classifier: classifier(),
+});
+check('asks for a photo to reformar', /reformar/i.test(r.final_reply) && /foto/i.test(r.final_reply), r.final_reply);
 
 // ── 2. After the process explanation, hand off without a price. ──
 console.log('=== Cover-up: process explained ===');
 r = run({
   start: start({ tattoo_type: 'cover_up', body_zone: 'fechamento', style: 'realismo' }),
   leadText: 'sem dúvida',
+  photo: true,
   ai: 'O processo de criação do Adriano é assim: ele vai sentar junto com você e criar um projeto exclusivo. Fica R$ 1.500 à vista.',
   classifier: classifier({ handoff: { reason: 'cover_up' } }),
 });
@@ -106,6 +148,7 @@ console.log('=== Rework: process explained ===');
 r = run({
   start: start({ tattoo_type: 'rework', body_zone: 'fechamento' }),
   leadText: 'ok',
+  photo: true,
   ai: 'O processo de criação do Adriano é assim: projeto exclusivo, tirar as medidas, encaixe perfeito.',
   classifier: classifier({ handoff: { reason: 'reforma' } }),
 });

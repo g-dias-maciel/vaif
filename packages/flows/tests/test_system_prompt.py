@@ -512,7 +512,8 @@ check("multi-message acknowledgements clear the doubts gate",
 check("prompt has the cover-up/rework qualify-process-handoff flow",
       "## Cobertura e reforma" in template
       and "NUNCA dê preço" in template
-      and "peça UMA foto da tatuagem atual" in template
+      and "UMA foto da tatuagem atual" in template
+      and "NÃO pergunte tamanho" in template
       and "NÃO faça a pergunta de dúvidas" in template)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
