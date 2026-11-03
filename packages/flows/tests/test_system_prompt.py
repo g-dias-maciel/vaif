@@ -419,19 +419,11 @@ check("a standard quote is replaced by the active promotion",
 
 check("the canonical checkpoint is removed as a whole, not cut in half",
       _cut == "" and parse_js.count("trailingCheckpoint") >= 2)
-check("rhetorical questions do not hide the doubts checkpoint",
-      "rhetoricalQuestionCount" in parse_js
-      and "tudo bem|tudo bom" in parse_js)
-# Behavioural check of the same rule: "tudo bem?" before the checkpoint must not
-# count as an earlier discovery question, otherwise "não" never clears the gate.
-_rhetorical = re.compile(r"(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu)\s*\?", re.I)
-_process = ("Agora, vou te explicar como funciona o processo de criação: "
-            "ele vai conversar com você, tudo bem? "
-            "Antes de falarmos de valores, ficou alguma dúvida?")
-_earlier = _process[: _process.rfind("?")]
-check("process explanation ends with a recognised checkpoint question",
-      re.search(r"(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\s*\?\s*$", _process, re.I) is not None
-      and (_earlier.count("?") - len(_rhetorical.findall(_earlier))) == 0)
+check("the doubts checkpoint is one-shot, not a reply loop",
+      "shouldAskDoubts" in parse_js
+      and "!checkpointWasPending" in parse_js
+      and "(checkpointWasPending || shouldAskDoubts)" in parse_js
+      and "const preGateDoubtLoop" not in parse_js)
 check("parse deterministically records a sent quote even if classifier missed it",
       "Deterministic quote state" in parse_js
       and "finalPipeline = 'orcamento_enviado'" in parse_js)
@@ -482,10 +474,10 @@ check("multi-message acknowledgements clear the doubts gate",
       and "const doubtTalk" in parse_js)
 check("prompt handles generic placements without handoff",
       "Se o local for GENÉRICO" in template and "NÃO faça handoff" in template)
-check("parse enforces the doubt-loop follow-up while pre-price",
-      "preGateDoubtLoop" in parse_js and "Mais alguma dúvida?'" in parse_js)
-check("prompt states the last-line doubt rule",
-      "REGRA DA ÚLTIMA LINHA" in template)
+check("parse asks the doubts question only once",
+      "shouldAskDoubts" in parse_js and "!checkpointWasPending" in parse_js)
+check("prompt asks the doubts question only once",
+      "UMA ÚNICA VEZ" in template and "REGRA DA ÚLTIMA LINHA" not in template)
 check("start_turn returns the scratch state",
       "start_turn" in nodes["Start Turn"]["parameters"]["query"])
 check("agent text threads preco_liberado",

@@ -712,6 +712,10 @@ function detectDuvidasZeradas(t) {
   if (!t) return false;
   const messages = t.split(/\\n+/).map(s => s.trim().toLowerCase()).filter(Boolean);
   if (!messages.length) return false;
+
+  // Common Portuguese confirmations the regex lists below used to miss.
+  if (/(?:n[aã]o (?:ficou|tem|tenho)|nenhuma|sem)\s+(?:nenhuma\s+)?d[uú]vida(?:\s+nenhuma)?/i.test(t)) return true;
+  if (/^(?:pode|manda|me manda|quero)\s+(?:passar|mandar|ver|saber)?\s*(?:o\s+)?(?:valor|pre[cç]o|or[cç]amento)\b/i.test(t)) return true;
   const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
   const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
@@ -1028,24 +1032,38 @@ const handoffPhrase = /vou (?:te )?passar|passar (?:as )?informa(?:ç|c)(?:õ|o)
 if ((handoffSuppressed || recoveredFromHandoff)
     && (handoffPhrase.test(finalReply)
         || (handoffSuppressed && /cover-?up|cobertura|reforma/i.test(finalReply)))) {
-  const newKnown = tipoDeterministic === 'nova' || lead.tattoo_type === 'new';
+  const typeKnown = tipoDeterministic || lead.tattoo_type || null;
+  const newKnown = typeKnown === 'nova' || typeKnown === 'new';
   if (newKnown) {
     finalReply = 'Perfeito, então é uma tatuagem nova! ' + nextDiscoveryQuestion(lead);
     finalPipeline = 'qualificando';
-  } else {
+    finalEvent = null;
+    finalHandoff = null;
+  } else if (!typeKnown) {
     finalReply = 'Só pra eu entender: você quer uma tatuagem nova ou cobrir/reformar uma tatuagem que já existe?';
     finalPipeline = current;
+    finalEvent = null;
+    finalHandoff = null;
+  } else {
+    // The type is already cover-up/rework: the handoff stands. Asking the
+    // type question again here trapped the lead in a loop.
+    const artistName = $('Resolve Artist').first().json.name || 'artista';
+    finalReply = 'Entendi! Vou passar seu atendimento para o ' + artistName + ' avaliar e te retornar, combinado?';
+    finalPipeline = 'aguardando_artista';
+    finalEvent = 'handoff_triggered';
+    finalHandoff = finalHandoff || 'cover_up';
   }
-  finalEvent = null;
-  finalHandoff = null;
 }
 
 // Before the checkpoint is cleared, no model/classifier response may leak a
 // quote. Even when the model only gives a generic sign-off, keep the checkpoint
 // as the final question. Once cleared, never ask it again.
-const preGateDoubtLoop = !priceGateOpen && processoExplicado && !duvidasEliminadas;
-if (preGateDoubtLoop && !priceGateViolation && !hasPrice
-    && !goingToArtist && finalReply.trim()) {
+// The doubts question is a ONE-SHOT checkpoint: ask once after the process
+// explanation, then answer the lead's questions without repeating it. A loop
+// here used to trap leads who had already said "não tenho dúvidas".
+const shouldAskDoubts = !duvidasEliminadas && !precoLiberadoJa && !goingToArtist
+  && processoExplicado && !checkpointWasPending;
+if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
   let trimmed = finalReply.trim();
 
   // The model sometimes copies the prompt's quoted sample verbatim. Strip
@@ -1084,6 +1102,13 @@ if (preGateDoubtLoop && !priceGateViolation && !hasPrice
     : 'Mais alguma dúvida?';
   trimmed = trimmed ? trimmed + '\\n\\n' + directQuestion : directQuestion;
   finalReply = trimmed;
+}
+
+// In a handoff state the artist owns the sale. The model sometimes keeps
+// asking the doubts question; replace a bare doubts reply with a handoff.
+if (goingToArtist && /^(?:antes de falarmos de valores,?\s*)?(?:mais|ficou) alguma d[uú]vida\?\s*$/i.test(finalReply.trim())) {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  finalReply = 'Entendi! Vou passar seu atendimento para o ' + artistName + ' avaliar e te retornar, combinado?';
 }
 
 // ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
@@ -1188,21 +1213,13 @@ if (discountApplied && !/instagram|insta\b|post|publica|marcand/i.test(finalRepl
     + (handle ? ' marcando o ' + handle : ' no Instagram') + '.';
 }
 
-const finalReplyAsksCheckpoint = /(?:mais alguma|ficou alguma|alguma (?:outra )?)(?:pergunta|d[uú]vida)\\s*\\?\\s*$/i.test(finalReply.trim());
-// Rhetorical questions ("tudo bem?", "pode ser?") are part of the process
-// explanation, not real discovery questions. Counting them as an earlier
-// question used to suppress the checkpoint flag, so the lead's "não" was
-// never recognized and Beatriz asked the same question again.
-const earlierText = finalReply.slice(0, finalReply.lastIndexOf('?'));
-const earlierQuestionCount = (earlierText.match(/\?/g) || []).length;
-const rhetoricalQuestionCount = (earlierText.match(/(?:tudo bem|tudo bom|pode ser|certo|ok|okay|beleza|combinado|entendeu|n[ée]|n[ãa]o [ée]|viu|t[áa]|n[ãa]o acha)\s*\?/gi) || []).length;
-const hasEarlierQuestion = earlierQuestionCount > rhetoricalQuestionCount;
+// The flag is driven by the one-shot decision, not by whether the model
+// happened to end the reply with a question mark.
 const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && !precoLiberadoJa
   && !goingToArtist
   && processoExplicado
-  && finalReplyAsksCheckpoint
-  && !hasEarlierQuestion;
+  && (checkpointWasPending || shouldAskDoubts);
 const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
 const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
 const quoteActuallySent = !isAudio && (!!firstQuote || !!repeatedQuote || (priceGateOpen && !priceGateViolation && /R\\$\\s*\\d/.test(finalReply)));

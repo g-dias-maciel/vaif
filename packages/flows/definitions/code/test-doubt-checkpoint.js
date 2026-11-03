@@ -159,5 +159,66 @@ check('doubts stay unresolved', turn3.duvidas_eliminadas_val === false);
 check('checkpoint remains pending', turn3.aguardando_confirmacao_duvidas_val === true);
 check('quote is blocked', !/R\$\s*\d/.test(turn3.final_reply), turn3.final_reply);
 
+// ── 4. Handoff state: the artist owns the sale. A bare doubts question from
+//       the model must not be repeated; it becomes a handoff.
+console.log('=== Handoff does not repeat the doubts question ===');
+const handoff = runParse({
+  start: {
+    stage_key: 'aguardando_artista',
+    placement: 'braco',
+    body_zone: 'fechamento',
+    style: 'realismo',
+    tattoo_type: 'cover_up',
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: false,
+      aguardando_confirmacao_duvidas: false,
+      preco_liberado: false,
+    },
+  },
+  agentOutput: 'Antes de falarmos de valores, ficou alguma dúvida?',
+  combinedText: 'não ficou dúvida nenhuma',
+  classifier: {
+    pipeline: 'qualificando',
+    event: null,
+    qualification: {},
+    pricing: {},
+    handoff: {},
+    price_gate: {},
+  },
+});
+check('handoff replaces the doubts question', /passar seu atendimento/i.test(handoff.final_reply), handoff.final_reply);
+check('handoff does not arm the checkpoint', handoff.aguardando_confirmacao_duvidas_val === false);
+
+// ── 5. A clear Portuguese no-doubt phrase clears a pending checkpoint. ──
+console.log('=== "não ficou dúvida nenhuma" clears the checkpoint ===');
+const cleared = runParse({
+  start: {
+    stage_key: 'qualificando',
+    placement: 'braco',
+    body_zone: 'fechamento',
+    style: 'realismo',
+    tattoo_type: 'new',
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: false,
+      aguardando_confirmacao_duvidas: true,
+      preco_liberado: false,
+    },
+  },
+  agentOutput: 'Perfeito! Para fechamento no braço, fica R$ 100,00 à vista.',
+  combinedText: 'não ficou dúvida nenhuma',
+  classifier: {
+    pipeline: 'qualificando',
+    event: null,
+    qualification: {},
+    pricing: { table_cents: 10000, nego_cents: 10000 },
+    handoff: {},
+    price_gate: {},
+  },
+});
+check('clear phrase clears doubts', cleared.duvidas_eliminadas_val === true);
+check('quote goes out', /R\$\s*100,00/.test(cleared.final_reply), cleared.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
