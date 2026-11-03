@@ -159,9 +159,10 @@
         @endif
 
         @if (! in_array($project->stage_key, ['fechado', 'perdido'], true))
+            @php($handoff = $project->stage_key === 'aguardando_artista')
             <div style="margin-top: 20px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;">
-                @if (! $fullSelling)
-                    {{-- Triage-only artist: pricing and scheduling happen outside the CRM. --}}
+                @if (! $fullSelling || $handoff)
+                    {{-- Triage-only or handed-off lead: pricing/scheduling happen outside the CRM. --}}
                     @if ($project->stage_key !== 'agendado')
                         <form method="post" action="{{ route('projects.schedule', $project) }}" class="inline">
                             @csrf

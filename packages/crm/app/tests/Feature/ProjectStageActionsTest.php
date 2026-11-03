@@ -88,7 +88,20 @@ class ProjectStageActionsTest extends TestCase
             ->assertSee('Marcar como finalizado');
     }
 
-    public function test_full_selling_artists_do_not_see_the_manual_stage_actions(): void
+    public function test_full_selling_artists_do_not_see_the_manual_stage_actions_on_a_normal_lead(): void
+    {
+        $artist = $this->artist('full', true);
+        $lead = $this->lead($artist);
+        $this->project($artist, $lead, 'qualificando');
+        $user = $this->user($artist);
+
+        $this->actingAs($user)->get('/leads/'.$lead->id)
+            ->assertOk()
+            ->assertDontSee('Marcar como agendado')
+            ->assertDontSee('Marcar como finalizado');
+    }
+
+    public function test_full_selling_artists_see_the_manual_stage_actions_on_a_handoff_lead(): void
     {
         $artist = $this->artist('full', true);
         $lead = $this->lead($artist);
@@ -97,8 +110,8 @@ class ProjectStageActionsTest extends TestCase
 
         $this->actingAs($user)->get('/leads/'.$lead->id)
             ->assertOk()
-            ->assertDontSee('Marcar como agendado')
-            ->assertDontSee('Marcar como finalizado');
+            ->assertSee('Marcar como agendado')
+            ->assertSee('Marcar como finalizado');
     }
 
     public function test_the_dashboard_board_offers_manual_actions_for_triage_only_artists(): void
@@ -114,18 +127,29 @@ class ProjectStageActionsTest extends TestCase
             ->assertSee('Finalizar');
     }
 
-    public function test_a_full_selling_artist_cannot_schedule_manually(): void
+    public function test_a_full_selling_artist_cannot_schedule_a_normal_lead_manually(): void
     {
         $artist = $this->artist('full', true);
         $lead = $this->lead($artist);
-        $project = $this->project($artist, $lead);
+        $project = $this->project($artist, $lead, 'qualificando');
         $user = $this->user($artist);
 
         $this->actingAs($user)
             ->post('/projects/'.$project->id.'/schedule')
             ->assertForbidden();
 
-        $this->assertSame('aguardando_artista', $project->refresh()->stage_key);
+        $this->assertSame('qualificando', $project->refresh()->stage_key);
+    }
+
+    public function test_the_policy_allows_schedule_and_complete_on_a_handoff_lead(): void
+    {
+        $artist = $this->artist('full', true);
+        $lead = $this->lead($artist);
+        $project = $this->project($artist, $lead);
+        $user = $this->user($artist);
+
+        $this->assertTrue($user->can('schedule', $project));
+        $this->assertTrue($user->can('complete', $project));
     }
 
     public function test_an_artist_cannot_schedule_another_artists_project(): void
@@ -150,6 +174,25 @@ class ProjectStageActionsTest extends TestCase
         }
 
         $artist = $this->artist('triage', false);
+        $lead = $this->lead($artist);
+        $project = $this->project($artist, $lead);
+        $user = $this->user($artist);
+
+        $this->actingAs($user)
+            ->post('/projects/'.$project->id.'/schedule')
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertSame('agendado', $project->refresh()->stage_key);
+    }
+
+    public function test_a_full_selling_artist_can_mark_a_handoff_lead_as_scheduled(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Requires the Postgres RPCs (see packages/crm/db/tests/v2_contract.sql).');
+        }
+
+        $artist = $this->artist('full', true);
         $lead = $this->lead($artist);
         $project = $this->project($artist, $lead);
         $user = $this->user($artist);

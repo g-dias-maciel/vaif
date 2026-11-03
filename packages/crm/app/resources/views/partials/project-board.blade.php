@@ -63,7 +63,8 @@
                                 @if ($project->whatsapp_url)
                                     <a href="{{ $project->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
                                 @endif
-                                @if ($triageOnly)
+                                @php($handoff = $project->stage_key === 'aguardando_artista')
+                                @if ($triageOnly || $handoff)
                                     @if (! in_array($project->stage_key, ['agendado', 'fechado', 'perdido'], true))
                                         <form method="post" action="{{ route('projects.schedule', $project) }}" class="inline">
                                             @csrf

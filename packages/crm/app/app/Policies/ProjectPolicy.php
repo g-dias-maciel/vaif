@@ -40,9 +40,11 @@ class ProjectPolicy
      */
     public function schedule(User $user, Project $project): bool
     {
-        // Manual scheduling exists for triage-only artists: the agent never
-        // quotes or books for them, so they move the pipeline themselves.
-        if ($project->artist?->settings?->full_selling !== false) {
+        // Manual scheduling exists for triage-only artists and for any lead
+        // the agent handed off (cover-up/rework, no price row, etc.).
+        $inHandoff = $project->stage_key === 'aguardando_artista';
+
+        if (! $inHandoff && $project->artist?->settings?->full_selling !== false) {
             return false;
         }
 
