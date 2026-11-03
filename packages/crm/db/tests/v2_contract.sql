@@ -195,14 +195,12 @@ begin
   select * into p from projects
    where artist_id = pg_temp.artist_a()
    order by created_at desc limit 1;
+  update projects set tattoo_type = 'new' where id = p.id;
 
-  -- The deposit gate: no signal before the slot is actually booked.
-  begin
-    perform request_deposit(pg_temp.artist_a(), p.id, 18000, 'pix');
-    perform pg_temp.ok(false, 'a deposit before booking must fail');
-  exception when sqlstate '22023' then
-    perform pg_temp.ok(true, 'a deposit before booking is refused');
-  end;
+  -- The deposit gate: no signal before the slot is actually booked. The RPC
+  -- returns an empty set (the agent must book first), it does not raise.
+  select * into pay from request_deposit(pg_temp.artist_a(), p.id, 18000, 'pix');
+  perform pg_temp.ok(pay.id is null, 'a deposit before booking returns no payment');
 
   select * into b from book_slot(
     pg_temp.artist_a(), p.id, timestamptz '2027-05-10 10:00:00-03');
@@ -272,6 +270,7 @@ begin
   select * into p1 from create_project(pg_temp.artist_a(), lead_a, 'braco', 'pequeno');
   select * into p2 from create_project(pg_temp.artist_a(), lead_a, 'costas', 'grande');
   select * into p3 from create_project(pg_temp.artist_b(), lead_b, 'antebraco', 'medio');
+  update projects set tattoo_type = 'new' where id in (p1.id, p2.id, p3.id);
 
   -- 2027-03-01 is a Monday; 10:00 local (UTC-3) = 13:00 UTC.
   select * into b1 from book_slot(pg_temp.artist_a(), p1.id, timestamptz '2027-03-01 10:00:00-03');
@@ -727,6 +726,7 @@ begin
   perform pg_temp.ok(n = 1, 'list_prices returns the current rows for the Artist');
 
   -- Deposit state is surfaced to the prompt, but only after booking.
+  update projects set tattoo_type = 'new', placement = 'braco', body_zone = 'pequeno' where id = t2.project_id;
   select * into cal from book_slot(
     pg_temp.artist_a(), t2.project_id, timestamptz '2027-06-01 10:00:00-03', 120, 'staff');
   perform pg_temp.ok(cal.id is not null, 'the agent books a slot before the deposit');

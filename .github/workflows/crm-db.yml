@@ -81,6 +81,11 @@ jobs:
           $PSQL -f packages/crm/db/migrations/0005_deposit_stage.sql
           $PSQL -f packages/crm/db/migrations/0006_tattoo_completed.sql
           $PSQL -f packages/crm/db/migrations/0007_artist_notifications.sql
+          $PSQL -f packages/crm/db/migrations/0008_agent_mode.sql
+          $PSQL -f packages/crm/db/migrations/0009_chat_memory_write.sql
+          $PSQL -f packages/crm/db/migrations/0010_handoff_silence.sql
+          $PSQL -f packages/crm/db/migrations/0011_booking_gates.sql
+          $PSQL -f packages/crm/db/migrations/0012_artist_address.sql
 
       - name: Contract tests
         env:

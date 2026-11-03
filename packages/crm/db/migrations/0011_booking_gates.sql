@@ -156,6 +156,11 @@ $$;
 -- and filters the slots, so the agent can never offer or book a morning slot
 -- to someone who said they work mornings.
 -- =============================================================================
+-- The old 5-argument overload (with defaults) makes 4/5-argument calls
+-- ambiguous once the 6-argument version exists. Drop it; the new function's
+-- defaults cover every previous call.
+drop function if exists booking_options(uuid, timestamptz, timestamptz, integer, text);
+
 create or replace function booking_options(
   p_artist_id    uuid,
   p_from         timestamptz,
