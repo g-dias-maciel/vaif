@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\CalendarEntry;
+use App\Models\ChatMessage;
 use App\Models\Project;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
@@ -145,8 +146,13 @@ class DashboardController extends Controller
             ];
         }
 
+        $lastMessageAt = ChatMessage::latestTimesForLeads(
+            $projects->pluck('lead_id')->unique()->filter()->all()
+        );
+
         return view('dashboard.index', [
             'artist' => $artist,
+            'lastMessageAt' => $lastMessageAt,
             'activePromotion' => $artist->activePromotion,
             'projects' => $projects,
             'pendingHandoffs' => $pendingHandoffs,

@@ -62,6 +62,41 @@ class ChatMessage extends Model
     }
 
     /**
+     * Latest message time per Lead, for the dashboard cards.
+     *
+     * @param  array<int, string>  $leadIds
+     * @return array<string, Carbon>
+     */
+    public static function latestTimesForLeads(array $leadIds): array
+    {
+        if ($leadIds === [] || DB::connection()->getDriverName() !== 'pgsql') {
+            return [];
+        }
+
+        try {
+            $rows = DB::table('agent_memory.chat_memory')
+                ->select('session_id', DB::raw('max(created_at) as last_at'))
+                ->whereIn('session_id', $leadIds)
+                ->groupBy('session_id')
+                ->get();
+
+            $times = [];
+            foreach ($rows as $row) {
+                if ($row->last_at) {
+                    $times[(string) $row->session_id] = Carbon::parse($row->last_at)
+                        ->setTimezone(config('app.timezone'));
+                }
+            }
+
+            return $times;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return [];
+        }
+    }
+
+    /**
      * `human` (lead) or `ai` (Beatriz/SDR).
      */
     public function getMessageTypeAttribute(): string
@@ -72,6 +107,26 @@ class ChatMessage extends Model
     public function getDirectionAttribute(): string
     {
         return $this->message_type === 'human' ? 'inbound' : 'outbound';
+    }
+
+    /**
+     * Messages sent by the artist from their own WhatsApp are stored as `ai`
+     * with `additional_kwargs.author = 'artist'`.
+     */
+    public function getIsArtistAttribute(): bool
+    {
+        $extra = $this->message['additional_kwargs'] ?? [];
+
+        return is_array($extra) && ($extra['author'] ?? null) === 'artist';
+    }
+
+    public function getSenderLabelAttribute(): string
+    {
+        if ($this->message_type === 'human') {
+            return 'Cliente';
+        }
+
+        return $this->is_artist ? 'Artista' : 'Beatriz';
     }
 
     public function getIsToolAttribute(): bool

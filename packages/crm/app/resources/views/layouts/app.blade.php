@@ -358,6 +358,7 @@
         .chat-bubble { max-width: 78%; padding: 9px 12px; border-radius: 12px; border: 1px solid var(--border); background: var(--panel-2); }
         .chat-bubble.inbound { align-self: flex-start; border-top-left-radius: 4px; }
         .chat-bubble.outbound { align-self: flex-end; border-top-right-radius: 4px; background: rgba(212,176,76,0.10); border-color: rgba(212,176,76,0.35); }
+        .chat-bubble.outbound.artist { background: rgba(96,165,250,0.10); border-color: rgba(96,165,250,0.35); }
         .chat-who { font-size: 0.6rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 3px; }
         .chat-text { font-size: 0.86rem; line-height: 1.45; white-space: pre-wrap; overflow-wrap: anywhere; }
         .chat-time { font-size: 0.62rem; color: var(--muted); margin-top: 4px; text-align: right; }

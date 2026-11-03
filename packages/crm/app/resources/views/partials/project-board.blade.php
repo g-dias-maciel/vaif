@@ -5,6 +5,7 @@
     $agentAction = $agentAction ?? false;
     // Triage-only artists schedule and close leads manually.
     $triageOnly = isset($artist) && ! ($artist->settings?->full_selling ?? true);
+    $lastMessageAt = $lastMessageAt ?? [];
 @endphp
 
 <div class="board">
@@ -39,6 +40,11 @@
                                 {{ collect([$project->placement_label, $project->body_zone_label, $project->style])->filter()->implode(' · ') }}
                             </div>
                         @endif
+
+                        <div class="meta">
+                            @php($lastAt = $lastMessageAt[$project->lead_id] ?? null)
+                            Última mensagem: {{ $lastAt ? $lastAt->format('d/m H:i') : '—' }}
+                        </div>
 
                         @if ($project->charged_price_cents !== null)
                             <div class="meta price">R$ {{ number_format($project->charged_price_cents / 100, 2, ',', '.') }}</div>

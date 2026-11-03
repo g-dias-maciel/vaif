@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Mail\ArtistInvite;
 use App\Models\Artist;
 use App\Models\CalendarEntry;
+use App\Models\ChatMessage;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\WahaService;
@@ -50,9 +51,14 @@ class ArtistController extends Controller
             ->orderBy('start_at')
             ->get();
 
+        $lastMessageAt = ChatMessage::latestTimesForLeads(
+            $projects->pluck('lead_id')->unique()->filter()->all()
+        );
+
         return view('artists.show', [
             'artist' => $artist,
             'projects' => $projects,
+            'lastMessageAt' => $lastMessageAt,
             'bookings' => $bookings,
             'pipeline' => config('crm.pipeline_statuses'),
         ]);

@@ -1,10 +1,19 @@
+<div class="chat-status" style="margin-bottom:10px;">
+    @if (($chatOwner ?? 'agent') === 'artist')
+        <span class="tag tag-success">Artista no atendimento</span>
+        <span class="meta">A Beatriz está silenciada nesta conversa.</span>
+    @else
+        <span class="tag tag-muted">Beatriz no atendimento</span>
+    @endif
+</div>
+
 @if ($chatMessages->isEmpty())
     <p class="meta">Nenhuma conversa registrada ainda.</p>
 @else
     <div class="chat-thread">
         @foreach ($chatMessages as $message)
-            <div class="chat-bubble {{ $message->direction }}">
-                <div class="chat-who">{{ $message->direction === 'inbound' ? 'Cliente' : 'Beatriz' }}</div>
+            <div class="chat-bubble {{ $message->direction }} {{ $message->is_artist ? 'artist' : '' }}">
+                <div class="chat-who">{{ $message->sender_label }}</div>
                 <div class="chat-text">{{ $message->content !== '' ? $message->content : '—' }}</div>
                 <div class="chat-time">{{ $message->created_at?->format('d/m H:i') }}</div>
             </div>

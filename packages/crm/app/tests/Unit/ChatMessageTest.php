@@ -7,33 +7,38 @@ use PHPUnit\Framework\TestCase;
 
 class ChatMessageTest extends TestCase
 {
-    private function message(array $message): ChatMessage
+    private function message(string $type, array $extra = []): ChatMessage
     {
-        return (new ChatMessage)->forceFill(['message' => $message]);
+        $m = new ChatMessage();
+        $m->message = array_merge(['type' => $type, 'content' => 'texto'], $extra);
+
+        return $m;
     }
 
-    public function test_tool_envelopes_and_empty_ai_rows_are_not_displayable(): void
+    public function test_human_messages_are_labelled_as_the_client(): void
     {
-        $tool = $this->message([
-            'type' => 'tool',
-            'content' => '[{"id":"booking-1"}]',
-        ]);
-        $emptyAi = $this->message([
-            'type' => 'ai',
-            'content' => '[]',
-        ]);
-        $reply = $this->message([
-            'type' => 'ai',
-            'content' => 'Posso te atender amanhã às 9 horas.',
-        ]);
-        $human = $this->message([
-            'type' => 'human',
-            'content' => 'Oi',
-        ]);
+        $m = $this->message('human');
 
-        $this->assertFalse($tool->is_displayable);
-        $this->assertFalse($emptyAi->is_displayable);
-        $this->assertTrue($reply->is_displayable);
-        $this->assertTrue($human->is_displayable);
+        $this->assertSame('inbound', $m->direction);
+        $this->assertSame('Cliente', $m->sender_label);
+        $this->assertFalse($m->is_artist);
+    }
+
+    public function test_ai_messages_are_labelled_as_beatriz_by_default(): void
+    {
+        $m = $this->message('ai');
+
+        $this->assertSame('outbound', $m->direction);
+        $this->assertSame('Beatriz', $m->sender_label);
+        $this->assertFalse($m->is_artist);
+    }
+
+    public function test_artist_messages_are_labelled_as_the_artist(): void
+    {
+        $m = $this->message('ai', ['additional_kwargs' => ['author' => 'artist']]);
+
+        $this->assertSame('outbound', $m->direction);
+        $this->assertSame('Artista', $m->sender_label);
+        $this->assertTrue($m->is_artist);
     }
 }

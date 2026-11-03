@@ -37,6 +37,7 @@ class LeadController extends Controller
             'chatMessages' => $this->latestChatMessages($lead),
             'eventLabels' => config('crm.event_labels'),
             'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
+            'chatOwner' => $this->chatOwner($lead),
         ]);
     }
 
@@ -50,7 +51,30 @@ class LeadController extends Controller
 
         return view('leads._conversation', [
             'chatMessages' => $this->latestChatMessages($lead),
+            'chatOwner' => $this->chatOwner($lead),
         ]);
+    }
+
+    /**
+     * `agent` or `artist` — who owns the WhatsApp chat right now.
+     */
+    private function chatOwner(Lead $lead): string
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            return 'agent';
+        }
+
+        try {
+            $owner = DB::table('chat_sessions')
+                ->where('artist_id', $lead->artist_id)
+                ->where('lead_id', $lead->id)
+                ->orderByDesc('updated_at')
+                ->value('owner');
+
+            return $owner === 'artist' ? 'artist' : 'agent';
+        } catch (\Throwable $e) {
+            return 'agent';
+        }
     }
 
     private function latestChatMessages(Lead $lead)
