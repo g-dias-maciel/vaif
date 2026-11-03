@@ -140,7 +140,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "let offerBlock = '_Nenhuma promoção ativa no momento. Apresente apenas o preço normal da tabela._';\n"
     "if (promoActive) {\n"
     "  offerBlock = 'PROMOÇÃO ATIVA: \"' + (offer.name || 'promoção') + '\". ' + (offer.description || '') + '\\n'\n"
-    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL.\n'\n"
+    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL.\\n'\n"
     "    + 'A SEGUNDA tatuagem é confirmada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário para a segunda, não prometa a mesma sessão e não diga que o lead e outra pessoa podem tatuar juntos ou ao mesmo tempo. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
     "}\n"
     "if (openQuote) {\n"

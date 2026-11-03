@@ -13,6 +13,7 @@ No DB required. Run: python3 packages/flows/tests/test_system_prompt.py
 import json
 import os
 import re
+import os
 import sys
 
 FLOWS_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -654,6 +655,31 @@ check("WAHA webhook path matches Beatriz node (waha-webhook)",
       "waha-webhook" in params.get("jsonBody", ""))
 check("WAHA session form response uses Form Ending node",
       next(n["parameters"].get("pageType") for n in form["nodes"] if n["name"] == "Form Response") == "end")
+
+print("=== Every Code node parses ===")
+
+# A stray newline inside a JS string only shows up when the node runs in
+# production ("Invalid or unexpected token" in Build System Prompt).
+import subprocess
+import tempfile
+
+broken = []
+checked = 0
+for node in wf["nodes"]:
+    code = node.get("parameters", {}).get("jsCode")
+    if not code:
+        continue
+    checked += 1
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False) as fh:
+        fh.write(code)
+        path = fh.name
+    result = subprocess.run(["node", "--check", path], capture_output=True, text=True)
+    if result.returncode != 0:
+        broken.append(node["name"])
+    os.unlink(path)
+
+check(f"all {checked} Code nodes are valid JavaScript", not broken,
+      ", ".join(broken) if broken else None)
 
 # ── Summary ──
 print(f"\n=== Results: {len([f for f in []])} — {len(expected)} placeholders, "
