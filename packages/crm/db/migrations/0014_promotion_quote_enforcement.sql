@@ -140,8 +140,12 @@ end;
 $$;
 
 
--- The agent's booking gate: type, placement and zone must all be known before
--- Beatriz offers or reserves a slot.
+-- The agent's booking gate: placement and zone must be known before Beatriz
+-- offers or reserves a slot. The tattoo type is deliberately NOT required:
+-- availability and session length depend on placement/zone, and the type is
+-- only ever inferred from the lead's own words — Adriano's live lead never
+-- said "nova" and could not be scheduled at all because of it. Cover-up and
+-- rework leads are handed off before this point anyway.
 create or replace function project_booking_ready(
   p_project_id uuid,
   p_artist_id  uuid
@@ -154,10 +158,88 @@ as $$
     select 1 from projects p
      where p.id = p_project_id
        and p.artist_id = p_artist_id
-       and p.tattoo_type is not null
        and p.placement is not null
        and p.body_zone is not null
   );
+$$;
+
+
+-- Same gate relaxation for the booking itself.
+
+create or replace function book_slot(
+  p_artist_id    uuid,
+  p_project_id   uuid,
+  p_start_at     timestamptz,
+  p_duration_min integer default null,
+  p_created_by   text default 'agent'
+)
+returns setof calendar_entries
+language plpgsql security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_project projects;
+  v_dur     integer := p_duration_min;
+  v_row     calendar_entries;
+begin
+  select * into v_project from projects
+   where id = p_project_id and artist_id = p_artist_id;
+  if not found then
+    raise exception 'book_slot: project % does not belong to artist %',
+      p_project_id, p_artist_id using errcode = '23503';
+  end if;
+
+  -- Never book a tattoo slot before the placement and zone are known: the
+  -- session length comes from the price book for that cell. The type is not
+  -- required (see project_booking_ready).
+  if v_project.placement is null
+     or v_project.body_zone is null then
+    return;  -- empty set: not qualified yet
+  end if;
+
+  if v_dur is null then
+    select pb.session_duration_min into v_dur
+    from price_book pb
+    where pb.artist_id = p_artist_id
+      and pb.placement = v_project.placement
+      and pb.body_zone = v_project.body_zone
+      and pb.effective_to is null
+    limit 1;
+  end if;
+  v_dur := coalesce(v_dur, 120);
+
+  -- Reduces retries under concurrent booking; the exclusion constraint is the
+  -- actual guarantee.
+  perform pg_advisory_xact_lock(hashtext(p_artist_id::text)::bigint);
+
+  begin
+    insert into calendar_entries (
+      artist_id, kind, project_id, lead_id, start_at, end_at, created_by
+    ) values (
+      p_artist_id, 'booking', p_project_id, v_project.lead_id,
+      p_start_at, p_start_at + make_interval(mins => greatest(v_dur, 1)), p_created_by
+    )
+    returning * into v_row;
+  exception when exclusion_violation then
+    return;  -- empty set: the slot is taken
+  end;
+
+  -- A slot is only "agendado" after the sinal is confirmed. Until then the
+  -- project waits in aguardando_deposito so the dashboard shows "Aguardando sinal".
+  if v_project.stage_key not in ('fechado','perdido','agendado','aguardando_deposito') then
+    update projects set stage_key = 'aguardando_deposito'
+     where id = p_project_id and artist_id = p_artist_id;
+  end if;
+
+  perform log_event(p_artist_id, v_project.lead_id, p_project_id, p_created_by, 'booking_created',
+    jsonb_build_object(
+      'booking_id', v_row.id,
+      'start_at', v_row.start_at,
+      'end_at', v_row.end_at
+    ));
+
+  return next v_row;
+end;
 $$;
 
 
