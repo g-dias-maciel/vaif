@@ -33,10 +33,15 @@ It is *stateless apart from `storage/`*: the database is the shared
 | Ports Exposes | `80` |
 | Domain | `https://crm.vaif.com.br` |
 | Healthcheck Path | `/api/up` |
-| Watch Paths | `/packages/crm/app/**` *(optional, keeps LP deploys from rebuilding the CRM)* |
+| Watch Paths | `packages/crm/app/**` *(required — see [docs/ops/coolify-deploys.md](../../../docs/ops/coolify-deploys.md))* |
 
 > Because this is a monorepo the **Base Directory is mandatory**. Building from
 > the repo root would use the wrong context and the image would not boot.
+>
+> Watch Paths are equally important: without them every push rebuilds the LP,
+> the dev LP and the CRM at once, which is enough to exhaust RAM on the
+> production server. One pattern per line, no commas; a docs-only commit must
+> produce no deployment at all.
 
 Leave "Custom Docker Options" empty. Coolify handles TLS and HTTP→HTTPS
 redirection through Traefik.
