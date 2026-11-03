@@ -2425,9 +2425,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT start_at, end_at, label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), NULLIF($3::text, ''));",
+                "query": "SELECT start_at, end_at, label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')));",
                 "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $('Debounce Resolve').first().json.combined_text || ''] }}"
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $fromAI('preferred_day', 'Dia ou data que o lead pediu (ex.: sábado, 07/11, 2026-11-07). Preencha quando ele recusar as opções e disser um dia.', 'string'), $('Debounce Resolve').first().json.combined_text || ''] }}"
                 },
             },
             "type": "n8n-nodes-base.postgresTool",
@@ -2544,6 +2544,25 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "uq-update-0000-0000-0000-000000000001",
             "name": "Patch Project",
             "credentials": POSTGRES,
+        },
+        # 29b. Silence Agent on Handoff — a handoff means the artist owns the
+        #      conversation. Sets leads.agent_blocked_at so the next inbound
+        #      message stops at the Agent Blocked? gate.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM set_agent_blocked($1::uuid, $2::uuid, true, 'agent') WHERE $3::boolean IS TRUE;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.lead_id, $('Parse Classification').first().json.stage_key === 'aguardando_artista'] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [4160, 480],
+            "id": "silence-handoff-0000-0000-0000-000000000001",
+            "name": "Silence Agent on Handoff",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
         },
         # 29a. Ensure Quote — persist the deterministic quote when the model did
         #      not write one. Promotion quotes take the branch below instead.
@@ -3086,6 +3105,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                 {"node": "Ensure Quote", "type": "main", "index": 0},
                 {"node": "Write Promotion Quote", "type": "main", "index": 0},
                 {"node": "Patch Lead", "type": "main", "index": 0},
+                {"node": "Silence Agent on Handoff", "type": "main", "index": 0},
             ]]
         },
         "Ensure Quote": {

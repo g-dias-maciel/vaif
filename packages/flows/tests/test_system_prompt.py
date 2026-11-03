@@ -271,9 +271,12 @@ check("AI Agent → Load Booking → Build Classification Prompt → Classify �
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
       and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory", "Deposit Requested?"]
       and wf["connections"]["Build Project Patch"]["main"][0][0]["node"] == "Patch Project")
-check("Patch Project fans out to quote persistence, promotion quote and name patch",
+check("Patch Project fans out to quote persistence, promotion quote, name patch and handoff silence",
       {c["node"] for c in wf["connections"]["Patch Project"]["main"][0]}
-      == {"Ensure Quote", "Write Promotion Quote", "Patch Lead"})
+      == {"Ensure Quote", "Write Promotion Quote", "Patch Lead", "Silence Agent on Handoff"})
+check("handoff silence sets agent_blocked through the RPC",
+      "set_agent_blocked" in nodes["Silence Agent on Handoff"]["parameters"]["query"]
+      and "stage_key === 'aguardando_artista'" in nodes["Silence Agent on Handoff"]["parameters"]["options"]["queryReplacement"])
 check("the Notion mirror is gone (RPCs write the audit trail)",
       "Log Event" not in nodes and "Enqueue Notion Sync" not in nodes
       and "Build Notion Sync Payload" not in nodes)
@@ -300,6 +303,8 @@ check("Check Availability uses the two-option RPC",
 check("Check Availability reads the lead's own message for the day",
       "combined_text" in nodes["Check Availability"]["parameters"]["query"]
       or "combined_text" in str(nodes["Check Availability"]["parameters"].get("options", {}).get("queryReplacement", "")))
+check("Check Availability accepts an explicit preferred_day (audio transcript)",
+      "preferred_day" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"])
 check("agent tools parameterise every value (no SQL injection via $fromAI)",
       all(
           "$fromAI" not in nodes[name]["parameters"]["query"]
