@@ -629,6 +629,10 @@ const g = parsed.price_gate || {};
 const lead = $('Start Turn').first().json;
 const state = lead.agent_state || {};
 const agentOutput = $('AI Agent').first().json.output || '';
+// Full selling disabled = triage mode: qualify, then hand off. The agent must
+// never quote, schedule or explain the process in this mode.
+const artist = $('Resolve Artist').first().json || {};
+const triageOnly = artist.full_selling === false || artist.full_selling === 'false';
 
 // ── Deterministic tipo_tatuagem guard ──
 let audioTranscript = null;
@@ -1063,11 +1067,11 @@ const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 // A live quote keeps its price: re-quoting the promotion price would silently
 // raise a number the lead already received.
 const openQuote = offer.open_quote === true;
-const firstQuote = !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
+const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
   ? deterministicQuote()
   : null;
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
-const repeatedQuote = !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
+const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   ? deterministicQuote(
       lead.quoted_price_cents
       || lead.table_price_cents
@@ -1104,7 +1108,7 @@ const promoPriceCents = offerLive && promoTableCents > 0
 // price: the model quotes the table and only *mentions* the promotion, which
 // undercharges the pair. A negotiated discount stays untouched, and a live
 // open quote keeps price protection.
-const promotionQuote = !firstQuote && !repeatedQuote && !isCoverOrRework
+const promotionQuote = !triageOnly && !firstQuote && !repeatedQuote && !isCoverOrRework
   && offerLive && replyHasPrice && !openQuote && !goingToArtist
   && promoPriceCents > 0
   // Only the raw table price (the model ignored the promotion) or a price
@@ -1130,7 +1134,7 @@ if (firstQuote) {
   finalReply = repeatedQuote.reply;
 } else if (promotionQuote) {
   finalReply = promotionQuote.reply;
-} else if (!precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework) {
+} else if (!triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
@@ -1157,7 +1161,7 @@ if (firstQuote) {
 // Never let the model invent a price for a placement/size that is not in the
 // artist's table. Ask for the missing detail, or hand off when the region is
 // already specific.
-const quoteMissingRow = !firstQuote && !repeatedQuote && !promotionQuote
+const quoteMissingRow = !triageOnly && !firstQuote && !repeatedQuote && !promotionQuote
   && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist && !isCoverOrRework;
 if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
@@ -1227,6 +1231,28 @@ if (!processoExplicado && !priceGateOpen && asksKnownField) {
   });
 }
 
+// ── Triage mode handoff ──
+// With full selling off, the agent's job ends when the qualification does:
+// the artist quotes and books. Without this, the deterministic quote engine
+// (or the model) still produced prices for triage-only artists.
+if (triageOnly && !isCoverOrRework && current !== 'aguardando_artista') {
+  const discoveryComplete = !!lead.tattoo_type && !!placementNow && !!bodyZoneNow && !!styleNow;
+  if (discoveryComplete) {
+    const artistName = artist.name || 'artista';
+    finalReply = 'Perfeito, já tenho o que preciso. Vou te passar para o ' + artistName
+      + ' para ele passar o valor e combinar o horário.';
+    finalPipeline = 'aguardando_artista';
+    finalEvent = 'handoff_triggered';
+    finalHandoff = 'triage_only';
+  } else if (/R\$\s*\d/.test(finalReply)) {
+    // The model quoted before finishing the triage: ask the next question.
+    finalReply = discoveryFallback({
+      ...lead,
+      tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+    });
+  }
+}
+
 // Cover-up/rework never show a price, even when the model writes one: the
 // artist quotes after seeing the tattoo.
 if (isCoverOrRework && /R\$\s*\d/.test(finalReply)) {
@@ -1282,7 +1308,7 @@ if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && 
 // The doubts question is a ONE-SHOT checkpoint: ask once after the process
 // explanation, then answer the lead's questions without repeating it. A loop
 // here used to trap leads who had already said "não tenho dúvidas".
-const shouldAskDoubts = !duvidasEliminadas && !precoLiberadoJa && !goingToArtist && !isCoverOrRework
+const shouldAskDoubts = !triageOnly && !duvidasEliminadas && !precoLiberadoJa && !goingToArtist && !isCoverOrRework
   && processoExplicado && !checkpointWasPending;
 if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
   let trimmed = finalReply.trim();
