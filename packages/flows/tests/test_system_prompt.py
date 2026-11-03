@@ -682,6 +682,22 @@ for node in wf["nodes"]:
 check(f"all {checked} Code nodes are valid JavaScript", not broken,
       ", ".join(broken) if broken else None)
 
+# Python string literals turn \b, \n, \t into control characters; an escape
+# meant for a JS regex ("\b") silently becomes a backspace and the pattern
+# stops matching. node --check cannot see it (it is valid syntax).
+import re as _re
+control = {0x08: 'backspace', 0x0C: 'formfeed', 0x0B: 'vertical tab', 0x07: 'bell', 0x0D: 'carriage return'}
+dirty = []
+for node in wf["nodes"]:
+    code = node.get("parameters", {}).get("jsCode") or ""
+    for char, name in control.items():
+        if chr(char) in code:
+            dirty.append(f"{node['name']} ({name})")
+            break
+
+check("no Code node contains a stray control character", not dirty,
+      ", ".join(dirty) if dirty else None)
+
 # ── Summary ──
 print(f"\n=== Results: {len([f for f in []])} — {len(expected)} placeholders, "
       f"{len(failures)} failures ===")

@@ -14,6 +14,16 @@ Pipeline atual: {{pipeline}}
 - Se dados de qualificação foram extraídos (local, tamanho, estilo, primeira tatuagem) e pipeline=novo → pipeline=qualificando
 - Se nada relevante aconteceu → pipeline=pipeline atual, event=null
 
+## Pergunta pendente (contexto)
+
+Quando o contexto indicar a pergunta pendente (ex.: "Beatriz perguntou o tipo da tatuagem"), a mensagem do lead é a RESPOSTA a essa pergunta. Interprete respostas curtas e truncadas como resposta a ela:
+
+- tipo: "nova", "nov", "novo", "isso" (quando a pergunta ofereceu nova/cobertura/reforma) → `tipo_tatuagem="nova"`; "cobrir", "cob", "cobertura" → `"cobertura"`; "reformar", "retocar", "ref" → `"reforma"`
+- primeira_tatuagem: "isso", "sim", "uhum" → `true`; "não", "nunca" → `false`
+- placement/body_zone/style: a resposta é o valor pedido
+
+Sem essa indicação, use `null` quando a mensagem não fizer sentido sozinha.
+
 ## Campos de qualificação (extraia SOMENTE da mensagem do lead — NUNCA da resposta da Beatriz)
 
 - placement: braco_externo, braco_interno, antebraco, panturrilha, tornozelo, pescoco, costela, costas, barriga, ombro, pulso, braco, peito, perna, coxa, dedo, mao, pe

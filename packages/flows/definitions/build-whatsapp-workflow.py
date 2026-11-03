@@ -581,6 +581,20 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "const userMsg = audioTranscript || $('Debounce Resolve').first().json.combined_text || '';\n"
     "const agentOutput = $('AI Agent').first().json.output || '';\n"
     "\n"
+    "// The previous turn records which discovery question is waiting for an\n"
+    "// answer; without it a reply like \"isso\" or \"nov\" is unreadable.\n"
+    "const pending = ($('Start Turn').first().json.agent_state || {}).pending_question || null;\n"
+    "const pendingLabels = {\n"
+    "  tipo: 'o tipo da tatuagem (nova, cobertura ou reforma)',\n"
+    "  primeira_tatuagem: 'se esta seria a primeira tatuagem',\n"
+    "  placement: 'onde no corpo',\n"
+    "  body_zone: 'a cobertura do local (partinha, área média, local inteiro)',\n"
+    "  style: 'o estilo',\n"
+    "};\n"
+    "const pendingNote = pendingLabels[pending]\n"
+    "  ? '\\n\\n[Contexto: Beatriz perguntou ' + pendingLabels[pending] + ' na mensagem anterior. A mensagem do lead é a RESPOSTA a essa pergunta — interprete respostas curtas (\"isso\", \"sim\", \"não\", \"nov\", \"cob\") como resposta a ela.]'\n"
+    "  : '';\n"
+    "\n"
     "const artist = $('Resolve Artist').first().json;\n"
     "const triageMode = artist.full_selling === false || artist.full_selling === 'false';\n"
     "const modo = triageMode\n"
@@ -595,7 +609,7 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "    temperature: 0,\n"
     "    messages: [\n"
     "      { role: 'system', content: filled },\n"
-    "      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput }\n"
+    "      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput + pendingNote }\n"
     "    ]\n"
     "  }\n"
     "} }];"
@@ -621,8 +635,8 @@ let audioTranscript = null;
 try { audioTranscript = $('Parse Audio').first().json.transcript || null; } catch (e) {}
 const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_text || '').toLowerCase();
 const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
-const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\b(?:cover|cobertura)\b/.test(rawLead);
-const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\b(?:reforma|retoque)\b/.test(rawLead);
+const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\\b(?:cover|cobertura)\\b/.test(rawLead);
+const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\\b(?:reforma|retoque)\\b/.test(rawLead);
 const leadSaysCover = saysCoverUp(rawLead) && !negativeCover;
 const leadSaysRework = /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework;
 const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
@@ -645,11 +659,44 @@ function detectTipo(text) {
   return null;
 }
 let tipoDeterministic = detectTipo(rawLead);
-if (saysNew && (negativeCover || negativeRework)) {
+// "não é cobertura, é nova" must not come out as a cover-up.
+if (tipoDeterministic === 'cobertura' && negativeCover) tipoDeterministic = null;
+if (tipoDeterministic === 'reforma' && negativeRework) tipoDeterministic = null;
+const saysNewExplicit = /\\b(?:é|eh|seria|ser[aá]|vai ser)\s+(?:uma\s+)?nov[ao]\\b/.test(rawLead);
+if ((saysNew || saysNewExplicit) && (negativeCover || negativeRework)) {
   tipoDeterministic = 'nova';
 }
 // The schema stores English enum values; the prompt/classifier vocabulary is PT.
 const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
+
+// ── Answer interpretation with the pending question ──
+// "isso" or "nov" only mean something relative to the question Beatriz asked
+// last turn. The previous turn persists `pending_question`; when the lead is
+// answering the type question, the classifier (which now also sees that
+// question) is trusted, and a small deterministic layer covers yes/no and
+// truncated words. Cover-up/rework keep the explicit-words guard.
+const pendingQuestion = state.pending_question || null;
+const answerText = String(rawLead || '').trim();
+const affirmAnswer = /^(?:sim|isso|isso mesmo|exato|correto|uhum|positivo|claro|com certeza|seria|é|eh)\\b/i.test(answerText);
+const denyAnswer = /^(?:n[aã]o|nunca|ainda n[aã]o|negativo)\\b/i.test(answerText);
+let tipoFromPending = null;
+if (pendingQuestion === 'tipo' && !tipoDeterministic) {
+  const answer = q.tipo_tatuagem || null;
+  if (answer === 'nova' || answer === 'cobertura' || answer === 'reforma') {
+    const negative = (answer === 'cobertura' && negativeCover) || (answer === 'reforma' && negativeRework);
+    if (!negative) tipoFromPending = answer;
+  }
+  if (!tipoFromPending) {
+    // Truncated answers ("seria uma tatuagem nov", "cob", "ref").
+    if (/^(?:nov|nova|novo)\\b/.test(answerText)) tipoFromPending = 'nova';
+    else if (/^(?:cob|cover)/.test(answerText)) tipoFromPending = 'cobertura';
+    else if (/^(?:ref|retoc|retoq)/.test(answerText)) tipoFromPending = 'reforma';
+  }
+}
+if (tipoFromPending) tipoDeterministic = tipoFromPending;
+const firstFromPending = pendingQuestion === 'primeira_tatuagem'
+  ? (affirmAnswer ? true : (denyAnswer ? false : null))
+  : null;
 
 // ── Deterministic qualification extraction (fills classifier gaps so the
 //    lead's answers are persisted reliably and never "forgotten"). ──
@@ -727,7 +774,7 @@ function detectDuvidasZeradas(t) {
 
   // Common Portuguese confirmations the regex lists below used to miss.
   if (/(?:n[aã]o (?:ficou|tem|tenho)|nenhuma|sem)\s+(?:nenhuma\s+)?d[uú]vida(?:\s+nenhuma)?/i.test(t)) return true;
-  if (/^(?:pode|manda|me manda|quero)\s+(?:passar|mandar|ver|saber)?\s*(?:o\s+)?(?:valor|pre[cç]o|or[cç]amento)\b/i.test(t)) return true;
+  if (/^(?:pode|manda|me manda|quero)\s+(?:passar|mandar|ver|saber)?\s*(?:o\s+)?(?:valor|pre[cç]o|or[cç]amento)\\b/i.test(t)) return true;
   const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
   const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
   const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
@@ -744,7 +791,7 @@ function detectDuvidasZeradas(t) {
       && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
     return true;
   }
-  if (/^(?:n[aã]o|n)\b/i.test(t) && !/n[aã]o sei/i.test(t)
+  if (/^(?:n[aã]o|n)\\b/i.test(t) && !/n[aã]o sei/i.test(t)
       && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
     return true;
   }
@@ -1185,7 +1232,7 @@ if (!processoExplicado && !priceGateOpen && asksKnownField) {
 if (isCoverOrRework && /R\$\s*\d/.test(finalReply)) {
   finalReply = finalReply
     .replace(/R\$\s*[\d.,]+[^\\n]*/g, '')
-    .replace(/\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
+    .replace(/\\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
     .trim();
 }
 
@@ -1221,7 +1268,7 @@ if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && 
   let body = finalReply
     .replace(/R\$\s*[\d.,]+[^\\n]*/g, '')
     .replace(/\s*(?:Antes de falarmos de valores,?\s*)?(?:Mais|Ficou) alguma d[uú]vida\?\s*$/i, '')
-    .replace(/\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
+    .replace(/\\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
     .trim();
   if (!handoffPhrase.test(body)) {
     body = body ? body + '\\n\\n' + handoffMsg : handoffMsg;
@@ -1398,7 +1445,7 @@ const replyPriceCents = replyPriceMatch
 const agreedCents = replyPriceCents > 0 ? replyPriceCents : Number(p.nego_cents || 0);
 const discountApplied = !goingToArtist && tableCents > 0
   && agreedCents > 0 && agreedCents < tableCents;
-if (discountApplied && !/instagram|insta\b|post|publica|marcand/i.test(finalReply)) {
+if (discountApplied && !/instagram|insta\\b|post|publica|marcand/i.test(finalReply)) {
   const handleRaw = String(($('Resolve Artist').first().json || {}).instagram_handle || '').trim();
   const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';
   finalReply = finalReply.trim() + ' Só te peço uma coisa: depois da tatuagem, você posta uma foto'
@@ -1421,6 +1468,20 @@ if (offerLive && !goingToArtist) {
     finalReply = (finalReply ? finalReply + '\\n\\n' : '')
       + 'A segunda tatuagem é confirmada direto com o ' + artistName + ', eu não agendo a segunda.';
   }
+}
+
+// ── Pending question ──
+// Persist which discovery question the reply asks so the next turn can read a
+// short answer ("isso", "nov") against it.
+function detectPendingQuestion(reply) {
+  const text = String(reply || '');
+  if (!/\?/.test(text)) return null;
+  if (/nova.*cobertura|cobertura.*reforma|nova ou cobrir|nova, uma cobertura/i.test(text)) return 'tipo';
+  if (/primeira tatuagem/i.test(text)) return 'primeira_tatuagem';
+  if (/onde no corpo|qual (?:o )?local/i.test(text)) return 'placement';
+  if (/partinha|área média|area media|local inteiro|fechamento/i.test(text)) return 'body_zone';
+  if (/qual (?:o )?estilo|estilo (?:voc[eê]|tem)/i.test(text)) return 'style';
+  return null;
 }
 
 // The flag is driven by the one-shot decision, not by whether the model
@@ -1510,12 +1571,14 @@ return [{ json: {
   style_val: (styleNow && styleNow !== lead.style) ? styleNow : null,
   first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
     ? q.first_tattoo
-    : (detectFirstTattoo(rawLead) !== null ? detectFirstTattoo(rawLead) : null),
+    : (detectFirstTattoo(rawLead) !== null
+        ? detectFirstTattoo(rawLead)
+        : firstFromPending),
   meaning_val: q.significado || null,
-  // Only the lead's own words may set the type. The classifier used to flip a
-  // persisted "new" to "cover_up" after Beatriz asked the coverage question
-  // ("você quer cobrir...?"), which then triggered a cover-up handoff and made
-  // her ask the type question again. An explicit correction still wins.
+  // The type comes from the lead's own words. When the lead is answering the
+  // pending type question, that includes the classifier's reading of the
+  // answer and short/truncated answers ("nov", "isso"). Beatriz's own question
+  // never sets it: the classifier only runs on the lead's reply.
   tattoo_type_val: TIPO_DB[tipoDeterministic] || null,
 
   quote_base_cents: quoteBaseCents,
@@ -1535,6 +1598,7 @@ return [{ json: {
     preco_liberado: precoLiberadoJa || quoteActuallySent,
     duvidas_eliminadas: duvidasEliminadas,
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
+    pending_question: detectPendingQuestion(audioFinalReply),
     audio_count: audioCountNext,
   },
 } }];"""
