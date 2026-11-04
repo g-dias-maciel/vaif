@@ -105,6 +105,32 @@ check('normalises "fineline" to fine_line', r.style_val === 'fine_line', String(
 check('confirmation mentions the style', /estilo fine line/i.test(r.final_reply), r.final_reply);
 check('marks the style as photo-derived', r.chat_state.style_from_photo === true, JSON.stringify({ s: r.chat_state.style_from_photo }));
 
+// ── 1b2. A low-confidence style is not used. ──
+console.log('=== Low-confidence style is ignored ===');
+r = run({
+  start: lead({
+    style: null,
+    reference_analysis: [{ assunto: 'flor', tipo: 'foto_de_tatuagem', local: 'antebraco', tamanho: 'medio', estilo: 'fineline', estilo_confianca: 'baixa' }],
+  }),
+  leadText: 'lilo',
+  ai: 'Ok!',
+  classifier: classifier(),
+});
+check('does not take the style', r.style_val === null, String(r.style_val));
+check('asks the style', /qual estilo/i.test(r.final_reply), r.final_reply);
+
+console.log('=== Confident style is used ===');
+r = run({
+  start: lead({
+    style: null,
+    reference_analysis: [{ assunto: 'flor', tipo: 'foto_de_tatuagem', local: 'antebraco', tamanho: 'medio', estilo: 'fineline', estilo_confianca: 'alta' }],
+  }),
+  leadText: 'lilo',
+  ai: 'Ok!',
+  classifier: classifier(),
+});
+check('takes the confident style', r.style_val === 'fine_line', String(r.style_val));
+
 // ── 1c. A style the lead said wins over the photo. ──
 console.log('=== Lead style wins ===');
 r = run({

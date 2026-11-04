@@ -312,6 +312,7 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "assunto": "2 a 5 palavras com o tema principal, sem detalhes (ex.: leão com bússola) — SEMPRE preencha",
   "resumo": "1 frase curta, no máximo 120 caracteres, sem descrever boca, dentes, olhos ou detalhes minuciosos — SEMPRE preencha",
   "estilo": "realismo | old_school | neo_tradicional | fine_line | new_school | blackwork | tradicional | geometrico | pontilhismo | aquarela | japones | oriental | tribal | floral | indefinido",
+  "estilo_confianca": "alta | media | baixa",
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
   "tipo": "desenho | foto_de_tatuagem | flash | outra",
@@ -321,6 +322,19 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "confianca": "alta | media | baixa",
   "observacoes": "detalhes úteis, ou string vazia"
 }
+Para `estilo`, use a técnica visível (e marque `estilo_confianca`):
+- fine_line: linhas finas, traço delicado, sem sombreado
+- pontilhismo: sombreado feito de pontos
+- blackwork: preto sólido, sem degradê
+- realismo: sombreado realista, aparência de foto
+- old_school: contorno grosso, cores saturadas
+- neo_tradicional: contorno grosso com paleta moderna
+- geometrico: formas geométricas
+- aquarela: manchas de cor
+- japones/oriental: motivos orientais (ondas, dragão, flor de cerejeira)
+- tribal: formas pretas tribais
+- floral: motivo floral, quando a técnica não estiver clara
+Use "indefinido" SOMENTE quando a imagem não mostrar a técnica (desenho sem sombreado, foto borrada, só o contorno). Na dúvida entre duas técnicas, escolha a mais provável e marque estilo_confianca="media" ou "baixa" — nunca "indefinido" por insegurança.
 Se a imagem mostrar uma tatuagem no corpo, identifique em `local` ONDE ela está e em `tamanho` o tamanho APROXIMADO, usando exatamente um dos valores da lista. Para `tamanho`, compare a tatuagem com a área do corpo: pequeno = até uma mão; medio = duas mãos; grande = quase todo o local; fechamento = o local inteiro. Se não der para estimar, use "indefinido". Se for um desenho/flash sem corpo, ou não der para ver a região, use "indefinido". Não estime preço. Não invente detalhes que não dá para ver. `referencia_de_tatuagem` é TRUE para qualquer imagem que possa servir de referência para uma tatuagem: desenho, flash, foto de tatuagem, animal, objeto, paisagem, personagem, foto de comida, etc. Marque FALSE somente para imagens claramente sem relação (captura de tela de texto, documento, meme, selfie, conversa). Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma. NUNCA devolva assunto ou resumo vazios: descreva o que aparece na imagem mesmo quando referencia_de_tatuagem=false."""
 
 VISION_USER_PROMPT = """Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que não é referência."""
@@ -341,7 +355,7 @@ const body = {
       { type: 'image_url', image_url: { url: imageUrl } }
     ] }
   ],
-  temperature: 0.2,
+  temperature: 0,
   max_tokens: 500
 };
 return [{ json: { body } }];"""
@@ -1008,7 +1022,9 @@ function normalizeStyle(raw) {
 }
 const aiStyle = normalizeStyle(q.style);
 const textStyle = detectStyle(rawLead);
-const visionStyle = normalizeStyle(visionAnalysis.estilo);
+const visionStyleConf = String(visionAnalysis.estilo_confianca || '');
+const visionStyleTrusted = !visionStyleConf || visionStyleConf === 'alta' || visionStyleConf === 'media';
+const visionStyle = visionStyleTrusted ? normalizeStyle(visionAnalysis.estilo) : null;
 const visionZone = ENUM_ZONES.indexOf(String(visionAnalysis.tamanho || '')) >= 0
   ? String(visionAnalysis.tamanho)
   : null;

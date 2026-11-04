@@ -269,6 +269,11 @@ check("vision request uses the public CRM image URL and a multimodal model",
       and "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"])
 check("vision prompt forbids using the image to calculate price",
       "NUNCA use esta análise para calcular preço" in nodes["Parse Reference Analysis"]["parameters"]["jsCode"])
+check("vision prompt explains each style and asks for confidence",
+      "estilo_confianca" in nodes["Build Vision Request"]["parameters"]["jsCode"]
+      and "pontilhismo: sombreado feito de pontos" in nodes["Build Vision Request"]["parameters"]["jsCode"]
+      and "temperature: 0" in nodes["Build Vision Request"]["parameters"]["jsCode"])
+
 check("vision analysis is persisted for later turns",
       nodes["Save Reference Analysis"]["parameters"]["url"].endswith("/api/references/analysis")
       and "reference_analysis" in nodes["Save Reference Analysis"]["parameters"]["jsonBody"])
