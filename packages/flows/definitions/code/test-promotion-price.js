@@ -104,6 +104,20 @@ check('records the promotion quote', r.offer_quoted === true, JSON.stringify({ q
 check('base is the table price', r.quote_base_cents === 60000, String(r.quote_base_cents));
 check('offered is the promotion price', r.quote_offered_cents === 120000, String(r.quote_offered_cents));
 check('second tattoo is confirmed by the artist, not scheduled', /não agendo a segunda/i.test(r.final_reply), r.final_reply);
+check('offers the second as same size and free', /mesmo tamanho/i.test(r.final_reply) && /gr[áa]tis|de gra[çc]a/i.test(r.final_reply), r.final_reply);
+check('never prices the second tattoo', !/segunda[^.]{0,60}R\$|valor at[ée]/i.test(r.final_reply), r.final_reply);
+
+// ── 1b. The open-quote line carries no second-tattoo price either. ──
+console.log('=== Open quote: no second price ===');
+r = run({
+  start: lead(),
+  leadText: 'qual o valor?',
+  ai: 'Ficou R$ 600,00. Com a promoção Leve 2 você leva uma segunda de mesmo valor.',
+  offer: { ...PROMO, open_quote: true, open_quote_first_price: 60000, open_quote_second_cap: 60000 },
+  classifier: classifier({ pricing: { table_cents: 60000, nego_cents: 60000 } }),
+});
+check('keeps the honoured price', /R\$\s*600,00/.test(r.final_reply), r.final_reply);
+check('does not mention a value for the second', !/segunda[^.]{0,60}R\$|valor at[ée]/i.test(r.final_reply), r.final_reply);
 
 // ── 2. A quote already sent is honoured, even when it is below the promotion. ──
 console.log('=== Open quote price protection ===');

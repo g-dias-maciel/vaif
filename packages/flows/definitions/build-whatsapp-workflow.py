@@ -140,11 +140,11 @@ BUILD_SYSTEM_PROMPT_JS = (
     "let offerBlock = '_Nenhuma promoção ativa no momento. Apresente apenas o preço normal da tabela._';\n"
     "if (promoActive) {\n"
     "  offerBlock = 'PROMOÇÃO ATIVA: \"' + (offer.name || 'promoção') + '\". ' + (offer.description || '') + '\\n'\n"
-    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: nesse valor o lead leva UMA SEGUNDA tatuagem de valor IGUAL OU MENOR, que pode ser de OUTRA PESSOA e em OUTRO LOCAL.\\n'\n"
-    "    + 'A SEGUNDA tatuagem é confirmada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário para a segunda, não prometa a mesma sessão e não diga que o lead e outra pessoa podem tatuar juntos ou ao mesmo tempo. Se o lead pedir uma segunda mais cara que a primeira, passe para o artista.';\n"
+    "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: fazendo uma tatuagem, você ganha outra do mesmo tamanho, grátis.\\n'\n"
+    "    + 'NUNCA fale do VALOR da segunda tatuagem: ela não tem preço, é assunto do artista. A SEGUNDA tatuagem é combinada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário nem condição para a segunda e não prometa a mesma sessão. Se o lead perguntar qualquer detalhe da segunda (tamanho diferente, local, quando, quanto), diga que o artista combina com ele.';\n"
     "}\n"
     "if (openQuote) {\n"
-    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', segunda de valor até ' + fmtOfferBRL(offer.open_quote_second_cap) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada ou que o preço da promoção seja diferente.';\n"
+    "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada ou que o preço da promoção seja diferente. NÃO fale do valor da segunda tatuagem.';\n"
     "}\n"
     "\n"
     "const replacements = {\n"
@@ -168,7 +168,7 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  prompt = prompt.split(k).join(v);\n"
     "}\n"
     "\n"
-    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.base_price_cents) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_offered_cents) || null, open_quote_second_cap: Number(offer.open_quote_second_cap) || null } } }];"
+    "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.base_price_cents) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_offered_cents) || null } } }];"
 )
 
 # ── Agent text: per-turn context + the debounced lead message. Same shape as
@@ -1110,7 +1110,7 @@ function deterministicQuote(centsOverride = null, rowOverride = null) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
   if (offerLive) {
-    reply += ` E com a promoção "${offer.name || 'leve 2'}", nesse mesmo valor você leva uma segunda tatuagem de valor igual ou menor, que pode até ser para outra pessoa ou outro local. A segunda é confirmada depois direto com o ${artistName}; eu não agendo a segunda.`;
+    reply += ` E com a promoção "${offer.name || 'leve 2'}", fazendo uma tatuagem você ganha outra do mesmo tamanho, grátis. A segunda é combinada direto com o ${artistName}; eu não agendo a segunda.`;
   }
   reply += ` Como fica esse valor para você?`;
   return { cents, reply, offer_active: offerLive, base_cents: baseCents };
