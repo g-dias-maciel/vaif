@@ -1715,13 +1715,6 @@ if (/(?:segurar|seguro|seguraria|reservar)[^.!?]{0,40}(?:pre[çc]o|valor|hor[áa
   finalHandoff = null;
 }
 
-// During discovery, two questions in the same message overwhelm the lead:
-// keep the first one (the next missing field).
-if (!isCoverOrRework && !/processo de cria/i.test(finalReply)) {
-  const chunks = String(finalReply).split(/(?<=\?)\s+/);
-  if (chunks.length > 1) finalReply = chunks[0].trim();
-}
-
 // The model sometimes explains the process before the qualification is done,
 // which ends the turn with "Ficou claro?" and no next step. Ask the missing
 // field instead; the process comes back when discovery is complete.
@@ -1733,9 +1726,6 @@ if (!isCoverOrRework && !triageOnly && !discoveryComplete && processoDeterminist
   });
 }
 
-// ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
-//    `Book Slot` runs as a tool before this node; if it succeeded this turn,
-//    or the project is already agendado, the gate is open.
 // The Book Slot tool returns its result under `ai_tool`, not `main`, so
 // `$('Book Slot').first().json` is empty. Read the calendar row that the tool
 // wrote instead; otherwise a successful booking is treated as "no slot" and
@@ -1747,11 +1737,6 @@ try {
   hasActiveBooking = false;
 }
 const depositGateOpen = hasActiveBooking || current === 'agendado' || finalPipeline === 'agendado';
-if (hasDeposit && !depositGateOpen) {
-  finalReply = 'Primeiro vamos escolher o horário da sua tatuagem. Depois eu te passo o valor do sinal e o PIX. Quer ver os horários disponíveis?';
-  finalPipeline = current;
-  finalEvent = null;
-}
 
 // The prompt says not to request the deposit when the artist has no PIX key,
 // but enforce it: a booking confirmation with an empty key would ask the lead
@@ -1981,11 +1966,26 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
       finalReply = retentionReply(negotiationReason);
       nextNegotiationStage = 'diagnose';
     }
-  } else if (!asksWhatIsMissing && !/R\$\s*\d/.test(finalReply)
+  } else if (!asksWhatIsMissing && !/\?/.test(finalReply)
       && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason)) {
     // The model responded, but never asked why: add the isolating question.
     finalReply = finalReply.trim() + ' ' + retentionReply('decision');
     nextNegotiationStage = 'diagnose';
+  }
+}
+
+// ── Deposit reply gate: never mention sinal/PIX before the slot is booked,
+//    and never push scheduling while the lead is hesitating.
+if (hasDeposit && !depositGateOpen) {
+  if (negotiationOpen) {
+    const kept = String(finalReply).split(/(?<=[.!?])\s+/).filter(function (sentence) {
+      return !/sinal|pix|dep[óo]sito/i.test(sentence);
+    }).join(' ').trim();
+    finalReply = kept || retentionReply(negotiationReason || 'decision');
+  } else {
+    finalReply = 'Primeiro vamos escolher o horário da sua tatuagem. Depois eu te passo o valor do sinal e o PIX. Quer ver os horários disponíveis?';
+    finalPipeline = current;
+    finalEvent = null;
   }
 }
 

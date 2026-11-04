@@ -401,5 +401,39 @@ r = runParse({
 });
 check('does not claim a guaranteed slot', !/garantid/i.test(r.final_reply), r.final_reply);
 
+// ── 9. Greeting keeps the name question (no truncation) ──
+console.log('=== Greeting keeps its questions ===');
+r = runParse({
+  start: {
+    stage_key: 'qualificando', tattoo_type: 'new', placement: 'antebraco', body_zone: 'grande',
+    style: 'fine_line', first_tattoo: false, table_price_cents: null, quoted_price_cents: null,
+    agent_state: { processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false },
+  },
+  leadText: 'oi quero uma tatuagem',
+  agentOutput: 'Oi! Eu sou a Beatriz, assistente do Gabriel aqui no estúdio. Tudo bem? Vi que você quer uma tatuagem de flor de lótus. Antes de começarmos, como posso te chamar?',
+  classifier: classifier({ table_cents: 0, nego_cents: 0 }),
+});
+check('keeps the name question', /como posso te chamar/i.test(r.final_reply), r.final_reply);
+
+// ── 10. Deposit during a negotiation is stripped, not pushed ──
+console.log('=== Deposit while hesitating is stripped ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'antebraco', body_zone: 'grande',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: null,
+    },
+  },
+  leadText: 'preciso ver com meu namorado',
+  agentOutput: 'Entendo, mas se fechar agora mantemos a cotação de R$ 200,00. O sinal para confirmar é de R$ 20,00, que será descontado do total. Isso garante seu horário!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('no sinal in the reply', !/sinal|pix|R\$\s*20/i.test(r.final_reply), r.final_reply);
+check('keeps the negotiation question', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('does not push the schedule', !/primeiro vamos escolher o hor[áa]rio/i.test(r.final_reply), r.final_reply);
+check('no slot guarantee', !/garantid/i.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
