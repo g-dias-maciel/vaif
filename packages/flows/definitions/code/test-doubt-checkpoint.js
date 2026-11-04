@@ -154,6 +154,34 @@ check('quote is sent', /R\$\s*100,00/.test(turn2.final_reply), turn2.final_reply
 check('doubts question is not repeated', !/alguma d[uú]vida\?/i.test(turn2.final_reply), turn2.final_reply);
 check('pipeline advances', turn2.stage_key === 'orcamento_enviado', turn2.stage_key);
 
+// ── 2b. A bare "não" to the doubts question clears it too. ──
+console.log('=== Bare "não" clears the checkpoint ===');
+const bare = runParse({
+  start: startTurn({
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: false,
+      aguardando_confirmacao_duvidas: true,
+      preco_liberado: false,
+    },
+  }),
+  agentOutput: 'Antes de falarmos de valores, ficou alguma dúvida?',
+  combinedText: 'nao',
+  classifier: {
+    pipeline: 'qualificando',
+    event: null,
+    qualification: {},
+    pricing: { table_cents: 10000, nego_cents: 10000 },
+    handoff: {},
+    price_gate: {},
+    doubts_cleared: true,
+  },
+});
+check('doubts cleared', bare.duvidas_eliminadas_val === true, String(bare.duvidas_eliminadas_val));
+check('quote goes out', /R\$\s*100,00/.test(bare.final_reply), bare.final_reply);
+check('does not ask what the lead has in mind', !/contar um pouco mais/i.test(bare.final_reply), bare.final_reply);
+check('no Instagram counterpart without a discount', !/posta uma foto|instagram/i.test(bare.final_reply), bare.final_reply);
+
 // ── 3. A real follow-up doubt still blocks the quote. ──
 console.log('=== A real doubt does not clear the checkpoint ===');
 const turn3 = runParse({

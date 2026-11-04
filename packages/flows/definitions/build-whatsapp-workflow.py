@@ -599,8 +599,14 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "  body_zone: 'a cobertura do local (partinha, área média, local inteiro)',\n"
     "  style: 'o estilo',\n"
     "};\n"
+    "const checkpoint = ($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas === true;\n"
     "const pendingNote = pendingLabels[pending]\n"
     "  ? '\\n\\n[Contexto: Beatriz perguntou ' + pendingLabels[pending] + ' na mensagem anterior. A mensagem do lead é a RESPOSTA a essa pergunta — interprete respostas curtas (\"isso\", \"sim\", \"não\", \"nov\", \"cob\") como resposta a ela.]'\n"
+    "  : '';\n"
+    "// Without this the classifier sees a bare \"não\" and cannot tell it is the\n"
+    "// answer to the doubts question, so the checkpoint never clears.\n"
+    "const checkpointNote = checkpoint\n"
+    "  ? '\\n\\n[Contexto: Beatriz perguntou se ficou alguma dúvida antes de falar de valores. Se o lead respondeu que não tem dúvidas (\"não\", \"não tenho\", \"sem dúvida\", \"pode mandar o valor\", \"só isso\"), marque doubts_cleared=true. Se ele fez uma pergunta de verdade, marca false.]'\n"
     "  : '';\n"
     "\n"
     "const artist = $('Resolve Artist').first().json;\n"
@@ -623,7 +629,7 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "    temperature: 0,\n"
     "    messages: [\n"
     "      { role: 'system', content: filled },\n"
-    "      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput + pendingNote }\n"
+    "      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput + pendingNote + checkpointNote }\n"
     "    ]\n"
     "  }\n"
     "} }];"
@@ -1770,8 +1776,11 @@ const replyPriceCents = replyPriceMatch
 // classifier's nego_cents is only a fallback. Otherwise the first promotion
 // quote (reply R$ 200, classifier table R$ 100) would look like a discount.
 const agreedCents = replyPriceCents > 0 ? replyPriceCents : Number(p.nego_cents || 0);
+// Only a price actually written in the reply counts as a discount: the
+// classifier's nego_cents is often the table price and used to attach the
+// Instagram counterpart to replies that had no price at all.
 const discountApplied = !goingToArtist && tableCents > 0
-  && agreedCents > 0 && agreedCents < tableCents;
+  && replyPriceCents > 0 && replyPriceCents < tableCents;
 if (discountApplied && !/instagram|insta\\b|post|publica|marcand/i.test(finalReply)) {
   const handleRaw = String(($('Resolve Artist').first().json || {}).instagram_handle || '').trim();
   const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';

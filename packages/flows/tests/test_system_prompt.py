@@ -512,6 +512,10 @@ check("a corrected new tattoo recovers from aguardando_artista",
       "recoveredFromHandoff" in parse_js
       and "finalPipeline = 'qualificando'" in parse_js
       and "nextDiscoveryQuestion" in parse_js)
+check("classifier knows the doubts checkpoint is pending",
+      "aguardando_confirmacao_duvidas === true" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "checkpointNote" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])
+
 check("doubts are cleared by the classifier, with a short-message guard",
       "parsed.doubts_cleared === true" in parse_js
       and "trim().length <= 160" in parse_js
