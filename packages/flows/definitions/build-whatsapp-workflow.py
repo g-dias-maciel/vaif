@@ -1005,9 +1005,14 @@ const visionPlacement = VISION_PLACEMENTS.indexOf(String(visionAnalysis.local ||
   : null;
 const coverLike = lead.tattoo_type === 'cover_up' || lead.tattoo_type === 'rework'
   || TIPO_DB[tipoDeterministic] === 'cover_up' || TIPO_DB[tipoDeterministic] === 'rework';
+// The photo also shows where a NEW tattoo goes: either the lead says "like the
+// photo / same place", or the image is a photo of a tattoo already on a body.
+const referencesPhoto = /como (?:na|da|essa|esta) foto|igual (?:a|da|essa) foto|mesmo local|exatamente como|ness[ae] foto|dess[ae] foto|naquela foto/i.test(rawLead);
+const visionShowsOnBody = String(visionAnalysis.tipo || '') === 'foto_de_tatuagem';
+const useVisionPlacement = coverLike || referencesPhoto || visionShowsOnBody;
 const placementNow = rawPlacement
   ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
-  : (lead.placement || (coverLike ? visionPlacement : null));
+  : (lead.placement || (useVisionPlacement ? visionPlacement : null));
 const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
 const styleNow = detectStyle(rawLead) || lead.style || null;
 // The lead already described the whole upper arm; asking outer/inner again is a loop.

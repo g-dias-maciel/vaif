@@ -39,15 +39,16 @@ const ROWS = [
   { placement: 'braco', body_zone: 'fechamento', table_price: 20000 },
 ];
 
-function runParse({ start, leadText, classifier, agentOutput, rows }) {
+function runParse({ start, leadText, classifier, agentOutput, rows, photo = null }) {
   const $ = (name) => ({
+    isExecuted: name === 'Parse Reference Analysis' ? !!photo : undefined,
     first: () => {
       if (name === 'Start Turn') return { json: start };
       if (name === 'AI Agent') return { json: { output: agentOutput || 'Certo!' } };
       if (name === 'Debounce Resolve') return { json: { combined_text: leadText } };
       if (name === 'Build System Prompt') return { json: { pricing_rows: rows || ROWS, offer: {} } };
       if (name === 'Parse Audio') return { json: {} };
-      if (name === 'Parse Reference Analysis') return { json: {} };
+      if (name === 'Parse Reference Analysis') return { json: { reference_analysis: photo || {} } };
       if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel' } };
       return { json: {} };
     },
@@ -193,6 +194,26 @@ r = runParse({
 check('ambiguous sides do not emit an invented price', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 check('region question is not repeated', !/parte de fora do braço/i.test(r.final_reply), r.final_reply);
 check('handoff happens instead', /confirmar o valor/i.test(r.final_reply), r.final_reply);
+
+// ── 8. The photo shows where a NEW tattoo goes. ──
+console.log('=== "exactly like the photo" uses the photo placement ===');
+r = runParse({
+  start: start({ placement: null, body_zone: null }),
+  leadText: 'quero fazer essa tatuagem. Exatamente como na foto, mesmo tamanho e local.',
+  agentOutput: 'Onde exatamente você gostaria de fazer?',
+  classifier: classifier({ qualification: {} }),
+  photo: { tipo: 'foto_de_tatuagem', local: 'antebraco', assunto: 'flor de lótus' },
+});
+check('takes the placement from the photo', r.placement_val === 'antebraco', String(r.placement_val));
+
+console.log('=== A drawing does not set the placement ===');
+r = runParse({
+  start: start({ placement: null, body_zone: null }),
+  leadText: 'quero uma tatuagem assim',
+  classifier: classifier({ qualification: {} }),
+  photo: { tipo: 'desenho', local: 'indefinido', assunto: 'flor' },
+});
+check('no placement from a drawing', r.placement_val === null, String(r.placement_val));
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
