@@ -435,5 +435,40 @@ check('keeps the negotiation question', /o que essa pessoa precisa saber/i.test(
 check('does not push the schedule', !/primeiro vamos escolher o hor[áa]rio/i.test(r.final_reply), r.final_reply);
 check('no slot guarantee', !/garantid/i.test(r.final_reply), r.final_reply);
 
+// ── 11. The model's own offer is never overwritten by a re-quote. ──
+console.log('=== Model discount survives ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
+    },
+  },
+  leadText: 'seria o preco',
+  agentOutput: 'Entendi, Lilo. Se fechar hoje, eu consigo fazer por R$ 180,00 em vez de R$ 200,00. E esse valor ainda inclui a promoção. Fecho pra você agora?',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { asks_for_price: true }),
+});
+check('keeps the model offer', /R\$\s*180,00/.test(r.final_reply), r.final_reply);
+check('does not replace it with the quoted price', !/fica R\$\s*200,00 à vista/i.test(r.final_reply), r.final_reply);
+check('moves to the close stage', r.chat_state.negotiation_stage === 'close', String(r.chat_state.negotiation_stage));
+
+console.log('=== A silent model still gets the repeat quote ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: false, negotiation_reason: null, negotiation_stage: null,
+    },
+  },
+  leadText: 'quanto custa mesmo?',
+  agentOutput: 'Claro!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { asks_for_price: true }),
+});
+check('repeats the quoted price', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

@@ -1346,6 +1346,7 @@ const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)
   || parsed.asks_for_price === true;
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   && parsed.objection !== 'decision'
+  && !/R\$\s*\d/.test(finalReply)
   ? deterministicQuote(
       lead.quoted_price_cents
       || lead.table_price_cents
@@ -1971,6 +1972,18 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
     // The model responded, but never asked why: add the isolating question.
     finalReply = finalReply.trim() + ' ' + retentionReply('decision');
     nextNegotiationStage = 'diagnose';
+  }
+  // The model already made an offer: the next turn closes, it does not diagnose
+  // the objection again.
+  if (!passiveExit && /R\$\s*\d/.test(finalReply)) {
+    const quotedCents = Number(lead.quoted_price_cents || 0);
+    const replyMatch = finalReply.match(/R\$\s*([\d.]+,\d{2})/);
+    const replyCents = replyMatch
+      ? Math.round(Number(replyMatch[1].replace(/\./g, '').replace(',', '.')) * 100)
+      : 0;
+    if (quotedCents > 0 && replyCents > 0 && replyCents < quotedCents) {
+      nextNegotiationStage = 'close';
+    }
   }
 }
 

@@ -79,7 +79,9 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `doubts_cleared`: true SOMENTE quando o LEAD diz que não tem mais dúvidas ou pede o valor para seguir: "não tenho dúvidas", "sem dúvida", "pode mandar o valor", "só isso", "tudo certo" (inclusive com erros: "sem duvda", "nao tenho duvda"). false quando ele ainda pergunta algo ou muda de assunto.
 - `asks_for_price`: true quando o lead pede o preço/valor/orçamento, mesmo abreviado ("qnto", "vlr", "quanto fica?").
 - `wants_artist`: true quando o lead pede para falar com o artista/tatuador, mesmo com erro ("artsta", "tatuadô").
-- `objection`: o motivo de NÃO fechar agora, quando o lead hesita. `decision` (precisa falar com alguém), `price` (valor), `timing` (horário/dia), `doubt` (dor, resultado, medo), `vague` ("vou pensar", "depois"). `null` quando não há hesitação. NUNCA marque `price` só porque o lead disse que não tem outras tatuagens ou que é a primeira.
+- `objection`: o motivo de NÃO fechar agora, quando o lead hesita. `decision` (precisa falar com alguém), `price` (valor), `timing` (horário/dia), `doubt` (dor, resultado, medo), `vague` ("vou pensar", "depois"). `null` quando não há hesitação.
+  - `price` também quando ele só confirma que é o valor: "seria o preço", "é o valor mesmo", "o preço pesou", "achei alto", "queria mais barato". Isso NÃO é `asks_for_price`.
+  - NUNCA marque `price` só porque o lead disse que não tem outras tatuagens ou que é a primeira.
 - `closing`: true quando o lead aceita fechar/agendar ("pode ser", "vamos", "fechado", "quero agendar", "bora", "aceito", "combinado"). false caso contrário.
 
 ## Casamento de preço (tabela)
