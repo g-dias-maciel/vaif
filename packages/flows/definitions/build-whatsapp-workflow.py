@@ -1380,7 +1380,13 @@ const quoteMissingRow = !triageOnly && !firstQuote && !repeatedQuote && !promoti
   && priceGateOpen && replyHasPrice && !hasPriceRow && !goingToArtist && !isCoverOrRework;
 if (quoteMissingRow) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
-  if (!bodyZoneNow) {
+  // The project already has a price: asking for the size now is unrelated to
+  // the lead's message (it happened when an AI-matched row priced the quote but
+  // the project was never patched). Keep the conversation on the objection.
+  const alreadyQuoted = precoLiberadoJa || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
+  if (alreadyQuoted && !bodyZoneNow) {
+    // leave the model's reply untouched
+  } else if (!bodyZoneNow) {
     finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
   } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides) {
     finalReply = placementNow === 'braco'
@@ -1912,8 +1918,15 @@ return [{ json: {
   // specific answer ("parte externa" / "ombro ao cotovelo"). Only send a value
   // when it actually changes, so a generic restatement cannot downgrade the
   // persisted specific placement.
-  placement_val: (placementNow && placementNow !== lead.placement) ? placementNow : null,
-  body_zone_val: (bodyZoneNow && bodyZoneNow !== lead.body_zone) ? bodyZoneNow : null,
+  // The quote may come from an AI-matched row even when the lead's message did
+  // not repeat the placement/zone. Persist the row's cell, otherwise the project
+  // stays "unqualified" and the next turn asks for the size again.
+  placement_val: ((placementNow || (aiPriceRow ? aiPriceRow.placement : null)) !== lead.placement
+    ? (placementNow || (aiPriceRow ? aiPriceRow.placement : null))
+    : null),
+  body_zone_val: ((bodyZoneNow || (aiPriceRow ? aiPriceRow.body_zone : null)) !== lead.body_zone
+    ? (bodyZoneNow || (aiPriceRow ? aiPriceRow.body_zone : null))
+    : null),
   style_val: (styleNow && styleNow !== lead.style) ? styleNow : null,
   first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
     ? q.first_tattoo

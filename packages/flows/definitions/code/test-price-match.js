@@ -223,5 +223,29 @@ r = run({
 check('no price at all', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 check('no promotion quote recorded', r.quote_offered_cents === null, String(r.quote_offered_cents));
 
+// ── 12. The AI-matched cell is persisted on the project. ──
+console.log('=== AI row persists placement and zone ===');
+r = run({
+  start: lead({ placement: null, body_zone: null }),
+  leadText: 'quero no antebraço',
+  rows: [{ placement: 'antebraco', body_zone: 'pequeno', table_price: 20000 }],
+  classifier: classifier({ match: true, placement: 'antebraco', body_zone: 'pequeno', confidence: 'alta', reason: 'lead disse antebraço' }),
+  critique: { agree: true, confidence: 'alta', reason: 'ok' },
+});
+check('persists the matched placement', r.placement_val === 'antebraco', String(r.placement_val));
+check('persists the matched zone', r.body_zone_val === 'pequeno', String(r.body_zone_val));
+
+// ── 13. A quoted project never asks for the size again. ──
+console.log('=== Already quoted: no size question ===');
+r = run({
+  start: lead({ placement: null, body_zone: null, stage_key: 'orcamento_enviado', quoted_price_cents: 20000, table_price_cents: 20000,
+    agent_state: { processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true } }),
+  leadText: 'seria o preco mesmo',
+  ai: 'Consigo fazer um desconto, fica R$ 180,00.',
+  rows: DIFFERENT_SIDES,
+  classifier: classifier({ match: false, placement: null, body_zone: null, confidence: 'alta', reason: 'x' }),
+});
+check('does not ask for the size again', !/pequena, média, grande|fechamento/i.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
