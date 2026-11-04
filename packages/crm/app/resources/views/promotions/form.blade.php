@@ -101,6 +101,11 @@
             @else
                 <input type="number" name="multiplier" id="multiplier" value="{{ $value('multiplier', 2) }}" min="1" max="10" step="0.01" required>
             @endif
+            <p class="meta" style="margin-top: 6px;">
+                <strong>2 = o dobro do valor da tabela.</strong>
+                A segunda tatuagem é do mesmo tamanho e gratuita, combinada direto com o artista:
+                o agente nunca informa valor para ela.
+            </p>
         </div>
 
         <div class="form-field">
