@@ -692,7 +692,7 @@ function saysCoverUp(text) {
   if (/cobertura|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(t)) return true;
   if (/^\s*(?:quero\s+|vou\s+|pode\s+ser\s+|seria\s+)?cobrir\s*[.!]?$/.test(t)) return true;
   return /\\bcobrir\\b/.test(t)
-    && /(tatuagem|tattoo|antig[ao]|existent[e]|j[áa] (?:tenho|existe)|por cima)/.test(t);
+    && /(tatu|tattoo|antig[ao]|existent[e]|j[áa] (?:tenho|existe)|por cima)/.test(t);
 }
 
 function detectTipo(text) {
@@ -737,6 +737,20 @@ if (pendingQuestion === 'tipo' && !tipoDeterministic) {
   }
 }
 if (tipoFromPending) tipoDeterministic = tipoFromPending;
+// The lead used an explicit verb ("quero cobrir", "quero reformar") but the
+// deterministic list did not recognise the noun (typos): trust the classifier,
+// which read the same message.
+if (!tipoDeterministic && !pendingQuestion) {
+  const saidCoverVerb = /\\b(?:cobrir|cobertura|cover|reformar|retoque|retocar)\\b/.test(rawLead);
+  // "cobrir do ombro ao cotovelo" is the AREA, not a cover-up: the verb only
+  // counts when it refers to an existing tattoo.
+  const saidCoverObject = /(?:tatu|tattoo|antig[ao]|existent[e]|ess[ae]|est[ae]|minha tattoo)/.test(rawLead);
+  const answer = q.tipo_tatuagem || null;
+  const negative = (answer === 'cobertura' && negativeCover) || (answer === 'reforma' && negativeRework);
+  if (saidCoverVerb && saidCoverObject && !negative && (answer === 'cobertura' || answer === 'reforma')) {
+    tipoDeterministic = answer;
+  }
+}
 const firstFromPending = pendingQuestion === 'primeira_tatuagem'
   ? (affirmAnswer ? true : (denyAnswer ? false : null))
   : null;
@@ -1309,6 +1323,16 @@ if (isCoverOrRework && /R\$\s*\d/.test(finalReply)) {
     .replace(/R\$\s*[\d.,]+[^\\n]*/g, '')
     .replace(/\\b(?:Fica|Ficaria|Sai|Sairia|Custa|Custaria)\s*$/i, '')
     .trim();
+}
+
+// The current-tattoo photo is already stored: asking for it again means the
+// lead repeats themselves. Move to the next step instead.
+if (isCoverOrReworkLead(lead) && coverPhotoNow && /\?/.test(finalReply)
+    && /foto da tatuagem|foto dela|manda uma foto|envie uma foto|enviar uma foto/i.test(finalReply)) {
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
 }
 
 // Cover-up/rework: never ask for size/coverage or the body location. The photo

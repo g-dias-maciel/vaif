@@ -93,6 +93,32 @@ check('asks for a photo of the existing tattoo', /manda uma foto/i.test(r.final_
 check('does not ask for the size', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
 check('no price before the process', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 
+// ── 1a2. Typo in the noun ("tatuagerm") still reads as a cover-up. ──
+console.log('=== Cover-up: typo + classifier verb fallback ===');
+r = run({
+  start: start({ tattoo_type: null }),
+  leadText: 'Oi\nquero cobrir essa\ntatuagerm',
+  ai: 'Oi! Sou a Beatriz, assistente do Gabriel. Como posso te chamar?',
+  classifier: classifier({ tipo_tatuagem: 'cobertura' }),
+  photo: true,
+});
+check('the type is recognised despite the typo', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
+check('the photo is recorded as the current tattoo', r.chat_state.cover_photo === true, JSON.stringify({ c: r.chat_state.cover_photo }));
+
+// ── 1a3. Never ask for the current-tattoo photo twice. ──
+console.log('=== Cover-up: does not ask for the photo again ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+    cover_photo: true,
+  } }),
+  leadText: 'pedro',
+  ai: 'Ótimo, Pedro! Para começarmos, você pode me enviar uma foto da tatuagem atual que você gostaria de cobrir?',
+  classifier: classifier(),
+});
+check('does not ask for the photo again', !/enviar uma foto da tatuagem|manda uma foto/i.test(r.final_reply), r.final_reply);
+check('asks for the new design instead', /refer[eê]ncia/i.test(r.final_reply), r.final_reply);
+
 // ── 1b. After the current-tattoo photo, ask what the lead wants on top. ──
 console.log('=== Cover-up: asks for the new design reference ===');
 r = run({
