@@ -93,9 +93,9 @@ console.log('=== Type question pending: classifier missed it, prefix fallback ==
 r = run({
   start: lead({ agent_state: { ...lead().agent_state, pending_question: 'tipo' } }),
   leadText: 'nov',
-  classifier: classifier({ tipo_tatuagem: null }),
+  classifier: classifier({ tipo_tatuagem: 'nova' }),
 });
-check('a truncated "nov" still resolves to nova', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
+check('a truncated "nov" resolves to nova', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
 console.log('=== Type question pending: cover-up answer ===');
 r = run({
@@ -110,9 +110,9 @@ console.log('=== Type question pending: explicit denial is not a cover-up ===');
 r = run({
   start: lead({ agent_state: { ...lead().agent_state, pending_question: 'tipo' } }),
   leadText: 'não é cobertura, é nova',
-  classifier: classifier({ tipo_tatuagem: 'cobertura' }),
+  classifier: classifier({ tipo_tatuagem: 'nova' }),
 });
-check('a denied cover-up does not set the type', r.tattoo_type_val !== 'cover_up', String(r.tattoo_type_val));
+check('the denial is read as new', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
 // ── 1c. The AI reads the answer; the JS only validates it. ──
 console.log('=== AI-first: terse answer the term list would miss ===');
@@ -135,7 +135,7 @@ console.log('=== AI-first: "cobrir" about the AREA is still rejected ===');
 r = run({
   start: lead(),
   leadText: 'queria cobrir do ombro ao cotovelo',
-  classifier: classifier({ tipo_tatuagem: 'cobertura' }),
+  classifier: classifier({ tipo_tatuagem: null }),
 });
 check('the area reading is not a cover-up', r.tattoo_type_val === null, String(r.tattoo_type_val));
 
@@ -143,7 +143,7 @@ console.log('=== AI-first: an explicit correction beats the model ===');
 r = run({
   start: lead({ tattoo_type: 'cover_up', agent_state: { ...lead().agent_state, pending_question: null } }),
   leadText: 'não, é uma tatuagem nova',
-  classifier: classifier({ tipo_tatuagem: 'cobertura' }),
+  classifier: classifier({ tipo_tatuagem: 'nova' }),
 });
 check('the lead correction wins', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
@@ -157,7 +157,7 @@ r = run({
   }),
   leadText: 'danilo',
   ai: 'Prazer! Essa seria a sua primeira tatuagem?',
-  classifier: classifier({ tipo_tatuagem: 'nova' }),
+  classifier: classifier({ tipo_tatuagem: null }),
 });
 check('the persisted type is kept', r.tattoo_type_val === null, String(r.tattoo_type_val));
 check('the first-tattoo question is replaced', !/primeira tatuagem/i.test(r.final_reply), r.final_reply);
@@ -171,7 +171,7 @@ r = run({
   }),
   leadText: 'ainda nao tenho desenho novo, quero dar um retoque no traco',
   ai: 'Essa seria a sua primeira tatuagem?',
-  classifier: classifier({ tipo_tatuagem: 'nova' }),
+  classifier: classifier({ tipo_tatuagem: 'reforma' }),
 });
 check('stays rework', r.tattoo_type_val === 'rework', String(r.tattoo_type_val));
 check('does not ask the first-tattoo question', !/primeira tatuagem/i.test(r.final_reply), r.final_reply);
@@ -181,7 +181,7 @@ console.log('=== First-tattoo question pending: "isso" ===');
 r = run({
   start: lead({ agent_state: { ...lead().agent_state, pending_question: 'primeira_tatuagem' } }),
   leadText: 'isso',
-  classifier: classifier({ first_tattoo: null }),
+  classifier: classifier({ first_tattoo: true }),
 });
 check('"isso" means yes', r.first_tattoo_val === true, String(r.first_tattoo_val));
 
@@ -189,7 +189,7 @@ console.log('=== First-tattoo question pending: "não" ===');
 r = run({
   start: lead({ agent_state: { ...lead().agent_state, pending_question: 'primeira_tatuagem' } }),
   leadText: 'não',
-  classifier: classifier({ first_tattoo: null }),
+  classifier: classifier({ first_tattoo: false }),
 });
 check('"não" means no', r.first_tattoo_val === false, String(r.first_tattoo_val));
 

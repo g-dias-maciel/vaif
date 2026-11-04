@@ -510,8 +510,8 @@ check("the final checkpoint is never sliced off after an earlier question",
       "const checkpointAt" not in parse_js
       and "Mais alguma dúvida?" in parse_js)
 check("false cover-up / artist-request handoffs are suppressed",
-      "leadSaysCover" in parse_js
-      and "leadRequestedArtist" in parse_js
+      "q.tipo_tatuagem === 'nova'" in parse_js
+      and "parsed.wants_artist === true" in parse_js
       and "handoffSuppressed" in parse_js)
 check("a corrected new tattoo recovers from aguardando_artista",
       "recoveredFromHandoff" in parse_js

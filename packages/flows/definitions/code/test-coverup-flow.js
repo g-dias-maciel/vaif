@@ -99,7 +99,7 @@ r = run({
   start: start({ tattoo_type: null }),
   leadText: 'Oi\nquero cobrir essa\ntatuagerm',
   ai: 'Oi! Sou a Beatriz, assistente do Gabriel. Como posso te chamar?',
-  classifier: classifier({ tipo_tatuagem: 'cobertura' }),
+  classifier: classifier({ qualification: { tipo_tatuagem: 'cobertura' } }),
   photo: true,
 });
 check('the type is recognised despite the typo', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
@@ -270,7 +270,7 @@ check('rework has no price', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 // ── 4. New tattoos are unaffected and still get priced. ──
 console.log('=== New tattoo still quotes ===');
 r = run({
-  start: start({ tattoo_type: 'new', body_zone: 'fechamento', agent_state: {
+  start: start({ tattoo_type: 'new', body_zone: 'fechamento', style: 'realismo', agent_state: {
     processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: false,
   } }),
   leadText: 'não',

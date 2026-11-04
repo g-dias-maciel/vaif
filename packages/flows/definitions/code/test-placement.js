@@ -92,7 +92,7 @@ console.log('=== "Cobrir do ombro ao cotovelo" is a coverage answer ===');
 let r = runParse({
   start: start(),
   leadText: 'queria cobrir do ombro ao cotovelo',
-  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento', tipo_tatuagem: 'cobertura' } }),
+  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento', tipo_tatuagem: null }, whole_arm: true }),
 });
 check('tattoo type is not flipped to cover_up', r.tattoo_type_val === null, String(r.tattoo_type_val));
 check('placement stays the arm (no downgrade patch)', r.placement_val === null, String(r.placement_val));
@@ -103,7 +103,7 @@ console.log('=== "Parte externa" maps to braco_externo and quotes ===');
 r = runParse({
   start: start({ body_zone: 'fechamento', style: 'realismo' }),
   leadText: 'seria na parte externa\ncomo falei\ndo ombro ao cotovelo',
-  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000, nego_cents: 10000 } }),
+  classifier: classifier({ qualification: { placement: 'braco_externo', body_zone: 'fechamento' }, pricing: { table_cents: 10000, nego_cents: 10000 } }),
   agentOutput: 'Para a parte externa do braço, no fechamento, fica R$ 100,00 à vista ou em até 6x de R$ 16,67 sem juros.',
 });
 check('placement resolved to braco_externo', r.placement_val === 'braco_externo', String(r.placement_val));
@@ -116,7 +116,7 @@ console.log('=== Inner side ===');
 r = runParse({
   start: start({ body_zone: 'fechamento' }),
   leadText: 'na parte de dentro',
-  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento' } }),
+  classifier: classifier({ qualification: { placement: 'braco_interno', body_zone: 'fechamento' } }),
 });
 check('"parte de dentro" -> braco_interno', r.placement_val === 'braco_interno', String(r.placement_val));
 
@@ -125,7 +125,7 @@ console.log('=== Shoulder-to-elbow alone ===');
 r = runParse({
   start: start({ placement: null }),
   leadText: 'do ombro ao cotovelo',
-  classifier: classifier({ qualification: { placement: null, body_zone: 'fechamento' } }),
+  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento' }, whole_arm: true }),
 });
 check('"ombro ao cotovelo" -> braco', r.placement_val === 'braco', String(r.placement_val));
 
@@ -154,7 +154,7 @@ r = runParse({
     processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: false,
   } }),
   leadText: 'parte de fora e de dentro',
-  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 20000 } }),
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 20000 }, both_sides: true }),
   agentOutput: 'Fica R$ 200,00 à vista.',
 });
 check('both sides are summed', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
@@ -168,7 +168,7 @@ r = runParse({
     processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true,
   } }),
   leadText: 'como falei, do ombro ao cotovelo',
-  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 } }),
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 }, whole_arm: true }),
   agentOutput: 'Para a tatuagem de águia no braço, do ombro ao cotovelo, fica R$ 100,00 à vista ou em até 6x de R$ 16,67 sem juros.',
 });
 check('quote is kept when both sides cost the same', /R\$\s*100,00/.test(r.final_reply), r.final_reply);
@@ -187,7 +187,7 @@ r = runParse({
     processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true,
   } }),
   leadText: 'como falei, do ombro ao cotovelo',
-  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 } }),
+  classifier: classifier({ pipeline: 'orcamento_enviado', qualification: { placement: 'braco', body_zone: 'fechamento' }, pricing: { table_cents: 10000 }, whole_arm: true }),
   agentOutput: 'Fica R$ 100,00 à vista.',
   rows: differentRows,
 });

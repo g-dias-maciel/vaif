@@ -183,7 +183,7 @@ r = run({
   }),
   leadText: 'isso',
   ai: 'Perfeito!',
-  classifier: classifier(),
+  classifier: classifier({ answers_previous: 'yes' }),
 });
 check('marks the photo as confirmed', r.chat_state.photo_confirmed === true, JSON.stringify({ c: r.chat_state.photo_confirmed }));
 check('stops asking for confirmation', !/é isso mesmo\?/i.test(r.final_reply), r.final_reply);

@@ -80,58 +80,27 @@ function runParse({ persistedType, leadText, classifierTipo, agentOutput }) {
   return new Function('$', '$input', parseCode)($, input)[0].json;
 }
 
-// ── 1. The exact production case: persisted "new" must not be flipped by the
-//       classifier reading Beatriz's area/coverage question.
-console.log('=== Persisted new + classifier hears "cobertura" in Beatriz\'s question ===');
-let r = runParse({
-  persistedType: 'new',
-  leadText: 'sim\nseria um significado pessoal',
-  classifierTipo: 'cobertura',
-  agentOutput: 'Entendi, Pepo! Agora, você já tem em mente qual cobertura você deseja para essa tatuagem?',
-});
-check('persisted new is not overwritten', r.tattoo_type_val === null, String(r.tattoo_type_val));
+// The type is exactly the classifier's reading, validated against the enum.
+// No keyword list decides it anymore.
+console.log('=== Classifier says nova ===');
+let r = runParse({ persistedType: null, leadText: 'qualquer coisa', classifierTipo: 'nova' });
+check('new is saved', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
-// ── 2. An explicit correction by the lead still wins. ──
-console.log('=== Lead explicitly corrects to cover-up ===');
-r = runParse({
-  persistedType: 'new',
-  leadText: 'na verdade quero cobrir uma tatuagem antiga',
-  classifierTipo: null,
-});
-check('explicit cover-up replaces new', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
+console.log('=== Classifier says cobertura ===');
+r = runParse({ persistedType: 'new', leadText: 'qualquer coisa', classifierTipo: 'cobertura' });
+check('cover-up replaces new', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
 
-console.log('=== Lead explicitly corrects back to new ===');
-r = runParse({
-  persistedType: 'cover_up',
-  leadText: 'não, é uma tatuagem nova',
-  classifierTipo: 'cobertura',
-});
-check('explicit new replaces cover_up', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
+console.log('=== Classifier says reforma ===');
+r = runParse({ persistedType: null, leadText: 'qualquer coisa', classifierTipo: 'reforma' });
+check('rework is saved', r.tattoo_type_val === 'rework', String(r.tattoo_type_val));
 
-// ── 3. First-time detection from the lead's own words still works. ──
-console.log('=== First detection from the lead ===');
-r = runParse({
-  persistedType: null,
-  leadText: 'seria uma tatuagem nova',
-  classifierTipo: 'nova',
-});
-check('explicit new is saved', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
+console.log('=== Classifier returns an invalid value ===');
+r = runParse({ persistedType: 'cover_up', leadText: 'qualquer coisa', classifierTipo: 'sei la' });
+check('nothing is patched', r.tattoo_type_val === null, String(r.tattoo_type_val));
 
-r = runParse({
-  persistedType: null,
-  leadText: 'quero fazer uma cobertura',
-  classifierTipo: null,
-});
-check('explicit cover-up is saved', r.tattoo_type_val === 'cover_up', String(r.tattoo_type_val));
-
-// ── 4. A bare classifier guess is not enough. ──
-console.log('=== Classifier guess without the lead saying it ===');
-r = runParse({
-  persistedType: null,
-  leadText: 'seria um significado pessoal',
-  classifierTipo: 'cobertura',
-});
-check('unconfirmed classifier type is ignored', r.tattoo_type_val === null, String(r.tattoo_type_val));
+console.log('=== Classifier corrects a persisted cover-up back to new ===');
+r = runParse({ persistedType: 'cover_up', leadText: 'nao, e uma tatuagem nova', classifierTipo: 'nova' });
+check('the correction wins', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

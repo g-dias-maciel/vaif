@@ -776,195 +776,29 @@ if (visionTurn) {
 const artist = $('Resolve Artist').first().json || {};
 const triageOnly = artist.full_selling === false || artist.full_selling === 'false';
 
-// ── Deterministic tipo_tatuagem guard ──
+// ── Type and answers: read by the classifier, validated here ──
 let audioTranscript = null;
 try { audioTranscript = $('Parse Audio').first().json.transcript || null; } catch (e) {}
 const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_text || '').toLowerCase();
-const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
-const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\\b(?:cover|cobertura)\\b/.test(rawLead);
-const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\\b(?:reforma|retoque)\\b/.test(rawLead);
-// The lead may have said "cobertura" in an earlier turn (the photo turn is
-// just "[FOTO RECEBIDA]"); the persisted type still authorises the handoff.
-const answeringType = state.pending_question === 'tipo';
-const leadSaysCover = (saysCoverUp(rawLead) && !negativeCover)
-  || lead.tattoo_type === 'cover_up'
-  || (answeringType && /\\b(?:cobrir|cobertura|cover)\\b/.test(rawLead) && !negativeCover);
-const leadSaysRework = (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework)
-  || lead.tattoo_type === 'rework'
-  || (answeringType && /\\b(?:reforma|reformar|retocar|retoque)\\b/.test(rawLead) && !negativeRework);
-const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead)
-  || parsed.wants_artist === true;
-
-// "Cobrir" is ambiguous in Portuguese: it is cover-up when it refers to an
-// existing tattoo, but it is the AREA when the lead says "queria cobrir do
-// ombro ao cotovelo" (that is body_zone=fechamento, not tipo=cover_up).
-function saysCoverUp(text) {
-  const t = String(text || '').toLowerCase();
-  if (/cobertura|cover[- ]?up|tatuagem por cima|por cima de(?:sta| uma)/.test(t)) return true;
-  if (/^\s*(?:quero\s+|vou\s+|pode\s+ser\s+|seria\s+)?cobrir\s*[.!]?$/.test(t)) return true;
-  return /\\bcobrir\\b/.test(t)
-    && /(tatu|tattoo|antig[ao]|existent[e]|j[áa] (?:tenho|existe)|por cima)/.test(t);
-}
-
-function detectTipo(text) {
-  if (saysCoverUp(text)) return 'cobertura';
-  if (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(text)) return 'reforma';
-  if (/tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(text)) return 'nova';
-  return null;
-}
-let tipoDeterministic = detectTipo(rawLead);
-// "não é cobertura, é nova" must not come out as a cover-up.
-if (tipoDeterministic === 'cobertura' && negativeCover) tipoDeterministic = null;
-if (tipoDeterministic === 'reforma' && negativeRework) tipoDeterministic = null;
-const saysNewExplicit = /\\b(?:é|eh|seria|ser[aá]|vai ser)\s+(?:uma\s+)?nov[ao]\\b/.test(rawLead);
-if ((saysNew || saysNewExplicit) && (negativeCover || negativeRework)) {
-  tipoDeterministic = 'nova';
-}
 // The schema stores English enum values; the prompt/classifier vocabulary is PT.
 const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
-
-// ── Answer interpretation with the pending question ──
-// "isso" or "nov" only mean something relative to the question Beatriz asked
-// last turn. The previous turn persists `pending_question`; when the lead is
-// answering the type question, the classifier (which now also sees that
-// question) is trusted, and a small deterministic layer covers yes/no and
-// truncated words. Cover-up/rework keep the explicit-words guard.
-const pendingQuestion = state.pending_question || null;
-const answerText = String(rawLead || '').trim();
-const affirmAnswer = /^(?:sim|isso|isso mesmo|exato|correto|uhum|positivo|claro|com certeza|seria|é|eh)\\b/i.test(answerText);
-const denyAnswer = /^(?:n[aã]o|nunca|ainda n[aã]o|negativo)\\b/i.test(answerText);
-let tipoFromPending = null;
-if (pendingQuestion === 'tipo' && !tipoDeterministic) {
-  const answer = q.tipo_tatuagem || null;
-  if (answer === 'nova' || answer === 'cobertura' || answer === 'reforma') {
-    const negative = (answer === 'cobertura' && negativeCover) || (answer === 'reforma' && negativeRework);
-    if (!negative) tipoFromPending = answer;
-  }
-  if (!tipoFromPending) {
-    // Truncated answers ("seria uma tatuagem nov", "cob", "ref").
-    if (/^(?:nov|nova|novo)\\b/.test(answerText)) tipoFromPending = 'nova';
-    else if (/^(?:cob|cover)/.test(answerText)) tipoFromPending = 'cobertura';
-    else if (/^(?:ref|retoc|retoq)/.test(answerText)) tipoFromPending = 'reforma';
-  }
-}
-if (tipoFromPending) tipoDeterministic = tipoFromPending;
-
-// ── AI-first parsing, JS validation ──
-// The model reads typos ("tatuagerm"), abbreviations and terse answers far
-// better than any term list, so its reading wins whenever it returns a valid
-// value. The guards below only reject impossible readings: an explicit denial,
-// or a "cover-up" that is really the AREA being covered ("cobrir do ombro ao
-// cotovelo"), which the lead's own words do not support.
-const aiTipo = (q.tipo_tatuagem === 'nova' || q.tipo_tatuagem === 'cobertura' || q.tipo_tatuagem === 'reforma')
+const TIPO_PT = ['nova', 'cobertura', 'reforma'];
+// The classifier reads the lead's message (and the previous question). No
+// keyword list: the only job here is validating the enum.
+const tipoDeterministic = TIPO_PT.indexOf(String(q.tipo_tatuagem || '')) >= 0
   ? q.tipo_tatuagem
   : null;
-if (aiTipo) {
-  const impossible = (aiTipo === 'cobertura' && !leadSaysCover)
-    || (aiTipo === 'reforma' && !leadSaysRework);
-  // An explicit correction by the lead always wins over the model.
-  const negativeNew = /n[aã]o\s+(?:é|eh|e|seria)\s+(?:uma\s+)?nov[ao]/.test(rawLead);
-  const correctedToNew = aiTipo !== 'nova' && (saysNew || saysNewExplicit) && !negativeNew;
-  // The model must not set a type out of nowhere: the lead either answered the
-  // type question or said something type-ish. Without that, a message like
-  // "danilo" would let the classifier overwrite a persisted cover-up with new.
-  const typeSignal = saysNew || saysNewExplicit || saysCoverUp(rawLead)
-    || /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead)
-    || /cobertura|cobrir|cover/.test(rawLead);
-  const answeredType = state.pending_question === 'tipo';
-  // A persisted cover-up/rework only changes type on an explicit correction.
-  const persistedCover = lead.tattoo_type === 'cover_up' || lead.tattoo_type === 'rework';
-  const wouldFlipPersisted = aiTipo === 'nova' && persistedCover && !(saysNew || saysNewExplicit);
-  if (!impossible && !correctedToNew && !wouldFlipPersisted && (typeSignal || answeredType)) {
-    tipoDeterministic = aiTipo;
-  }
-}
-// The lead used an explicit verb ("quero cobrir", "quero reformar") but the
-// deterministic list did not recognise the noun (typos): trust the classifier,
-// which read the same message.
-if (!tipoDeterministic && !pendingQuestion) {
-  const saidCoverVerb = /\\b(?:cobrir|cobertura|cover|reformar|retoque|retocar)\\b/.test(rawLead);
-  // "cobrir do ombro ao cotovelo" is the AREA, not a cover-up: the verb only
-  // counts when it refers to an existing tattoo.
-  const saidCoverObject = /(?:tatu|tattoo|antig[ao]|existent[e]|ess[ae]|est[ae]|minha tattoo)/.test(rawLead);
-  const answer = q.tipo_tatuagem || null;
-  const negative = (answer === 'cobertura' && negativeCover) || (answer === 'reforma' && negativeRework);
-  if (saidCoverVerb && saidCoverObject && !negative && (answer === 'cobertura' || answer === 'reforma')) {
-    tipoDeterministic = answer;
-  }
-}
-const firstFromPending = pendingQuestion === 'primeira_tatuagem'
-  ? (affirmAnswer ? true : (denyAnswer ? false : null))
-  : null;
+const pendingQuestion = state.pending_question || null;
 
-// ── Deterministic qualification extraction (fills classifier gaps so the
-//    lead's answers are persisted reliably and never "forgotten"). ──
+// ── Text helpers ──
+// normalizeText is only used to compare style spellings; the field detection
+// is done by the classifier, not by keyword lists.
 function normalizeText(t) {
   return String(t || '').toLowerCase()
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
     .replace(/_/g, ' ');
 }
-function detectPlacement(t) {
-  const text = normalizeText(t);
-  // "parte de fora e de dentro" is the whole upper arm, not only the first side.
-  if (/(?:fora|externa).{0,18}(?:e|mais).{0,18}(?:dentro|interna)|(?:dentro|interna).{0,18}(?:e|mais).{0,18}(?:fora|externa)/.test(text)) {
-    return 'braco';
-  }
-  const map = [
-    // Answers to "parte de fora / de dentro?" when the lead already said
-    // "braço". Must come before the generic "ombro"/"braço" matches.
-    ['parte externa', 'braco_externo'], ['parte de fora', 'braco_externo'], ['lado de fora', 'braco_externo'],
-    ['parte interna', 'braco_interno'], ['parte de dentro', 'braco_interno'], ['lado de dentro', 'braco_interno'],
-    // "Do ombro ao cotovelo" is the upper arm (a coverage answer), not the
-    // shoulder itself.
-    ['ombro ao cotovelo', 'braco'], ['ombro ate o cotovelo', 'braco'],
-    ['braço externo', 'braco_externo'], ['braco externo', 'braco_externo'],
-    ['braço interno', 'braco_interno'], ['braco interno', 'braco_interno'],
-    ['antebraço', 'antebraco'], ['antebraco', 'antebraco'],
-    ['panturrilha', 'panturrilha'], ['canela', 'canela'], ['tornozelo', 'tornozelo'],
-    ['pescoço', 'pescoco'], ['pescoco', 'pescoco'],
-    ['costela', 'costela'], ['costas', 'costas'],
-    ['barriga', 'barriga'], ['abdomen', 'barriga'], ['abdômen', 'barriga'],
-    ['ombro', 'ombro'], ['pulso', 'pulso'],
-    ['braço', 'braco'], ['braco', 'braco'],
-    ['peito', 'peito'], ['perna', 'perna'], ['coxa', 'coxa'],
-    ['dedo', 'dedo'], ['mão', 'mao'], ['mao', 'mao'], ['pé', 'pe'], ['pe', 'pe'],
-  ];
-  for (const [k, v] of map) {
-    // Short words like "pe" (foot) must match a word, not "Pedro" or "peito".
-    if (k.length <= 3 && !text.split(/[^a-z0-9]+/).includes(k)) continue;
-    if (text.includes(k)) return v;
-  }
-  return null;
-}
-function detectZone(t) {
-  const text = normalizeText(t);
-  if (/fechamento|fechar|fechado|sleeve|inteir[oa]|complet[oa]|cobrir tudo|o .* todo|ombro ao cotovelo|ombro ate o cotovelo/.test(text)) return 'fechamento';
-  if (/quase tudo|a maior parte|maior parte|grande/.test(text)) return 'grande';
-  if (/area media|metade|medi[oa]/.test(text)) return 'medio';
-  if (/partinha|pedacinho|so um detalhe|pequen[oa]/.test(text)) return 'pequeno';
-  return null;
-}
-function detectStyle(t) {
-  const text = normalizeText(t);
-  const map = [
-    ['neo tradicional', 'neo_tradicional'], ['neo trad', 'neo_tradicional'],
-    ['old school', 'old_school'], ['oldschool', 'old_school'],
-    ['fine line', 'fine_line'], ['fineline', 'fine_line'],
-    ['new school', 'new_school'],
-    ['geométrico', 'geometrico'], ['geométrica', 'geometrico'], ['geometrico', 'geometrico'],
-    ['pontilhismo', 'pontilhismo'], ['aquarela', 'aquarela'], ['aquarelado', 'aquarela'],
-    ['realismo', 'realismo'], ['blackwork', 'blackwork'], ['tradicional', 'tradicional'],
-    ['japonês', 'japones'], ['japones', 'japones'], ['oriental', 'oriental'],
-    ['tribal', 'tribal'], ['floral', 'floral'],
-  ];
-  for (const [k, v] of map) if (text.includes(k)) return v;
-  return null;
-}
-function detectFirstTattoo(t) {
-  if (/minha primeira|é minha 1ª|é a primeira|primeira tattoo|primeira tatu|nunca fiz|nunca tatuei|vai ser a primeira/.test(t)) return true;
-  if (/já tenho|já fiz|já tatuei|tenho várias|tenho algumas|não é a primeira|segunda tattoo|terceira tattoo/.test(t)) return false;
-  return null;
-}
+
 const specificArm = ['braco_externo', 'braco_interno', 'antebraco'];
 // The classifier already reads the lead's message; its enum values fill the
 // gaps when the keyword list misses a typo or an unusual phrasing.
@@ -972,7 +806,7 @@ const ENUM_PLACEMENTS = ['braco', 'braco_externo', 'braco_interno', 'antebraco',
 const ENUM_ZONES = ['pequeno', 'medio', 'grande', 'fechamento'];
 const ENUM_STYLES = ['realismo', 'old_school', 'neo_tradicional', 'fine_line', 'new_school', 'blackwork', 'tradicional', 'geometrico', 'pontilhismo', 'aquarela', 'japones', 'oriental', 'tribal', 'floral'];
 const aiPlacement = ENUM_PLACEMENTS.indexOf(String(q.placement || '')) >= 0 ? q.placement : null;
-const rawPlacement = detectPlacement(rawLead) || aiPlacement;
+const rawPlacement = aiPlacement;
 // The photo of a cover-up/rework shows where the tattoo already is: read the
 // location from the vision analysis instead of asking the lead.
 const visionAnalysis = (function () {
@@ -1021,26 +855,24 @@ function normalizeStyle(raw) {
   return ENUM_STYLES.indexOf(t) >= 0 ? t : null;
 }
 const aiStyle = normalizeStyle(q.style);
-const textStyle = detectStyle(rawLead);
 const visionStyleConf = String(visionAnalysis.estilo_confianca || '');
 const visionStyleTrusted = !visionStyleConf || visionStyleConf === 'alta' || visionStyleConf === 'media';
 const visionStyle = visionStyleTrusted ? normalizeStyle(visionAnalysis.estilo) : null;
 const visionZone = ENUM_ZONES.indexOf(String(visionAnalysis.tamanho || '')) >= 0
   ? String(visionAnalysis.tamanho)
   : null;
-const textZone = detectZone(rawLead);
-const bodyZoneNow = textZone || aiZone || lead.body_zone || visionZone || null;
+const bodyZoneNow = aiZone || lead.body_zone || visionZone || null;
 // Provenance: values that came only from the photo must be confirmed with the
 // lead instead of silently assumed.
-const zoneFromVision = !textZone && !aiZone && !lead.body_zone && !!visionZone;
-const placementFromVision = !detectPlacement(rawLead) && !aiPlacement && !lead.placement && !!visionPlacement;
-const styleNow = textStyle || aiStyle || lead.style || visionStyle || null;
+const zoneFromVision = !aiZone && !lead.body_zone && !!visionZone;
+const placementFromVision = !aiPlacement && !lead.placement && !!visionPlacement;
+const styleNow = aiStyle || lead.style || visionStyle || null;
 // Provenance: a style read only from the photo is a hint, confirmed with the lead.
-const styleFromVision = !textStyle && !aiStyle && !lead.style && !!visionStyle;
-// The lead already described the whole upper arm; asking outer/inner again is a loop.
-const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(normalizeText(rawLead));
-// "parte de fora e de dentro" means BOTH sides, not the first one mentioned.
-const leadGaveBothSides = /(?:fora|externa).{0,18}(?:e|mais).{0,18}(?:dentro|interna)|(?:dentro|interna).{0,18}(?:e|mais).{0,18}(?:fora|externa)|os dois lados|ambos os lados/.test(normalizeText(rawLead));
+const styleFromVision = !aiStyle && !lead.style && !!visionStyle;
+// The lead described the whole upper arm (ombro ao cotovelo) or both sides
+// (parte de fora e de dentro): the classifier reads it, no keyword list.
+const leadGaveSpecificArea = parsed.whole_arm === true;
+const leadGaveBothSides = parsed.both_sides === true;
 
 function newReferenceQuestion(lead) {
   const type = lead.tattoo_type || TIPO_DB[tipoDeterministic] || null;
@@ -1133,7 +965,7 @@ const discoveryComplete = !!((TIPO_DB[tipoDeterministic] || lead.tattoo_type)
 const photoDerived = !isCoverOrRework && !triageOnly && (zoneFromVision || placementFromVision || styleFromVision
   || state.placement_from_photo === true || state.zone_from_photo === true || state.style_from_photo === true);
 const photoConfirmed = state.photo_confirmed === true
-  || (state.pending_question === 'confirmar_foto' && affirmAnswer);
+  || (state.pending_question === 'confirmar_foto' && parsed.answers_previous === 'yes');
 const qualificationReady = !!(isCoverOrRework || (discoveryComplete && (!photoDerived || photoConfirmed)));
 const gateJustOpened = processoExplicado && duvidasEliminadas && qualificationReady;
 const priceGateOpen = precoLiberadoJa || gateJustOpened;
@@ -1244,8 +1076,9 @@ let recoveredFromHandoff = false;
 
 // A cover-up/rework handoff is only legitimate when the LEAD explicitly said
 // it. "Queria no estilo da foto" is not a cover-up.
-if ((finalHandoff === 'cover_up' && !leadSaysCover)
-    || (finalHandoff === 'reforma' && !leadSaysRework)) {
+// The classifier reads the type; a cover-up handoff that contradicts a
+// "tatuagem nova" reading is a false positive.
+if (finalHandoff === 'cover_up' && q.tipo_tatuagem === 'nova') {
   finalHandoff = null;
   handoffSuppressed = true;
   if (finalPipeline === 'aguardando_artista') {
@@ -1256,6 +1089,7 @@ if ((finalHandoff === 'cover_up' && !leadSaysCover)
 
 // The classifier can mistake Beatriz's own "vou passar pro artista" for a
 // request from the lead. Only trust it when the lead actually asked.
+const leadRequestedArtist = parsed.wants_artist === true;
 if (finalHandoff === 'lead_requested_artist' && !leadRequestedArtist) {
   finalHandoff = null;
   handoffSuppressed = true;
@@ -1342,8 +1176,7 @@ const aiPriceRow = (aiPriceMatch.match === true
 const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
   ? deterministicQuote(null, aiPriceRow)
   : null;
-const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead)
-  || parsed.asks_for_price === true;
+const asksForPrice = parsed.asks_for_price === true;
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   && parsed.objection !== 'decision'
   && !/R\$\s*\d/.test(finalReply)
@@ -1567,7 +1400,7 @@ if (isCoverOrReworkLead(lead) && /\?/.test(finalReply)
 // Cover-up/rework: once the process is explained AND the photo of the existing
 // tattoo arrived, hand off for pricing and scheduling. No price, no doubts
 // question. Without the photo there is nothing for the artist to evaluate.
-const cannotSendPhoto = /(?:n[aã]o|sem)\s+(?:tenho|consigo|h[aá]|tem)\s*(?:mais)?\s*(?:uma\s+)?(?:foto|fotos|fotografia|imagem)|apagou|n[aã]o tenho mais/i.test(rawLead);
+const cannotSendPhoto = parsed.cannot_send_photo === true;
 const coverReadyForHandoff = coverPhotoNow || cannotSendPhoto;
 if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && !coverReadyForHandoff) {
   // Keep the process explanation, ask for the photo, stay in qualification.
@@ -1658,7 +1491,7 @@ const bareCheckpoint = /^(?:antes de falarmos de valores,?\s*)?(?:mais|ficou) al
 if (checkpointWasPending && !explicitClearThisTurn) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   if (bareCheckpoint.test(finalReply.trim())) {
-    finalReply = /[?]|^(?:onde|qual|quanto|como|quando|voc[eê]s?|tem|pode)/i.test(rawLead)
+    finalReply = parsed.answers_previous === 'other'
       ? 'Boa pergunta! Vou confirmar com o ' + artistName + ' e já te retorno.'
       : 'Entendi! Pode me contar um pouco mais sobre o que você tem em mente?';
   } else {
@@ -2104,11 +1937,7 @@ return [{ json: {
     ? (bodyZoneNow || (aiPriceRow ? aiPriceRow.body_zone : null))
     : null),
   style_val: (styleNow && styleNow !== lead.style) ? styleNow : null,
-  first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false)
-    ? q.first_tattoo
-    : (detectFirstTattoo(rawLead) !== null
-        ? detectFirstTattoo(rawLead)
-        : firstFromPending),
+  first_tattoo_val: (q.first_tattoo === true || q.first_tattoo === false) ? q.first_tattoo : null,
   meaning_val: q.significado || null,
   // The type comes from the lead's own words. When the lead is answering the
   // pending type question, that includes the classifier's reading of the
@@ -2135,11 +1964,11 @@ return [{ json: {
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
     photo_confirmed: isCoverOrRework ? false : photoConfirmed,
     placement_from_photo: isCoverOrRework ? false
-      : (photoConfirmed ? false : (placementFromVision || (state.placement_from_photo === true && !aiPlacement && !detectPlacement(rawLead)))),
+      : (photoConfirmed ? false : (placementFromVision || (state.placement_from_photo === true && !aiPlacement))),
     zone_from_photo: isCoverOrRework ? false
-      : (photoConfirmed ? false : (zoneFromVision || (state.zone_from_photo === true && !aiZone && !textZone))),
+      : (photoConfirmed ? false : (zoneFromVision || (state.zone_from_photo === true && !aiZone))),
     style_from_photo: isCoverOrRework ? false
-      : (photoConfirmed ? false : (styleFromVision || (state.style_from_photo === true && !aiStyle && !textStyle))),
+      : (photoConfirmed ? false : (styleFromVision || (state.style_from_photo === true && !aiStyle))),
     negotiation_open: closingSignal ? false : negotiationOpen,
     negotiation_stage: closingSignal ? null : nextNegotiationStage,
     negotiation_reason: closingSignal ? null : negotiationReason,
