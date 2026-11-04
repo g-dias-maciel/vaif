@@ -24,6 +24,18 @@ Quando o contexto indicar a pergunta pendente (ex.: "Beatriz perguntou o tipo da
 
 Sem essa indicação, use `null` quando a mensagem não fizer sentido sozinha.
 
+## Como ler a mensagem do lead
+
+O lead escreve no WhatsApp: erros de digitação, abreviações e palavras cortadas são normais. Interprete a intenção:
+
+- "tatuagerm", "tatuagen", "tatoo", "tatto" → tatuagem
+- "nov", "nova", "novo", "tatuagem nov" → nova
+- "cob", "cobrir", "cobertura", "cover" → cobertura
+- "ref", "retoc", "reformar" → reforma
+- "sim", "isso", "uhum", "pode ser" → confirmação do que Beatriz acabou de perguntar (veja a pergunta pendente)
+
+Nunca deixe um campo como null só porque a palavra está escrita de forma errada.
+
 ## Campos de qualificação (extraia SOMENTE da mensagem do lead — NUNCA da resposta da Beatriz)
 
 - placement: braco_externo, braco_interno, antebraco, panturrilha, tornozelo, pescoco, costela, costas, barriga, ombro, pulso, braco, peito, perna, coxa, dedo, mao, pe

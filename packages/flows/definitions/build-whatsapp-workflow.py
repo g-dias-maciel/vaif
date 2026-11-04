@@ -679,9 +679,13 @@ const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|
 const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\\b(?:reforma|retoque)\\b/.test(rawLead);
 // The lead may have said "cobertura" in an earlier turn (the photo turn is
 // just "[FOTO RECEBIDA]"); the persisted type still authorises the handoff.
-const leadSaysCover = (saysCoverUp(rawLead) && !negativeCover) || lead.tattoo_type === 'cover_up';
+const answeringType = state.pending_question === 'tipo';
+const leadSaysCover = (saysCoverUp(rawLead) && !negativeCover)
+  || lead.tattoo_type === 'cover_up'
+  || (answeringType && /\\b(?:cobrir|cobertura|cover)\\b/.test(rawLead) && !negativeCover);
 const leadSaysRework = (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework)
-  || lead.tattoo_type === 'rework';
+  || lead.tattoo_type === 'rework'
+  || (answeringType && /\\b(?:reforma|reformar|retocar|retoque)\\b/.test(rawLead) && !negativeRework);
 const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
 
 // "Cobrir" is ambiguous in Portuguese: it is cover-up when it refers to an
@@ -737,6 +741,24 @@ if (pendingQuestion === 'tipo' && !tipoDeterministic) {
   }
 }
 if (tipoFromPending) tipoDeterministic = tipoFromPending;
+
+// ── AI-first parsing, JS validation ──
+// The model reads typos ("tatuagerm"), abbreviations and terse answers far
+// better than any term list, so its reading wins whenever it returns a valid
+// value. The guards below only reject impossible readings: an explicit denial,
+// or a "cover-up" that is really the AREA being covered ("cobrir do ombro ao
+// cotovelo"), which the lead's own words do not support.
+const aiTipo = (q.tipo_tatuagem === 'nova' || q.tipo_tatuagem === 'cobertura' || q.tipo_tatuagem === 'reforma')
+  ? q.tipo_tatuagem
+  : null;
+if (aiTipo) {
+  const impossible = (aiTipo === 'cobertura' && !leadSaysCover)
+    || (aiTipo === 'reforma' && !leadSaysRework);
+  // An explicit correction by the lead always wins over the model.
+  const negativeNew = /n[aã]o\s+(?:é|eh|e|seria)\s+(?:uma\s+)?nov[ao]/.test(rawLead);
+  const correctedToNew = aiTipo !== 'nova' && (saysNew || saysNewExplicit) && !negativeNew;
+  if (!impossible && !correctedToNew) tipoDeterministic = aiTipo;
+}
 // The lead used an explicit verb ("quero cobrir", "quero reformar") but the
 // deterministic list did not recognise the noun (typos): trust the classifier,
 // which read the same message.
