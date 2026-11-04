@@ -128,6 +128,21 @@ r = run({
 });
 check('asks for a photo to reformar', /reformar/i.test(r.final_reply) && /foto/i.test(r.final_reply), r.final_reply);
 
+// ── 1e. The photo is the current tattoo, never a "reference". ──
+console.log('=== Cover-up: photo acknowledgement ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up' }),
+  leadText: '[FOTO RECEBIDA]',
+  ai: 'Vou te passar para o Adriano para ele avaliar.',
+  classifier: classifier({ handoff: { reason: 'cover_up' } }),
+  photo: true,
+});
+check('calls it the tattoo to cover', /foto da tatuagem que você quer cobrir/i.test(r.final_reply), r.final_reply);
+check('never calls it a reference', !/refer[êe]ncia/i.test(r.final_reply), r.final_reply);
+check('never says curti', !/curti/i.test(r.final_reply), r.final_reply);
+check('does not hand off before the process', r.stage_key === 'qualificando' && !r.handoff_reason, JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
+check('invites the process explanation instead', /processo de criação/i.test(r.final_reply), r.final_reply);
+
 // ── 2. After the process explanation, hand off without a price. ──
 console.log('=== Cover-up: process explained ===');
 r = run({

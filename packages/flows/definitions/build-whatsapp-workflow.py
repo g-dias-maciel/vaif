@@ -185,7 +185,7 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
-    "+ ' referencia_visual=' + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; var subject = d.assunto || (d.resumo ? String(d.resumo).split(/(?<=[.!?])\s+/)[0] : ''); if (subject) p.push(subject.slice(0, 120)); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
+    "+ (function(){ var __t = $('Start Turn').first().json.tattoo_type; return (__t === 'cover_up' || __t === 'rework') ? ' foto_tatuagem_atual=' : ' referencia_visual='; })() + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; var subject = d.assunto || (d.resumo ? String(d.resumo).split(/(?<=[.!?])\s+/)[0] : ''); if (subject) p.push(subject.slice(0, 120)); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
     "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
@@ -305,7 +305,7 @@ return [{ json: {
 
 # ── Vision: the customer's reference is downloaded by the CRM and exposed as a
 #    public URL (`image_url`). OpenRouter analyzes it before the agent replies.
-VISION_SYSTEM_PROMPT = """Você é um assistente de um estúdio de tatuagem. Analise a imagem que o cliente enviou como referência.
+VISION_SYSTEM_PROMPT = """Você é um assistente de um estúdio de tatuagem. Analise a imagem que o cliente enviou: pode ser uma referência para uma tatuagem nova ou a tatuagem EXISTENTE que ele quer cobrir/reformar.
 Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
 {
   "referencia_de_tatuagem": true ou false,
@@ -324,12 +324,18 @@ Não estime preço. Não invente detalhes que não dá para ver. `referencia_de_
 VISION_USER_PROMPT = """Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que não é referência."""
 
 BUILD_VISION_REQUEST_JS = """const imageUrl = $('Save References').first().json.image_url;
+const tattooType = String(($('Start Turn').first().json || {}).tattoo_type || '');
+const coverContext = (tattooType === 'cover_up' || tattooType === 'rework')
+  ? ' ATENÇÃO: esta imagem é a TATUAGEM EXISTENTE que o cliente quer '
+    + (tattooType === 'rework' ? 'reformar' : 'cobrir')
+    + '. Descreva-a como tatuagem atual a ser coberta (assunto = o que está desenhado hoje), nunca como referência de desenho novo.'
+  : '';
 const body = {
   model: 'openai/gpt-4o-mini',
   messages: [
     { role: 'system', content: __VISION_SYSTEM__ },
     { role: 'user', content: [
-      { type: 'text', text: __VISION_USER__ },
+      { type: 'text', text: __VISION_USER__ + coverContext },
       { type: 'image_url', image_url: { url: imageUrl } }
     ] }
   ],
@@ -641,8 +647,11 @@ const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_
 const saysNew = /tatuagem nova|nova tattoo|tattoo nova|fazer uma nova|uma nova tatuagem/.test(rawLead);
 const negativeCover = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:cover|cobertura|cobrir)|n[aã]o\s+[^.]{0,30}\\b(?:cover|cobertura)\\b/.test(rawLead);
 const negativeRework = /n[aã]o\s+(?:é|eh|e|quero|vou|ser)\s+(?:um\s+)?(?:reforma|reformar|retocar|retoque)|n[aã]o\s+[^.]{0,30}\\b(?:reforma|retoque)\\b/.test(rawLead);
-const leadSaysCover = saysCoverUp(rawLead) && !negativeCover;
-const leadSaysRework = /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework;
+// The lead may have said "cobertura" in an earlier turn (the photo turn is
+// just "[FOTO RECEBIDA]"); the persisted type still authorises the handoff.
+const leadSaysCover = (saysCoverUp(rawLead) && !negativeCover) || lead.tattoo_type === 'cover_up';
+const leadSaysRework = (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework)
+  || lead.tattoo_type === 'rework';
 const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
 
 // "Cobrir" is ambiguous in Portuguese: it is cover-up when it refers to an
@@ -1059,6 +1068,15 @@ let finalReply = priceGateViolation
       : (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead)))
   : agentOutput;
 
+// The model jumps straight to "vou te passar" after the cover-up photo; the
+// process explanation has to come first (the handoff lands on the next turn).
+if (isCoverOrRework && !processoExplicado
+    && /vou (?:te )?passar|deixa eu te passar|passar seu atendimento/i.test(finalReply)) {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  finalReply = 'Vou te explicar rapidinho como funciona o processo de criação do '
+    + artistName + ', pode ser?';
+}
+
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
 // ── Deterministic quote state: the model may not have quoted at all, so the
 //    price table decides whether a first/repeat quote goes out. ──
@@ -1447,7 +1465,13 @@ if (visionTurn && lead.is_new !== true) {
     .slice(0, 90);
   const already = /refer[êe]ncia|curti|(?:vi|recebi).{0,20}(?:foto|imagem)/i.test(finalReply);
   if (subject && vision.referencia_de_tatuagem !== false && !already) {
-    finalReply = 'Vi a referência que você mandou: ' + subject + '. Curti! ' + finalReply;
+    if (isCoverOrRework) {
+      // The photo is the tattoo to be covered/reworked, never a reference.
+      finalReply = 'Vi a foto da tatuagem que você quer '
+        + (currentType === 'rework' ? 'reformar' : 'cobrir') + ': ' + subject + '. ' + finalReply;
+    } else {
+      finalReply = 'Vi a referência que você mandou: ' + subject + '. Curti! ' + finalReply;
+    }
   }
 }
 
