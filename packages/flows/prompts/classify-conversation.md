@@ -74,6 +74,13 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `processo_explicado`: true se a resposta da BEATRIZ contém a explicação do processo de criação do artista (ex: "processo de criação", "vai sentar junto com você", "projeto exclusivo", "tirar as medidas do local", "encaixe perfeito no seu corpo"). false se ela ainda não explicou.
 - `duvidas_eliminadas`: campo legado, retorne false. O sistema decide isso deterministicamente usando o estado persistido do checkpoint e as mensagens do lead; a classificação do modelo nunca pode abrir o gate.
 
+## Sinais do lead (interprete a intenção, não a palavra exata)
+
+- `doubts_cleared`: true SOMENTE quando o LEAD diz que não tem mais dúvidas ou pede o valor para seguir: "não tenho dúvidas", "sem dúvida", "pode mandar o valor", "só isso", "tudo certo" (inclusive com erros: "sem duvda", "nao tenho duvda"). false quando ele ainda pergunta algo ou muda de assunto.
+- `asks_for_price`: true quando o lead pede o preço/valor/orçamento, mesmo abreviado ("qnto", "vlr", "quanto fica?").
+- `wants_artist`: true quando o lead pede para falar com o artista/tatuador, mesmo com erro ("artsta", "tatuadô").
+- `objection`: o motivo de NÃO fechar agora, quando o lead hesita. `decision` (precisa falar com alguém), `price` (valor), `timing` (horário/dia), `doubt` (dor, resultado, medo), `vague` ("vou pensar", "depois"). `null` quando não há hesitação.
+
 ## Casamento de preço (tabela)
 
 Tabela vigente do artista (local / cobertura → preço de tabela):
@@ -140,6 +147,10 @@ Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana
   "deposit": {
     "amount_cents": 18000 or null
   },
+  "doubts_cleared": true or false,
+  "asks_for_price": true or false,
+  "wants_artist": true or false,
+  "objection": "decision | price | timing | doubt | vague or null",
   "photo_match": {
     "same_placement": true or false or null,
     "reason": "1 frase curta"

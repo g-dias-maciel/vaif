@@ -765,7 +765,8 @@ const leadSaysCover = (saysCoverUp(rawLead) && !negativeCover)
 const leadSaysRework = (/reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead) && !negativeRework)
   || lead.tattoo_type === 'rework'
   || (answeringType && /\\b(?:reforma|reformar|retocar|retoque)\\b/.test(rawLead) && !negativeRework);
-const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead);
+const leadRequestedArtist = /(?:falar|chamar|conversar|passar).{0,20}(?:artista|gabriel|tatuador)|(?:quero|prefiro).{0,20}(?:artista|tatuador)/i.test(rawLead)
+  || parsed.wants_artist === true;
 
 // "Cobrir" is ambiguous in Portuguese: it is cover-up when it refers to an
 // existing tattoo, but it is the AREA when the lead says "queria cobrir do
@@ -987,7 +988,13 @@ function detectDuvidasZeradas(t) {
 // the persisted state. A generic "braco" never downgrades a more specific
 // persisted "braco_externo"/"braco_interno"/"antebraco".
 const specificArm = ['braco_externo', 'braco_interno', 'antebraco'];
-const rawPlacement = detectPlacement(rawLead);
+// The classifier already reads the lead's message; its enum values fill the
+// gaps when the keyword list misses a typo or an unusual phrasing.
+const ENUM_PLACEMENTS = ['braco', 'braco_externo', 'braco_interno', 'antebraco', 'peito', 'costas', 'perna', 'coxa', 'panturrilha', 'tornozelo', 'pescoco', 'costela', 'barriga', 'ombro', 'pulso', 'dedo', 'mao', 'pe'];
+const ENUM_ZONES = ['pequeno', 'medio', 'grande', 'fechamento'];
+const ENUM_STYLES = ['realismo', 'old_school', 'neo_tradicional', 'fine_line', 'new_school', 'blackwork', 'tradicional', 'geometrico', 'pontilhismo', 'aquarela', 'japones', 'oriental', 'tribal', 'floral'];
+const aiPlacement = ENUM_PLACEMENTS.indexOf(String(q.placement || '')) >= 0 ? q.placement : null;
+const rawPlacement = detectPlacement(rawLead) || aiPlacement;
 // The photo of a cover-up/rework shows where the tattoo already is: read the
 // location from the vision analysis instead of asking the lead.
 const visionAnalysis = (function () {
@@ -1016,8 +1023,11 @@ const useVisionPlacement = coverLike
 const placementNow = rawPlacement
   ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
   : (lead.placement || (useVisionPlacement ? visionPlacement : null));
-const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
-const styleNow = detectStyle(rawLead) || lead.style || null;
+const aiZone = ENUM_ZONES.indexOf(String(q.body_zone || '')) >= 0 ? q.body_zone : null;
+const aiStyle = ENUM_STYLES.indexOf(String(q.style || '')) >= 0 ? q.style : null;
+const visionStyle = ENUM_STYLES.indexOf(String(visionAnalysis.estilo || '')) >= 0 ? String(visionAnalysis.estilo) : null;
+const bodyZoneNow = detectZone(rawLead) || aiZone || lead.body_zone || null;
+const styleNow = detectStyle(rawLead) || aiStyle || lead.style || visionStyle || null;
 // The lead already described the whole upper arm; asking outer/inner again is a loop.
 const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(normalizeText(rawLead));
 // "parte de fora e de dentro" means BOTH sides, not the first one mentioned.
@@ -1078,7 +1088,10 @@ const agentLower = agentOutput.toLowerCase();
 const processoDeterministic = ['processo de criação', 'projeto exclusivo', 'sentar junto com você', 'tirar as medidas', 'encaixe perfeito'].some(frase => agentLower.includes(frase));
 const processoExplicado = processoDeterministic || state.processo_explicado === true;
 const checkpointWasPending = state.aguardando_confirmacao_duvidas === true;
-const explicitClearThisTurn = checkpointWasPending && detectDuvidasZeradas(rawLead);
+// The model may clear the checkpoint too, but only on a short/affirmative
+// message: this gate releases the price.
+const explicitClearThisTurn = checkpointWasPending && (detectDuvidasZeradas(rawLead)
+  || (parsed.doubts_cleared === true && String(rawLead).trim().length <= 160));
 const duvidasEliminadas = state.duvidas_eliminadas === true || explicitClearThisTurn;
 
 const current = lead.stage_key || 'novo';
@@ -1292,7 +1305,8 @@ const aiPriceRow = (aiPriceMatch.match === true
 const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
   ? deterministicQuote(null, aiPriceRow)
   : null;
-const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
+const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead)
+  || parsed.asks_for_price === true;
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   ? deterministicQuote(
       lead.quoted_price_cents
@@ -1792,7 +1806,11 @@ function detectObjection(text) {
   if (/(vou pensar|pensar melhor|depois|mais tarde|amanh[ãa]|semana que vem)/i.test(t)) return 'vague';
   return null;
 }
-const detectedObjection = detectObjection(rawLead);
+// The classifier's reading of the objection wins; the keyword list is the
+// fallback for typos or unusual phrasing.
+const ENUM_OBJECTIONS = ['decision', 'price', 'timing', 'doubt', 'vague'];
+const aiObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')) >= 0 ? parsed.objection : null;
+const detectedObjection = aiObjection || detectObjection(rawLead);
 const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
 const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
 const passiveExit = !/\?/.test(finalReply)
