@@ -311,7 +311,7 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "referencia_de_tatuagem": true ou false,
   "assunto": "2 a 5 palavras com o tema principal, sem detalhes (ex.: leão com bússola) — SEMPRE preencha",
   "resumo": "1 frase curta, no máximo 120 caracteres, sem descrever boca, dentes, olhos ou detalhes minuciosos — SEMPRE preencha",
-  "estilo": "realismo | fineline | old school | blackwork | geométrico | aquarela | oriental | lettering | outro | indefinido",
+  "estilo": "realismo | old_school | neo_tradicional | fine_line | new_school | blackwork | tradicional | geometrico | pontilhismo | aquarela | japones | oriental | tribal | floral | indefinido",
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
   "tipo": "desenho | foto_de_tatuagem | flash | outra",
@@ -976,8 +976,27 @@ const placementNow = rawPlacement
   ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
   : (lead.placement || (useVisionPlacement ? visionPlacement : null));
 const aiZone = ENUM_ZONES.indexOf(String(q.body_zone || '')) >= 0 ? q.body_zone : null;
-const aiStyle = ENUM_STYLES.indexOf(String(q.style || '')) >= 0 ? q.style : null;
-const visionStyle = ENUM_STYLES.indexOf(String(visionAnalysis.estilo || '')) >= 0 ? String(visionAnalysis.estilo) : null;
+// Styles arrive in several spellings ("fineline", "old school", "geométrico"):
+// normalise before validating against the enum.
+function normalizeStyle(raw) {
+  const t = normalizeText(String(raw || '')).replace(/[^a-z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+  const map = {
+    fineline: 'fine_line', fine_line: 'fine_line', fin_line: 'fine_line',
+    old_school: 'old_school', oldschool: 'old_school', old_school_tattoo: 'old_school',
+    neo_tradicional: 'neo_tradicional', neo_trad: 'neo_tradicional', neotradicional: 'neo_tradicional',
+    new_school: 'new_school', newschool: 'new_school',
+    geometrico: 'geometrico', geometrica: 'geometrico', geometria: 'geometrico',
+    japones: 'japones', japonesa: 'japones', oriental: 'oriental',
+    realismo: 'realismo', realista: 'realismo', blackwork: 'blackwork', black_work: 'blackwork',
+    aquarela: 'aquarela', aquarelado: 'aquarela', pontilhismo: 'pontilhismo',
+    tradicional: 'tradicional', tribal: 'tribal', floral: 'floral', lettering: 'lettering',
+  };
+  if (map[t]) return map[t];
+  return ENUM_STYLES.indexOf(t) >= 0 ? t : null;
+}
+const aiStyle = normalizeStyle(q.style);
+const textStyle = detectStyle(rawLead);
+const visionStyle = normalizeStyle(visionAnalysis.estilo);
 const visionZone = ENUM_ZONES.indexOf(String(visionAnalysis.tamanho || '')) >= 0
   ? String(visionAnalysis.tamanho)
   : null;
@@ -987,7 +1006,9 @@ const bodyZoneNow = textZone || aiZone || lead.body_zone || visionZone || null;
 // lead instead of silently assumed.
 const zoneFromVision = !textZone && !aiZone && !lead.body_zone && !!visionZone;
 const placementFromVision = !detectPlacement(rawLead) && !aiPlacement && !lead.placement && !!visionPlacement;
-const styleNow = detectStyle(rawLead) || aiStyle || lead.style || visionStyle || null;
+const styleNow = textStyle || aiStyle || lead.style || visionStyle || null;
+// Provenance: a style read only from the photo is a hint, confirmed with the lead.
+const styleFromVision = !textStyle && !aiStyle && !lead.style && !!visionStyle;
 // The lead already described the whole upper arm; asking outer/inner again is a loop.
 const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(normalizeText(rawLead));
 // "parte de fora e de dentro" means BOTH sides, not the first one mentioned.
@@ -1015,6 +1036,7 @@ function photoConfirmationQuestion(lead) {
   const parts = [];
   if (placementNow && place[placementNow]) parts.push(place[placementNow]);
   if (bodyZoneNow && size[bodyZoneNow]) parts.push(size[bodyZoneNow]);
+  if (styleNow && styleFromVision) parts.push('estilo ' + String(styleNow).replace(/_/g, ' '));
   const what = parts.length ? 'que é ' + parts.join(', ') : 'a tattoo da foto';
   return 'Vi na foto ' + what + '. É isso mesmo?';
 }
@@ -1080,7 +1102,8 @@ const discoveryComplete = !!((TIPO_DB[tipoDeterministic] || lead.tattoo_type)
   && placementNow && bodyZoneNow && styleNow);
 // The photo may have provided placement/size. Those are a guess: confirm them
 // with the lead before treating the discovery as done.
-const photoDerived = !isCoverOrRework && !triageOnly && (zoneFromVision || placementFromVision || state.placement_from_photo === true || state.zone_from_photo === true);
+const photoDerived = !isCoverOrRework && !triageOnly && (zoneFromVision || placementFromVision || styleFromVision
+  || state.placement_from_photo === true || state.zone_from_photo === true || state.style_from_photo === true);
 const photoConfirmed = state.photo_confirmed === true
   || (state.pending_question === 'confirmar_foto' && affirmAnswer);
 const qualificationReady = !!(isCoverOrRework || (discoveryComplete && (!photoDerived || photoConfirmed)));
@@ -1995,6 +2018,8 @@ return [{ json: {
       : (photoConfirmed ? false : (placementFromVision || (state.placement_from_photo === true && !aiPlacement && !detectPlacement(rawLead)))),
     zone_from_photo: isCoverOrRework ? false
       : (photoConfirmed ? false : (zoneFromVision || (state.zone_from_photo === true && !aiZone && !textZone))),
+    style_from_photo: isCoverOrRework ? false
+      : (photoConfirmed ? false : (styleFromVision || (state.style_from_photo === true && !aiStyle && !textStyle))),
     negotiation_open: closingSignal ? false : negotiationOpen,
     negotiation_reason: closingSignal ? null : negotiationReason,
     pending_question: pendingNext,

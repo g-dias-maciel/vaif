@@ -90,6 +90,35 @@ check('marks it as photo-derived', r.chat_state.placement_from_photo === true &&
 check('records the confirmation question', r.chat_state.pending_question === 'confirmar_foto', String(r.chat_state.pending_question));
 check('does not arm the doubts checkpoint', r.aguardando_confirmacao_duvidas_val === false, String(r.aguardando_confirmacao_duvidas_val));
 
+// ── 1b. The photo also supplies the style (normalised). ──
+console.log('=== Photo gives the style ===');
+r = run({
+  start: lead({
+    style: null,
+    reference_analysis: [{ assunto: 'flor', tipo: 'foto_de_tatuagem', local: 'antebraco', tamanho: 'medio', estilo: 'fineline' }],
+  }),
+  leadText: 'lilo',
+  ai: 'Qual estilo você tem em mente?',
+  classifier: classifier(),
+});
+check('normalises "fineline" to fine_line', r.style_val === 'fine_line', String(r.style_val));
+check('confirmation mentions the style', /estilo fine line/i.test(r.final_reply), r.final_reply);
+check('marks the style as photo-derived', r.chat_state.style_from_photo === true, JSON.stringify({ s: r.chat_state.style_from_photo }));
+
+// ── 1c. A style the lead said wins over the photo. ──
+console.log('=== Lead style wins ===');
+r = run({
+  start: lead({
+    style: null,
+    reference_analysis: [{ assunto: 'flor', tipo: 'foto_de_tatuagem', local: 'antebraco', tamanho: 'medio', estilo: 'fineline' }],
+  }),
+  leadText: 'quero em realismo',
+  ai: 'Qual estilo você tem em mente?',
+  classifier: classifier({ qualification: { style: 'realismo' } }),
+});
+check('uses the lead style', r.style_val === 'realismo', String(r.style_val));
+check('does not ask the style again', !/qual estilo/i.test(r.final_reply), r.final_reply);
+
 // ── 2. The lead confirms. ──
 console.log('=== Lead confirms the photo ===');
 r = run({
