@@ -1763,6 +1763,39 @@ const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && (checkpointWasPending || shouldAskDoubts);
 const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
 const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
+// ── Retention on hesitation ──
+// The model sometimes accepts "vou pensar / vou ver se esse valor rola" and
+// lets the lead walk away. Never end a negotiation without a next step: make an
+// offer. When the price is the blocker, offer the maximum discount (bounded by
+// the artist's floor) with the Instagram post as the counterpart.
+let fallbackOffer = null;
+const hasPriceContext = precoLiberadoJa || !!lead.quoted_price_cents || !!lead.table_price_cents;
+const hesitant = /(?:vou|preciso|tenho que)\s+(?:pensar|conversar|falar com|avaliar|decidir|ver se)|depois (?:eu )?(?:vejo|te falo|volto)|vou deixar (?:pra|para) depois|mais tarde|semana que vem/i.test(rawLead);
+const priceBlocker = /(?:caro|car[íi]ssimo|valor|pre[çc]o|or[çc]amento|grana|dinheiro|nesse valor|esse valor|n[ãa]o tenho)/i.test(rawLead);
+const passiveExit = !/\?/.test(finalReply)
+  && !/desconto|condi[çc][ãa]o especial|instagram|posta uma foto|parcel/i.test(finalReply);
+if (hesitant && hasPriceContext && passiveExit && !isAudio && !triageOnly && !isCoverOrRework) {
+  const artistJson = $('Resolve Artist').first().json || {};
+  const artistName = artistJson.name || 'artista';
+  const handleRaw = String(artistJson.instagram_handle || '').trim();
+  const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';
+  const base = Number(lead.table_price_cents || lead.quoted_price_cents || 0);
+  const floorPct = Number(artistJson.floor_pct);
+  const maxPct = Number.isFinite(floorPct) && floorPct > 0 ? Math.max(0, 100 - floorPct) : 20;
+  const fmtRetention = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+  if (priceBlocker && base > 0 && maxPct > 0) {
+    const offered = Math.round(base * (100 - maxPct) / 100);
+    finalReply = 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta: eu consigo '
+      + maxPct + '% de desconto se você fechar agora, fica ' + fmtRetention(offered)
+      + ' em vez de ' + fmtRetention(base) + '. Em troca, no fim você posta uma foto marcando o '
+      + (handle || artistName) + '. Fecho pra você agora?';
+    fallbackOffer = { base: base, offered: offered };
+  } else {
+    finalReply = 'Entendo! Antes de você decidir, deixa eu te falar uma coisa: o ' + artistName
+      + ' só consegue garantir esse horário e esse valor fechando agora. Me conta o que ficou pesando pra você?';
+  }
+}
+
 const quoteActuallySent = !isAudio && /R\\$\\s*\\d/.test(finalReply)
   && (!!firstQuote || !!repeatedQuote || !!promotionQuote || priceGateOpen);
 
@@ -1812,12 +1845,14 @@ const quoteBaseCents = !quoteActuallySent
   ? null
   : (firstQuote ? firstQuote.base_cents
      : (repeatedQuote ? (lead.table_price_cents || repeatedQuote.base_cents)
-        : (promotionQuote ? promotionQuote.base_cents : (p.table_cents || null))));
+        : (promotionQuote ? promotionQuote.base_cents
+           : (fallbackOffer ? fallbackOffer.base : (p.table_cents || null)))));
 const quoteOfferedCents = !quoteActuallySent
   ? null
   : (firstQuote ? firstQuote.cents
      : (repeatedQuote ? (lead.quoted_price_cents || repeatedQuote.cents)
-        : (promotionQuote ? promotionQuote.cents : (p.nego_cents || p.table_cents || null))));
+        : (promotionQuote ? promotionQuote.cents
+           : (fallbackOffer ? fallbackOffer.offered : (p.nego_cents || p.table_cents || null)))));
 
 return [{ json: {
   lead_id: lead.lead_id,

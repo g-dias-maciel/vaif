@@ -48,7 +48,7 @@ function runParse({ start, leadText, agentOutput, classifier }) {
       if (name === 'Build System Prompt') return { json: { pricing_rows: ROWS, offer: OFFER } };
       if (name === 'Parse Audio') return { json: {} };
       if (name === 'Parse Reference Analysis') return { json: {} };
-      if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel', instagram_handle: '@teste' } };
+      if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel', instagram_handle: '@teste', floor_pct: 80 } };
       return { json: {} };
     },
   });
@@ -149,6 +149,60 @@ r = runParse({
 check('first quote shows the promotion price', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
 check('promotion is persisted as the first offer', r.quote_offered_cents === 20000, String(r.quote_offered_cents));
 check('first quote does not add the discount counterpart', !/@teste/i.test(r.final_reply), r.final_reply);
+
+// ── 4. Never let a hesitating lead leave without a move. ──
+console.log('=== Price hesitation is answered with a discount, not a goodbye ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'pequeno',
+    style: 'fineline',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: true,
+      aguardando_confirmacao_duvidas: false,
+      preco_liberado: true,
+    },
+  },
+  leadText: 'tenho que ver se esse valor rola',
+  agentOutput: 'Claro, sem problemas! Fique à vontade, vou ficar aguardando seu retorno.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+});
+check('offers a discount', /desconto/i.test(r.final_reply), r.final_reply);
+check('uses the artist floor (20%)', /20%/.test(r.final_reply), r.final_reply);
+check('asks the counterpart (Instagram post)', /posta uma foto|instagram/i.test(r.final_reply), r.final_reply);
+check('records the discounted offer', r.quote_offered_cents === 16000, String(r.quote_offered_cents));
+check('does not end with a goodbye', !/fico aguardando|fique à vontade/i.test(r.final_reply), r.final_reply);
+
+console.log('=== Generic hesitation keeps the lead with a question ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'pequeno',
+    style: 'fineline',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true,
+      duvidas_eliminadas: true,
+      aguardando_confirmacao_duvidas: false,
+      preco_liberado: true,
+    },
+  },
+  leadText: 'vou pensar',
+  agentOutput: 'Tudo bem! Fico aguardando.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+});
+check('asks a question instead of closing', /\?/.test(r.final_reply), r.final_reply);
+check('does not end with a goodbye', !/fico aguardando|tudo bem/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
