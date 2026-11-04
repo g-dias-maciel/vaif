@@ -835,7 +835,19 @@ if (aiTipo) {
   // An explicit correction by the lead always wins over the model.
   const negativeNew = /n[aã]o\s+(?:é|eh|e|seria)\s+(?:uma\s+)?nov[ao]/.test(rawLead);
   const correctedToNew = aiTipo !== 'nova' && (saysNew || saysNewExplicit) && !negativeNew;
-  if (!impossible && !correctedToNew) tipoDeterministic = aiTipo;
+  // The model must not set a type out of nowhere: the lead either answered the
+  // type question or said something type-ish. Without that, a message like
+  // "danilo" would let the classifier overwrite a persisted cover-up with new.
+  const typeSignal = saysNew || saysNewExplicit || saysCoverUp(rawLead)
+    || /reforma|reformar|retocar|retoque|refazer|redesign|remodelar/.test(rawLead)
+    || /cobertura|cobrir|cover/.test(rawLead);
+  const answeredType = state.pending_question === 'tipo';
+  // A persisted cover-up/rework only changes type on an explicit correction.
+  const persistedCover = lead.tattoo_type === 'cover_up' || lead.tattoo_type === 'rework';
+  const wouldFlipPersisted = aiTipo === 'nova' && persistedCover && !(saysNew || saysNewExplicit);
+  if (!impossible && !correctedToNew && !wouldFlipPersisted && (typeSignal || answeredType)) {
+    tipoDeterministic = aiTipo;
+  }
 }
 // The lead used an explicit verb ("quero cobrir", "quero reformar") but the
 // deterministic list did not recognise the noun (typos): trust the classifier,

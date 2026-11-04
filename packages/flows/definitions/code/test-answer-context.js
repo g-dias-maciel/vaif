@@ -147,6 +147,35 @@ r = run({
 });
 check('the lead correction wins', r.tattoo_type_val === 'new', String(r.tattoo_type_val));
 
+// ── 1d. A terse message must not let the model flip a persisted cover-up. ──
+console.log('=== Persisted rework is not flipped by a name ===');
+r = run({
+  start: lead({
+    tattoo_type: 'rework',
+    reference_analysis: [{ assunto: 'tattoo antiga' }],
+    agent_state: { ...lead().agent_state, cover_photo: true, new_ref_asked: true },
+  }),
+  leadText: 'danilo',
+  ai: 'Prazer! Essa seria a sua primeira tatuagem?',
+  classifier: classifier({ tipo_tatuagem: 'nova' }),
+});
+check('the persisted type is kept', r.tattoo_type_val === null, String(r.tattoo_type_val));
+check('the first-tattoo question is replaced', !/primeira tatuagem/i.test(r.final_reply), r.final_reply);
+
+console.log('=== "retoque" wording keeps the rework type ===');
+r = run({
+  start: lead({
+    tattoo_type: 'rework',
+    reference_analysis: [{ assunto: 'tattoo antiga' }],
+    agent_state: { ...lead().agent_state, cover_photo: true, new_ref_asked: true },
+  }),
+  leadText: 'ainda nao tenho desenho novo, quero dar um retoque no traco',
+  ai: 'Essa seria a sua primeira tatuagem?',
+  classifier: classifier({ tipo_tatuagem: 'nova' }),
+});
+check('stays rework', r.tattoo_type_val === 'rework', String(r.tattoo_type_val));
+check('does not ask the first-tattoo question', !/primeira tatuagem/i.test(r.final_reply), r.final_reply);
+
 // ── 2. The second production case: "isso" answering the first-tattoo question. ──
 console.log('=== First-tattoo question pending: "isso" ===');
 r = run({
