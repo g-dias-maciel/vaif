@@ -224,7 +224,8 @@ r = runParse({
   classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
-check('reinforces urgency instead of holding', /s[óo] ficam garantidos fechando agora/i.test(r.final_reply), r.final_reply);
+check('offers the condition for today', /condi[cç][aã]o especial fechando hoje/i.test(r.final_reply), r.final_reply);
+check('never claims a slot is guaranteed', !/garantid/i.test(r.final_reply), r.final_reply);
 check('never offers to hold', !/(?:posso|vou) segurar/i.test(r.final_reply), r.final_reply);
 check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',
   JSON.stringify({ o: r.chat_state.negotiation_open, r: r.chat_state.negotiation_reason }));
@@ -345,7 +346,60 @@ r = runParse({
   classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('does not offer to hold', !/posso segurar|garantidos nesse per[íi]odo/i.test(r.final_reply), r.final_reply);
-check('states the urgency', /s[óo] ficam garantidos fechando agora/i.test(r.final_reply), r.final_reply);
+check('states the condition', /vale para hoje/i.test(r.final_reply), r.final_reply);
+check('never claims a slot', !/garantid/i.test(r.final_reply), r.final_reply);
+
+// ── 8. A decision objection does not repeat the price. ──
+console.log('=== Decision objection: no re-quote ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'antebraco', body_zone: 'grande',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: null,
+    },
+  },
+  leadText: 'preciso confirmar o valor com ele',
+  agentOutput: 'Perfeito! Fico à disposição.',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision', asks_for_price: true }),
+  // stage null: first hesitation, so the reply is the diagnosis, not the offer
+});
+check('does not repeat the price', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+
+console.log('=== Quote and objection are not concatenated ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'antebraco', body_zone: 'grande',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
+    },
+  },
+  leadText: 'vou mostrar pra ele',
+  agentOutput: 'Para uma tatuagem grande no antebraço, fica R$ 200,00 à vista. Como fica esse valor para você?',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('keeps the quote', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+check('does not append the decision question', !/o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('a single question', (r.final_reply.match(/\?/g) || []).length === 1, r.final_reply);
+
+console.log('=== A slot guarantee is never sent ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'antebraco', body_zone: 'grande',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
+    },
+  },
+  leadText: 'preciso ver com meu namorado',
+  agentOutput: 'Entendi! O horário e o valor ficam garantidos se você decidir fechar agora. Qualquer coisa me chama.',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('does not claim a guaranteed slot', !/garantid/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

@@ -1345,6 +1345,7 @@ const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingTo
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead)
   || parsed.asks_for_price === true;
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
+  && parsed.objection !== 'decision'
   ? deterministicQuote(
       lead.quoted_price_cents
       || lead.table_price_cents
@@ -1695,9 +1696,19 @@ if (hadAnyImage && !isCoverOrRework && !triageOnly
   });
 }
 
+// Never claim a slot is guaranteed or reserved: nothing is booked until
+// Book Slot runs. Strip the offending sentence (or the whole claim).
+const slotClaim = /(?:hor[áa]rio|agenda|vaga|data)[^.!?]{0,40}(?:garantid|reservad|segurad)|(?:garantid|reservad)[^.!?]{0,40}(?:hor[áa]rio|agenda|vaga)/i;
+if (slotClaim.test(finalReply)) {
+  const kept = String(finalReply).split(/(?<=[.!?])\s+/).filter(function (sentence) {
+    return !slotClaim.test(sentence);
+  }).join(' ').trim();
+  finalReply = kept || 'Não consigo garantir horário sem fechar. Essa condição vale para hoje. Me conta o que falta pra você decidir?';
+}
+
 // Offering to hold the price/slot gives the lead a way out of the conversation.
 if (/(?:segurar|seguro|seguraria|reservar)[^.!?]{0,40}(?:pre[çc]o|valor|hor[áa]rio|vaga)|garantid[oa]s?[^.!?]{0,40}(?:enquanto|nesse per[íi]odo|por \d+ (?:dias|horas)|at[ée] )/i.test(finalReply)) {
-  finalReply = 'Não consigo segurar o valor nem o horário. Os dois só ficam garantidos fechando agora. '
+  finalReply = 'Não consigo segurar o valor nem reservar sem fechar. Essa condição vale para hoje. '
     + 'O que falta pra você decidir?';
   finalPipeline = current;
   finalEvent = null;
@@ -1706,7 +1717,7 @@ if (/(?:segurar|seguro|seguraria|reservar)[^.!?]{0,40}(?:pre[çc]o|valor|hor[áa
 
 // During discovery, two questions in the same message overwhelm the lead:
 // keep the first one (the next missing field).
-if (!isCoverOrRework && !discoveryComplete && !/processo de cria/i.test(finalReply)) {
+if (!isCoverOrRework && !/processo de cria/i.test(finalReply)) {
   const chunks = String(finalReply).split(/(?<=\?)\s+/);
   if (chunks.length > 1) finalReply = chunks[0].trim();
 }
@@ -1940,8 +1951,7 @@ function retentionReply(reason) {
   }
   if (reason === 'decision') {
     return 'Perfeito! Só me conta uma coisa. O que essa pessoa precisa saber pra vocês decidirem? '
-      + 'Se for o valor, eu consigo uma condição especial fechando hoje. Só te adianto que o valor e o horário '
-      + 'só ficam garantidos fechando agora e não consigo segurar pra depois. Quer que eu já reserve?';
+      + 'Se for o valor, eu consigo uma condição especial fechando hoje.';
   }
   if (reason === 'timing') {
     return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName
@@ -1971,7 +1981,8 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
       finalReply = retentionReply(negotiationReason);
       nextNegotiationStage = 'diagnose';
     }
-  } else if (!asksWhatIsMissing && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason)) {
+  } else if (!asksWhatIsMissing && !/R\$\s*\d/.test(finalReply)
+      && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason)) {
     // The model responded, but never asked why: add the isolating question.
     finalReply = finalReply.trim() + ' ' + retentionReply('decision');
     nextNegotiationStage = 'diagnose';
