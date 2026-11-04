@@ -228,6 +228,8 @@ check('reinforces urgency instead of holding', /s[óo] ficam garantidos fechando
 check('never offers to hold', !/(?:posso|vou) segurar/i.test(r.final_reply), r.final_reply);
 check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',
   JSON.stringify({ o: r.chat_state.negotiation_open, r: r.chat_state.negotiation_reason }));
+check('starts at the diagnose stage', r.chat_state.negotiation_stage === 'diagnose', String(r.chat_state.negotiation_stage));
+check('no colon, semicolon or dash', !/[:;]|\s[—–-]\s/.test(r.final_reply), r.final_reply);
 
 console.log('=== Follow-up "ok" escalates to the concrete offer ===');
 r = runParse({
@@ -242,7 +244,7 @@ r = runParse({
     quoted_price_cents: 20000,
     agent_state: {
       processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
-      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
     },
   },
   leadText: 'ok',
@@ -251,6 +253,8 @@ r = runParse({
 });
 check('makes the concrete offer', /desconto/i.test(r.final_reply), r.final_reply);
 check('records the discounted offer', r.quote_offered_cents === 16000, String(r.quote_offered_cents));
+check('moves to the close stage', r.chat_state.negotiation_stage === 'close', String(r.chat_state.negotiation_stage));
+check('no colon, semicolon or dash', !/[:;]|\s[—–-]\s/.test(r.final_reply), r.final_reply);
 
 console.log('=== Vague hesitation diagnoses first (no discount yet) ===');
 r = runParse({
@@ -286,7 +290,7 @@ r = runParse({
     quoted_price_cents: 20000,
     agent_state: {
       processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
-      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
     },
   },
   leadText: 'ta bem',
@@ -310,7 +314,7 @@ r = runParse({
     quoted_price_cents: 10000,
     agent_state: {
       processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
-      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
     },
   },
   leadText: 'ta bem',
@@ -333,7 +337,7 @@ r = runParse({
     quoted_price_cents: 20000,
     agent_state: {
       processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
-      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: 'diagnose',
     },
   },
   leadText: 'preciso ver com meu marido',

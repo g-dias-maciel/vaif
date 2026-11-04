@@ -265,8 +265,8 @@ check("Analyze Reference? sends images through vision and text-only turns straig
       and wf["connections"]["No Reference"]["main"][0][0]["node"] == "AI Agent")
 check("vision request uses the public CRM image URL and a multimodal model",
       "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"]
-      and "gpt-4o-mini" in nodes["Build Vision Request"]["parameters"]["jsCode"]
-      and "image_url" in nodes["Build Vision Request"]["parameters"]["jsCode"])
+      and "gemini-2.5-flash" in nodes["Build Vision Request"]["parameters"]["jsCode"]
+      and "temperature: 0" in nodes["Build Vision Request"]["parameters"]["jsCode"])
 check("vision prompt forbids using the image to calculate price",
       "NUNCA use esta análise para calcular preço" in nodes["Parse Reference Analysis"]["parameters"]["jsCode"])
 check("vision prompt explains each style and asks for confidence",

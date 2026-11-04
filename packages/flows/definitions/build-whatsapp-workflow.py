@@ -347,7 +347,7 @@ const coverContext = (tattooType === 'cover_up' || tattooType === 'rework')
     + '. Descreva-a como tatuagem atual a ser coberta (assunto = o que está desenhado hoje), nunca como referência de desenho novo.'
   : '';
 const body = {
-  model: 'openai/gpt-4o-mini',
+  model: 'google/gemini-2.5-flash',
   messages: [
     { role: 'system', content: __VISION_SYSTEM__ },
     { role: 'user', content: [
@@ -1076,7 +1076,7 @@ function discoveryFallback(lead) {
     if (!newReferenceNow && !newRefAsked) return newReferenceQuestion(lead);
     return 'Perfeito, já tenho o que preciso. Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
   }
-  if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
+  if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho. Essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
   if (lead.first_tattoo == null) return 'Essa seria a sua primeira tatuagem?';
   if (!placementNow) return 'E onde no corpo você quer fazer?';
   if (!bodyZoneNow) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
@@ -1196,7 +1196,7 @@ function deterministicQuote(centsOverride = null, rowOverride = null) {
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
   if (offerLive) {
-    reply += ` E com a promoção "${offer.name || 'leve 2'}", fazendo uma tatuagem você ganha outra do mesmo tamanho, grátis. A segunda é combinada direto com o ${artistName}; eu não agendo a segunda.`;
+    reply += ` E com a promoção "${offer.name || 'leve 2'}", fazendo uma tatuagem você ganha outra do mesmo tamanho, grátis. A segunda é combinada direto com o ${artistName} e eu não agendo a segunda.`;
   }
   reply += ` Como fica esse valor para você?`;
   return { cents, reply, offer_active: offerLive, base_cents: baseCents };
@@ -1421,8 +1421,8 @@ if (firstQuote) {
   } else {
   finalReply = genericPlacement
     ? (placementNow === 'braco'
-      ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
-      : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?')
+      ? 'Só pra eu te passar o valor certinho. É a parte de fora do braço, a de dentro, ou o antebraço?'
+      : 'Só pra eu te passar o valor certinho. É na coxa ou na panturrilha?')
     : `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
   if (!genericPlacement) {
     finalPipeline = 'aguardando_artista';
@@ -1446,7 +1446,7 @@ if (quoteMissingRow) {
   if (alreadyQuoted && !bodyZoneNow) {
     // leave the model's reply untouched
   } else if (!bodyZoneNow) {
-    finalReply = 'Só pra eu te passar o valor certinho: nesse local, é uma tattoo pequena, média, grande ou fechamento?';
+    finalReply = 'Só pra eu te passar o valor certinho. Nesse local, é uma tattoo pequena, média, grande ou fechamento?';
   } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides) {
     finalReply = placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
@@ -1474,7 +1474,7 @@ if ((handoffSuppressed || recoveredFromHandoff)
     finalEvent = null;
     finalHandoff = null;
   } else if (!typeKnown) {
-    finalReply = 'Só pra eu entender: você quer uma tatuagem nova ou cobrir/reformar uma tatuagem que já existe?';
+    finalReply = 'Só pra eu entender. Você quer uma tatuagem nova ou cobrir/reformar uma tatuagem que já existe?';
     finalPipeline = current;
     finalEvent = null;
     finalHandoff = null;
@@ -1697,7 +1697,7 @@ if (hadAnyImage && !isCoverOrRework && !triageOnly
 
 // Offering to hold the price/slot gives the lead a way out of the conversation.
 if (/(?:segurar|seguro|seguraria|reservar)[^.!?]{0,40}(?:pre[çc]o|valor|hor[áa]rio|vaga)|garantid[oa]s?[^.!?]{0,40}(?:enquanto|nesse per[íi]odo|por \d+ (?:dias|horas)|at[ée] )/i.test(finalReply)) {
-  finalReply = 'Não consigo segurar o valor nem o horário: os dois só ficam garantidos fechando agora. '
+  finalReply = 'Não consigo segurar o valor nem o horário. Os dois só ficam garantidos fechando agora. '
     + 'O que falta pra você decidir?';
   finalPipeline = current;
   finalEvent = null;
@@ -1933,15 +1933,15 @@ function retentionReply(reason) {
     const floorCents = tableBase > 0 ? Math.round(tableBase * Math.min(Math.max(floorPct, 0), 100) / 100) : 0;
     const offered = Math.max(floorCents, Math.round(base * (100 - maxPct) / 100));
     fallbackOffer = { base: base, offered: offered };
-    return 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta: eu consigo '
+    return 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta. Eu consigo '
       + maxPct + '% de desconto se você fechar agora, fica ' + fmt(offered) + ' em vez de ' + fmt(base)
       + '. Em troca, no fim você posta uma foto marcando o ' + (handle || artistName)
       + '. Fecho pra você agora?';
   }
   if (reason === 'decision') {
-    return 'Perfeito! Só me conta uma coisa: o que essa pessoa precisa saber pra vocês decidirem? '
-      + 'Se for o valor, eu consigo uma condição especial fechando hoje. Só te adianto: o valor e o horário '
-      + 'só ficam garantidos fechando agora — não consigo segurar pra depois. Quer que eu já reserve?';
+    return 'Perfeito! Só me conta uma coisa. O que essa pessoa precisa saber pra vocês decidirem? '
+      + 'Se for o valor, eu consigo uma condição especial fechando hoje. Só te adianto que o valor e o horário '
+      + 'só ficam garantidos fechando agora e não consigo segurar pra depois. Quer que eu já reserve?';
   }
   if (reason === 'timing') {
     return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName
@@ -1955,19 +1955,26 @@ function retentionReply(reason) {
     + 'É o valor, é o horário, ou você precisa falar com alguém antes?';
 }
 
-// After one diagnostic attempt the likely blocker is the price (everything else
-// should have been resolved before the quote), so the next passive turn makes
-// the concrete offer instead of asking the same question again.
-const alreadyDiagnosed = state.negotiation_open === true && state.negotiation_reason === negotiationReason;
-const effectiveReason = (alreadyDiagnosed && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason))
-  ? 'price'
-  : negotiationReason;
+// Stages, each played once: diagnose -> offer -> close. A new objection reason
+// restarts from diagnose, so the decision question is never repeated.
+const objectionIsNew = !!detectedObjection && detectedObjection !== state.negotiation_reason;
+const negotiationStage = objectionIsNew ? null : (state.negotiation_stage || null);
+let nextNegotiationStage = negotiationStage;
 if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrRework) {
   if (passiveExit) {
-    finalReply = retentionReply(effectiveReason);
+    if (negotiationStage === 'close') {
+      // Already offered and asked to close: let the model carry the turn.
+    } else if (negotiationStage === 'diagnose' || negotiationReason === 'price') {
+      finalReply = retentionReply('price') || retentionReply('decision');
+      nextNegotiationStage = 'close';
+    } else {
+      finalReply = retentionReply(negotiationReason);
+      nextNegotiationStage = 'diagnose';
+    }
   } else if (!asksWhatIsMissing && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason)) {
     // The model responded, but never asked why: add the isolating question.
     finalReply = finalReply.trim() + ' ' + retentionReply('decision');
+    nextNegotiationStage = 'diagnose';
   }
 }
 
@@ -1986,6 +1993,21 @@ if (!/sinal|pix/i.test(finalReply) && finalPipeline === 'aguardando_deposito'
   finalPipeline = current;
   finalEvent = null;
 }
+
+// WhatsApp style: no colon, semicolon or dash used as punctuation. The model
+// (and a few hardcoded strings) drift into written Portuguese; a lead reads it
+// as cold. Reformulate into short sentences.
+function tidyWhatsapp(text) {
+  let out = String(text || '');
+  out = out.replace(/\s+[—–]\s+/g, '. ');
+  out = out.replace(/\s+-\s+/g, '. ');
+  out = out.replace(/;\s+/g, '. ');
+  out = out.replace(/(?<![\d:]):\s+/g, '. ');
+  out = out.replace(/([.!?]\s+)([a-zà-ú])/g, function (m, a, b) { return a + b.toUpperCase(); });
+  out = out.replace(/[ \t]{2,}/g, ' ');
+  return out.trim();
+}
+finalReply = tidyWhatsapp(finalReply);
 
 // ── Audio handling (deterministic — the model never sees the raw placeholder
 //    matter; we answer every audio and hand off on the second). ──
@@ -2095,6 +2117,7 @@ return [{ json: {
     style_from_photo: isCoverOrRework ? false
       : (photoConfirmed ? false : (styleFromVision || (state.style_from_photo === true && !aiStyle && !textStyle))),
     negotiation_open: closingSignal ? false : negotiationOpen,
+    negotiation_stage: closingSignal ? null : nextNegotiationStage,
     negotiation_reason: closingSignal ? null : negotiationReason,
     last_agent_message: String(audioFinalReply || '').slice(-600),
     pending_question: pendingNext,

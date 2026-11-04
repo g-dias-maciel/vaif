@@ -104,6 +104,7 @@ check('records the promotion quote', r.offer_quoted === true, JSON.stringify({ q
 check('base is the table price', r.quote_base_cents === 60000, String(r.quote_base_cents));
 check('offered is the promotion price', r.quote_offered_cents === 120000, String(r.quote_offered_cents));
 check('second tattoo is confirmed by the artist, not scheduled', /não agendo a segunda/i.test(r.final_reply), r.final_reply);
+check('no colon, semicolon or dash', !/[:;]|\s[—–-]\s/.test(r.final_reply), r.final_reply);
 check('offers the second as same size and free', /mesmo tamanho/i.test(r.final_reply) && /gr[áa]tis|de gra[çc]a/i.test(r.final_reply), r.final_reply);
 check('never prices the second tattoo', !/segunda[^.]{0,60}R\$|valor at[ée]/i.test(r.final_reply), r.final_reply);
 
