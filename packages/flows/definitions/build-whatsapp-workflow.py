@@ -1283,7 +1283,7 @@ if (isCoverOrRework && /R\$\s*\d/.test(finalReply)) {
 // Cover-up/rework: never ask for size/coverage or the body location. The photo
 // already shows both, and the artist confirms anything missing in person.
 if (isCoverOrReworkLead(lead) && /\?/.test(finalReply)
-    && /partinha|área média|area media|local inteiro|tamanho|onde no corpo|qual (?:o )?local|onde (?:voc[eê] )?(?:gostaria|quer|pensa)|em que (?:parte|local)|qual (?:o )?estilo/i.test(finalReply)) {
+    && /partinha|área média|area media|local inteiro|tamanho|onde no corpo|qual (?:o )?local|onde (?:voc[eê] )?(?:gostaria|quer|pensa)|em que (?:parte|local)|qual (?:o )?estilo|primeira (?:tatuagem|tattoo)|j[aá] (?:tem|fez) (?:outras|alguma)/i.test(finalReply)) {
   finalReply = discoveryFallback({
     ...lead,
     tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,

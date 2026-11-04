@@ -128,6 +128,17 @@ r = run({
 });
 check('asks for a photo to reformar', /reformar/i.test(r.final_reply) && /foto/i.test(r.final_reply), r.final_reply);
 
+// ── 1d2. Never ask "primeira tatuagem" for a cover-up. ──
+console.log('=== Cover-up: no first-tattoo question ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga' }] }),
+  leadText: 'Danilo',
+  ai: 'Prazer, Danilo! Primeiro, essa tatuagem que você quer cobrir é a sua primeira tatuagem ou você já tem outras?',
+  classifier: classifier(),
+});
+check('does not ask if it is the first tattoo', !/primeira (?:tatuagem|tattoo)|j[aá] (?:tem|fez) outras/i.test(r.final_reply), r.final_reply);
+check('moves on to the process', /processo de criação/i.test(r.final_reply), r.final_reply);
+
 // ── 1e. The photo is the current tattoo, never a "reference". ──
 console.log('=== Cover-up: photo acknowledgement ===');
 r = run({
