@@ -204,5 +204,71 @@ r = runParse({
 check('asks a question instead of closing', /\?/.test(r.final_reply), r.final_reply);
 check('does not end with a goodbye', !/fico aguardando|tudo bem/i.test(r.final_reply), r.final_reply);
 
+// ── 5. Diagnose before offering a condition. ──
+console.log('=== Decision-maker: ask what the person needs ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'pequeno',
+    style: 'fineline',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: { processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true },
+  },
+  leadText: 'preciso ver com meu marido',
+  agentOutput: 'Claro, fique à vontade.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+});
+check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
+check('mentions holding the slot', /segurar/i.test(r.final_reply), r.final_reply);
+check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',
+  JSON.stringify({ o: r.chat_state.negotiation_open, r: r.chat_state.negotiation_reason }));
+
+console.log('=== Follow-up "ok" escalates to the concrete offer ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'pequeno',
+    style: 'fineline',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+    },
+  },
+  leadText: 'ok',
+  agentOutput: 'Perfeito! Fico aguardando seu retorno.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+});
+check('makes the concrete offer', /desconto/i.test(r.final_reply), r.final_reply);
+check('records the discounted offer', r.quote_offered_cents === 16000, String(r.quote_offered_cents));
+
+console.log('=== Vague hesitation diagnoses first (no discount yet) ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'pequeno',
+    style: 'fineline',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: { processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false, preco_liberado: true },
+  },
+  leadText: 'vou pensar',
+  agentOutput: 'Tudo bem, fico aguardando.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+});
+check('asks the isolating question', /é o valor, é o horário|o que está te impedindo/i.test(r.final_reply), r.final_reply);
+check('does not discount yet', !/desconto/i.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

@@ -1763,36 +1763,75 @@ const aguardandoConfirmacaoDuvidas = !duvidasEliminadas
   && (checkpointWasPending || shouldAskDoubts);
 const rawCombined = ($('Debounce Resolve').first().json.combined_text || '').trim();
 const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
-// ── Retention on hesitation ──
-// The model sometimes accepts "vou pensar / vou ver se esse valor rola" and
-// lets the lead walk away. Never end a negotiation without a next step: make an
-// offer. When the price is the blocker, offer the maximum discount (bounded by
-// the artist's floor) with the Instagram post as the counterpart.
-let fallbackOffer = null;
+// ── Negotiation: diagnose first, then apply the condition ──
+// The model tends to accept a hesitation and let the lead go. The rule is:
+// find out WHY the lead is not closing, then answer that reason specifically.
+// The state survives turns, so a follow-up "ok" cannot end the conversation.
 const hasPriceContext = precoLiberadoJa || !!lead.quoted_price_cents || !!lead.table_price_cents;
-const hesitant = /(?:vou|preciso|tenho que)\s+(?:pensar|conversar|falar com|avaliar|decidir|ver se)|depois (?:eu )?(?:vejo|te falo|volto)|vou deixar (?:pra|para) depois|mais tarde|semana que vem/i.test(rawLead);
-const priceBlocker = /(?:caro|car[íi]ssimo|valor|pre[çc]o|or[çc]amento|grana|dinheiro|nesse valor|esse valor|n[ãa]o tenho)/i.test(rawLead);
+const closingSignal = /(pode ser|vamos|fechado|fechar|quero agendar|agendar|bora|aceito|combinado)/i.test(rawLead);
+function detectObjection(text) {
+  const t = String(text || '');
+  if (/(esposa|marido|namorad[ao]|noiv[ao]|fam[íi]lia|meu pai|minha m[ãa]e|s[óo]cio|meu amigo|minha amiga)|(falar|conversar|ver|decidir) com (algu[ée]m|ele|ela|meu|minha)/i.test(t)) return 'decision';
+  if (/(caro|car[íi]ssimo|valor|pre[çc]o|or[çc]amento|grana|dinheiro|esse valor|nesse valor|n[ãa]o tenho|sem condi[çc][õo]es)/i.test(t)) return 'price';
+  if (/(hor[áa]rio|agenda|dia|semana|trabalho|folga|tempo)/i.test(t)) return 'timing';
+  if (/(d[óo]i|medo|seguro|cicatriz|resultado|confian[çc]a)/i.test(t)) return 'doubt';
+  if (/(vou pensar|pensar melhor|depois|mais tarde|amanh[ãa]|semana que vem)/i.test(t)) return 'vague';
+  return null;
+}
+const detectedObjection = detectObjection(rawLead);
+const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
+const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
 const passiveExit = !/\?/.test(finalReply)
   && !/desconto|condi[çc][ãa]o especial|instagram|posta uma foto|parcel/i.test(finalReply);
-if (hesitant && hasPriceContext && passiveExit && !isAudio && !triageOnly && !isCoverOrRework) {
+const asksWhatIsMissing = /(o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)/i.test(finalReply);
+let fallbackOffer = null;
+
+function retentionReply(reason) {
   const artistJson = $('Resolve Artist').first().json || {};
   const artistName = artistJson.name || 'artista';
   const handleRaw = String(artistJson.instagram_handle || '').trim();
   const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';
+  const fmt = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
   const base = Number(lead.table_price_cents || lead.quoted_price_cents || 0);
-  const floorPct = Number(artistJson.floor_pct);
-  const maxPct = Number.isFinite(floorPct) && floorPct > 0 ? Math.max(0, 100 - floorPct) : 20;
-  const fmtRetention = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  if (priceBlocker && base > 0 && maxPct > 0) {
+  if (reason === 'price' && base > 0) {
+    const floorPct = Number(artistJson.floor_pct);
+    const maxPct = Number.isFinite(floorPct) && floorPct > 0 ? Math.max(0, 100 - floorPct) : 20;
     const offered = Math.round(base * (100 - maxPct) / 100);
-    finalReply = 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta: eu consigo '
-      + maxPct + '% de desconto se você fechar agora, fica ' + fmtRetention(offered)
-      + ' em vez de ' + fmtRetention(base) + '. Em troca, no fim você posta uma foto marcando o '
-      + (handle || artistName) + '. Fecho pra você agora?';
     fallbackOffer = { base: base, offered: offered };
-  } else {
-    finalReply = 'Entendo! Antes de você decidir, deixa eu te falar uma coisa: o ' + artistName
-      + ' só consegue garantir esse horário e esse valor fechando agora. Me conta o que ficou pesando pra você?';
+    return 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta: eu consigo '
+      + maxPct + '% de desconto se você fechar agora, fica ' + fmt(offered) + ' em vez de ' + fmt(base)
+      + '. Em troca, no fim você posta uma foto marcando o ' + (handle || artistName)
+      + '. Fecho pra você agora?';
+  }
+  if (reason === 'decision') {
+    return 'Perfeito! Só me conta uma coisa: o que essa pessoa precisa saber pra vocês decidirem? '
+      + 'Se for o valor, eu consigo uma condição especial fechando hoje. E eu consigo segurar esse horário pra você, pode ser?';
+  }
+  if (reason === 'timing') {
+    return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName
+      + ' e seguro o horário.';
+  }
+  if (reason === 'doubt') {
+    return 'Claro! Me conta o que ficou em dúvida: é sobre a dor, o resultado ou o cuidado com a pele? '
+      + 'Eu te explico agora e já deixo tudo certo.';
+  }
+  return 'Só pra eu te ajudar do jeito certo: o que está te impedindo de fechar agora? '
+    + 'É o valor, é o horário, ou você precisa falar com alguém antes?';
+}
+
+// After one diagnostic attempt the likely blocker is the price (everything else
+// should have been resolved before the quote), so the next passive turn makes
+// the concrete offer instead of asking the same question again.
+const alreadyDiagnosed = state.negotiation_open === true && state.negotiation_reason === negotiationReason;
+const effectiveReason = (alreadyDiagnosed && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason))
+  ? 'price'
+  : negotiationReason;
+if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrRework) {
+  if (passiveExit) {
+    finalReply = retentionReply(effectiveReason);
+  } else if (!asksWhatIsMissing && (negotiationReason === 'decision' || negotiationReason === 'vague' || !negotiationReason)) {
+    // The model responded, but never asked why: add the isolating question.
+    finalReply = finalReply.trim() + ' ' + retentionReply('decision');
   }
 }
 
@@ -1905,6 +1944,8 @@ return [{ json: {
     preco_liberado: precoLiberadoJa || quoteActuallySent,
     duvidas_eliminadas: duvidasEliminadas,
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
+    negotiation_open: closingSignal ? false : negotiationOpen,
+    negotiation_reason: closingSignal ? null : negotiationReason,
     pending_question: pendingNext,
     cover_photo: isCoverOrRework ? coverPhotoNow : undefined,
     new_reference: isCoverOrRework ? newReferenceNow : undefined,
