@@ -627,7 +627,79 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "} }];"
 )
 
-PARSE_CLASSIFICATION_JS = """const resp = $input.first().json;
+PRICE_CRITIC_SYSTEM_PROMPT = """Você revisa um casamento de preço feito por outro assistente de um estúdio de tatuagem.
+Receba a mensagem do lead, a resposta da Beatriz, a tabela de preços do artista e a linha escolhida.
+Responda se a linha corresponde EXATAMENTE ao que o LEAD pediu.
+- agree=true SÓ se o local e a cobertura descritos pelo lead batem com a linha escolhida.
+- Se o lead não deixou claro o local ou a cobertura, ou se outra linha casaria melhor, agree=false.
+- A fala da Beatriz NUNCA conta como pedido do lead.
+- Você não sugere preço: apenas aprova ou rejeita a linha.
+Responda SOMENTE JSON: {"agree": true ou false, "confidence": "alta | media | baixa", "reason": "1 frase curta"}"""
+
+BUILD_PRICE_CRITIQUE_JS = """const resp = $('Classify Conversation').first().json;
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+let parsed = {};
+try { parsed = JSON.parse(content); } catch (e) {}
+const match = parsed.price_match || {};
+const rows = $('Build System Prompt').first().json.pricing_rows || [];
+const lead = $('Debounce Resolve').first().json.combined_text || '';
+const beatriz = $('AI Agent').first().json.output || '';
+
+// Nothing to review unless the classifier actually picked a row.
+const skip = match.match !== true
+  || !match.placement
+  || !match.body_zone
+  || match.confidence === 'baixa';
+
+const table = rows.length
+  ? rows.map(function (r) {
+      return '- ' + r.placement + ' / ' + r.body_zone + ' -> R$ '
+        + (Number(r.table_price) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 });
+    }).join('\\n')
+  : '(sem tabela cadastrada)';
+
+const body = {
+  model: 'openai/gpt-4o-mini',
+  temperature: 0,
+  messages: [
+    { role: 'system', content: __CRITIC_SYSTEM__ },
+    { role: 'user', content:
+        'Lead: ' + lead
+        + '\\n\\nBeatriz: ' + beatriz
+        + '\\n\\nTabela:\\n' + table
+        + '\\n\\nLinha escolhida: ' + match.placement + ' / ' + match.body_zone
+        + '\\nMotivo do classificador: ' + (match.reason || '-')
+    }
+  ]
+};
+
+return [{ json: { skip: skip, body: skip ? null : body } }];"""
+BUILD_PRICE_CRITIQUE_JS = BUILD_PRICE_CRITIQUE_JS.replace('__CRITIC_SYSTEM__', json.dumps(PRICE_CRITIC_SYSTEM_PROMPT))
+
+PARSE_PRICE_CRITIQUE_JS = """const resp = $input.first().json || {};
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+let parsed = {};
+try { parsed = JSON.parse(content); } catch (e) {}
+return [{ json: { price_critique: {
+  agree: parsed.agree === true,
+  confidence: parsed.confidence || 'baixa',
+  reason: parsed.reason || '',
+} } }];"""
+
+PARSE_CLASSIFICATION_JS = """// In production the input is the price-critique node; the classifier response
+// is read by name. Tests call the parse directly with the classifier payload.
+const __input = $input.first().json || {};
+const resp = (__input.choices && __input.choices.length)
+  ? __input
+  : ($('Classify Conversation').first().json || {});
+// The critic runs only when the classifier picked a row; when it is skipped the
+// node did not execute and this stays null.
+let priceCritique = null;
+try {
+  priceCritique = $('Parse Price Critique').first().json.price_critique || null;
+} catch (e) {
+  priceCritique = null;
+}
 const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
 let parsed;
 try { parsed = JSON.parse(content); } catch(e) { parsed = {}; }
@@ -1170,8 +1242,11 @@ const openQuote = offer.open_quote === true;
 // ignored, which sends the lead to the existing "no row" handling.
 const pricingRowsAll = $('Build System Prompt').first().json.pricing_rows || [];
 const aiPriceMatch = parsed.price_match || {};
+const critiqueAccepts = priceCritique === null
+  || (priceCritique.agree === true && priceCritique.confidence !== 'baixa');
 const aiPriceRow = (aiPriceMatch.match === true
-    && (aiPriceMatch.confidence === 'alta' || aiPriceMatch.confidence === 'media'))
+    && (aiPriceMatch.confidence === 'alta' || aiPriceMatch.confidence === 'media')
+    && critiqueAccepts)
   ? (pricingRowsAll.find(function (r) {
       return r.placement === aiPriceMatch.placement && r.body_zone === aiPriceMatch.body_zone;
     }) || null)
@@ -2976,6 +3051,79 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Classify Conversation",
             "credentials": OPENROUTER,
         },
+        # 26a. Build Price Critique — only when the classifier picked a row.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_PRICE_CRITIQUE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3640, 260],
+            "id": "price-critique-build-0000-0000-000000000001",
+            "name": "Build Price Critique",
+        },
+        # 26b. Price Critique Needed? — skip the extra call when there is no match.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "price-critique-cond-0000",
+                            "leftValue": "={{ $json.skip }}",
+                            "rightValue": False,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3900, 260],
+            "id": "price-critique-if-0000-0000-000000000001",
+            "name": "Price Critique Needed?",
+        },
+        # 26c. Critique Price Match — second, independent read of the chosen row.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [4160, 260],
+            "id": "price-critique-http-0000-000000000001",
+            "name": "Critique Price Match",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+            "alwaysOutputData": True,
+        },
+        # 26d. Parse Price Critique — normalise the verdict.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_PRICE_CRITIQUE_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [4420, 260],
+            "id": "price-critique-parse-0000-000000000001",
+            "name": "Parse Price Critique",
+        },
         # 27. Parse Classification
         {
             "parameters": {
@@ -3583,6 +3731,21 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Classify Conversation", "type": "main", "index": 0}]]
         },
         "Classify Conversation": {
+            "main": [[{"node": "Build Price Critique", "type": "main", "index": 0}]]
+        },
+        "Build Price Critique": {
+            "main": [[{"node": "Price Critique Needed?", "type": "main", "index": 0}]]
+        },
+        "Price Critique Needed?": {
+            "main": [
+                [{"node": "Critique Price Match", "type": "main", "index": 0}],
+                [{"node": "Parse Classification", "type": "main", "index": 0}],
+            ]
+        },
+        "Critique Price Match": {
+            "main": [[{"node": "Parse Price Critique", "type": "main", "index": 0}]]
+        },
+        "Parse Price Critique": {
             "main": [[{"node": "Parse Classification", "type": "main", "index": 0}]]
         },
         "Parse Classification": {

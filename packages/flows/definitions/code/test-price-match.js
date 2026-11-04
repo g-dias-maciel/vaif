@@ -34,7 +34,7 @@ function check(label, cond, detail) {
   }
 }
 
-function run({ start, leadText, ai, rows, classifier }) {
+function run({ start, leadText, ai, rows, classifier, critique = null }) {
   const $ = (name) => ({
     first: () => {
       if (name === 'Start Turn') return { json: start };
@@ -42,6 +42,7 @@ function run({ start, leadText, ai, rows, classifier }) {
       if (name === 'Debounce Resolve') return { json: { combined_text: leadText } };
       if (name === 'Build System Prompt') return { json: { pricing_rows: rows, offer: { promo_active: false } } };
       if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel', full_selling: true } };
+      if (name === 'Parse Price Critique' && critique) return { json: { price_critique: critique } };
       return { json: {} };
     },
   });
@@ -157,6 +158,40 @@ r = run({
 check('no quote', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 check('hands off to the artist', r.stage_key === 'aguardando_artista' && r.handoff_reason === 'no_price_row',
   JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
+
+// ── 7. The critic can veto a match the classifier accepted. ──
+console.log('=== Critic vetoes a bad match ===');
+r = run({
+  start: lead(),
+  leadText: 'quero no braço, médio',
+  rows: DIFFERENT_SIDES,
+  classifier: classifier({ match: true, placement: 'braco_externo', body_zone: 'medio', confidence: 'alta', reason: 'chute' }),
+  critique: { agree: false, confidence: 'alta', reason: 'o lead não disse qual lado do braço' },
+});
+check('no quote after the veto', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+check('no quote is recorded', r.quote_offered_cents === null, String(r.quote_offered_cents));
+
+// ── 8. The critic confirms a good match. ──
+console.log('=== Critic confirms the row ===');
+r = run({
+  start: lead(),
+  leadText: 'quero na parte de fora do braço, médio',
+  rows: DIFFERENT_SIDES,
+  classifier: classifier({ match: true, placement: 'braco_externo', body_zone: 'medio', confidence: 'alta', reason: 'parte de fora' }),
+  critique: { agree: true, confidence: 'alta', reason: 'a mensagem diz parte de fora' },
+});
+check('quotes the confirmed row', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+
+// ── 9. A low-confidence critic vetoes too. ──
+console.log('=== Critic low confidence ===');
+r = run({
+  start: lead(),
+  leadText: 'quero no braço, médio',
+  rows: DIFFERENT_SIDES,
+  classifier: classifier({ match: true, placement: 'braco_externo', body_zone: 'medio', confidence: 'alta', reason: 'parte de fora' }),
+  critique: { agree: true, confidence: 'baixa', reason: 'talvez' },
+});
+check('no quote on low-confidence critique', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

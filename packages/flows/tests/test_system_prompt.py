@@ -273,11 +273,15 @@ check("agent context exposes referencia_visual from start_turn",
       "referencia_visual=" in AGENT_TEXT_JS
       and "reference_analysis" in AGENT_TEXT_JS
       and "referencia_visual" in template)
-check("AI Agent → Load Booking → Build Classification Prompt → Classify → Parse",
+check("AI Agent → Load Booking → Build Classification Prompt → Classify → Critique → Parse",
       wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Load Booking"
       and wf["connections"]["Load Booking"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
-      and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Parse Classification"
+      and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Build Price Critique"
+      and wf["connections"]["Build Price Critique"]["main"][0][0]["node"] == "Price Critique Needed?"
+      and wf["connections"]["Price Critique Needed?"]["main"][0][0]["node"] == "Critique Price Match"
+      and wf["connections"]["Price Critique Needed?"]["main"][1][0]["node"] == "Parse Classification"
+      and wf["connections"]["Parse Price Critique"]["main"][0][0]["node"] == "Parse Classification"
       and [c["node"] for c in wf["connections"]["Parse Classification"]["main"][0]] == ["Build Project Patch", "Sync Chat Memory", "Deposit Requested?"]
       and wf["connections"]["Build Project Patch"]["main"][0][0]["node"] == "Patch Project")
 check("Patch Project fans out to quote persistence, promotion quote, name patch and handoff silence",
