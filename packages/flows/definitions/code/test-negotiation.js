@@ -526,6 +526,24 @@ check('does not let the lead go', !/pode falar com ele à vontade|estou aqui/i.t
 check('keeps the negotiation', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
 check('drops the validity date', !/v[áa]lida at[ée]/i.test(r.final_reply), r.final_reply);
 
+console.log('=== Farewell paraphrase with a validity price is replaced ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: false, negotiation_reason: null, negotiation_stage: null,
+    },
+  },
+  leadText: 'preciso falar com meu marido',
+  agentOutput: 'Claro, Manu! Fica à vontade para conversar com ele. O importante é que você e ele estejam confortáveis com a decisão. \n\nSó lembrando que essa cotação de R$ 200,00 está válida até 11 de novembro de 2026. Se você precisar de mais alguma informação ou se houver alguma dúvida, estou por aqui!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('replaces the paraphrased farewell', !/fica à vontade|estou por aqui|se você precisar/i.test(r.final_reply), r.final_reply);
+check('asks what the other person needs', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('advances to diagnose', r.chat_state.negotiation_stage === 'diagnose', String(r.chat_state.negotiation_stage));
+
 console.log('=== Greeting asks the name with the new wording ===');
 r = runParse({
   start: {

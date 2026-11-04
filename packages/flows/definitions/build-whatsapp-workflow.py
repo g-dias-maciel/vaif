@@ -1741,11 +1741,6 @@ const detectedObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')
   : null;
 const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
 const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
-// A reply that says "pode falar à vontade / estou aqui" is a farewell, even
-// when it repeats the price: it lets the lead leave. That is a passive exit.
-const farewell = /(?:pode|fique)\s+(?:falar|à vontade)|estou aqui|fico\s+à\s+disposi[çc][ãa]o|qualquer\s+(?:coisa|d[úu]vida)[^.]{0,20}(?:chama|avisa)|se\s+precisar/i;
-const passiveExit = (!/\?/.test(finalReply) && !/R\$\s*\d/.test(finalReply)) || farewell.test(finalReply);
-const asksWhatIsMissing = /(o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)/i.test(finalReply);
 let fallbackOffer = null;
 
 function retentionReply(reason) {
@@ -1794,9 +1789,21 @@ let nextNegotiationStage = negotiationStage;
 if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrRework) {
   // A validity date hands the lead an exit ("válida até ...").
   finalReply = String(finalReply).replace(/[^.!?]*\\b(?:v[áa]lid[ao]|v[áa]lida at[ée])\\b[^.!?]*[.!?]?/gi, '').trim();
+  // A reply that sends the lead away ("fica à vontade", "estou por aqui",
+  // "se você precisar") is a farewell even when it repeats the price. These
+  // are the phrasings the model actually uses, not just the canonical ones.
+  const farewell = /(?:fica|fique|pode|podes)\s+(?:falar\s+)?(?:à|a)\s+vontade|est(?:ou|amos)\s+(?:por\s+)?aqui|fic(?:o|amos)\s+(?:à|a)\s+disposi[çc][ãa]o|qualquer\s+(?:d[úu]vida|coisa)|se\s+(?:voc[eê]\s+)?precisar|at[ée]\s+(?:mais|logo|breve)|é\s+só\s+(?:me\s+)?(?:chamar|avisar|dizer)/i;
+  const finalHasPrice = /R\$\s*\d/.test(finalReply);
+  const passiveExit = (!/\?/.test(finalReply) && !finalHasPrice) || farewell.test(finalReply);
+  // A real question ends with "?". Without that anchor "o que" matches inside
+  // "lembrando que" and the missing-why fallback never runs.
+  const asksWhatIsMissing = /(?:o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)[^.!?]*\?/i.test(finalReply);
   if (passiveExit) {
     if (negotiationStage === 'close') {
-      // Already offered and asked to close: let the model carry the turn.
+      // Already offered and asked to close: never end on a goodbye.
+      if (farewell.test(finalReply)) {
+        finalReply = retentionReply('price') || retentionReply(negotiationReason || 'decision');
+      }
     } else if (negotiationStage === 'diagnose' || negotiationReason === 'price') {
       finalReply = retentionReply('price') || retentionReply('decision');
       nextNegotiationStage = 'close';
