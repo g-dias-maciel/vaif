@@ -1797,7 +1797,11 @@ function retentionReply(reason) {
 // Stages, each played once: diagnose -> offer -> close. A new objection reason
 // restarts from diagnose, so the decision question is never repeated.
 const objectionIsNew = !!detectedObjection && detectedObjection !== state.negotiation_reason;
-const negotiationStage = objectionIsNew ? null : (state.negotiation_stage || null);
+// Once an offer was made (close), never reset to diagnose: a lead that flips
+// between "price" and "talk to someone" would get the same question again.
+const negotiationStage = state.negotiation_stage === 'close'
+  ? 'close'
+  : (objectionIsNew ? null : (state.negotiation_stage || null));
 let nextNegotiationStage = negotiationStage;
 if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrRework) {
   // A validity date hands the lead an exit ("válida até ...").
@@ -1813,11 +1817,13 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
   const asksWhatIsMissing = /(?:o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)[^.!?]*\?/i.test(finalReply);
   if (passiveExit) {
     if (negotiationStage === 'close') {
-      // Already offered and asked to close: never end the turn without a next
-      // step. A repeated price decline gets installments, not the same number.
-      finalReply = negotiationReason === 'price'
-        ? retentionReply('price_floor')
-        : (retentionReply('price') || retentionReply(negotiationReason || 'decision'));
+      // Already offered: any further hesitation gets the consolidated floor
+      // reply (value + installments + door open). Never re-ask the diagnose
+      // question and never re-offer the same discount. A genuine timing/doubt
+      // concern still gets its own answer.
+      finalReply = (negotiationReason === 'timing' || negotiationReason === 'doubt')
+        ? retentionReply(negotiationReason)
+        : retentionReply('price_floor');
     } else if (negotiationStage === 'diagnose' || negotiationReason === 'price') {
       finalReply = retentionReply('price') || retentionReply('decision');
       nextNegotiationStage = 'close';

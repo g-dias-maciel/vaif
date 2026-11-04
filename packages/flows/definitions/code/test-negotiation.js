@@ -564,6 +564,35 @@ check('offers the installments', /6x/i.test(r.final_reply), r.final_reply);
 check('states the floor value', /R\$\s*160,00/.test(r.final_reply), r.final_reply);
 check('stays at the close stage', r.chat_state.negotiation_stage === 'close', String(r.chat_state.negotiation_stage));
 
+// Production case (Pedro): decision -> price -> decision. The third turn must
+// not re-ask the decision question once the offer is on the table.
+console.log('=== decision → price → decision does not loop ===');
+function flipTurn(state, leadText, objection) {
+  return runParse({
+    start: {
+      stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+      style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+      agent_state: state,
+    },
+    leadText,
+    agentOutput: 'Compreendo!',
+    classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection }),
+  });
+}
+const openState = {
+  processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+  preco_liberado: true, negotiation_open: false, negotiation_reason: null, negotiation_stage: null,
+};
+const f1 = flipTurn(openState, 'preciso falar com meu namorado', 'decision');
+const f2 = flipTurn(f1.chat_state, 'tenho que ver se consigo por esse valor', 'price');
+const f3 = flipTurn(f2.chat_state, 'ainda preciso ver com ele', 'decision');
+check('turn 1 asks the decision question', /pessoa precisa saber/i.test(f1.final_reply), f1.final_reply);
+check('turn 2 offers the discount', /20% de desconto/i.test(f2.final_reply), f2.final_reply);
+check('turn 3 does not re-ask the decision question', !/pessoa precisa saber/i.test(f3.final_reply), f3.final_reply);
+check('turn 3 does not repeat the discount', !/20% de desconto/i.test(f3.final_reply), f3.final_reply);
+check('turn 3 consolidates with installments', /6x/i.test(f3.final_reply), f3.final_reply);
+check('turn 3 stays at close', f3.chat_state.negotiation_stage === 'close', String(f3.chat_state.negotiation_stage));
+
 console.log('=== Greeting asks the name with the new wording ===');
 r = runParse({
   start: {
