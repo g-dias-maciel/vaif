@@ -544,6 +544,26 @@ check('replaces the paraphrased farewell', !/fica à vontade|estou por aqui|se v
 check('asks what the other person needs', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
 check('advances to diagnose', r.chat_state.negotiation_stage === 'diagnose', String(r.chat_state.negotiation_stage));
 
+console.log('=== A second price decline gets installments, not the same offer ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'price', negotiation_stage: 'close',
+    },
+  },
+  leadText: 'nao sei se consigo',
+  agentOutput: 'Compreendo, Manu! Se você precisar de mais tempo para decidir, sem problema. Só me avise quando estiver pronta. E, se tiver alguma dúvida ou quiser conversar mais sobre a tatuagem, estou aqui!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'price' }),
+});
+check('no wrong decision question', !/pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('no identical discount re-offer', !/20% de desconto/i.test(r.final_reply), r.final_reply);
+check('offers the installments', /6x/i.test(r.final_reply), r.final_reply);
+check('states the floor value', /R\$\s*160,00/.test(r.final_reply), r.final_reply);
+check('stays at the close stage', r.chat_state.negotiation_stage === 'close', String(r.chat_state.negotiation_stage));
+
 console.log('=== Greeting asks the name with the new wording ===');
 r = runParse({
   start: {

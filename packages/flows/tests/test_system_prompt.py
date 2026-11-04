@@ -523,6 +523,15 @@ check("classifier receives the previous Beatriz message",
       and "Beatriz perguntou antes" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
       and "last_agent_message" in nodes["Parse Classification"]["parameters"]["jsCode"])
 
+check("classifier receives the lead's previous message",
+      "last_lead_message" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "Lead disse antes" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "last_lead_message" in nodes["Parse Classification"]["parameters"]["jsCode"])
+
+check("a continuous money hesitation stays a price objection",
+      "sei se consigo (pagar)" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "continua `price`, NUNCA `decision`" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])
+
 check("classifier knows the doubts checkpoint is pending",
       "aguardando_confirmacao_duvidas === true" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
       and "checkpointNote" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])

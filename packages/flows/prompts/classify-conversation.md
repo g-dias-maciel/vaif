@@ -85,6 +85,8 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `whole_arm`: true quando o lead descreve o braço inteiro ("do ombro ao cotovelo").
 - `objection`: o motivo de NÃO fechar agora, quando o lead hesita. `decision` (precisa falar com alguém), `price` (valor), `timing` (horário/dia), `doubt` (dor, resultado, medo), `vague` ("vou pensar", "depois"). `null` quando não há hesitação.
   - `price` também quando ele só confirma que é o valor: "seria o preço", "é o valor mesmo", "o preço pesou", "achei alto", "queria mais barato". Isso NÃO é `asks_for_price`.
+  - `price` também quando ele hesita sobre o dinheiro sem dizer "preço": "não sei se consigo (pagar)", "não sei se vai dar", "tá caro ainda", "estou sem o valor agora", "acho que não consigo". Depois que a Beatriz já ofereceu um valor, hesitação contínua sobre dinheiro continua `price`, NUNCA `decision`.
+  - `decision` é só quando o lead diz que precisa falar/ver com OUTRA PESSOA ("vou falar com meu marido", "preciso ver com ele"). Duvidar de si mesmo ("não sei se consigo") não é `decision`.
   - NUNCA marque `price` só porque o lead disse que não tem outras tatuagens ou que é a primeira.
 - `closing`: true quando o lead aceita fechar/agendar ("pode ser", "vamos", "fechado", "quero agendar", "bora", "aceito", "combinado"). false caso contrário.
 

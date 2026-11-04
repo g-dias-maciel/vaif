@@ -619,6 +619,10 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "// question is at the end).\n"
     "const lastAgent = String(agentState.last_agent_message || '').trim().slice(-400);\n"
     "const lastAgentNote = lastAgent ? '\\n\\n[Beatriz perguntou antes]: ' + lastAgent : '';\n"
+    "// The lead's previous turn: a short continuation (não sei se consigo) loses\n"
+    "// the object of consigo (pagar, não falar com alguém) and is misread.\n"
+    "const lastLead = String(agentState.last_lead_message || '').trim().slice(-300);\n"
+    "const lastLeadNote = lastLead ? '\\n\\n[Lead disse antes]: ' + lastLead : '';\n"
     "const checkpoint = agentState.aguardando_confirmacao_duvidas === true;\n"
     "const pendingNote = pendingLabels[pending]\n"
     "  ? '\\n\\n[Contexto: Beatriz perguntou ' + pendingLabels[pending] + ' na mensagem anterior. A mensagem do lead é a RESPOSTA a essa pergunta — interprete respostas curtas (\"isso\", \"sim\", \"não\", \"nov\", \"cob\") como resposta a ela.]'\n"
@@ -649,7 +653,7 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "    temperature: 0,\n"
     "    messages: [\n"
     "      { role: 'system', content: filled },\n"
-    "      { role: 'user', content: lastAgentNote + '\\n\\nLead: ' + userMsg + '\\n\\nBeatriz (agora): ' + agentOutput + pendingNote + checkpointNote }\n"
+    "      { role: 'user', content: lastAgentNote + lastLeadNote + '\\n\\nLead: ' + userMsg + '\\n\\nBeatriz (agora): ' + agentOutput + pendingNote + checkpointNote }\n"
     "    ]\n"
     "  }\n"
     "} }];"
@@ -1754,12 +1758,20 @@ function retentionReply(reason) {
   // is still the artist's percentage of the table.
   const base = Number(lead.quoted_price_cents || lead.table_price_cents || 0);
   const tableBase = Number(lead.table_price_cents || 0);
-  if (reason === 'price' && base > 0) {
+  if ((reason === 'price' || reason === 'price_floor') && base > 0) {
     const floorPct = Number(artistJson.floor_pct);
     const maxPct = Number.isFinite(floorPct) && floorPct > 0 ? Math.max(0, 100 - floorPct) : 20;
     const floorCents = tableBase > 0 ? Math.round(tableBase * Math.min(Math.max(floorPct, 0), 100) / 100) : 0;
     const offered = Math.max(floorCents, Math.round(base * (100 - maxPct) / 100));
     fallbackOffer = { base: base, offered: offered };
+    if (reason === 'price_floor') {
+      // The max discount is already on the table and the lead declined again:
+      // repeating the same number is a loop. Offer installments instead.
+      const installment = Math.round(offered / 6);
+      return 'Entendo! ' + fmt(offered) + ' já é o melhor valor que o ' + artistName
+        + ' consegue nessa peça. Dá pra parcelar em até 6x de ' + fmt(installment)
+        + '. Se fechar, é só me falar que eu já deixo tudo encaminhado.';
+    }
     return 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta. Eu consigo '
       + maxPct + '% de desconto se você fechar agora, fica ' + fmt(offered) + ' em vez de ' + fmt(base)
       + '. Em troca, no fim você posta uma foto marcando o ' + (handle || artistName)
@@ -1801,10 +1813,11 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
   const asksWhatIsMissing = /(?:o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)[^.!?]*\?/i.test(finalReply);
   if (passiveExit) {
     if (negotiationStage === 'close') {
-      // Already offered and asked to close: never end on a goodbye.
-      if (farewell.test(finalReply)) {
-        finalReply = retentionReply('price') || retentionReply(negotiationReason || 'decision');
-      }
+      // Already offered and asked to close: never end the turn without a next
+      // step. A repeated price decline gets installments, not the same number.
+      finalReply = negotiationReason === 'price'
+        ? retentionReply('price_floor')
+        : (retentionReply('price') || retentionReply(negotiationReason || 'decision'));
     } else if (negotiationStage === 'diagnose' || negotiationReason === 'price') {
       finalReply = retentionReply('price') || retentionReply('decision');
       nextNegotiationStage = 'close';
@@ -1996,6 +2009,7 @@ return [{ json: {
     negotiation_stage: closingSignal ? null : nextNegotiationStage,
     negotiation_reason: closingSignal ? null : negotiationReason,
     last_agent_message: String(audioFinalReply || '').slice(-600),
+    last_lead_message: String(audioTranscript || rawCombined || '').slice(-400),
     pending_question: pendingNext,
     cover_photo: isCoverOrRework ? coverPhotoNow : undefined,
     new_reference: isCoverOrRework ? newReferenceNow : undefined,
