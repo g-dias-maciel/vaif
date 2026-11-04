@@ -512,6 +512,11 @@ check("a corrected new tattoo recovers from aguardando_artista",
       "recoveredFromHandoff" in parse_js
       and "finalPipeline = 'qualificando'" in parse_js
       and "nextDiscoveryQuestion" in parse_js)
+check("classifier receives the previous Beatriz message",
+      "last_agent_message" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "Beatriz perguntou antes" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "last_agent_message" in nodes["Parse Classification"]["parameters"]["jsCode"])
+
 check("classifier knows the doubts checkpoint is pending",
       "aguardando_confirmacao_duvidas === true" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
       and "checkpointNote" in nodes["Build Classification Prompt"]["parameters"]["jsCode"])

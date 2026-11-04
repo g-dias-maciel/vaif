@@ -599,7 +599,13 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "  body_zone: 'a cobertura do local (partinha, área média, local inteiro)',\n"
     "  style: 'o estilo',\n"
     "};\n"
-    "const checkpoint = ($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas === true;\n"
+    "const agentState = $('Start Turn').first().json.agent_state || {};\n"
+    "// The classifier is stateless: without the previous question a bare \"não\"\n"
+    "// or \"ok\" has no antecedent. The tail of the last message is enough (the\n"
+    "// question is at the end).\n"
+    "const lastAgent = String(agentState.last_agent_message || '').trim().slice(-400);\n"
+    "const lastAgentNote = lastAgent ? '\\n\\n[Beatriz perguntou antes]: ' + lastAgent : '';\n"
+    "const checkpoint = agentState.aguardando_confirmacao_duvidas === true;\n"
     "const pendingNote = pendingLabels[pending]\n"
     "  ? '\\n\\n[Contexto: Beatriz perguntou ' + pendingLabels[pending] + ' na mensagem anterior. A mensagem do lead é a RESPOSTA a essa pergunta — interprete respostas curtas (\"isso\", \"sim\", \"não\", \"nov\", \"cob\") como resposta a ela.]'\n"
     "  : '';\n"
@@ -629,7 +635,7 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "    temperature: 0,\n"
     "    messages: [\n"
     "      { role: 'system', content: filled },\n"
-    "      { role: 'user', content: 'Lead: ' + userMsg + '\\n\\nBeatriz: ' + agentOutput + pendingNote + checkpointNote }\n"
+    "      { role: 'user', content: lastAgentNote + '\\n\\nLead: ' + userMsg + '\\n\\nBeatriz (agora): ' + agentOutput + pendingNote + checkpointNote }\n"
     "    ]\n"
     "  }\n"
     "} }];"
@@ -2031,6 +2037,7 @@ return [{ json: {
       : (photoConfirmed ? false : (styleFromVision || (state.style_from_photo === true && !aiStyle && !textStyle))),
     negotiation_open: closingSignal ? false : negotiationOpen,
     negotiation_reason: closingSignal ? null : negotiationReason,
+    last_agent_message: String(audioFinalReply || '').slice(-600),
     pending_question: pendingNext,
     cover_photo: isCoverOrRework ? coverPhotoNow : undefined,
     new_reference: isCoverOrRework ? newReferenceNow : undefined,

@@ -102,6 +102,9 @@ const turn1 = runParse({
 check('process detected', turn1.processo_explicado_val === true);
 check('checkpoint is armed', turn1.aguardando_confirmacao_duvidas_val === true);
 check('reply ends with the doubts question', /d[uú]vida\?$/.test(turn1.final_reply.trim()), turn1.final_reply);
+check('persists the message so the next classification has the question',
+  /d[uú]vida\?$/.test(String(turn1.chat_state.last_agent_message || '').trim()),
+  String(turn1.chat_state.last_agent_message));
 
 // ── 1b. The process before the qualification ends must not arm the checkpoint. ──
 console.log('=== Process explained too early does not arm the checkpoint ===');
