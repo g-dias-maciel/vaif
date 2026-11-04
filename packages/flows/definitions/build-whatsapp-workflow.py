@@ -1741,9 +1741,10 @@ const detectedObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')
   : null;
 const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
 const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
-// A mention of "desconto" without a number is not an offer: only a reply with a
-// price counts as negotiating.
-const passiveExit = !/\?/.test(finalReply) && !/R\$\s*\d/.test(finalReply);
+// A reply that says "pode falar à vontade / estou aqui" is a farewell, even
+// when it repeats the price: it lets the lead leave. That is a passive exit.
+const farewell = /(?:pode|fique)\s+(?:falar|à vontade)|estou aqui|fico\s+à\s+disposi[çc][ãa]o|qualquer\s+(?:coisa|d[úu]vida)[^.]{0,20}(?:chama|avisa)|se\s+precisar/i;
+const passiveExit = (!/\?/.test(finalReply) && !/R\$\s*\d/.test(finalReply)) || farewell.test(finalReply);
 const asksWhatIsMissing = /(o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)/i.test(finalReply);
 let fallbackOffer = null;
 
@@ -1791,6 +1792,8 @@ const objectionIsNew = !!detectedObjection && detectedObjection !== state.negoti
 const negotiationStage = objectionIsNew ? null : (state.negotiation_stage || null);
 let nextNegotiationStage = negotiationStage;
 if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrRework) {
+  // A validity date hands the lead an exit ("válida até ...").
+  finalReply = String(finalReply).replace(/[^.!?]*\\b(?:v[áa]lid[ao]|v[áa]lida at[ée])\\b[^.!?]*[.!?]?/gi, '').trim();
   if (passiveExit) {
     if (negotiationStage === 'close') {
       // Already offered and asked to close: let the model carry the turn.
@@ -1872,6 +1875,8 @@ function tidyWhatsapp(text) {
   out = out.replace(/(?<![\d:]):\s+/g, '. ');
   out = out.replace(/([.!?]\s+)([a-zà-ú])/g, function (m, a, b) { return a + b.toUpperCase(); });
   out = out.replace(/[ \t]{2,}/g, ' ');
+  // Fixed wording: the greeting asks the name, it does not use "chamar".
+  out = out.replace(/como posso te chamar/gi, 'qual o seu nome');
   return out.trim();
 }
 finalReply = tidyWhatsapp(finalReply);

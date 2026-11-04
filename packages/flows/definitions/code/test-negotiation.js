@@ -413,7 +413,7 @@ r = runParse({
   agentOutput: 'Oi! Eu sou a Beatriz, assistente do Gabriel aqui no estúdio. Tudo bem? Vi que você quer uma tatuagem de flor de lótus. Antes de começarmos, como posso te chamar?',
   classifier: classifier({ table_cents: 0, nego_cents: 0 }),
 });
-check('keeps the name question', /como posso te chamar/i.test(r.final_reply), r.final_reply);
+check('keeps the name question', /qual o seu nome/i.test(r.final_reply), r.final_reply);
 
 // ── 10. Deposit during a negotiation is stripped, not pushed ──
 console.log('=== Deposit while hesitating is stripped ===');
@@ -506,6 +506,39 @@ r = runParse({
 });
 check('asks what the person needs', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
 check('no deadline without a value', !/fechar agora|fechando hoje|vale para hoje/i.test(r.final_reply), r.final_reply);
+
+// ── 13. A farewell with the price is still a farewell. ──
+console.log('=== Farewell during negotiation is replaced ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: null,
+    },
+  },
+  leadText: 'entendi\nvou falar com meu marido',
+  agentOutput: 'Claro, Lilo! Pode falar com ele à vontade. Só te aviso que essa cotação de R$ 200,00 é válida até 11 de novembro de 2026. Se precisar conversar mais ou tiver alguma dúvida, estou aqui. 😊',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('does not let the lead go', !/pode falar com ele à vontade|estou aqui/i.test(r.final_reply), r.final_reply);
+check('keeps the negotiation', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('drops the validity date', !/v[áa]lida at[ée]/i.test(r.final_reply), r.final_reply);
+
+console.log('=== Greeting asks the name with the new wording ===');
+r = runParse({
+  start: {
+    stage_key: 'novo', tattoo_type: null, placement: null, body_zone: null, style: null,
+    first_tattoo: null, table_price_cents: null, quoted_price_cents: null,
+    agent_state: { processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false },
+  },
+  leadText: 'oi',
+  agentOutput: 'Oi! Eu sou a Beatriz, assistente do Gabriel. Tudo bem? Antes de começarmos, como posso te chamar?',
+  classifier: classifier({}),
+});
+check('uses "qual o seu nome"', /qual o seu nome/i.test(r.final_reply), r.final_reply);
+check('never uses "como posso te chamar"', !/como posso te chamar/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

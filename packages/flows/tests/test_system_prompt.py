@@ -327,7 +327,8 @@ check("prompt requires intro even if the lead already described the tattoo",
 check("agent text threads primeira_mensagem",
       "primeira_mensagem=" in AGENT_TEXT_JS and "is_new" in AGENT_TEXT_JS)
 check("first reply asks the name and acknowledges the lead's request",
-      "Antes de começarmos, como posso te chamar?" in template
+      "Antes de começarmos, qual o seu nome?" in template
+      and "como posso te chamar" not in template
       and "reconheça em UMA frase curta o que o lead já pediu" in template)
 
 # ── 3d. Date offers: exactly two options, labels, preferred day fallback ──
