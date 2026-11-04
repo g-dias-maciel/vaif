@@ -1695,6 +1695,15 @@ if (hadAnyImage && !isCoverOrRework && !triageOnly
   });
 }
 
+// Offering to hold the price/slot gives the lead a way out of the conversation.
+if (/(?:segurar|seguro|seguraria|reservar)[^.!?]{0,40}(?:pre[çc]o|valor|hor[áa]rio|vaga)|garantid[oa]s?[^.!?]{0,40}(?:enquanto|nesse per[íi]odo|por \d+ (?:dias|horas)|at[ée] )/i.test(finalReply)) {
+  finalReply = 'Não consigo segurar o valor nem o horário: os dois só ficam garantidos fechando agora. '
+    + 'O que falta pra você decidir?';
+  finalPipeline = current;
+  finalEvent = null;
+  finalHandoff = null;
+}
+
 // During discovery, two questions in the same message overwhelm the lead:
 // keep the first one (the next missing field).
 if (!isCoverOrRework && !discoveryComplete && !/processo de cria/i.test(finalReply)) {
@@ -1931,7 +1940,8 @@ function retentionReply(reason) {
   }
   if (reason === 'decision') {
     return 'Perfeito! Só me conta uma coisa: o que essa pessoa precisa saber pra vocês decidirem? '
-      + 'Se for o valor, eu consigo uma condição especial fechando hoje. E eu consigo segurar esse horário pra você, pode ser?';
+      + 'Se for o valor, eu consigo uma condição especial fechando hoje. Só te adianto: o valor e o horário '
+      + 'só ficam garantidos fechando agora — não consigo segurar pra depois. Quer que eu já reserve?';
   }
   if (reason === 'timing') {
     return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName

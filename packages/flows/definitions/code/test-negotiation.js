@@ -224,7 +224,8 @@ r = runParse({
   classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
-check('mentions holding the slot', /segurar/i.test(r.final_reply), r.final_reply);
+check('reinforces urgency instead of holding', /s[óo] ficam garantidos fechando agora/i.test(r.final_reply), r.final_reply);
+check('never offers to hold', !/(?:posso|vou) segurar/i.test(r.final_reply), r.final_reply);
 check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',
   JSON.stringify({ o: r.chat_state.negotiation_open, r: r.chat_state.negotiation_reason }));
 
@@ -317,6 +318,30 @@ r = runParse({
   classifier: classifier({ table_cents: 10000, nego_cents: 10000 }, { objection: 'decision' }),
 });
 check('discounts the table price', /R\$\s*80,00 em vez de R\$\s*100,00/.test(r.final_reply), r.final_reply);
+
+// ── 7. Offering to hold the price gives the lead a way out. ──
+console.log('=== Hold offers are replaced by urgency ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'medio',
+    style: 'fine_line',
+    first_tattoo: true,
+    table_price_cents: 20000,
+    quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+    },
+  },
+  leadText: 'preciso ver com meu marido',
+  agentOutput: 'Claro! E se precisar, posso segurar o preço e o horário enquanto você conversa com ele. O valor e o agendamento ficarão garantidos nesse período.',
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('does not offer to hold', !/posso segurar|garantidos nesse per[íi]odo/i.test(r.final_reply), r.final_reply);
+check('states the urgency', /s[óo] ficam garantidos fechando agora/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

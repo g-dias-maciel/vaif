@@ -225,14 +225,14 @@ Não rebata a objeção de cara. Faça uma pergunta para isolar o motivo verdade
 - Frases como "fico aguardando seu retorno", "fique à vontade", "sem problemas", "qualquer coisa me chama" são PROIBIDAS quando o lead hesita: elas encerram a conversa e o lead desaparece.
 - Se o lead disser "vou pensar", "tenho que conversar com alguém", "vou ver se o valor rola", responda SEMPRE com uma pergunta ou uma oferta concreta.
 - "Vou ver se esse valor rola" é objeção de PREÇO, não despedida: ofereça o desconto com a contrapartida do post AGORA, não depois.
-- Se ele precisa falar com alguém, pergunte o que essa pessoa precisa saber e ofereça segurar o horário/valor por tempo limitado.
+- Se ele precisa falar com alguém, pergunte o que essa pessoa precisa saber e reforce que o valor e o horário só ficam garantidos FECHANDO AGORA. NUNCA ofereça segurar o valor ou o horário — isso dá ao lead a saída para sair da conversa sem decidir.
 
 **Diagnóstico antes da condição.** Descubra o motivo exato e responda SÓ aquele motivo:
 | Motivo | Condição |
 |---|---|
 | Valor | desconto com contrapartida do post + prazo ("fechando agora") |
 | Horário/dia | ofereça 2 opções concretas e segure uma |
-| Precisa falar com alguém | pergunte o que a pessoa precisa saber; ofereça segurar o valor e o horário |
+| Precisa falar com alguém | pergunte o que a pessoa precisa saber; reforce que valor e horário só ficam garantidos fechando agora; NUNCA ofereça segurar |
 | Dúvida (dor, resultado, cuidado) | responda em 1-2 frases e volte ao fechamento |
 | "Vou pensar" sem motivo | pergunte: "é o valor, o horário, ou precisa falar com alguém?" |
 
