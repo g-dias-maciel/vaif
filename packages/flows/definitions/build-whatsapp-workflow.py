@@ -607,7 +607,13 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "  ? 'MODO TRIAGEM ATIVO: a venda completa está desativada. Quando Beatriz passar o lead para o artista depois de concluir a triagem, use handoff.reason=\"triage_only\".'\n"
     "  : 'MODO VENDA COMPLETA: não use o motivo triage_only.';\n"
     "const sysPrompt = " + json.dumps(CLASSIFY_PROMPT_TEMPLATE) + ";\n"
-    "const filled = sysPrompt.split('{{pipeline}}').join(currentPipeline).split('{{MODO}}').join(modo);\n"
+    "const priceRows = $('Build System Prompt').first().json.pricing_rows || [];\n"
+    "const priceTable = priceRows.length\n"
+    "  ? priceRows.map(function (r) { return '- ' + r.placement + ' / ' + r.body_zone + ' -> R$ ' + (Number(r.table_price) / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2 }); }).join('\\n')\n"
+    "  : '(sem tabela cadastrada)';\n"
+    "const filled = sysPrompt.split('{{pipeline}}').join(currentPipeline)\n"
+    "  .split('{{MODO}}').join(modo)\n"
+    "  .split('{{TABELA_PRECOS}}').join(priceTable);\n"
     "\n"
     "return [{ json: {\n"
     "  body: {\n"
@@ -991,9 +997,14 @@ function priceRowFor(rows, placement, zone) {
   return a || b || null;
 }
 
-function deterministicQuote(centsOverride = null) {
+function deterministicQuote(centsOverride = null, rowOverride = null) {
   const rows = $('Build System Prompt').first().json.pricing_rows || [];
-  let row = priceRowFor(rows, placementNow, bodyZoneNow);
+  // The exact row always wins; the AI's match is only used when the table
+  // lookup cannot resolve the request on its own.
+  let row = priceRowFor(rows, placementNow, bodyZoneNow) || rowOverride || null;
+  const usingRowOverride = !!rowOverride && row === rowOverride;
+  const quotePlacement = usingRowOverride ? rowOverride.placement : placementNow;
+  const quoteZone = usingRowOverride ? rowOverride.body_zone : bodyZoneNow;
   let bothCents = null;
   if (leadGaveBothSides && placementNow === 'braco') {
     const ext = rows.find(p => p.placement === 'braco_externo' && p.body_zone === bodyZoneNow);
@@ -1019,10 +1030,10 @@ function deterministicQuote(centsOverride = null) {
     barriga: 'na barriga', ombro: 'no ombro', pulso: 'no pulso', dedo: 'no dedo', mao: 'na mão', pe: 'no pé',
   };
   const zones = { pequeno: 'uma tatuagem pequena', medio: 'uma tatuagem média', grande: 'uma tatuagem grande', fechamento: 'fechamento' };
-  const local = (leadGaveBothSides && placementNow === 'braco')
+  const local = (!usingRowOverride && leadGaveBothSides && placementNow === 'braco')
     ? 'no braço (partes externa e interna)'
-    : (places[placementNow] || `em ${placementNow}`);
-  const zona = zones[bodyZoneNow] || bodyZoneNow;
+    : (places[quotePlacement] || `em ${quotePlacement}`);
+  const zona = zones[quoteZone] || quoteZone;
   const description = `${zona} ${local}`;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   let reply = `Para ${description}, fica ${fmt(cents)} à vista ou em até 6x de ${fmt(Math.round(cents / 6))} sem juros.`;
@@ -1152,22 +1163,36 @@ const offerLive = offer.promo_active === true && Number(offer.multiplier) > 0;
 // A live quote keeps its price: re-quoting the promotion price would silently
 // raise a number the lead already received.
 const openQuote = offer.open_quote === true;
+// ── AI price match ──
+// The classifier receives the price table and picks the row that matches the
+// lead's request. It never returns a number: the price always comes from the
+// table, and the row is validated here. A low-confidence or unknown row is
+// ignored, which sends the lead to the existing "no row" handling.
+const pricingRowsAll = $('Build System Prompt').first().json.pricing_rows || [];
+const aiPriceMatch = parsed.price_match || {};
+const aiPriceRow = (aiPriceMatch.match === true
+    && (aiPriceMatch.confidence === 'alta' || aiPriceMatch.confidence === 'media'))
+  ? (pricingRowsAll.find(function (r) {
+      return r.placement === aiPriceMatch.placement && r.body_zone === aiPriceMatch.body_zone;
+    }) || null)
+  : null;
 const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
-  ? deterministicQuote()
+  ? deterministicQuote(null, aiPriceRow)
   : null;
 const asksForPrice = /quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)/i.test(rawLead);
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
   ? deterministicQuote(
       lead.quoted_price_cents
       || lead.table_price_cents
-      || (openQuote ? Number(offer.open_quote_first_price) || null : null)
+      || (openQuote ? Number(offer.open_quote_first_price) || null : null),
+      aiPriceRow
     )
   : null;
 
 // If the model quoted the standard price while a promotion is active, replace
 // the quote with the promotion price. This also removes scheduling questions
 // from the same message: the lead must accept the price first.
-const pricingRows = $('Build System Prompt').first().json.pricing_rows || [];
+const pricingRows = pricingRowsAll;
 const bothSidesRows = leadGaveBothSides && placementNow === 'braco'
   ? [
       pricingRows.find(p => p.placement === 'braco_externo' && p.body_zone === bodyZoneNow),
@@ -1176,7 +1201,7 @@ const bothSidesRows = leadGaveBothSides && placementNow === 'braco'
   : null;
 const hasPriceRow = bothSidesRows
   ? (!!bothSidesRows[0] && !!bothSidesRows[1])
-  : !!priceRowFor(pricingRows, placementNow, bodyZoneNow);
+  : !!(priceRowFor(pricingRows, placementNow, bodyZoneNow) || aiPriceRow);
 const replyHasPrice = /R\$\s*\d/.test(finalReply);
 // Amount actually written in the reply (the discount guard parses it again
 // later; this one decides whether the promotion price must replace it).
@@ -1200,7 +1225,7 @@ const promotionQuote = !triageOnly && !firstQuote && !repeatedQuote && !isCoverO
   // above the promotion is rewritten; a negotiated discount below it is kept.
   && (replyQuoteCents === promoTableCents || replyQuoteCents >= promoPriceCents)
   && replyQuoteCents !== promoPriceCents
-  ? deterministicQuote()
+  ? deterministicQuote(null, aiPriceRow)
   : null;
 
 if (firstQuote) {

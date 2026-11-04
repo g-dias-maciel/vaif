@@ -64,6 +64,29 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `processo_explicado`: true se a resposta da BEATRIZ contém a explicação do processo de criação do artista (ex: "processo de criação", "vai sentar junto com você", "projeto exclusivo", "tirar as medidas do local", "encaixe perfeito no seu corpo"). false se ela ainda não explicou.
 - `duvidas_eliminadas`: campo legado, retorne false. O sistema decide isso deterministicamente usando o estado persistido do checkpoint e as mensagens do lead; a classificação do modelo nunca pode abrir o gate.
 
+## Casamento de preço (tabela)
+
+Tabela vigente do artista (local / cobertura → preço de tabela):
+
+{{TABELA_PRECOS}}
+
+Se o lead pediu, aceitou ou está negociando um orçamento, escolha EXATAMENTE UMA linha dessa tabela que corresponda ao que ele descreveu.
+
+- Copie `placement` e `body_zone` exatamente como aparecem na tabela.
+- NUNCA invente preço, linha ou combinação que não esteja na tabela. O sistema usa apenas a linha escolhida para buscar o valor; se ela não existir, o atendimento vai para o artista.
+- Use `match: false` quando: o local não estiver claro, a cobertura não estiver clara, a região tiver partes com preços diferentes ("braço" sem dizer externo/interno), ou qualquer dúvida.
+- Se a linha depender de algo que o lead não disse, NÃO adivinhe.
+
+### Checagem crítica (obrigatória)
+
+Antes de responder, releia a mensagem do lead e confira:
+
+1. A linha escolhida descreve exatamente o local e a cobertura que o lead pediu?
+2. O lead realmente falou de preço/orçamento, ou Beatriz apenas perguntou algo?
+3. Existe outra linha que casaria melhor?
+
+Se qualquer resposta for "não" ou "talvez", use `match: false` e explique em `reason`. Na dúvida, o artista atende.
+
 ## Motivos de handoff
 
 cover_up, reforma, lead_requested_artist, below_piso, vague, audio_2x, no_availability, triage_only
@@ -105,6 +128,13 @@ Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana
   },
   "deposit": {
     "amount_cents": 18000 or null
+  },
+  "price_match": {
+    "match": true or false,
+    "placement": "string or null",
+    "body_zone": "string or null",
+    "confidence": "alta | media | baixa",
+    "reason": "1 frase curta justificando a escolha (ou por que não casou)"
   },
   "handoff": {
     "reason": "string or null"
