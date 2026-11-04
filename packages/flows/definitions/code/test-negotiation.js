@@ -224,7 +224,7 @@ r = runParse({
   classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
-check('offers a condition with the artist', /condi[cç][aã]o especial com o Gabriel/i.test(r.final_reply), r.final_reply);
+check('does not pre-assume price', !/condi[cç][aã]o especial|desconto/i.test(r.final_reply), r.final_reply);
 check('never claims a slot is guaranteed', !/garantid/i.test(r.final_reply), r.final_reply);
 check('never offers to hold', !/(?:posso|vou) segurar/i.test(r.final_reply), r.final_reply);
 check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',

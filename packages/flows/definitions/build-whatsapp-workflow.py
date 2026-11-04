@@ -1766,8 +1766,9 @@ function retentionReply(reason) {
       + '. Fecho pra você agora?';
   }
   if (reason === 'decision') {
-    return 'Perfeito! Só me conta uma coisa. O que essa pessoa precisa saber pra vocês decidirem? '
-      + 'Se for o valor, eu consigo uma condição especial com o Gabriel.';
+    // Ask only. The blocker may be the design, the timing or the money: naming
+    // the price here assumes the wrong problem before the lead says it.
+    return 'Perfeito! Só me conta uma coisa. O que essa pessoa precisa saber pra vocês decidirem?';
   }
   if (reason === 'timing') {
     return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName
