@@ -1512,7 +1512,7 @@ if (!isCoverOrRework && !triageOnly && !discoveryComplete && lead.name && !/\?/.
 // The photo supplied the placement/size: confirm with the lead before the
 // process. The name is often still null on this very turn (it is extracted
 // from the lead's message now), so gate on the reply instead.
-const asksName = /como posso te chamar|qual (?:é |e )?o seu nome|seu nome/i.test(finalReply);
+const asksName = /qual (?:é |e )?o seu nome|seu nome|como posso te chamar/i.test(finalReply);
 if (photoDerived && !photoConfirmed && discoveryComplete && !asksName && !isCoverOrRework && !triageOnly) {
   finalReply = photoConfirmationQuestion(lead);
   finalPipeline = current;
@@ -1741,8 +1741,9 @@ const detectedObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')
   : null;
 const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
 const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
-const passiveExit = !/\?/.test(finalReply)
-  && !/desconto|condi[çc][ãa]o especial|instagram|posta uma foto|parcel/i.test(finalReply);
+// A mention of "desconto" without a number is not an offer: only a reply with a
+// price counts as negotiating.
+const passiveExit = !/\?/.test(finalReply) && !/R\$\s*\d/.test(finalReply);
 const asksWhatIsMissing = /(o que|qual|precisa saber|ficou pesando|mais alguma d[úu]vida)/i.test(finalReply);
 let fallbackOffer = null;
 
@@ -1770,7 +1771,7 @@ function retentionReply(reason) {
   }
   if (reason === 'decision') {
     return 'Perfeito! Só me conta uma coisa. O que essa pessoa precisa saber pra vocês decidirem? '
-      + 'Se for o valor, eu consigo uma condição especial fechando hoje.';
+      + 'Se for o valor, eu consigo uma condição especial com o Gabriel.';
   }
   if (reason === 'timing') {
     return 'Entendo! Qual dia e horário funcionam melhor pra você? Eu já vejo as opções com o ' + artistName
@@ -1806,6 +1807,15 @@ if (negotiationOpen && hasPriceContext && !isAudio && !triageOnly && !isCoverOrR
     finalReply = finalReply.trim() + ' ' + retentionReply('decision');
     nextNegotiationStage = 'diagnose';
   }
+  // A mention of a discount without an amount is a dangling promise: replace it
+  // with the concrete offer (amount + counterpart + urgency). Checked on the
+  // model's own text, not on the decision reply above (which says "condição
+  // especial" without offering a number on purpose).
+  if (/desconto|condi[çc][ãa]o especial/i.test(agentOutput) && !/R\$\s*\d/.test(agentOutput)) {
+    finalReply = retentionReply('price') || retentionReply(negotiationReason || 'decision');
+    nextNegotiationStage = 'close';
+  }
+
   // The model already made an offer: the next turn closes, it does not diagnose
   // the objection again.
   if (!passiveExit && /R\$\s*\d/.test(finalReply)) {

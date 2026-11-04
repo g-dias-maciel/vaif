@@ -224,7 +224,7 @@ r = runParse({
   classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
-check('offers the condition for today', /condi[cç][aã]o especial fechando hoje/i.test(r.final_reply), r.final_reply);
+check('offers a condition with the artist', /condi[cç][aã]o especial com o Gabriel/i.test(r.final_reply), r.final_reply);
 check('never claims a slot is guaranteed', !/garantid/i.test(r.final_reply), r.final_reply);
 check('never offers to hold', !/(?:posso|vou) segurar/i.test(r.final_reply), r.final_reply);
 check('records the reason', r.chat_state.negotiation_open === true && r.chat_state.negotiation_reason === 'decision',
@@ -469,6 +469,43 @@ r = runParse({
   classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { asks_for_price: true }),
 });
 check('repeats the quoted price', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+
+// ── 12. A discount mentioned without a number becomes a concrete offer. ──
+console.log('=== Dangling discount gets a number ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: false, negotiation_reason: null, negotiation_stage: null,
+    },
+  },
+  leadText: 'preciso conversar com meu marido',
+  agentOutput: 'Entendi, Lilo! É super importante conversar com ele. O que exatamente você acha que ele pode querer saber? O desconto da promoção só vale se fechar agora.',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('gives the concrete value', /R\$\s*160,00/.test(r.final_reply), r.final_reply);
+check('mentions the post counterpart', /posta uma foto|instagram/i.test(r.final_reply), r.final_reply);
+check('urgency only with the value', /fechar agora/i.test(r.final_reply) && /R\$/.test(r.final_reply), r.final_reply);
+check('does not repeat the dangling phrase', !/só vale se fechar agora\.$/i.test(r.final_reply), r.final_reply);
+
+console.log('=== Decision reply has no deadline ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado', tattoo_type: 'new', placement: 'braco_externo', body_zone: 'fechamento',
+    style: 'fine_line', first_tattoo: true, table_price_cents: 10000, quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision', negotiation_stage: null,
+    },
+  },
+  leadText: 'preciso conversar com meu marido',
+  agentOutput: 'Claro! Fique à vontade.',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('asks what the person needs', /o que essa pessoa precisa saber/i.test(r.final_reply), r.final_reply);
+check('no deadline without a value', !/fechar agora|fechando hoje|vale para hoje/i.test(r.final_reply), r.final_reply);
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
