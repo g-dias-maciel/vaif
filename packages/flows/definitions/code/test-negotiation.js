@@ -271,5 +271,52 @@ r = runParse({
 check('asks the isolating question', /é o valor, é o horário|o que está te impedindo/i.test(r.final_reply), r.final_reply);
 check('does not discount yet', !/desconto/i.test(r.final_reply), r.final_reply);
 
+// ── 6. The discount applies to the quoted price, not the table. ──
+console.log('=== Promotion: discount from the quoted price ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'medio',
+    style: 'fine_line',
+    first_tattoo: true,
+    table_price_cents: 10000,
+    quoted_price_cents: 20000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+    },
+  },
+  leadText: 'ta bem',
+  agentOutput: 'Perfeito!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 20000 }, { objection: 'decision' }),
+});
+check('discounts the quoted price', /R\$\s*160,00 em vez de R\$\s*200,00/.test(r.final_reply), r.final_reply);
+check('records base and offered correctly', r.quote_base_cents === 20000 && r.quote_offered_cents === 16000,
+  JSON.stringify({ b: r.quote_base_cents, o: r.quote_offered_cents }));
+
+console.log('=== No promotion: discount from the table price ===');
+r = runParse({
+  start: {
+    stage_key: 'orcamento_enviado',
+    tattoo_type: 'new',
+    placement: 'antebraco',
+    body_zone: 'medio',
+    style: 'fine_line',
+    first_tattoo: true,
+    table_price_cents: 10000,
+    quoted_price_cents: 10000,
+    agent_state: {
+      processo_explicado: true, duvidas_eliminadas: true, aguardando_confirmacao_duvidas: false,
+      preco_liberado: true, negotiation_open: true, negotiation_reason: 'decision',
+    },
+  },
+  leadText: 'ta bem',
+  agentOutput: 'Perfeito!',
+  classifier: classifier({ table_cents: 10000, nego_cents: 10000 }, { objection: 'decision' }),
+});
+check('discounts the table price', /R\$\s*80,00 em vez de R\$\s*100,00/.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

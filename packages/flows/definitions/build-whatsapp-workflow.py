@@ -1913,11 +1913,16 @@ function retentionReply(reason) {
   const handleRaw = String(artistJson.instagram_handle || '').trim();
   const handle = handleRaw ? (handleRaw.startsWith('@') ? handleRaw : '@' + handleRaw) : '';
   const fmt = value => (value / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
-  const base = Number(lead.table_price_cents || lead.quoted_price_cents || 0);
+  // The discount applies to the price the lead was actually quoted (which may
+  // include the promotion multiplier), never to the raw table price. The floor
+  // is still the artist's percentage of the table.
+  const base = Number(lead.quoted_price_cents || lead.table_price_cents || 0);
+  const tableBase = Number(lead.table_price_cents || 0);
   if (reason === 'price' && base > 0) {
     const floorPct = Number(artistJson.floor_pct);
     const maxPct = Number.isFinite(floorPct) && floorPct > 0 ? Math.max(0, 100 - floorPct) : 20;
-    const offered = Math.round(base * (100 - maxPct) / 100);
+    const floorCents = tableBase > 0 ? Math.round(tableBase * Math.min(Math.max(floorPct, 0), 100) / 100) : 0;
+    const offered = Math.max(floorCents, Math.round(base * (100 - maxPct) / 100));
     fallbackOffer = { base: base, offered: offered };
     return 'Entendo! Antes de você decidir, deixa eu te fazer uma proposta: eu consigo '
       + maxPct + '% de desconto se você fechar agora, fica ' + fmt(offered) + ' em vez de ' + fmt(base)
