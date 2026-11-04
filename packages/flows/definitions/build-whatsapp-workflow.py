@@ -185,7 +185,7 @@ AGENT_TEXT_EXPR = (
     "+ ' estilo=' + ($('Start Turn').first().json.style || '?') "
     "+ ' primeira_tatuagem=' + ($('Start Turn').first().json.first_tattoo === true ? 'sim' : ($('Start Turn').first().json.first_tattoo === false ? 'nao' : '?')) "
     "+ ' significado=' + ($('Start Turn').first().json.meaning || '?') "
-    "+ (function(){ var __t = $('Start Turn').first().json.tattoo_type; return (__t === 'cover_up' || __t === 'rework') ? ' foto_tatuagem_atual=' : ' referencia_visual='; })() + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; var subject = d.assunto || (d.resumo ? String(d.resumo).split(/(?<=[.!?])\s+/)[0] : ''); if (subject) p.push(subject.slice(0, 120)); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
+    "+ (function(){ var __t = $('Start Turn').first().json.tattoo_type; return (__t === 'cover_up' || __t === 'rework') ? ' foto_tatuagem_atual=' : ' referencia_visual='; })() + (function(){ var r = $json.reference_analysis || $('Start Turn').first().json.reference_analysis; if (!r) return '?'; var d = Array.isArray(r) ? r[r.length-1] : r; if (!d) return '?'; var p=[]; var subject = d.assunto || (d.resumo ? String(d.resumo).split(/(?<=[.!?])\s+/)[0] : ''); if (subject) p.push(subject.slice(0, 120)); if (d.estilo) p.push('estilo:'+d.estilo); if (d.cores) p.push('cores:'+d.cores); if (d.local && d.local !== 'indefinido') p.push('local:'+d.local); if (d.complexidade) p.push('complexidade:'+d.complexidade); if (d.cobertura && d.cobertura !== 'indefinido') p.push('cobertura:'+d.cobertura); if (d.confianca) p.push('confianca:'+d.confianca); return p.join(' | ') || '?'; })() "
     "+ ' processo_explicado=' + ((($('Start Turn').first().json.agent_state || {}).processo_explicado) ? 'sim' : 'nao') "
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
@@ -315,11 +315,12 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
   "tipo": "desenho | foto_de_tatuagem | flash | outra",
+  "local": "braco | braco_externo | braco_interno | antebraco | peito | costas | perna | coxa | panturrilha | tornozelo | pescoco | costela | barriga | ombro | pulso | dedo | mao | pe | indefinido",
   "cobertura": "sim | nao | talvez | indefinido",
   "confianca": "alta | media | baixa",
   "observacoes": "detalhes úteis, ou string vazia"
 }
-Não estime preço. Não invente detalhes que não dá para ver. `referencia_de_tatuagem` é TRUE para qualquer imagem que possa servir de referência para uma tatuagem: desenho, flash, foto de tatuagem, animal, objeto, paisagem, personagem, foto de comida, etc. Marque FALSE somente para imagens claramente sem relação (captura de tela de texto, documento, meme, selfie, conversa). Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma. NUNCA devolva assunto ou resumo vazios: descreva o que aparece na imagem mesmo quando referencia_de_tatuagem=false."""
+Se a imagem mostrar uma tatuagem no corpo, identifique em `local` ONDE ela está, usando exatamente um dos valores da lista. Se for um desenho/flash sem corpo, ou não der para ver a região, use "indefinido". Não estime preço. Não invente detalhes que não dá para ver. `referencia_de_tatuagem` é TRUE para qualquer imagem que possa servir de referência para uma tatuagem: desenho, flash, foto de tatuagem, animal, objeto, paisagem, personagem, foto de comida, etc. Marque FALSE somente para imagens claramente sem relação (captura de tela de texto, documento, meme, selfie, conversa). Se for foto de uma tatuagem já existente, indique em observacoes se parece cobertura ou reforma. NUNCA devolva assunto ou resumo vazios: descreva o que aparece na imagem mesmo quando referencia_de_tatuagem=false."""
 
 VISION_USER_PROMPT = """Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido. O cliente pode ter mandado um desenho, um flash, uma foto de tatuagem existente ou algo que não é referência."""
 
@@ -987,9 +988,26 @@ function detectDuvidasZeradas(t) {
 // persisted "braco_externo"/"braco_interno"/"antebraco".
 const specificArm = ['braco_externo', 'braco_interno', 'antebraco'];
 const rawPlacement = detectPlacement(rawLead);
+// The photo of a cover-up/rework shows where the tattoo already is: read the
+// location from the vision analysis instead of asking the lead.
+const visionAnalysis = (function () {
+  let a = null;
+  try { a = $('Parse Reference Analysis').first().json.reference_analysis; } catch (e) {}
+  if (!a) {
+    const r = lead.reference_analysis;
+    a = Array.isArray(r) ? r[r.length - 1] : r;
+  }
+  return a || {};
+})();
+const VISION_PLACEMENTS = ['braco', 'braco_externo', 'braco_interno', 'antebraco', 'peito', 'costas', 'perna', 'coxa', 'panturrilha', 'tornozelo', 'pescoco', 'costela', 'barriga', 'ombro', 'pulso', 'dedo', 'mao', 'pe'];
+const visionPlacement = VISION_PLACEMENTS.indexOf(String(visionAnalysis.local || '')) >= 0
+  ? String(visionAnalysis.local)
+  : null;
+const coverLike = lead.tattoo_type === 'cover_up' || lead.tattoo_type === 'rework'
+  || TIPO_DB[tipoDeterministic] === 'cover_up' || TIPO_DB[tipoDeterministic] === 'rework';
 const placementNow = rawPlacement
   ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
-  : (lead.placement || null);
+  : (lead.placement || (coverLike ? visionPlacement : null));
 const bodyZoneNow = detectZone(rawLead) || lead.body_zone || null;
 const styleNow = detectStyle(rawLead) || lead.style || null;
 // The lead already described the whole upper arm; asking outer/inner again is a loop.
@@ -1472,7 +1490,7 @@ if (isCoverOrReworkLead(lead) && coverPhotoNow && /\?/.test(finalReply)
 // Cover-up/rework: never ask for size/coverage or the body location. The photo
 // already shows both, and the artist confirms anything missing in person.
 if (isCoverOrReworkLead(lead) && /\?/.test(finalReply)
-    && /partinha|área média|area media|local inteiro|tamanho|onde no corpo|qual (?:o )?local|onde (?:voc[eê] )?(?:gostaria|quer|pensa)|em que (?:parte|local)|qual (?:o )?estilo|primeira (?:tatuagem|tattoo)|j[aá] (?:tem|fez) (?:outras|alguma)/i.test(finalReply)) {
+    && /partinha|área média|area media|local inteiro|tamanho|onde no corpo|qual (?:o )?local|onde (?:voc[eê] )?(?:gostaria|quer|pensa)|onde (?:na sua pele|no seu corpo|fica)|em que (?:parte|regi[aã]o) do corpo|em que (?:parte|local)|qual (?:o )?estilo|primeira (?:tatuagem|tattoo)|j[aá] (?:tem|fez) (?:outras|alguma)/i.test(finalReply)) {
   finalReply = discoveryFallback({
     ...lead,
     tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,

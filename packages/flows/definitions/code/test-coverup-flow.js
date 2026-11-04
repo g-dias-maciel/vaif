@@ -30,7 +30,7 @@ function check(label, cond, detail) {
   }
 }
 
-function run({ start, leadText, ai, classifier, photo = false }) {
+function run({ start, leadText, ai, classifier, photo = false, analysis = null }) {
   const $ = (name) => ({
     isExecuted: name === 'Parse Reference Analysis' ? !!photo : undefined,
     first: () => {
@@ -42,7 +42,7 @@ function run({ start, leadText, ai, classifier, photo = false }) {
       }
       if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Adriano' } };
       if (name === 'Parse Reference Analysis') {
-        return { json: { reference_analysis: { assunto: 'tatuagem antiga no braço', confianca: 'alta' } } };
+        return { json: { reference_analysis: analysis || { assunto: 'tatuagem antiga no braço', confianca: 'alta' } } };
       }
       return { json: {} };
     },
@@ -211,6 +211,19 @@ check('never calls it a reference', !/vi a refer[êe]ncia/i.test(r.final_reply),
 check('never says curti', !/curti/i.test(r.final_reply), r.final_reply);
 check('does not hand off before the process', r.stage_key === 'qualificando' && !r.handoff_reason, JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
 check('asks for the new design next', /refer[eê]ncia/i.test(r.final_reply), r.final_reply);
+
+// ── 1e2. The photo tells where the tattoo is: no "where" question. ──
+console.log('=== Cover-up: location read from the photo ===');
+r = run({
+  start: start({ tattoo_type: 'rework', placement: null }),
+  leadText: '[FOTO RECEBIDA]',
+  ai: 'Onde na sua pele está a tatuagem? É no braço, nas costas, na perna?',
+  classifier: classifier(),
+  photo: true,
+  analysis: { assunto: 'flor de lótus', local: 'antebraco', confianca: 'alta' },
+});
+check('records the location from the photo', r.placement_val === 'antebraco', String(r.placement_val));
+check('does not ask where', !/onde na sua pele|onde no corpo|em que parte/i.test(r.final_reply), r.final_reply);
 
 // ── 1f. With the photo already sent, never ask where the tattoo is. ──
 console.log('=== Cover-up: no "where" question after the photo ===');
