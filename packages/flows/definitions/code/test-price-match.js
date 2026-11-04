@@ -34,13 +34,13 @@ function check(label, cond, detail) {
   }
 }
 
-function run({ start, leadText, ai, rows, classifier, critique = null }) {
+function run({ start, leadText, ai, rows, classifier, critique = null, offer = { promo_active: false } }) {
   const $ = (name) => ({
     first: () => {
       if (name === 'Start Turn') return { json: start };
       if (name === 'AI Agent') return { json: { output: ai || 'Ok!' } };
       if (name === 'Debounce Resolve') return { json: { combined_text: leadText } };
-      if (name === 'Build System Prompt') return { json: { pricing_rows: rows, offer: { promo_active: false } } };
+      if (name === 'Build System Prompt') return { json: { pricing_rows: rows, offer } };
       if (name === 'Resolve Artist') return { json: { id: 'a1', name: 'Gabriel', full_selling: true } };
       if (name === 'Parse Price Critique' && critique) return { json: { price_critique: critique } };
       return { json: {} };
@@ -192,6 +192,36 @@ r = run({
   critique: { agree: true, confidence: 'baixa', reason: 'talvez' },
 });
 check('no quote on low-confidence critique', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+
+// ── 10. The promotion multiplier applies on top of the matched row. ──
+console.log('=== Promotion + AI row ===');
+r = run({
+  start: lead(),
+  leadText: 'quero no braço, médio',
+  rows: DIFFERENT_SIDES,
+  offer: { promo_active: true, name: 'Leve 2 pelo valor de 1', multiplier: 2 },
+  classifier: classifier({ match: true, placement: 'braco_externo', body_zone: 'medio', confidence: 'alta', reason: 'parte de fora' }),
+  critique: { agree: true, confidence: 'alta', reason: 'ok' },
+});
+check('doubles the matched row price', /R\$\s*400,00/.test(r.final_reply), r.final_reply);
+check('does not quote the raw row price', !/R\$\s*200,00/.test(r.final_reply), r.final_reply);
+check('mentions the promotion', /promo[cç][aã]o/i.test(r.final_reply), r.final_reply);
+check('records base and offered', r.quote_base_cents === 20000 && r.quote_offered_cents === 40000,
+  JSON.stringify({ b: r.quote_base_cents, o: r.quote_offered_cents }));
+check('marks it as a promotion quote', r.offer_quoted === true, String(r.offer_quoted));
+
+// ── 11. Same with the critic vetoing: no promo quote goes out. ──
+console.log('=== Promotion + critic veto ===');
+r = run({
+  start: lead(),
+  leadText: 'quero no braço, médio',
+  rows: DIFFERENT_SIDES,
+  offer: { promo_active: true, name: 'Leve 2 pelo valor de 1', multiplier: 2 },
+  classifier: classifier({ match: true, placement: 'braco_externo', body_zone: 'medio', confidence: 'alta', reason: 'chute' }),
+  critique: { agree: false, confidence: 'alta', reason: 'não disse o lado' },
+});
+check('no price at all', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+check('no promotion quote recorded', r.quote_offered_cents === null, String(r.quote_offered_cents));
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

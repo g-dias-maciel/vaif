@@ -76,6 +76,7 @@ Se o lead pediu, aceitou ou está negociando um orçamento, escolha EXATAMENTE U
 - NUNCA invente preço, linha ou combinação que não esteja na tabela. O sistema usa apenas a linha escolhida para buscar o valor; se ela não existir, o atendimento vai para o artista.
 - Use `match: false` quando: o local não estiver claro, a cobertura não estiver clara, a região tiver partes com preços diferentes ("braço" sem dizer externo/interno), ou qualquer dúvida.
 - Se a linha depender de algo que o lead não disse, NÃO adivinhe.
+- Escolha a linha pelo LOCAL e COBERTURA, nunca pelo valor: se houver promoção ativa, o sistema aplica o multiplicador depois. Não calcule nem sugira preço promocional.
 
 ### Checagem crítica (obrigatória)
 
