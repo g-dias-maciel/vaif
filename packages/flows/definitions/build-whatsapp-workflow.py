@@ -1280,10 +1280,10 @@ if (isCoverOrRework && /R\$\s*\d/.test(finalReply)) {
     .trim();
 }
 
-// Cover-up/rework: never ask for size/coverage. The artist sizes it in
-// person; the size question only delays the handoff.
+// Cover-up/rework: never ask for size/coverage or the body location. The photo
+// already shows both, and the artist confirms anything missing in person.
 if (isCoverOrReworkLead(lead) && /\?/.test(finalReply)
-    && /partinha|área média|area media|local inteiro|tamanho/i.test(finalReply)) {
+    && /partinha|área média|area media|local inteiro|tamanho|onde no corpo|qual (?:o )?local|onde (?:voc[eê] )?(?:gostaria|quer|pensa)|em que (?:parte|local)|qual (?:o )?estilo/i.test(finalReply)) {
   finalReply = discoveryFallback({
     ...lead,
     tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
@@ -1523,10 +1523,13 @@ if (offerLive && !goingToArtist) {
 // ── Pending question ──
 // Persist which discovery question the reply asks so the next turn can read a
 // short answer ("isso", "nov") against it.
-function detectPendingQuestion(reply) {
+function detectPendingQuestion(reply, coverFlow) {
   const text = String(reply || '');
   if (!/\?/.test(text)) return null;
   if (/nova.*cobertura|cobertura.*reforma|nova ou cobrir|nova, uma cobertura/i.test(text)) return 'tipo';
+  // A cover-up/rework only asks for the photo; placement, size and style are
+  // read from the photo by the artist.
+  if (coverFlow) return null;
   if (/primeira tatuagem/i.test(text)) return 'primeira_tatuagem';
   if (/onde no corpo|qual (?:o )?local/i.test(text)) return 'placement';
   if (/partinha|área média|area media|local inteiro|fechamento/i.test(text)) return 'body_zone';
@@ -1648,7 +1651,7 @@ return [{ json: {
     preco_liberado: precoLiberadoJa || quoteActuallySent,
     duvidas_eliminadas: duvidasEliminadas,
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
-    pending_question: detectPendingQuestion(audioFinalReply),
+    pending_question: detectPendingQuestion(audioFinalReply, isCoverOrRework),
     audio_count: audioCountNext,
   },
 } }];"""

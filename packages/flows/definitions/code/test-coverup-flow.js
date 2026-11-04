@@ -143,6 +143,18 @@ check('never says curti', !/curti/i.test(r.final_reply), r.final_reply);
 check('does not hand off before the process', r.stage_key === 'qualificando' && !r.handoff_reason, JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
 check('invites the process explanation instead', /processo de criação/i.test(r.final_reply), r.final_reply);
 
+// ── 1f. With the photo already sent, never ask where the tattoo is. ──
+console.log('=== Cover-up: no "where" question after the photo ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga no antebraço' }] }),
+  leadText: 'Daniel',
+  ai: 'Prazer em te conhecer, Daniel! Onde você gostaria de fazer a cobertura dessa tatuagem?',
+  classifier: classifier(),
+});
+check('does not ask where', !/onde voc[eê] gostaria|onde no corpo|qual (?:o )?local/i.test(r.final_reply), r.final_reply);
+check('moves on to the process', /processo de criação/i.test(r.final_reply), r.final_reply);
+check('the placement is not recorded as a pending question', r.chat_state.pending_question === null, String(r.chat_state.pending_question));
+
 // ── 2. After the process explanation, hand off without a price. ──
 console.log('=== Cover-up: process explained ===');
 r = run({
