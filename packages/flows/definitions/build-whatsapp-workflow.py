@@ -1064,7 +1064,7 @@ function photoConfirmationQuestion(lead) {
   const parts = [];
   if (placementNow && place[placementNow]) parts.push(place[placementNow]);
   if (bodyZoneNow && size[bodyZoneNow]) parts.push(size[bodyZoneNow]);
-  if (styleNow && styleFromVision) parts.push('estilo ' + String(styleNow).replace(/_/g, ' '));
+  if (styleNow && (styleFromVision || state.style_from_photo === true)) parts.push('estilo ' + String(styleNow).replace(/_/g, ' '));
   const what = parts.length ? 'que é ' + parts.join(', ') : 'a tattoo da foto';
   return 'Vi na foto ' + what + '. É isso mesmo?';
 }
@@ -1082,7 +1082,7 @@ function discoveryFallback(lead) {
   if (!bodyZoneNow) return 'Nesse local, você quer cobrir só uma partinha, uma área média, ou o local inteiro?';
   if (!styleNow) return 'E qual estilo você tem em mente?';
   // Everything came from the photo: confirm before moving on.
-  if (photoDerived && !photoConfirmed && lead.name) return photoConfirmationQuestion(lead);
+  if (photoDerived && !photoConfirmed) return photoConfirmationQuestion(lead);
   return 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
 }
 function nextDiscoveryQuestion(lead) {
@@ -1675,12 +1675,31 @@ if (!isCoverOrRework && !triageOnly && !discoveryComplete && lead.name && !/\?/.
 }
 
 // The photo supplied the placement/size: confirm with the lead before the
-// process (the model tends to assume them and move on).
-if (photoDerived && !photoConfirmed && discoveryComplete && lead.name && !isCoverOrRework && !triageOnly) {
+// process. The name is often still null on this very turn (it is extracted
+// from the lead's message now), so gate on the reply instead.
+const asksName = /como posso te chamar|qual (?:é |e )?o seu nome|seu nome/i.test(finalReply);
+if (photoDerived && !photoConfirmed && discoveryComplete && !asksName && !isCoverOrRework && !triageOnly) {
   finalReply = photoConfirmationQuestion(lead);
   finalPipeline = current;
   finalEvent = null;
   finalHandoff = null;
+}
+
+// The lead already sent an image: asking for another reference/photo is
+// redundant and pushes them to repeat themselves.
+if (hadAnyImage && !isCoverOrRework && !triageOnly
+    && /(?:manda|mandar|envie|enviar|mostrar|compartilhar)[^?]{0,40}(?:foto|imagem|refer[eê]ncia)|outra (?:foto|imagem|refer[eê]ncia)/i.test(finalReply)) {
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
+}
+
+// During discovery, two questions in the same message overwhelm the lead:
+// keep the first one (the next missing field).
+if (!isCoverOrRework && !discoveryComplete && !/processo de cria/i.test(finalReply)) {
+  const chunks = String(finalReply).split(/(?<=\?)\s+/);
+  if (chunks.length > 1) finalReply = chunks[0].trim();
 }
 
 // The model sometimes explains the process before the qualification is done,
@@ -1834,20 +1853,29 @@ if (offerLive && !goingToArtist) {
 function detectPendingQuestion(reply, coverFlow) {
   const text = String(reply || '');
   if (!/\?/.test(text)) return null;
-  if (/é isso mesmo\?|vi na foto .*é isso/i.test(text)) return 'confirmar_foto';
-  if (/nova.*cobertura|cobertura.*reforma|nova ou cobrir|nova, uma cobertura/i.test(text)) return 'tipo';
+  // Only the last question sentence counts: a statement such as "que é a sua
+  // primeira tatuagem" followed by "como posso te chamar?" is not a pending
+  // first-tattoo question.
+  const sentences = text.split(/(?<=[.!?])\s+/).filter(Boolean);
+  let question = '';
+  for (let i = sentences.length - 1; i >= 0; i--) {
+    if (/\?\s*$/.test(sentences[i])) { question = sentences[i]; break; }
+  }
+  if (!question) question = text;
+  if (/é isso mesmo\?|vi na foto .*é isso/i.test(question)) return 'confirmar_foto';
+  if (/nova.*cobertura|cobertura.*reforma|nova ou cobrir|nova, uma cobertura/i.test(question)) return 'tipo';
   // A cover-up/rework asks for two photos and nothing else.
   if (coverFlow) {
     // The reference question comes first: a reply that acknowledges the current
     // tattoo and then asks for the design must not be read as "photo again".
-    if (/refer[eê]ncia|desenho que voc[eê] quer|por cima|no lugar/i.test(text)) return 'foto_nova';
-    if (/foto da tatuagem|foto dela|manda uma foto/i.test(text)) return 'foto_atual';
+    if (/refer[eê]ncia|desenho que voc[eê] quer|por cima|no lugar/i.test(question)) return 'foto_nova';
+    if (/foto da tatuagem|foto dela|manda uma foto/i.test(question)) return 'foto_atual';
     return null;
   }
-  if (/primeira tatuagem/i.test(text)) return 'primeira_tatuagem';
-  if (/onde no corpo|qual (?:o )?local/i.test(text)) return 'placement';
-  if (/partinha|área média|area media|local inteiro|fechamento/i.test(text)) return 'body_zone';
-  if (/qual (?:o )?estilo|estilo (?:voc[eê]|tem)/i.test(text)) return 'style';
+  if (/primeira tatuagem/i.test(question)) return 'primeira_tatuagem';
+  if (/onde no corpo|qual (?:o )?local/i.test(question)) return 'placement';
+  if (/partinha|área média|area media|local inteiro|fechamento/i.test(question)) return 'body_zone';
+  if (/qual (?:o )?estilo|estilo (?:voc[eê]|tem)/i.test(question)) return 'style';
   return null;
 }
 

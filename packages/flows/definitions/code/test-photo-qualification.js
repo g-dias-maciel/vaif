@@ -145,6 +145,26 @@ r = run({
 check('uses the lead style', r.style_val === 'realismo', String(r.style_val));
 check('does not ask the style again', !/qual estilo/i.test(r.final_reply), r.final_reply);
 
+// ── 1d. The persisted provenance keeps the confirmation alive on later turns. ──
+console.log('=== Confirmation on a later turn (name still null) ===');
+r = run({
+  start: lead({
+    name: null,
+    agent_state: {
+      processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false,
+      preco_liberado: false, pending_question: null,
+      placement_from_photo: true, zone_from_photo: true, style_from_photo: true,
+    },
+  }),
+  leadText: 'lilo',
+  ai: 'Ótimo, Lilo! Você poderia confirmar o estilo? E gostaria de mostrar outra imagem?',
+  classifier: classifier(),
+});
+check('asks the confirmation with place, size and style',
+  /vi na foto/i.test(r.final_reply) && /antebraço/i.test(r.final_reply) && /médio/i.test(r.final_reply) && /estilo/i.test(r.final_reply),
+  r.final_reply);
+check('records the confirmation question', r.chat_state.pending_question === 'confirmar_foto', String(r.chat_state.pending_question));
+
 // ── 2. The lead confirms. ──
 console.log('=== Lead confirms the photo ===');
 r = run({
@@ -167,6 +187,18 @@ r = run({
 });
 check('marks the photo as confirmed', r.chat_state.photo_confirmed === true, JSON.stringify({ c: r.chat_state.photo_confirmed }));
 check('stops asking for confirmation', !/é isso mesmo\?/i.test(r.final_reply), r.final_reply);
+
+// ── 2b. A reference request after the photo is replaced. ──
+console.log('=== No reference request when the photo is already there ===');
+r = run({
+  start: lead({ placement: null, body_zone: null, style: null }),
+  leadText: 'oi',
+  ai: 'Legal! Você tem alguma referência ou gostaria de mostrar outra imagem?',
+  classifier: classifier(),
+  analysis: { tipo: 'foto_de_tatuagem', local: 'antebraco' },
+});
+check('does not ask for another image', !/outra imagem|alguma refer[eê]ncia/i.test(r.final_reply), r.final_reply);
+check('asks the missing field instead', /partinha|área média|local inteiro|qual estilo/i.test(r.final_reply), r.final_reply);
 
 // ── 3. The photo has no size: ask for it. ──
 console.log('=== Photo without a size asks for it ===');

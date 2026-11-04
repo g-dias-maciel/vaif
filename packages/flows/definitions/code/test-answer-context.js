@@ -201,6 +201,18 @@ r = run({
 });
 check('the type stays empty', r.tattoo_type_val === null, String(r.tattoo_type_val));
 
+// ── 2b. A statement with "primeira tatuagem" plus the name question is not a
+//        pending first-tattoo question. ──
+console.log('=== Only the last question sentence sets the pending question ===');
+r = run({
+  start: lead(),
+  leadText: 'oi',
+  ai: 'Vi que você quer uma flor de lótus e que é a sua primeira tatuagem. Antes de seguirmos, como posso te chamar?',
+  classifier: classifier({}),
+});
+check('the statement does not become a pending question', r.chat_state.pending_question === null,
+  String(r.chat_state.pending_question));
+
 // ── 3. The pending question is persisted for the next turn. ──
 console.log('=== Pending question round-trip ===');
 r = run({
