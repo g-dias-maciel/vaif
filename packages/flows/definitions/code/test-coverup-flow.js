@@ -93,8 +93,8 @@ check('asks for a photo of the existing tattoo', /manda uma foto/i.test(r.final_
 check('does not ask for the size', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
 check('no price before the process', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
 
-// ── 1b. With the photo, the size question is replaced and the process comes. ──
-console.log('=== Cover-up: photo received, no size question ===');
+// ── 1b. After the current-tattoo photo, ask what the lead wants on top. ──
+console.log('=== Cover-up: asks for the new design reference ===');
 r = run({
   start: start({ tattoo_type: 'cover_up', placement: 'braco' }),
   leadText: 'quero cobrir uma tattoo no braço',
@@ -103,7 +103,36 @@ r = run({
   photo: true,
 });
 check('does not ask for the size once the photo arrived', !/partinha|área média|area media|local inteiro/i.test(r.final_reply), r.final_reply);
+check('asks for a reference of the new design', /refer[eê]ncia/i.test(r.final_reply), r.final_reply);
+check('the cover photo is recorded', r.chat_state.cover_photo === true, JSON.stringify({ c: r.chat_state.cover_photo }));
+check('the question is tracked as the new-design photo', r.chat_state.pending_question === 'foto_nova', String(r.chat_state.pending_question));
+
+// ── 1b2. With both photos, the process comes. ──
+console.log('=== Cover-up: both photos in ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga' }, { assunto: 'flor grande' }] }),
+  leadText: '[FOTO RECEBIDA]',
+  ai: 'Legal!',
+  classifier: classifier(),
+  photo: true,
+});
 check('moves on to the process', /processo de criação/i.test(r.final_reply), r.final_reply);
+check('the new reference is recorded', r.chat_state.new_reference === true, JSON.stringify({ n: r.chat_state.new_reference }));
+
+// ── 1b3. The new-design photo is acknowledged as a reference. ──
+console.log('=== Cover-up: new design acknowledgement ===');
+r = run({
+  start: start({ tattoo_type: 'cover_up', agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+    cover_photo: true, new_reference: false, new_ref_asked: true, pending_question: 'foto_nova',
+  } }),
+  leadText: '[FOTO RECEBIDA]',
+  ai: 'Legal!',
+  classifier: classifier(),
+  photo: true,
+});
+check('acknowledges it as a reference', /refer[eê]ncia/i.test(r.final_reply) && /curti/i.test(r.final_reply), r.final_reply);
+check('does not call it the tattoo to cover', !/tatuagem que você quer cobrir/i.test(r.final_reply), r.final_reply);
 
 // ── 1c. A later size question is replaced too, while the photo is missing. ──
 console.log('=== Cover-up: size question after the process is blocked ===');
@@ -131,7 +160,10 @@ check('asks for a photo to reformar', /reformar/i.test(r.final_reply) && /foto/i
 // ── 1d2. Never ask "primeira tatuagem" for a cover-up. ──
 console.log('=== Cover-up: no first-tattoo question ===');
 r = run({
-  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga' }] }),
+  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga' }], agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+    cover_photo: true, new_reference: true,
+  } }),
   leadText: 'Danilo',
   ai: 'Prazer, Danilo! Primeiro, essa tatuagem que você quer cobrir é a sua primeira tatuagem ou você já tem outras?',
   classifier: classifier(),
@@ -149,15 +181,18 @@ r = run({
   photo: true,
 });
 check('calls it the tattoo to cover', /foto da tatuagem que você quer cobrir/i.test(r.final_reply), r.final_reply);
-check('never calls it a reference', !/refer[êe]ncia/i.test(r.final_reply), r.final_reply);
+check('never calls it a reference', !/vi a refer[êe]ncia/i.test(r.final_reply), r.final_reply);
 check('never says curti', !/curti/i.test(r.final_reply), r.final_reply);
 check('does not hand off before the process', r.stage_key === 'qualificando' && !r.handoff_reason, JSON.stringify({ s: r.stage_key, h: r.handoff_reason }));
-check('invites the process explanation instead', /processo de criação/i.test(r.final_reply), r.final_reply);
+check('asks for the new design next', /refer[eê]ncia/i.test(r.final_reply), r.final_reply);
 
 // ── 1f. With the photo already sent, never ask where the tattoo is. ──
 console.log('=== Cover-up: no "where" question after the photo ===');
 r = run({
-  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga no antebraço' }] }),
+  start: start({ tattoo_type: 'cover_up', reference_analysis: [{ assunto: 'tatuagem antiga no antebraço' }], agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+    cover_photo: true, new_reference: true,
+  } }),
   leadText: 'Daniel',
   ai: 'Prazer em te conhecer, Daniel! Onde você gostaria de fazer a cobertura dessa tatuagem?',
   classifier: classifier(),

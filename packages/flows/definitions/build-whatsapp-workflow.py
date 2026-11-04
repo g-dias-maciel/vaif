@@ -635,6 +635,36 @@ const g = parsed.price_gate || {};
 const lead = $('Start Turn').first().json;
 const state = lead.agent_state || {};
 const agentOutput = $('AI Agent').first().json.output || '';
+
+// ── Cover-up/rework photo state ──
+// Two different images: the tattoo that exists today and the design the lead
+// wants on top. The vision analysis alone cannot tell them apart, so the
+// question that was pending decides which one just arrived.
+let visionTurn = false;
+try { visionTurn = $('Parse Reference Analysis').isExecuted === true; } catch (e) {}
+const pendingNow = state.pending_question || null;
+const hadAnyImage = (function () {
+  const r = lead.reference_analysis;
+  return Array.isArray(r) ? r.length > 0 : !!(r && Object.keys(r).length);
+})();
+// Projects created before this change only ever asked for the current tattoo.
+let coverPhotoNow = state.cover_photo === true
+  || (state.cover_photo === undefined && !state.new_reference && hadAnyImage);
+let newReferenceNow = state.new_reference === true;
+const newRefAsked = state.new_ref_asked === true;
+if (visionTurn) {
+  if (pendingNow === 'foto_nova' || (pendingNow !== 'foto_atual' && coverPhotoNow)) {
+    newReferenceNow = true;
+  } else {
+    coverPhotoNow = true;
+  }
+  // The image is a design reference when the current tattoo photo is already
+  // in and this one was not requested as the current tattoo.
+  var visionIsNewReference = pendingNow === 'foto_nova' || (pendingNow !== 'foto_atual' && coverPhotoNow && newReferenceNow);
+} else {
+  var visionIsNewReference = false;
+}
+
 // Full selling disabled = triage mode: qualify, then hand off. The agent must
 // never quote, schedule or explain the process in this mode.
 const artist = $('Resolve Artist').first().json || {};
@@ -841,14 +871,11 @@ const leadGaveSpecificArea = /ombro ao cotovelo|ombro ate o cotovelo/.test(norma
 // "parte de fora e de dentro" means BOTH sides, not the first one mentioned.
 const leadGaveBothSides = /(?:fora|externa).{0,18}(?:e|mais).{0,18}(?:dentro|interna)|(?:dentro|interna).{0,18}(?:e|mais).{0,18}(?:fora|externa)|os dois lados|ambos os lados/.test(normalizeText(rawLead));
 
-function hasReferencePhoto(lead) {
-  const ref = lead.reference_analysis;
-  const persisted = Array.isArray(ref)
-    ? ref.length > 0
-    : !!(ref && Object.keys(ref).length);
-  let thisTurn = false;
-  try { thisTurn = $('Parse Reference Analysis').isExecuted === true; } catch (e) {}
-  return persisted || thisTurn;
+function newReferenceQuestion(lead) {
+  const type = lead.tattoo_type || TIPO_DB[tipoDeterministic] || null;
+  return type === 'rework'
+    ? 'E como você imagina a reforma? Me manda uma referência do desenho que você quer no lugar?'
+    : 'E como você imagina a cobertura? Me manda uma referência do desenho que você quer por cima?';
 }
 function isCoverOrReworkLead(lead) {
   const type = lead.tattoo_type || TIPO_DB[tipoDeterministic] || null;
@@ -862,9 +889,10 @@ function coverPhotoQuestion(lead) {
 }
 function discoveryFallback(lead) {
   // Cover-up/rework: the artist evaluates size, style and price in person, so
-  // the SDR only needs a photo of the existing tattoo.
+  // the SDR only needs the two photos (current tattoo + the desired design).
   if (isCoverOrReworkLead(lead)) {
-    if (!hasReferencePhoto(lead)) return coverPhotoQuestion(lead);
+    if (!coverPhotoNow) return coverPhotoQuestion(lead);
+    if (!newReferenceNow && !newRefAsked) return newReferenceQuestion(lead);
     return 'Perfeito, já tenho o que preciso. Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
   }
   if (!lead.tattoo_type) return 'Só mais uma coisinha pra eu te ajudar certinho: essa tatuagem que você quer é uma nova, uma cobertura ou uma reforma?';
@@ -877,9 +905,9 @@ function discoveryFallback(lead) {
 function nextDiscoveryQuestion(lead) {
   // Same rule: a cover-up/rework never goes through size/style discovery.
   if (isCoverOrReworkLead(lead)) {
-    return hasReferencePhoto(lead)
-      ? 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?'
-      : coverPhotoQuestion(lead);
+    if (!coverPhotoNow) return coverPhotoQuestion(lead);
+    if (!newReferenceNow && !newRefAsked) return newReferenceQuestion(lead);
+    return 'Vou te explicar rapidinho como funciona o processo de criação, pode ser?';
   }
   const ref = Array.isArray(lead.reference_analysis)
     ? (lead.reference_analysis[lead.reference_analysis.length - 1] || {})
@@ -1072,9 +1100,12 @@ let finalReply = priceGateViolation
 // process explanation has to come first (the handoff lands on the next turn).
 if (isCoverOrRework && !processoExplicado
     && /vou (?:te )?passar|deixa eu te passar|passar seu atendimento/i.test(finalReply)) {
-  const artistName = $('Resolve Artist').first().json.name || 'artista';
-  finalReply = 'Vou te explicar rapidinho como funciona o processo de criação do '
-    + artistName + ', pode ser?';
+  // Ask whatever is still missing (the other photo, or the process
+  // explanation) instead of sending an early handoff.
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
 }
 
 const goingToArtist = finalPipeline === 'aguardando_artista' || finalPipeline === 'bloqueado' || !!finalHandoff;
@@ -1294,7 +1325,7 @@ if (isCoverOrReworkLead(lead) && /\?/.test(finalReply)
 // tattoo arrived, hand off for pricing and scheduling. No price, no doubts
 // question. Without the photo there is nothing for the artist to evaluate.
 const cannotSendPhoto = /(?:n[aã]o|sem)\s+(?:tenho|consigo|h[aá]|tem)\s*(?:mais)?\s*(?:uma\s+)?(?:foto|fotos|fotografia|imagem)|apagou|n[aã]o tenho mais/i.test(rawLead);
-const coverReadyForHandoff = hasReferencePhoto(lead) || cannotSendPhoto;
+const coverReadyForHandoff = coverPhotoNow || cannotSendPhoto;
 if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && !coverReadyForHandoff) {
   // Keep the process explanation, ask for the photo, stay in qualification.
   if (!/foto|imagem/i.test(finalReply)) {
@@ -1449,12 +1480,15 @@ const depositRequested = hasDeposit && hasActiveBooking && pixKey !== '' && comp
 // ── Vision acknowledgement: the model has the image block in its system
 //    prompt, but it sometimes ignores it and asks again. On the turn that
 //    actually analyzed a photo, make sure the reply mentions the reference.
-let visionTurn = false;
-try {
-  visionTurn = $('Parse Reference Analysis').isExecuted === true;
-} catch (e) {
-  visionTurn = false;
+// A cover-up photo turn that ends without a question leaves the lead hanging:
+// ask for the other photo, or move on to the process explanation.
+if (isCoverOrRework && visionTurn && !processoExplicado && !/\?/.test(finalReply)) {
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
 }
+
 if (visionTurn && lead.is_new !== true) {
   const vision = $('Parse Reference Analysis').first().json.reference_analysis || {};
   const subject = String(vision.assunto || vision.resumo || '')
@@ -1463,9 +1497,11 @@ if (visionTurn && lead.is_new !== true) {
     .replace(/[.!?]+$/, '')
     .trim()
     .slice(0, 90);
-  const already = /refer[êe]ncia|curti|(?:vi|recebi).{0,20}(?:foto|imagem)/i.test(finalReply);
+  // Only an actual acknowledgement counts; the reply may legitimately ask for
+  // a "referência" without having acknowledged the image yet.
+  const already = /(?:vi|recebi|chegou).{0,25}(?:foto|imagem|refer[êe]ncia)|curti/i.test(finalReply);
   if (subject && vision.referencia_de_tatuagem !== false && !already) {
-    if (isCoverOrRework) {
+    if (isCoverOrRework && !visionIsNewReference) {
       // The photo is the tattoo to be covered/reworked, never a reference.
       finalReply = 'Vi a foto da tatuagem que você quer '
         + (currentType === 'rework' ? 'reformar' : 'cobrir') + ': ' + subject + '. ' + finalReply;
@@ -1527,9 +1563,14 @@ function detectPendingQuestion(reply, coverFlow) {
   const text = String(reply || '');
   if (!/\?/.test(text)) return null;
   if (/nova.*cobertura|cobertura.*reforma|nova ou cobrir|nova, uma cobertura/i.test(text)) return 'tipo';
-  // A cover-up/rework only asks for the photo; placement, size and style are
-  // read from the photo by the artist.
-  if (coverFlow) return null;
+  // A cover-up/rework asks for two photos and nothing else.
+  if (coverFlow) {
+    // The reference question comes first: a reply that acknowledges the current
+    // tattoo and then asks for the design must not be read as "photo again".
+    if (/refer[eê]ncia|desenho que voc[eê] quer|por cima|no lugar/i.test(text)) return 'foto_nova';
+    if (/foto da tatuagem|foto dela|manda uma foto/i.test(text)) return 'foto_atual';
+    return null;
+  }
   if (/primeira tatuagem/i.test(text)) return 'primeira_tatuagem';
   if (/onde no corpo|qual (?:o )?local/i.test(text)) return 'placement';
   if (/partinha|área média|area media|local inteiro|fechamento/i.test(text)) return 'body_zone';
@@ -1586,6 +1627,8 @@ if (isAudio) {
     audioHandoff = null;
   }
 }
+
+const pendingNext = detectPendingQuestion(audioFinalReply, isCoverOrRework);
 
 // Quote state to persist: the deterministic quote (when the model did not
 // produce one) becomes a real `quotes` row via the Ensure Quote node.
@@ -1651,7 +1694,10 @@ return [{ json: {
     preco_liberado: precoLiberadoJa || quoteActuallySent,
     duvidas_eliminadas: duvidasEliminadas,
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
-    pending_question: detectPendingQuestion(audioFinalReply, isCoverOrRework),
+    pending_question: pendingNext,
+    cover_photo: isCoverOrRework ? coverPhotoNow : undefined,
+    new_reference: isCoverOrRework ? newReferenceNow : undefined,
+    new_ref_asked: isCoverOrRework ? (newRefAsked || pendingNext === 'foto_nova') : undefined,
     audio_count: audioCountNext,
   },
 } }];"""
