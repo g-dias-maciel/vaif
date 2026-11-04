@@ -39,6 +39,9 @@ def load_json(name):
 with open(os.path.join(FLOWS_ROOT, "prompts", "beatriz-system.md")) as f:
     template = f.read()
 
+with open(os.path.join(FLOWS_ROOT, "prompts", "classify-conversation.md")) as f:
+    classify_template = f.read()
+
 print("=== Template placeholders ===")
 expected = ["{{NOME}}", "{{INSTAGRAM}}", "{{PIX}}", "{{SINAL}}", "{{PISO}}", "{{DESCONTO_MAX}}", "{{TABELA_PRECOS}}", "{{OFFER}}", "{{ESTILOS}}", "{{NAO_FAZ}}", "{{MODO_VENDA}}", "{{CIDADE}}", "{{ENDERECO}}"]
 for ph in expected:
@@ -509,10 +512,10 @@ check("a corrected new tattoo recovers from aguardando_artista",
       "recoveredFromHandoff" in parse_js
       and "finalPipeline = 'qualificando'" in parse_js
       and "nextDiscoveryQuestion" in parse_js)
-check("multi-message acknowledgements clear the doubts gate",
-      "const acknowledgement" in parse_js
-      and "const noDoubt" in parse_js
-      and "const doubtTalk" in parse_js)
+check("doubts are cleared by the classifier, with a short-message guard",
+      "parsed.doubts_cleared === true" in parse_js
+      and "trim().length <= 160" in parse_js
+      and "doubts_cleared" in classify_template)
 check("prompt has the cover-up/rework qualify-process-handoff flow",
       "## Cobertura e reforma" in template
       and "NUNCA dê preço" in template

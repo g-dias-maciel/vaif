@@ -938,55 +938,6 @@ function detectFirstTattoo(t) {
   if (/já tenho|já fiz|já tatuei|tenho várias|tenho algumas|não é a primeira|segunda tattoo|terceira tattoo/.test(t)) return false;
   return null;
 }
-function detectDuvidasZeradas(t) {
-  if (!t) return false;
-  const messages = t.split(/\\n+/).map(s => s.trim().toLowerCase()).filter(Boolean);
-  if (!messages.length) return false;
-
-  // Common Portuguese confirmations the regex lists below used to miss.
-  if (/(?:n[aã]o (?:ficou|tem|tenho)|nenhuma|sem)\s+(?:nenhuma\s+)?d[uú]vida(?:\s+nenhuma)?/i.test(t)) return true;
-  if (/^(?:pode|manda|me manda|quero)\s+(?:passar|mandar|ver|saber)?\s*(?:o\s+)?(?:valor|pre[cç]o|or[cç]amento)\\b/i.test(t)) return true;
-  const clearAnswer = /^(?:n[aã]o|n|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|pode mandar|manda o (?:valor|pre[cç]o)|pode falar|[eé] isso|tranquilo|encerrou|s[oó] isso|nada mais|mais nada)[.!]?$/i;
-  const bareNo = /^(?:n[aã]o|n)[.!]?$/i;
-  const priceRequest = /^(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o)|(?:me\\s+)?passa\\s+(?:o\\s+)?(?:valor|pre[cç]o)|(?:manda|me\\s+manda)\\s+(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i;
-  const acknowledgement = /^(?:beleza|blz|ok|okay|perfeito|combinado|entendi|claro|tranquil[oa]|show|demais|pode ser|isso|sim|legal|massa|top|boa|tudo (?:bem|tranquilo|certo|joia|ótimo|otimo))[.!]?$/i;
-  const noDoubt = /^(?:n[aã]o|n|acho que n[aã]o|sem d[uú]vidas?|sem mais (?:d[uú]vidas?|perguntas?)|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|s[oó] o (?:pre[cç]o|valor)(?: mesmo)?|s[oó] isso|nada mais|mais nada)[.!]?$/i;
-  const doubtTalk = /(?:tenho|ficou|fiquei|surgiu|apareceu)[^.\\n]{0,25}(?:d[uú]vida|pergunta)/i;
-  const strongNoDoubt = /(?:s[oó] isso(?: mesmo)?|é isso(?: mesmo)?|sem (?:mais )?d[uú]vidas?|n[aã]o tenho (?:mais )?(?:d[uú]vidas?|perguntas?)|tudo certo)/i;
-  const priceTalk = /(?:valores?|pre[cç]os?|or[cç]amento|formas? de pagamento|quanto (?:fica|custa)|parcel)/i;
-
-  // A longer WhatsApp/audio sentence can confirm and ask for the price at the
-  // same time: "Perfeito, só isso mesmo. Agora queria saber os valores...".
-  if (strongNoDoubt.test(t) && !doubtTalk.test(t)) return true;
-  if (/(?:perfeito|beleza|ok|okay|combinado|entendi|pode ser)/i.test(t)
-      && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
-    return true;
-  }
-  if (/^(?:n[aã]o|n)\\b/i.test(t) && !/n[aã]o sei/i.test(t)
-      && priceTalk.test(t) && !doubtTalk.test(t) && t.length < 240) {
-    return true;
-  }
-
-  // WhatsApp bursts often answer with several short messages: "beleza",
-  // "não", "acho que não", "só o preço mesmo". Any clear confirmation plus
-  // only acknowledgements/price requests (and no real doubt) clears the gate.
-  if (messages.some(m => acknowledgement.test(m) || noDoubt.test(m))
-      && messages.every(m => acknowledgement.test(m) || noDoubt.test(m) || priceRequest.test(m) || clearAnswer.test(m))
-      && !t.includes('?')
-      && !doubtTalk.test(t)) {
-    return true;
-  }
-  if (clearAnswer.test(messages[0]) && (messages.length === 1 || messages.slice(1).every(m => priceRequest.test(m)))) return true;
-  // WAHA debounce joins burst messages with newlines. A bare "não" followed
-  // only by a price request is an explicit checkpoint answer plus a request,
-  // not an unresolved doubt. Other follow-up questions do not qualify.
-  if (bareNo.test(messages[0]) && messages.length > 1 && messages.slice(1).every(m => priceRequest.test(m))) return true;
-  // Also accept the same two-part answer when sent as one WhatsApp message.
-  return /^(?:n[aã]o|n)[,;:]?\\s+(?:(?:e\\s*)?quanto(?:\\s+que)?\\s+(?:fica|custa)|qual\\s+(?:[eé]\\s+)?(?:o\\s+)?(?:valor|pre[cç]o))[?!.,\\s]*$/i.test(messages.join(' '));
-}
-// Qualification values for THIS turn: the lead's current message wins over
-// the persisted state. A generic "braco" never downgrades a more specific
-// persisted "braco_externo"/"braco_interno"/"antebraco".
 const specificArm = ['braco_externo', 'braco_interno', 'antebraco'];
 // The classifier already reads the lead's message; its enum values fill the
 // gaps when the keyword list misses a typo or an unusual phrasing.
@@ -1090,8 +1041,11 @@ const processoExplicado = processoDeterministic || state.processo_explicado === 
 const checkpointWasPending = state.aguardando_confirmacao_duvidas === true;
 // The model may clear the checkpoint too, but only on a short/affirmative
 // message: this gate releases the price.
-const explicitClearThisTurn = checkpointWasPending && (detectDuvidasZeradas(rawLead)
-  || (parsed.doubts_cleared === true && String(rawLead).trim().length <= 160));
+// The classifier reads whether the lead cleared the doubts; the message must
+// also be short/affirmative because this opens the price gate.
+const explicitClearThisTurn = checkpointWasPending
+  && parsed.doubts_cleared === true
+  && String(rawLead).trim().length <= 160;
 const duvidasEliminadas = state.duvidas_eliminadas === true || explicitClearThisTurn;
 
 const current = lead.stage_key || 'novo';
@@ -1100,7 +1054,12 @@ const isCoverOrRework = currentType === 'cover_up' || currentType === 'rework';
 const precoLiberadoJa = state.preco_liberado === true || ['orcamento_enviado', 'aguardando_deposito', 'agendado'].includes(current);
 // Clearing doubts authorizes a quote, but the price is not considered
 // liberated until an actual quote has been sent.
-const gateJustOpened = processoExplicado && duvidasEliminadas;
+// Type, placement, zone and style are required before the price gate: asking
+// the doubts question first opened the gate with nothing to price.
+const discoveryComplete = !!((TIPO_DB[tipoDeterministic] || lead.tattoo_type)
+  && placementNow && bodyZoneNow && styleNow);
+const qualificationReady = !!(isCoverOrRework || discoveryComplete);
+const gateJustOpened = processoExplicado && duvidasEliminadas && qualificationReady;
 const priceGateOpen = precoLiberadoJa || gateJustOpened;
 
 // A generic region can still be priced when its sides cost the same. For
@@ -1263,7 +1222,9 @@ const priceGateViolation = (hasPrice || hasDeposit) && !priceGateOpen;
 let finalReply = priceGateViolation
   ? (isCoverOrRework
       ? (processoExplicado ? agentOutput : discoveryFallback(lead))
-      : (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead)))
+      : (triageOnly || !qualificationReady
+          ? discoveryFallback(lead)
+          : (processoExplicado ? 'Antes de falarmos de valores, ficou alguma dúvida?' : discoveryFallback(lead))))
   : agentOutput;
 
 // The model jumps straight to "vou te passar" after the cover-up photo; the
@@ -1562,7 +1523,7 @@ if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && 
 // explanation, then answer the lead's questions without repeating it. A loop
 // here used to trap leads who had already said "não tenho dúvidas".
 const shouldAskDoubts = !triageOnly && !duvidasEliminadas && !precoLiberadoJa && !goingToArtist && !isCoverOrRework
-  && processoExplicado && !checkpointWasPending;
+  && processoExplicado && !checkpointWasPending && qualificationReady;
 if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
   let trimmed = finalReply.trim();
 
@@ -1627,6 +1588,17 @@ if (checkpointWasPending && !explicitClearThisTurn) {
       .replace(/\s*(?:Antes de falarmos de valores,?\s*)?(?:Mais|Ficou) alguma d[uú]vida\?\s*$/i, '')
       .trim();
   }
+}
+
+// The model sometimes explains the process before the qualification is done,
+// which ends the turn with "Ficou claro?" and no next step. Ask the missing
+// field instead; the process comes back when discovery is complete.
+if (!isCoverOrRework && !triageOnly && !discoveryComplete && processoDeterministic
+    && /processo de cria/i.test(finalReply)) {
+  finalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
 }
 
 // ── Deposit gate: never mention sinal/PIX before the chosen slot is booked.
@@ -1796,21 +1768,13 @@ const isAudio = rawCombined === '[ÁUDIO RECEBIDO]' && !audioTranscript;
 // find out WHY the lead is not closing, then answer that reason specifically.
 // The state survives turns, so a follow-up "ok" cannot end the conversation.
 const hasPriceContext = precoLiberadoJa || !!lead.quoted_price_cents || !!lead.table_price_cents;
-const closingSignal = /(pode ser|vamos|fechado|fechar|quero agendar|agendar|bora|aceito|combinado)/i.test(rawLead);
-function detectObjection(text) {
-  const t = String(text || '');
-  if (/(esposa|marido|namorad[ao]|noiv[ao]|fam[íi]lia|meu pai|minha m[ãa]e|s[óo]cio|meu amigo|minha amiga)|(falar|conversar|ver|decidir) com (algu[ée]m|ele|ela|meu|minha)/i.test(t)) return 'decision';
-  if (/(caro|car[íi]ssimo|valor|pre[çc]o|or[çc]amento|grana|dinheiro|esse valor|nesse valor|n[ãa]o tenho|sem condi[çc][õo]es)/i.test(t)) return 'price';
-  if (/(hor[áa]rio|agenda|dia|semana|trabalho|folga|tempo)/i.test(t)) return 'timing';
-  if (/(d[óo]i|medo|seguro|cicatriz|resultado|confian[çc]a)/i.test(t)) return 'doubt';
-  if (/(vou pensar|pensar melhor|depois|mais tarde|amanh[ãa]|semana que vem)/i.test(t)) return 'vague';
-  return null;
-}
-// The classifier's reading of the objection wins; the keyword list is the
-// fallback for typos or unusual phrasing.
+const closingSignal = parsed.closing === true;
+// The objection is read by the classifier; there is no keyword list. No
+// objection means no negotiation state.
 const ENUM_OBJECTIONS = ['decision', 'price', 'timing', 'doubt', 'vague'];
-const aiObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')) >= 0 ? parsed.objection : null;
-const detectedObjection = aiObjection || detectObjection(rawLead);
+const detectedObjection = ENUM_OBJECTIONS.indexOf(String(parsed.objection || '')) >= 0
+  ? parsed.objection
+  : null;
 const negotiationReason = detectedObjection || (state.negotiation_open === true ? (state.negotiation_reason || null) : null);
 const negotiationOpen = !closingSignal && (state.negotiation_open === true || !!detectedObjection);
 const passiveExit = !/\?/.test(finalReply)

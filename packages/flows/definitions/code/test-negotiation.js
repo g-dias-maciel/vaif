@@ -56,7 +56,7 @@ function runParse({ start, leadText, agentOutput, classifier }) {
   return new Function('$', '$input', parseCode)($, input)[0].json;
 }
 
-function classifier(pricing) {
+function classifier(pricing, extra = {}) {
   return {
     pipeline: 'orcamento_enviado',
     event: null,
@@ -64,6 +64,7 @@ function classifier(pricing) {
     pricing,
     handoff: {},
     price_gate: { processo_explicado: true, duvidas_eliminadas: true },
+    ...extra,
   };
 }
 
@@ -171,7 +172,7 @@ r = runParse({
   },
   leadText: 'tenho que ver se esse valor rola',
   agentOutput: 'Claro, sem problemas! Fique à vontade, vou ficar aguardando seu retorno.',
-  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'price' }),
 });
 check('offers a discount', /desconto/i.test(r.final_reply), r.final_reply);
 check('uses the artist floor (20%)', /20%/.test(r.final_reply), r.final_reply);
@@ -199,7 +200,7 @@ r = runParse({
   },
   leadText: 'vou pensar',
   agentOutput: 'Tudo bem! Fico aguardando.',
-  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'vague' }),
 });
 check('asks a question instead of closing', /\?/.test(r.final_reply), r.final_reply);
 check('does not end with a goodbye', !/fico aguardando|tudo bem/i.test(r.final_reply), r.final_reply);
@@ -220,7 +221,7 @@ r = runParse({
   },
   leadText: 'preciso ver com meu marido',
   agentOutput: 'Claro, fique à vontade.',
-  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'decision' }),
 });
 check('asks what the other person needs', /o que essa pessoa precisa saber|o que ele precisa saber/i.test(r.final_reply), r.final_reply);
 check('mentions holding the slot', /segurar/i.test(r.final_reply), r.final_reply);
@@ -265,7 +266,7 @@ r = runParse({
   },
   leadText: 'vou pensar',
   agentOutput: 'Tudo bem, fico aguardando.',
-  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }),
+  classifier: classifier({ table_cents: 20000, nego_cents: 20000 }, { objection: 'vague' }),
 });
 check('asks the isolating question', /é o valor, é o horário|o que está te impedindo/i.test(r.final_reply), r.final_reply);
 check('does not discount yet', !/desconto/i.test(r.final_reply), r.final_reply);

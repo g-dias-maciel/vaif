@@ -103,6 +103,26 @@ check('process detected', turn1.processo_explicado_val === true);
 check('checkpoint is armed', turn1.aguardando_confirmacao_duvidas_val === true);
 check('reply ends with the doubts question', /d[uú]vida\?$/.test(turn1.final_reply.trim()), turn1.final_reply);
 
+// ── 1b. The process before the qualification ends must not arm the checkpoint. ──
+console.log('=== Process explained too early does not arm the checkpoint ===');
+const early = runParse({
+  start: startTurn({ style: null, body_zone: null, first_tattoo: false }),
+  agentOutput: PROCESS_REPLY,
+  combinedText: 'liz',
+  classifier: {
+    pipeline: 'qualificando',
+    event: null,
+    qualification: { placement: 'braco' },
+    pricing: {},
+    handoff: {},
+    price_gate: { processo_explicado: true, duvidas_eliminadas: false },
+  },
+});
+check('checkpoint is not armed', early.aguardando_confirmacao_duvidas_val === false, String(early.aguardando_confirmacao_duvidas_val));
+check('no doubts question is sent', !/alguma d[uú]vida\?/i.test(early.final_reply), early.final_reply);
+check('asks the missing discovery field', /partinha|área média|fechamento|estilo/i.test(early.final_reply), early.final_reply);
+check('gate stays closed', early.preco_liberado_val === false, String(early.preco_liberado_val));
+
 // ── 2. The next burst ("legal / nao / tudo tranquilo") must clear the
 //       checkpoint and produce the authoritative quote.
 console.log('=== Burst answer clears the checkpoint ===');
@@ -125,6 +145,7 @@ const turn2 = runParse({
     pricing: { table_cents: 10000, nego_cents: 10000 },
     handoff: {},
     price_gate: { processo_explicado: true, duvidas_eliminadas: false },
+    doubts_cleared: true,
   },
 });
 check('doubts cleared', turn2.duvidas_eliminadas_val === true);
@@ -215,6 +236,7 @@ const cleared = runParse({
     pricing: { table_cents: 10000, nego_cents: 10000 },
     handoff: {},
     price_gate: {},
+    doubts_cleared: true,
   },
 });
 check('clear phrase clears doubts', cleared.duvidas_eliminadas_val === true);
