@@ -1005,11 +1005,14 @@ const visionPlacement = VISION_PLACEMENTS.indexOf(String(visionAnalysis.local ||
   : null;
 const coverLike = lead.tattoo_type === 'cover_up' || lead.tattoo_type === 'rework'
   || TIPO_DB[tipoDeterministic] === 'cover_up' || TIPO_DB[tipoDeterministic] === 'rework';
-// The photo also shows where a NEW tattoo goes: either the lead says "like the
-// photo / same place", or the image is a photo of a tattoo already on a body.
-const referencesPhoto = /como (?:na|da|essa|esta) foto|igual (?:a|da|essa) foto|mesmo local|exatamente como|ness[ae] foto|dess[ae] foto|naquela foto/i.test(rawLead);
+// The photo shows where the tattoo is; the classifier reads whether the lead
+// wants that same place ("exactly like the photo", typos included). The vision
+// "on a body" check is only a fallback for when the message says nothing.
 const visionShowsOnBody = String(visionAnalysis.tipo || '') === 'foto_de_tatuagem';
-const useVisionPlacement = coverLike || referencesPhoto || visionShowsOnBody;
+const sameAsPhoto = (parsed.photo_match || {}).same_placement;
+const useVisionPlacement = coverLike
+  || sameAsPhoto === true
+  || (sameAsPhoto !== false && visionShowsOnBody);
 const placementNow = rawPlacement
   ? ((rawPlacement === 'braco' && specificArm.includes(lead.placement)) ? lead.placement : rawPlacement)
   : (lead.placement || (useVisionPlacement ? visionPlacement : null));

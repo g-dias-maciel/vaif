@@ -201,10 +201,28 @@ r = runParse({
   start: start({ placement: null, body_zone: null }),
   leadText: 'quero fazer essa tatuagem. Exatamente como na foto, mesmo tamanho e local.',
   agentOutput: 'Onde exatamente você gostaria de fazer?',
-  classifier: classifier({ qualification: {} }),
+  classifier: classifier({ qualification: {}, photo_match: { same_placement: true, reason: 'lead disse como na foto' } }),
   photo: { tipo: 'foto_de_tatuagem', local: 'antebraco', assunto: 'flor de lótus' },
 });
 check('takes the placement from the photo', r.placement_val === 'antebraco', String(r.placement_val));
+
+console.log('=== The classifier can veto the photo placement ===');
+r = runParse({
+  start: start({ placement: null, body_zone: null }),
+  leadText: 'igual a foto, mas quero nas costas',
+  classifier: classifier({ qualification: { placement: 'costas' }, photo_match: { same_placement: false, reason: 'quer nas costas' } }),
+  photo: { tipo: 'foto_de_tatuagem', local: 'antebraco', assunto: 'flor de lótus' },
+});
+check('uses the place the lead said, not the photo', r.placement_val === 'costas', String(r.placement_val));
+
+console.log('=== A veto without a new place leaves it empty ===');
+r = runParse({
+  start: start({ placement: null, body_zone: null }),
+  leadText: 'desse jeito não, quero em outro lugar',
+  classifier: classifier({ qualification: {}, photo_match: { same_placement: false, reason: 'quer outro lugar' } }),
+  photo: { tipo: 'foto_de_tatuagem', local: 'antebraco', assunto: 'flor de lótus' },
+});
+check('does not take the photo placement', r.placement_val === null, String(r.placement_val));
 
 console.log('=== A drawing does not set the placement ===');
 r = runParse({

@@ -53,6 +53,16 @@ Nunca deixe um campo como null só porque a palavra está escrita de forma errad
 
 ⚠ **A PERGUNTA DE ÁREA TAMBÉM NÃO É TIPO:** quando a Beatriz pergunta "nesse local você quer cobrir só uma partinha, uma área média ou o [local] inteiro (fechamento)?", ela está perguntando a **body_zone**, não o tipo_tatuagem. Se o lead respondeu apenas o significado, a primeira tatuagem ou outra coisa, mantenha tipo_tatuagem = null. Exemplo: Beatriz pergunta a cobertura do braço e o lead responde "seria um significado pessoal" → tipo_tatuagem = null (NUNCA "cobertura").
 
+## Foto enviada pelo lead
+
+Quando o lead manda uma foto e fala sobre ela, diga se ele quer a tatuagem NO MESMO LOCAL da foto.
+
+- `same_placement: true` quando o lead quer repetir o que vê na foto: "exatamente como na foto", "mesmo tamanho e local", "igualzinho", "desse jeito", "nesse lugar mesmo", "quero assim" — inclusive com erros de digitação ("lokar", "lok", "igual da ft").
+- `same_placement: false` quando ele quer outra coisa: "igual mas no braço", "quero no mesmo estilo, mas nas costas", "não quero aí".
+- `null` quando ele não falou da foto ou não há foto.
+
+Não confunda com o local que ele digitou: se ele digitou um local, `placement` manda; `same_placement` só diz se a foto deve definir o local.
+
 ## Campos de preço (extraia da resposta da Beatriz)
 
 Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
@@ -129,6 +139,10 @@ Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana
   },
   "deposit": {
     "amount_cents": 18000 or null
+  },
+  "photo_match": {
+    "same_placement": true or false or null,
+    "reason": "1 frase curta"
   },
   "price_match": {
     "match": true or false,
