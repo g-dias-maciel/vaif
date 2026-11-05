@@ -217,10 +217,15 @@ check("Patch Chat State → humanize → Split Reply → Send WAHA → Aggregate
       and wf["connections"]["Send WAHA Message"]["main"][0][0]["node"] == "Aggregate Sent"
       and wf["connections"]["Aggregate Sent"]["main"][0][0]["node"] == "Stop Typing"
       and wf["connections"]["Stop Typing"]["main"][0][0]["node"] == "Build Handoff Message")
-check("Clear Buffer → Check Chat Owner → Start Turn → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Audio?",
+check("Clear Buffer → Check Chat Owner → Start Turn → Contact Gate → Agent Blocked? → Build References → Save References → Load Offer → Load Pricing → Build System Prompt → Analyze Audio?",
       wf["connections"]["Clear Buffer"]["main"][0][0]["node"] == "Check Chat Owner"
       and wf["connections"]["Chat Owned by Artist?"]["main"][1][0]["node"] == "Start Turn"
-      and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Agent Blocked?"
+      and wf["connections"]["Start Turn"]["main"][0][0]["node"] == "Check Contact Gate?"
+      and wf["connections"]["Check Contact Gate?"]["main"][0][0]["node"] == "Check Contact Gate"
+      and wf["connections"]["Check Contact Gate?"]["main"][1][0]["node"] == "Agent Blocked?"
+      and wf["connections"]["Check Contact Gate"]["main"][0][0]["node"] == "Contact Gate Hold?"
+      and wf["connections"]["Contact Gate Hold?"]["main"][0] == []
+      and [c["node"] for c in wf["connections"]["Contact Gate Hold?"]["main"][1]] == ["Agent Blocked?"]
       and wf["connections"]["Agent Blocked?"]["main"][0] == []
       and [c["node"] for c in wf["connections"]["Agent Blocked?"]["main"][1]] == ["Build References"]
       and wf["connections"]["Build References"]["main"][0][0]["node"] == "Save References"

@@ -4,6 +4,7 @@ namespace App\Console\Commands;
 
 use App\Mail\ArtistAttention;
 use App\Models\Artist;
+use App\Models\Lead;
 use App\Models\Payment;
 use App\Models\Project;
 use App\Models\User;
@@ -37,6 +38,7 @@ class NotifyArtistAttention extends Command
 
         $handoffs = $this->pendingHandoffs();
         $deposits = $this->pendingDeposits();
+        $contacts = $this->pendingContactGates();
 
         $byArtist = [];
 
@@ -48,6 +50,10 @@ class NotifyArtistAttention extends Command
             if ($payment->project) {
                 $byArtist[$payment->project->artist_id]['deposits'][] = $payment;
             }
+        }
+
+        foreach ($contacts as $lead) {
+            $byArtist[$lead->artist_id]['contacts'][] = $lead;
         }
 
         foreach ($byArtist as $artistId => $bucket) {
@@ -93,8 +99,17 @@ class NotifyArtistAttention extends Command
                 ->values()
                 ->all();
 
+            $contactItems = collect($bucket['contacts'] ?? [])
+                ->map(fn (Lead $lead) => [
+                    'name' => $lead->displayName() ?: 'Contato',
+                    'phone' => $lead->phone_e164,
+                    'url' => route('leads.show', $lead),
+                ])
+                ->values()
+                ->all();
+
             try {
-                Mail::to($emails)->send(new ArtistAttention($artist, $handoffItems, $depositItems));
+                Mail::to($emails)->send(new ArtistAttention($artist, $handoffItems, $depositItems, $contactItems));
             } catch (Throwable $e) {
                 report($e);
                 $this->error("Failed to e-mail {$artist->displayName()} ({$artistId}): {$e->getMessage()}");
@@ -113,12 +128,19 @@ class NotifyArtistAttention extends Command
                     ->update(['deposit_notified_at' => now()]);
             }
 
+            if ($contactItems !== []) {
+                DB::table('leads')
+                    ->whereIn('id', collect($bucket['contacts'])->pluck('id'))
+                    ->update(['contact_gate_notified_at' => now()]);
+            }
+
             $this->info(sprintf(
-                'Notified %s (%s): %d handoff(s), %d deposit(s).',
+                'Notified %s (%s): %d handoff(s), %d deposit(s), %d saved contact(s).',
                 $artist->displayName(),
                 $artistId,
                 count($handoffItems),
                 count($depositItems),
+                count($contactItems),
             ));
         }
 
@@ -152,6 +174,19 @@ class NotifyArtistAttention extends Command
     /**
      * @return Collection<int, Payment>
      */
+    /**
+     * Saved contacts the agent is holding for a decision.
+     *
+     * @return Collection<int, Lead>
+     */
+    private function pendingContactGates(): Collection
+    {
+        return Lead::query()
+            ->where('contact_gate', 'pending')
+            ->whereNull('contact_gate_notified_at')
+            ->get();
+    }
+
     private function pendingDeposits(): Collection
     {
         return Payment::with(['project.lead', 'project.artist.settings'])

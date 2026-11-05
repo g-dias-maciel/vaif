@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\ContactGateController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\ReferenceController;
@@ -23,3 +24,6 @@ Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('
 // Internal automation (n8n): attach WhatsApp reference media/links.
 Route::post('/references', [ReferenceController::class, 'store'])->middleware('throttle:120,1');
 Route::post('/references/analysis', [ReferenceController::class, 'storeAnalysis'])->middleware('throttle:120,1');
+
+// Internal automation (n8n): saved-contact gate on a lead's first contact.
+Route::post('/contact-gate', ContactGateController::class)->middleware('throttle:120,1');

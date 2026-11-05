@@ -2743,7 +2743,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                 "operation": "executeQuery",
                 "query": "SELECT * FROM start_turn($1::uuid, $2::text, $3::text, NULLIF($4, ''), 'whatsapp');",
                 "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id, $('Debounce Start').first().json.phone, ($('WAHA Webhook').first().json.body.payload._data?.notifyName || '')] }}"
+                    # notifyName is the saved contact name (store on); pushName
+                    # is the profile name. Use either as the placeholder name.
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Debounce Start').first().json.chat_id, $('Debounce Start').first().json.phone, ($('WAHA Webhook').first().json.body.payload._data?.notifyName || $('WAHA Webhook').first().json.body.payload._data?.pushName || '')] }}"
                 },
             },
             "type": "n8n-nodes-base.postgres",
@@ -2766,7 +2768,9 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                     "conditions": [
                         {
                             "id": "agent-blocked-cond-0000",
-                            "leftValue": "={{ $json.agent_blocked }}",
+                            # Read from Start Turn explicitly: the saved-contact
+                            # check now sits between Start Turn and this gate.
+                            "leftValue": "={{ $('Start Turn').first().json.agent_blocked }}",
                             "rightValue": True,
                             "operator": {"type": "boolean", "operation": "equals"},
                         }
@@ -2780,6 +2784,84 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "position": [2600, 640],
             "id": "agent-blocked-0000-0000-0000-000000000001",
             "name": "Agent Blocked?",
+        },
+        # 16a1. Check Contact Gate? — first contact only. A number that is in
+        #      the artist's saved contacts must not be answered automatically.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "contact-gate-new-cond-0000",
+                            "leftValue": "={{ $('Start Turn').first().json.is_new }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [2600, 900],
+            "id": "contact-gate-new-0000-0000-000000000001",
+            "name": "Check Contact Gate?",
+        },
+        # 16a2. Check Contact Gate — the CRM asks WAHA whether the number is a
+        #       saved contact and records the pending decision.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://crm.vaif.com.br/api/contact-gate",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify({ artist_id: $('Resolve Artist').first().json.id, lead_id: $('Start Turn').first().json.lead_id, phone: $('Start Turn').first().json.phone_e164, chat_id: $('Debounce Start').first().json.chat_id }) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [2820, 900],
+            "id": "contact-gate-check-0000-000000000001",
+            "name": "Check Contact Gate",
+            "credentials": CRM_INTERNAL,
+            "onError": "continueRegularOutput",
+        },
+        # 16a3. Contact Gate Hold? — true when the agent must stay silent.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "contact-gate-hold-cond-0000",
+                            "leftValue": "={{ $json.hold }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [3040, 900],
+            "id": "contact-gate-hold-0000-000000000001",
+            "name": "Contact Gate Hold?",
         },
         # 16b. Build References — the inbound picture/links, once the Project exists.
         {
@@ -3808,7 +3890,22 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             ]
         },
         "Start Turn": {
-            "main": [[{"node": "Agent Blocked?", "type": "main", "index": 0}]]
+            "main": [[{"node": "Check Contact Gate?", "type": "main", "index": 0}]]
+        },
+        "Check Contact Gate?": {
+            "main": [
+                [{"node": "Check Contact Gate", "type": "main", "index": 0}],
+                [{"node": "Agent Blocked?", "type": "main", "index": 0}],
+            ]
+        },
+        "Check Contact Gate": {
+            "main": [[{"node": "Contact Gate Hold?", "type": "main", "index": 0}]]
+        },
+        "Contact Gate Hold?": {
+            "main": [
+                [],
+                [{"node": "Agent Blocked?", "type": "main", "index": 0}],
+            ]
         },
         "Agent Blocked?": {
             "main": [

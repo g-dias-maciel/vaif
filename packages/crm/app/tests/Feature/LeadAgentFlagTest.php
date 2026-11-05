@@ -97,6 +97,31 @@ class LeadAgentFlagTest extends TestCase
         $this->assertContains('5599999999999', $numbers);
     }
 
+    public function test_the_saved_contact_decision_allows_or_blocks(): void
+    {
+        $artist = $this->artist();
+        $lead = $this->lead($artist);
+        $user = $this->artistUser($artist);
+
+        $lead->forceFill(['contact_gate' => 'pending'])->save();
+
+        $this->actingAs($user)
+            ->post("/leads/{$lead->id}/contact-gate", ['decision' => 'allow'])
+            ->assertRedirect();
+        $this->assertSame('allowed', $lead->refresh()->contact_gate);
+
+        $lead->forceFill(['contact_gate' => 'pending'])->save();
+
+        $this->actingAs($user)
+            ->post("/leads/{$lead->id}/contact-gate", ['decision' => 'block'])
+            ->assertRedirect();
+
+        $lead->refresh();
+        $this->assertSame('blocked', $lead->contact_gate);
+        $this->assertNotNull($lead->agent_blocked_at);
+        $this->assertContains('5511900000000', $artist->settings()->first()->blocked_numbers);
+    }
+
     public function test_an_artist_cannot_silence_another_artists_lead(): void
     {
         $owner = $this->artist('owner');

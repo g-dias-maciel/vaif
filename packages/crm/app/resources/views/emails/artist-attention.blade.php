@@ -1,5 +1,6 @@
 @php
-    $count = count($handoffs) + count($deposits);
+    $contacts = $contacts ?? [];
+    $count = count($handoffs) + count($deposits) + count($contacts);
 @endphp
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -32,6 +33,27 @@
                         </span>
                         <a href="{{ $handoff['url'] }}" style="display:inline-block; background:#D4B04C; color:#0A0A0A; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:700; font-size:13px;">
                             Ver conversa
+                        </a>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
+        @if (count($contacts) > 0)
+            <div style="background:#121212; border:1px solid #4a3d18; border-radius:12px; padding:20px; margin-bottom:18px;">
+                <h2 style="font-size:17px; margin:0 0 6px; color:#D4B04C;">Contatos salvos aguardando você</h2>
+                <p style="color:#a09a8e; font-size:13px; margin:0 0 16px;">
+                    Estes números estão na sua lista de contatos. A Beatriz não respondeu. Libere para ela atender, ou bloqueie.
+                </p>
+
+                @foreach ($contacts as $contact)
+                    <div style="border-top:1px solid #242424; padding:12px 0;">
+                        <strong style="display:block; color:#f2ede4;">{{ $contact['name'] }}</strong>
+                        @if (! empty($contact['phone']))
+                            <span style="display:block; color:#a09a8e; font-size:13px; margin:2px 0 8px;">{{ $contact['phone'] }}</span>
+                        @endif
+                        <a href="{{ $contact['url'] }}" style="display:inline-block; background:#D4B04C; color:#0A0A0A; padding:8px 14px; border-radius:8px; text-decoration:none; font-weight:700; font-size:13px;">
+                            Decidir no CRM
                         </a>
                     </div>
                 @endforeach

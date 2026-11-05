@@ -67,8 +67,32 @@ class WahaServiceTest extends TestCase
                 && $request['name'] === 'default'
                 && $request['config']['webhooks'][0]['url'] === 'https://n8n.test/webhook/waha-webhook'
                 && $request['config']['webhooks'][0]['customHeaders'][0]['name'] === 'X-VAIF-Webhook-Token'
-                && $request['config']['webhooks'][0]['customHeaders'][0]['value'] === 'shared-secret';
+                && $request['config']['webhooks'][0]['customHeaders'][0]['value'] === 'shared-secret'
+                // New sessions must be born with the NOWEB store so the agent
+                // can read the artist's saved contacts.
+                && $request['config']['noweb']['store']['enabled'] === true
+                && $request['config']['noweb']['store']['fullSync'] === true;
         });
+    }
+
+    public function test_relink_deletes_then_creates_with_the_store()
+    {
+        Http::fake();
+        config([
+            'transport.waha_url' => 'https://waha.test',
+            'transport.waha_webhook_url' => 'https://n8n.test/webhook/waha-webhook',
+        ]);
+
+        $ok = WahaService::make()->relink($this->artist());
+
+        $this->assertTrue($ok);
+
+        Http::assertSent(fn ($request) => $request->method() === 'DELETE'
+            && $request->url() === 'https://waha.test/api/sessions/default');
+        Http::assertSent(fn ($request) => $request->method() === 'POST'
+            && $request->url() === 'https://waha.test/api/sessions'
+            && $request['name'] === 'default'
+            && $request['config']['noweb']['store']['enabled'] === true);
     }
 
     public function test_send_text_posts_to_the_session()

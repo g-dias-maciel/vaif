@@ -18,17 +18,19 @@ class ArtistAttention extends Mailable
     /**
      * @param  array<int, array{name: string, phone: ?string, reason: string, url: string}>  $handoffs
      * @param  array<int, array{name: string, amount: string, url: string}>  $deposits
+     * @param  array<int, array{name: string, phone: ?string, url: string}>  $contacts
      */
     public function __construct(
         public Artist $artist,
         public array $handoffs = [],
         public array $deposits = [],
+        public array $contacts = [],
     ) {
     }
 
     public function build(): self
     {
-        $count = count($this->handoffs) + count($this->deposits);
+        $count = count($this->handoffs) + count($this->deposits) + count($this->contacts);
 
         return $this
             ->subject($count.' cliente'.($count === 1 ? '' : 's').' aguardando você')

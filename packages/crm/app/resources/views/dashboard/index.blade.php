@@ -94,6 +94,50 @@
 </details>
 @endif
 
+@if (isset($pendingContactGates) && $pendingContactGates->isNotEmpty())
+<div id="pending-contact-gates" class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
+    <h2 class="section-title" style="margin-top:0;">
+        Contatos salvos aguardando você
+        <span class="tag">{{ $pendingContactGates->count() }}</span>
+    </h2>
+    <p class="meta">Estes números estão na sua lista de contatos do WhatsApp. A Beatriz não respondeu. Libere para ela atender, ou bloqueie.</p>
+
+    <ul class="slot-list" style="margin-top: 14px;">
+        @foreach ($pendingContactGates as $gateLead)
+            <li>
+                <div class="slot-main">
+                    <strong>
+                        <a href="{{ route('leads.show', $gateLead) }}">{{ $gateLead->displayName() }}</a>
+                    </strong>
+                    <span>
+                        @if ($gateLead->phone_e164)
+                            {{ $gateLead->phone_e164 }}
+                        @endif
+                        @if ($gateLead->name)
+                            · {{ $gateLead->name }}
+                        @endif
+                    </span>
+                    <span class="meta">Primeira mensagem {{ $gateLead->updated_at?->format('d/m H:i') }}</span>
+                </div>
+                <div class="actions-row" style="display:flex; gap:8px;">
+                    <form method="post" action="{{ route('leads.contact-gate', $gateLead) }}" class="inline">
+                        @csrf
+                        <input type="hidden" name="decision" value="allow">
+                        <button type="submit" class="btn btn--small">Responder</button>
+                    </form>
+                    <form method="post" action="{{ route('leads.contact-gate', $gateLead) }}" class="inline"
+                        onsubmit="return confirm('Bloquear este contato? A Beatriz não responderá mais.');">
+                        @csrf
+                        <input type="hidden" name="decision" value="block">
+                        <button type="submit" class="btn btn--ghost btn--small">Não responder</button>
+                    </form>
+                </div>
+            </li>
+        @endforeach
+    </ul>
+</div>
+@endif
+
 @if ($pendingDeposits->isNotEmpty())
 <div id="pending-deposits" class="panel" style="margin-bottom: 20px; border-color: var(--gold);">
     <h2 class="section-title" style="margin-top:0;">

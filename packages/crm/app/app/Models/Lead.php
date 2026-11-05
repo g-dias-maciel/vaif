@@ -31,6 +31,8 @@ class Lead extends Model
         'last_message_at',
         'archived_at',
         'agent_blocked_at',
+        'contact_gate',
+        'contact_gate_notified_at',
         'anonymized_at',
     ];
 
@@ -39,6 +41,7 @@ class Lead extends Model
         'last_message_at' => 'datetime',
         'archived_at' => 'datetime',
         'agent_blocked_at' => 'datetime',
+        'contact_gate_notified_at' => 'datetime',
         'anonymized_at' => 'datetime',
     ];
 

@@ -138,6 +138,16 @@ class WahaService
                 'name' => $artist->wa_session_slug,
                 'config' => [
                     'webhooks' => [$webhook],
+                    // Enable the NOWEB store so the agent can read the artist's
+                    // saved contacts (and their saved name). It must be set at
+                    // session creation: changing it after the QR scan makes
+                    // WAHA drop the stored history.
+                    'noweb' => [
+                        'store' => [
+                            'enabled' => true,
+                            'fullSync' => true,
+                        ],
+                    ],
                 ],
             ]);
         } catch (ConnectionException) {
@@ -165,6 +175,27 @@ class WahaService
         }
 
         return $this->start($artist);
+    }
+
+    /**
+     * Re-link the device from scratch so the session picks up a config change
+     * (e.g. the NOWEB store). WAHA refuses to apply a new store config to an
+     * already-paired session, so the only safe path is delete + create: the
+     * artist scans the QR again.
+     */
+    public function relink(Artist $artist): bool
+    {
+        // Best-effort logout first so the phone drops the old link even if the
+        // delete endpoint is unavailable.
+        try {
+            $this->client()->post("/api/sessions/{$artist->wa_session_slug}/logout");
+        } catch (ConnectionException) {
+            // Already unlinked / unreachable: continue with the delete.
+        }
+
+        $this->deleteSession($artist);
+
+        return $this->create($artist);
     }
 
     /**
@@ -211,6 +242,41 @@ class WahaService
         }
 
         return $resp->successful();
+    }
+
+    /**
+     * Whether the phone is in the Artist's saved WhatsApp contacts.
+     *
+     * Requires the NOWEB store to be enabled on the session. Returns null when
+     * the check cannot be made (store off, WAHA unreachable) so the caller can
+     * fail open and never block a lead on an infrastructure error.
+     */
+    public function isSavedContact(Artist $artist, string $phone): ?bool
+    {
+        if (! $artist->wa_session_slug) {
+            return null;
+        }
+
+        $digits = preg_replace('/\D+/', '', $phone);
+
+        if ($digits === '') {
+            return null;
+        }
+
+        try {
+            $resp = $this->client()->get('/api/contacts/check-exists', [
+                'phone' => $digits,
+                'session' => $artist->wa_session_slug,
+            ]);
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $resp->successful()) {
+            return null;
+        }
+
+        return (bool) ($resp->json('numberExists') ?? false);
     }
 
     /**

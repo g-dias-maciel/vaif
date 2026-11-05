@@ -113,12 +113,55 @@ class LeadController extends Controller
             'agent_blocked_at' => $blocking ? now() : null,
         ])->save();
 
-        // Keep the per-artist blocklist in sync. The per-lead flag lives on a
-        // single row; if that Lead is ever re-created (phone re-normalization,
-        // restore, anonymization) the silence would be lost and the agent
-        // would answer again. Writing the number to `blocked_numbers` makes the
-        // block durable and number-level: the "Blocked Number?" gate runs
-        // before the Lead exists, so the number stays blocked.
+        $this->syncBlocklist($lead, $blocking);
+
+        return back()->with('status', $blocking
+            ? 'Agente silenciado para este cliente. A Beatriz não responderá mais automaticamente.'
+            : 'Agente reativado para este cliente.');
+    }
+
+    /**
+     * Saved-contact gate: the agent held an incoming message from a number in
+     * the artist's contacts. The artist decides whether the agent may answer.
+     */
+    public function decideContactGate(Request $request, Lead $lead)
+    {
+        $this->authorize('flagAgent', $lead);
+
+        $decision = $request->validate([
+            'decision' => ['required', 'in:allow,block'],
+        ])['decision'];
+
+        if ($decision === 'allow') {
+            $lead->forceFill([
+                'contact_gate' => 'allowed',
+                'contact_gate_notified_at' => null,
+            ])->save();
+            $this->syncBlocklist($lead, false);
+
+            return back()->with('status', 'Contato liberado. A Beatriz responde a partir da próxima mensagem.');
+        }
+
+        $lead->forceFill([
+            'contact_gate' => 'blocked',
+            'contact_gate_notified_at' => null,
+            'agent_blocked_at' => $lead->agent_blocked_at ?? now(),
+        ])->save();
+        $this->syncBlocklist($lead, true);
+
+        return back()->with('status', 'Contato bloqueado. A Beatriz não responderá mais.');
+    }
+
+    /**
+     * Keep the per-artist blocklist in sync with a Lead's silenced state.
+     *
+     * The per-lead flag lives on a single row; if that Lead is ever re-created
+     * (phone re-normalization, restore, anonymization) the silence would be
+     * lost and the agent would answer again. The number-level blocklist makes
+     * it durable: the "Blocked Number?" gate runs before the Lead exists.
+     */
+    private function syncBlocklist(Lead $lead, bool $block): void
+    {
         $settings = $lead->artist->settings()->firstOrCreate(['artist_id' => $lead->artist_id]);
         $digits = preg_replace('/\D+/', '', (string) $lead->phone_e164);
         $digitsOf = fn (string $n): string => preg_replace('/\D+/', '', $n);
@@ -127,7 +170,7 @@ class LeadController extends Controller
             fn (string $n) => $n !== '',
         ));
 
-        if ($blocking) {
+        if ($block) {
             if ($digits !== '' && ! in_array($digits, array_map($digitsOf, $numbers), true)) {
                 $numbers[] = $digits;
             }
@@ -139,10 +182,6 @@ class LeadController extends Controller
         }
 
         $settings->forceFill(['blocked_numbers' => $numbers])->save();
-
-        return back()->with('status', $blocking
-            ? 'Agente silenciado para este cliente. A Beatriz não responderá mais automaticamente.'
-            : 'Agente reativado para este cliente.');
     }
 
     /**

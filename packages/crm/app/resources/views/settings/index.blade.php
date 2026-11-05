@@ -53,6 +53,13 @@
                 @csrf
                 <button type="submit" class="btn btn--ghost">Reiniciar sessão</button>
             </form>
+            <form method="post" action="{{ route('settings.waha.relink') }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost"
+                    onclick="return confirm('Isto desvincula o WhatsApp e pede um novo QR code. Use para ativar a leitura de contatos. Continuar?');">
+                    Revincular (ativar contatos)
+                </button>
+            </form>
         </div>
     @endif
 </div>

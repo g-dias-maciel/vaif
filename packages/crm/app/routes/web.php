@@ -46,6 +46,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/config', [SettingsController::class, 'index'])->name('settings.index');
         Route::post('/config/toggle', [SettingsController::class, 'toggle'])->name('settings.toggle');
         Route::post('/config/waha/connect', [SettingsController::class, 'connectWaha'])->name('settings.waha.connect');
+        Route::post('/config/waha/relink', [SettingsController::class, 'relinkWaha'])->name('settings.waha.relink');
         Route::post('/config/waha/restart', [SettingsController::class, 'restartWaha'])->name('settings.waha.restart');
         Route::post('/config/payment', [SettingsController::class, 'updatePayment'])->name('settings.payment');
         Route::post('/config/negotiation', [SettingsController::class, 'updateNegotiation'])->name('settings.negotiation');
@@ -66,6 +67,7 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:artist,staff')->group(function () {
         Route::get('/leads/{lead}', [LeadController::class, 'show'])->name('leads.show');
         Route::post('/leads/{lead}/agent', [LeadController::class, 'toggleAgent'])->name('leads.agent.toggle');
+        Route::post('/leads/{lead}/contact-gate', [LeadController::class, 'decideContactGate'])->name('leads.contact-gate');
         Route::get('/leads/{lead}/conversation', [LeadController::class, 'conversation'])->name('leads.conversation');
         Route::post('/leads/{lead}/notes', [LeadController::class, 'storeNote'])->name('leads.notes.store');
         Route::post('/projects/{project}/schedule', [LeadController::class, 'scheduleProject'])->name('projects.schedule');

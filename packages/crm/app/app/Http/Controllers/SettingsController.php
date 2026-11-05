@@ -559,6 +559,24 @@ class SettingsController extends Controller
     }
 
     /**
+     * Re-link the WhatsApp device from scratch. Needed once to pick up the
+     * NOWEB store (contact reading): WAHA won't apply a new store config to an
+     * already-paired session.
+     */
+    public function relinkWaha(Request $request)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist && $artist->wa_session_slug, 403);
+
+        $ok = WahaService::make()->relink($artist);
+
+        return back()->with($ok ? 'status' : 'error', $ok
+            ? 'WhatsApp desvinculado. Escaneie o novo QR code para reconectar e ativar a leitura de contatos.'
+            : 'Não foi possível revincular o WhatsApp agora. Tente novamente.');
+    }
+
+    /**
      * Restart the WAHA session (fix a stuck / bugged session).
      */
     public function restartWaha(Request $request)

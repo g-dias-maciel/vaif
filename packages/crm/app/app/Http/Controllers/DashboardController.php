@@ -81,6 +81,14 @@ class DashboardController extends Controller
 
         // In-platform alert: requested signals the Artist still needs to
         // confirm after checking the PIX.
+        // Saved contacts the agent is holding until the artist decides whether
+        // it may answer.
+        $pendingContactGates = \App\Models\Lead::query()
+            ->where('artist_id', $artist->id)
+            ->where('contact_gate', 'pending')
+            ->orderByDesc('updated_at')
+            ->get();
+
         $pendingDeposits = Project::with(['lead', 'payments', 'calendar'])
             ->where('artist_id', $artist->id)
             ->whereNotIn('stage_key', ['fechado', 'perdido'])
@@ -156,6 +164,7 @@ class DashboardController extends Controller
             'activePromotion' => $artist->activePromotion,
             'projects' => $projects,
             'pendingHandoffs' => $pendingHandoffs,
+            'pendingContactGates' => $pendingContactGates,
             'pendingDeposits' => $pendingDeposits,
             'pipeline' => config('crm.pipeline_statuses'),
             'period' => $period,
