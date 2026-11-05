@@ -151,6 +151,7 @@ class LeadAgentFlagTest extends TestCase
             && $request['session'] === $artist->wa_session_slug
             && $request['payload']['body'] === 'oi, quero uma tatuagem'
             && $request['payload']['from'] === '5511900000000@c.us'
+            && $request['payload']['replay'] === true
             && in_array('secret', $request->header('X-VAIF-Webhook-Token'), true));
     }
 

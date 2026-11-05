@@ -201,6 +201,7 @@ class LeadController extends Controller
                 'type' => 'chat',
                 'hasMedia' => false,
                 'media' => null,
+                'replay' => true,
                 '_data' => [
                     'key' => [
                         'remoteJid' => $from,
@@ -210,6 +211,7 @@ class LeadController extends Controller
                     ],
                     'pushName' => (string) $lead->name,
                     'message' => ['conversation' => $text],
+                    'replay' => true,
                 ],
             ],
         ];

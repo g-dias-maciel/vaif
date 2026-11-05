@@ -190,7 +190,7 @@ AGENT_TEXT_EXPR = (
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
     "+ ' aguardando_confirmacao_duvidas=' + ((($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas) ? 'sim' : 'nao') "
-    "+ ' primeira_mensagem=' + ($('Start Turn').first().json.is_new ? 'sim' : 'nao') "
+    "+ ' primeira_mensagem=' + (($('Start Turn').first().json.is_new || $('Debounce Start').first().json.replay) ? 'sim' : 'nao') "
     "+ ' preco_tabela=' + ($('Start Turn').first().json.table_price_cents || '?') "
     "+ ' preco_negociado=' + ($('Start Turn').first().json.quoted_price_cents || '?') "
     "+ ' sinal_reais=' + (function(){ var a = $('Resolve Artist').first().json || {}; var l = $('Start Turn').first().json || {}; var dv = a.deposit_value; if (dv === null || dv === undefined) return '?'; if (a.deposit_type === 'fixed') return String(dv); var base = l.quoted_price_cents || l.table_price_cents; if (!base) return '?'; return String(Math.ceil(Number(base) * Number(dv) / 100) / 100); })() "
@@ -247,6 +247,11 @@ const links = Array.from(new Set((rawText.match(/https?:\\/\\/[^\\s]+/g) || [])
   .map(u => u.replace(/[.,;:!?)\\]]+$/, ''))))
   .slice(0, 5);
 
+// A replay is the held first message re-submitted by the CRM after the artist
+// allowed a saved contact: treat it as the first message so the greeting (and
+// the name question) goes out.
+const replay = payload.replay === true || (payload._data && payload._data.replay === true);
+
 return [{ json: {
   chat_id: session + ':' + rawFrom,
   phone: phone,
@@ -257,6 +262,7 @@ return [{ json: {
   audio_url: audioUrl,
   audio_mime: audioUrl ? (mediaMime || null) : null,
   links: links,
+  replay: replay,
 } }];"""
 
 # Side branch after Start Turn: attach the inbound reference picture and any
