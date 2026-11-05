@@ -8,6 +8,7 @@ use App\Models\Lead;
 use App\Models\Project;
 use App\Models\User;
 use App\Services\Google\GoogleCalendarService;
+use App\Services\Google\GoogleCalendarSync;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
@@ -94,6 +95,35 @@ class SettingsGoogleSyncTest extends TestCase
             ->assertOk()
             ->assertSee('Falha ao sincronizar com o Google')
             ->assertSee('writer access');
+    }
+
+    public function test_sincronizar_agora_also_imports_the_google_events(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('getCalendar')->andReturn([
+                'id' => 'artist@example.com',
+                'summary' => 'Agenda da Tattoo',
+                'timezone' => 'America/Sao_Paulo',
+            ]);
+        });
+
+        $this->mock(GoogleCalendarSync::class, function (MockInterface $mock) {
+            $mock->shouldReceive('syncArtist')->once()->andReturn([
+                'created' => 1, 'updated' => 0, 'deleted' => 0, 'skipped' => 0, 'failed' => 0,
+            ]);
+            $mock->shouldReceive('syncBlocks')->once()->andReturn([
+                'inserted' => 2, 'updated' => 0, 'deleted' => 0,
+            ]);
+        });
+
+        $this->actingAs($user)
+            ->post('/config/google/sync')
+            ->assertRedirect()
+            ->assertSessionHas('status', fn ($status) => is_string($status)
+                && str_contains($status, '2 importado'));
     }
 
     public function test_a_read_only_calendar_sets_the_sync_error(): void

@@ -536,18 +536,35 @@ class SettingsController extends Controller
             return back()->with('error', 'Não foi possível sincronizar agora: '.$e->getMessage());
         }
 
+        // Also refresh the external Google events mirrored as blocks, so one
+        // click updates both directions instead of waiting for the scheduler.
+        $blockError = null;
+        try {
+            $blocks = $sync->syncBlocks($artist);
+        } catch (Throwable $e) {
+            $blocks = ['inserted' => 0, 'updated' => 0, 'deleted' => 0];
+            $blockError = $e->getMessage();
+        }
+
         $summary = sprintf(
-            '%d criado(s), %d atualizado(s), %d removido(s)',
+            'Agendamentos enviados: %d criado(s), %d atualizado(s), %d removido(s). Eventos do Google: %d importado(s), %d atualizado(s), %d removido(s).',
             $counts['created'],
             $counts['updated'],
             $counts['deleted'],
+            $blocks['inserted'],
+            $blocks['updated'],
+            $blocks['deleted'],
         );
+
+        if ($blockError !== null) {
+            return back()->with('error', $summary.' Falha ao importar os eventos do Google: '.$blockError);
+        }
 
         return back()->with(
             $counts['failed'] > 0 ? 'error' : 'status',
             $counts['failed'] > 0
-                ? $summary.'; '.$counts['failed'].' falhou(aram). Tente novamente.'
-                : $summary.'.',
+                ? $summary.' '.$counts['failed'].' agendamento(s) falharam no Google. Tente novamente.'
+                : $summary,
         );
     }
 
@@ -597,18 +614,33 @@ class SettingsController extends Controller
             return back()->with('error', 'Acesso confirmado, mas a sincronização falhou: '.$e->getMessage());
         }
 
+        $blockError = null;
+        try {
+            $blocks = $sync->syncBlocks($artist);
+        } catch (Throwable $e) {
+            $blocks = ['inserted' => 0, 'updated' => 0, 'deleted' => 0];
+            $blockError = $e->getMessage();
+        }
+
         $summary = sprintf(
-            '%d criado(s), %d atualizado(s), %d removido(s)',
+            'Acesso confirmado. Agendamentos enviados: %d criado(s), %d atualizado(s), %d removido(s). Eventos do Google: %d importado(s), %d atualizado(s), %d removido(s).',
             $counts['created'],
             $counts['updated'],
             $counts['deleted'],
+            $blocks['inserted'],
+            $blocks['updated'],
+            $blocks['deleted'],
         );
+
+        if ($blockError !== null) {
+            return back()->with('error', $summary.' Falha ao importar os eventos do Google: '.$blockError);
+        }
 
         return back()->with(
             $counts['failed'] > 0 ? 'error' : 'status',
             $counts['failed'] > 0
-                ? 'Acesso confirmado. '.$summary.'; '.$counts['failed'].' falhou(aram).'
-                : 'Acesso confirmado. '.$summary.'.',
+                ? $summary.' '.$counts['failed'].' agendamento(s) falharam no Google.'
+                : $summary,
         );
     }
 
