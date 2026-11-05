@@ -204,6 +204,181 @@ class GoogleCalendarSyncTest extends TestCase
         $this->assertSame('Google recusou o evento.', $entry->google_sync_error);
     }
 
+    private function googleEvent(array $overrides = []): array
+    {
+        return array_merge([
+            'id' => 'ext-1',
+            'status' => 'confirmed',
+            'start' => ['dateTime' => now()->addDays(3)->setTime(9, 0)->toIso8601String()],
+            'end' => ['dateTime' => now()->addDays(3)->setTime(11, 0)->toIso8601String()],
+        ], $overrides);
+    }
+
+    public function test_an_external_google_event_becomes_a_labelled_block(): void
+    {
+        $artist = $this->artist();
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([$this->googleEvent()]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(1, $counts['inserted']);
+
+        $entry = CalendarEntry::where('google_event_id', 'ext-1')->first();
+        $this->assertNotNull($entry);
+        $this->assertSame('block', $entry->kind);
+        $this->assertSame('Google Agenda', $entry->reason);
+        $this->assertFalse($entry->google_sync_pending);
+    }
+
+    public function test_a_crm_event_is_not_imported(): void
+    {
+        $artist = $this->artist();
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([
+                $this->googleEvent(['id' => 'crm-1', 'extendedProperties' => ['private' => ['vaif_booking_id' => 'abc']]]),
+            ]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(0, $counts['inserted']);
+        $this->assertNull(CalendarEntry::where('google_event_id', 'crm-1')->first());
+    }
+
+    public function test_cancelled_and_free_events_are_ignored(): void
+    {
+        $artist = $this->artist();
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([
+                $this->googleEvent(['id' => 'cancelled', 'status' => 'cancelled']),
+                $this->googleEvent(['id' => 'free', 'transparency' => 'transparent']),
+            ]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(0, $counts['inserted']);
+    }
+
+    public function test_a_moved_event_updates_its_block(): void
+    {
+        $artist = $this->artist();
+
+        CalendarEntry::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'kind' => 'block',
+            'start_at' => now()->addDays(3)->setTime(9, 0),
+            'end_at' => now()->addDays(3)->setTime(11, 0),
+            'reason' => 'Google Agenda',
+            'created_by' => 'artist',
+            'google_event_id' => 'ext-1',
+            'google_sync_pending' => false,
+        ]);
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([
+                $this->googleEvent([
+                    'start' => ['dateTime' => now()->addDays(3)->setTime(14, 0)->toIso8601String()],
+                    'end' => ['dateTime' => now()->addDays(3)->setTime(16, 0)->toIso8601String()],
+                ]),
+            ]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(1, $counts['updated']);
+        $this->assertSame(14, CalendarEntry::where('google_event_id', 'ext-1')->first()->start_at->hour);
+    }
+
+    public function test_a_deleted_event_removes_its_block(): void
+    {
+        $artist = $this->artist();
+
+        CalendarEntry::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'kind' => 'block',
+            'start_at' => now()->addDays(3)->setTime(9, 0),
+            'end_at' => now()->addDays(3)->setTime(11, 0),
+            'reason' => 'Google Agenda',
+            'created_by' => 'artist',
+            'google_event_id' => 'gone',
+            'google_sync_pending' => false,
+        ]);
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(1, $counts['deleted']);
+        $this->assertNull(CalendarEntry::where('google_event_id', 'gone')->first());
+    }
+
+    public function test_an_event_overlapping_a_booking_is_skipped(): void
+    {
+        $artist = $this->artist();
+        $this->booking($artist); // +2 days, 14:00–16:00
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([
+                $this->googleEvent([
+                    'id' => 'overlap',
+                    'start' => ['dateTime' => now()->addDays(2)->setTime(15, 0)->toIso8601String()],
+                    'end' => ['dateTime' => now()->addDays(2)->setTime(17, 0)->toIso8601String()],
+                ]),
+            ]);
+        });
+
+        $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $this->assertSame(0, $counts['inserted']);
+        $this->assertNull(CalendarEntry::where('google_event_id', 'overlap')->first());
+    }
+
+    public function test_an_all_day_event_blocks_the_whole_day(): void
+    {
+        $artist = $this->artist();
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([
+                $this->googleEvent([
+                    'id' => 'all-day',
+                    'start' => ['date' => now()->addDays(4)->toDateString()],
+                    'end' => ['date' => now()->addDays(5)->toDateString()],
+                ]),
+            ]);
+        });
+
+        app(GoogleCalendarSync::class)->syncBlocks($artist);
+
+        $entry = CalendarEntry::where('google_event_id', 'all-day')->first();
+        $this->assertNotNull($entry);
+        $this->assertSame('00:00', $entry->start_at->format('H:i'));
+        $this->assertSame('00:00', $entry->end_at->format('H:i'));
+        $this->assertSame(now()->addDays(5)->toDateString(), $entry->end_at->toDateString());
+    }
+
+    public function test_the_import_command_runs_for_connected_artists(): void
+    {
+        $artist = $this->artist();
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('listEvents')->once()->andReturn([$this->googleEvent()]);
+        });
+
+        $this->artisan('calendar:import-google-blocks')
+            ->expectsOutputToContain('1 importado')
+            ->assertExitCode(0);
+    }
+
     public function test_the_command_syncs_connected_artists(): void
     {
         $artist = $this->artist();

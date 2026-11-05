@@ -73,6 +73,25 @@ class GoogleCalendarService
     }
 
     /**
+     * Events in a calendar between two instants, expanded into instances.
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function listEvents(string $calendarId, \DateTimeInterface $from, \DateTimeInterface $to): array
+    {
+        $data = $this->request('get', 'calendars/'.$this->encode($calendarId).'/events', [
+            'timeMin' => $from->format(DATE_RFC3339),
+            'timeMax' => $to->format(DATE_RFC3339),
+            'singleEvents' => 'true',
+            'orderBy' => 'startTime',
+            'showDeleted' => 'false',
+            'maxResults' => 2500,
+        ]);
+
+        return $data['items'] ?? [];
+    }
+
+    /**
      * Read one calendar's metadata, which also proves the service account has
      * access before we save the connection.
      *

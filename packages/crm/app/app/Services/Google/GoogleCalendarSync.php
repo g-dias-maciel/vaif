@@ -4,6 +4,7 @@ namespace App\Services\Google;
 
 use App\Models\Artist;
 use App\Models\CalendarEntry;
+use Carbon\CarbonImmutable;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -89,6 +90,196 @@ class GoogleCalendarSync
         }
 
         return $counts;
+    }
+
+    /**
+     * Mirror the Artist's external Google events as blocks so the agent will
+     * not offer a slot the artist already filled in Google.
+     *
+     * CRM-created bookings are skipped (they already have a row), and only
+     * events that would actually block the Artist are imported: cancelled and
+     * "free" (transparency=transparent) events are ignored.
+     *
+     * @return array{deleted: int, inserted: int, updated: int}
+     */
+    public function syncBlocks(Artist $artist, int $days = 60): array
+    {
+        $counts = ['deleted' => 0, 'inserted' => 0, 'updated' => 0];
+
+        if (! $artist->hasGoogleCalendar()) {
+            return $counts;
+        }
+
+        $from = now()->startOfDay();
+        $to = now()->addDays(max(1, $days))->endOfDay();
+
+        $events = $this->google->listEvents((string) $artist->google_calendar_id, $from, $to);
+
+        /** @var array<string, array{0: CarbonImmutable, 1: CarbonImmutable}> $wanted */
+        $wanted = [];
+
+        foreach ($events as $event) {
+            if (! is_array($event)) {
+                continue;
+            }
+
+            if (($event['status'] ?? '') === 'cancelled') {
+                continue;
+            }
+
+            if (($event['transparency'] ?? '') === 'transparent') {
+                continue;
+            }
+
+            // A CRM booking: it already lives in `calendar_entries`.
+            if (! empty($event['extendedProperties']['private']['vaif_booking_id'])) {
+                continue;
+            }
+
+            $id = (string) ($event['id'] ?? '');
+
+            if ($id === '') {
+                continue;
+            }
+
+            [$start, $end] = $this->eventRange($event, (string) $artist->timezone);
+
+            if ($start === null || $end === null) {
+                continue;
+            }
+
+            $wanted[$id] = [$start, $end];
+        }
+
+        $existing = CalendarEntry::where('artist_id', $artist->id)
+            ->where('kind', 'block')
+            ->whereNotNull('google_event_id')
+            ->get()
+            ->keyBy('google_event_id');
+
+        // Imported blocks whose Google event disappeared.
+        foreach ($existing as $eventId => $entry) {
+            if (! array_key_exists((string) $eventId, $wanted)) {
+                $entry->delete();
+                $counts['deleted']++;
+            }
+        }
+
+        foreach ($wanted as $eventId => [$start, $end]) {
+            $entry = $existing->get($eventId);
+
+            if ($entry) {
+                if ($entry->start_at->equalTo($start) && $entry->end_at->equalTo($end)) {
+                    continue;
+                }
+
+                // A moved event that now collides with a booking replaces the
+                // mirror with nothing; the CRM entry wins.
+                if ($this->collides($artist, $start, $end, (string) $entry->id)) {
+                    $entry->delete();
+                    $counts['deleted']++;
+
+                    continue;
+                }
+
+                try {
+                    $entry->forceFill(['start_at' => $start, 'end_at' => $end])->save();
+                    $counts['updated']++;
+                } catch (Throwable $e) {
+                    report($e);
+                }
+
+                continue;
+            }
+
+            if ($this->collides($artist, $start, $end)) {
+                continue;
+            }
+
+            try {
+                CalendarEntry::create([
+                    'artist_id' => $artist->id,
+                    'kind' => 'block',
+                    'start_at' => $start,
+                    'end_at' => $end,
+                    'reason' => 'Google Agenda',
+                    'created_by' => 'artist',
+                    'google_event_id' => $eventId,
+                    // Read-only mirror: never push it back to Google.
+                    'google_sync_pending' => false,
+                ]);
+                $counts['inserted']++;
+            } catch (Throwable $e) {
+                if ($this->isExclusionViolation($e)) {
+                    continue;
+                }
+
+                throw $e;
+            }
+        }
+
+        return $counts;
+    }
+
+    /**
+     * Whether an active calendar entry overlaps the range (optionally ignoring
+     * one entry, e.g. the block being moved).
+     */
+    private function collides(Artist $artist, CarbonImmutable $start, CarbonImmutable $end, ?string $ignoreId = null): bool
+    {
+        return CalendarEntry::where('artist_id', $artist->id)
+            ->where('active', true)
+            ->when($ignoreId !== null, fn ($query) => $query->where('id', '!=', $ignoreId))
+            ->where('start_at', '<', $end)
+            ->where('end_at', '>', $start)
+            ->exists();
+    }
+
+    private function isExclusionViolation(Throwable $e): bool
+    {
+        return ($e instanceof \Illuminate\Database\QueryException && (string) $e->getCode() === '23P01')
+            || str_contains($e->getMessage(), 'calendar_no_overlap');
+    }
+
+    /**
+     * Start/end of a Google event. All-day events block the whole day in the
+     * Artist's timezone; Google's all-day `end.date` is exclusive.
+     *
+     * @param  array<string, mixed>  $event
+     * @return array{0: ?CarbonImmutable, 1: ?CarbonImmutable}
+     */
+    private function eventRange(array $event, string $timezone): array
+    {
+        $start = $event['start'] ?? [];
+        $end = $event['end'] ?? [];
+        $appTz = (string) config('app.timezone', 'UTC');
+
+        if (isset($start['dateTime'])) {
+            $startAt = CarbonImmutable::parse((string) $start['dateTime'])->setTimezone($appTz);
+            $endAt = isset($end['dateTime'])
+                ? CarbonImmutable::parse((string) $end['dateTime'])->setTimezone($appTz)
+                : $startAt;
+
+            return [$startAt, $endAt];
+        }
+
+        if (isset($start['date'])) {
+            $tz = $timezone !== '' ? $timezone : 'UTC';
+            $startAt = CarbonImmutable::parse((string) $start['date'], $tz)
+                ->startOfDay()
+                ->setTimezone($appTz);
+            $endAt = isset($end['date'])
+                ? CarbonImmutable::parse((string) $end['date'], $tz)->startOfDay()->setTimezone($appTz)
+                : $startAt->addDay();
+
+            if ($endAt <= $startAt) {
+                $endAt = $startAt->addDay();
+            }
+
+            return [$startAt, $endAt];
+        }
+
+        return [null, null];
     }
 
     /**

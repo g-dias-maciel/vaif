@@ -41,11 +41,18 @@
         <li>
             <div class="slot-main">
                 <span>{{ $b->start_at->format('d/m/Y H:i') }} – {{ $b->end_at->format('d/m/Y H:i') }}</span>
+                @if ($b->google_event_id)
+                    <span class="tag">Google Agenda</span>
+                @endif
             </div>
-            <form method="post" action="{{ route('bookings.unblock', $b) }}" class="inline">
-                @csrf
-                <button type="submit" class="btn btn--danger btn--small">Desbloquear</button>
-            </form>
+            @if ($b->google_event_id)
+                <span class="meta">Gerenciado no Google Agenda</span>
+            @else
+                <form method="post" action="{{ route('bookings.unblock', $b) }}" class="inline">
+                    @csrf
+                    <button type="submit" class="btn btn--danger btn--small">Desbloquear</button>
+                </form>
+            @endif
         </li>
     @empty
         <li class="empty">Nenhum horário bloqueado.</li>

@@ -18,6 +18,12 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping(10);
 
+        // Read the Artist's own Google events as blocks so the agent never
+        // offers a slot already filled outside the CRM.
+        $schedule->command('calendar:import-google-blocks')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10);
+
         // E-mail the artist when a lead is waiting for a handoff or a PIX
         // confirmation. The notified_at columns dedupe each item.
         $schedule->command('crm:notify-artist-attention')
