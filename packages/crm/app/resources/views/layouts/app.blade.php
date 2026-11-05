@@ -321,8 +321,21 @@
 
         .week-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
         .week-range { font-family: 'Montserrat', sans-serif; font-size: 1.25rem; color: var(--ink); }
-        .week-scroll { overflow-x: auto; }
-        .week-grid { display: grid; grid-template-columns: repeat(7, minmax(140px, 1fr)); gap: 10px; }
+        .week-scroll {
+            overflow-x: auto;
+            overflow-y: hidden;
+            padding-bottom: 8px;
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) var(--panel-2);
+            scrollbar-gutter: stable;
+        }
+        .week-scroll::-webkit-scrollbar { height: 8px; }
+        .week-scroll::-webkit-scrollbar-track { background: var(--panel-2); border-radius: 999px; }
+        .week-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
+        .week-scroll::-webkit-scrollbar-thumb:hover { background: var(--gold); }
+        /* Fit all seven days on desktop; the mobile rule below keeps a readable
+           minimum width so it scrolls instead of squashing. */
+        .week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
         .week-day { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 10px; min-height: 220px; }
         .week-day.today { border-color: var(--gold); }
         .week-day-head { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin-bottom: 8px; display: flex; flex-direction: column; gap: 2px; }
