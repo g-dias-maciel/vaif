@@ -1472,7 +1472,7 @@ if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
 
   // Indirect sign-offs ("se ficou alguma dúvida é só falar") are not a direct
   // question. Remove them anywhere in the reply.
-  const indirect = /(?:^|[\s\\n])(?:se\s+(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:alguma|qualquer|mais)?\s*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\\n]*(?:[.!?]|$)|se\s+precisar[^.!?\\n]*(?:[.!?]|$))/gi;
+  const indirect = /(?:^|[\s\\n])(?:se\s+(?:voc[eê]\s+)?(?:ficou|ficar|tiver|surgir|aparecer)\s+(?:(?:mais|alguma|qualquer)\s+)*(?:d[uú]vida|pergunta|quest[aã]o)[^.!?\\n]*(?:[.!?]|$)|qualquer\s+(?:d[uú]vida|coisa)[^.!?\\n]*(?:[.!?]|$)|(?:estou|estamos|tô|to|fico|ficamos)\s+(?:sempre\s+)?[àa]\s+(?:sua\s+)?disposi[cç][aã]o[^.!?\\n]*(?:[.!?]|$)|se\s+precisar[^.!?\\n]*(?:[.!?]|$))/gi;
   trimmed = trimmed.replace(indirect, ' ');
 
   // Remove only *trailing* checkpoint variants, then append exactly one direct
