@@ -80,6 +80,7 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `asks_for_price`: true quando o lead pede o preço/valor/orçamento, mesmo abreviado ("qnto", "vlr", "quanto fica?").
 - `wants_artist`: true quando o lead pede para falar com o artista/tatuador, mesmo com erro ("artsta", "tatuadô").
 - `asks_location`: true quando o lead pergunta onde fica o estúdio ou se o artista está em alguma cidade ("onde vocês ficam?", "você é daqui?", "tá em Nova Resende?", "atende em X?"). false caso contrário.
+- `promotion_second`: true quando o lead diz que vai fazer a tatuagem junto com OUTRA PESSOA que JÁ FECHOU a promoção 2 por 1 — ele é a segunda pessoa dessa promoção ("meu amigo já fechou a promoção e eu vou fazer a segunda", "minha namorada já pagou o 2 por 1", "a segunda tattoo da promoção é minha"). false quando ele só pergunta da promoção, ou quer fazer duas tattoos junto com alguém sem que ninguém já tenha fechado.
 - `answers_previous`: a resposta do lead à pergunta anterior da Beatriz (`[Beatriz perguntou antes]`). `yes` para qualquer afirmativa ("sim", "s", "ss", "isso", "ok", "beleza", "pode", "uhum"), mesmo abreviada ou com erro. `no` para negativa ("não", "n", "ainda não"). `other` quando ele pergunta outra coisa ou muda de assunto. `null` quando não havia pergunta.
 - `cannot_send_photo`: true quando o lead diz que não tem/consegue mandar a foto ("não tenho foto", "apaguei", "não tenho mais"). false caso contrário.
 - `both_sides`: true quando o lead quer a tatuagem dos dois lados do braço ("parte de fora e de dentro", "os dois lados").
@@ -165,6 +166,7 @@ Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana
   "asks_for_price": true or false,
   "wants_artist": true or false,
   "asks_location": true or false,
+  "promotion_second": true or false,
   "objection": "decision | price | timing | doubt | vague or null",
   "closing": true or false,
   "photo_match": {

@@ -141,7 +141,8 @@ BUILD_SYSTEM_PROMPT_JS = (
     "if (promoActive) {\n"
     "  offerBlock = 'PROMOÇÃO ATIVA: \"' + (offer.name || 'promoção') + '\". ' + (offer.description || '') + '\\n'\n"
     "    + 'O preço a ser apresentado no orçamento JÁ é o preço da promoção (multiplicador ' + (Number(offer.multiplier) || 1) + 'x sobre a tabela). NUNCA apresente o preço da tabela quando a promoção está ativa: o valor a cobrar é o da promoção. Apresente esse valor como o preço normal e, em seguida, mencione a promoção: fazendo uma tatuagem, você ganha outra do mesmo tamanho, grátis.\\n'\n"
-    "    + 'NUNCA fale do VALOR da segunda tatuagem: ela não tem preço, é assunto do artista. A SEGUNDA tatuagem é combinada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário nem condição para a segunda e não prometa a mesma sessão. Se o lead perguntar qualquer detalhe da segunda (tamanho diferente, local, quando, quanto), diga que o artista combina com ele.';\n"
+    "    + 'NUNCA fale do VALOR da segunda tatuagem: ela não tem preço, é assunto do artista. A SEGUNDA tatuagem é combinada DIRETAMENTE com o artista e NUNCA é agendada por você: não ofereça horário nem condição para a segunda e não prometa a mesma sessão. Se o lead perguntar qualquer detalhe da segunda (tamanho diferente, local, quando, quanto), diga que o artista combina com ele.\\n'\n"
+    "    + 'Se o lead disser que vai fazer a tattoo junto com alguém que JÁ FECHOU a promoção 2 por 1 (ele é a segunda pessoa), NÃO faça orçamento nem agendamento: diga que isso é com o artista e passe o atendimento para ele.';\n"
     "}\n"
     "if (openQuote) {\n"
     "  offerBlock += '\\n\\nJá existe uma COTAÇÃO aberta para este lead (proteção de preço): primeira tatuagem ' + fmtOfferBRL(offer.open_quote_offered_cents) + ', válida até ' + String(offer.open_quote_valid_until || '').slice(0, 10) + '. HONRE essa cotação mesmo que a promoção tenha sido pausada ou que o preço da promoção seja diferente. NÃO fale do valor da segunda tatuagem.';\n"
@@ -1109,6 +1110,15 @@ if (finalHandoff === 'lead_requested_artist' && !leadRequestedArtist) {
   }
 }
 
+// Guardrail: the lead is the second person of a 2-for-1 that someone else
+// already closed. The second tattoo belongs to the artist, so the agent hands
+// off instead of quoting or scheduling it.
+if (parsed.promotion_second === true && !terminal.includes(current)) {
+  finalHandoff = 'promotion_second';
+  finalPipeline = 'aguardando_artista';
+  finalEvent = 'handoff_triggered';
+}
+
 // If the lead explicitly corrected the type to "nova", bring the Project back
 // from aguardando_artista and continue the qualification.
 if (tipoDeterministic === 'nova' && current === 'aguardando_artista') {
@@ -1915,6 +1925,15 @@ function tidyWhatsapp(text) {
   out = out.replace(/como posso te chamar/gi, 'qual o seu nome');
   return out.trim();
 }
+// The second person of an already-closed 2-for-1 is the artist's to handle:
+// replace any quote or scheduling with a clean handoff.
+if (finalHandoff === 'promotion_second') {
+  const promoArtist = $('Resolve Artist').first().json || {};
+  finalReply = 'Isso é com o ' + (promoArtist.name || 'artista')
+    + '. Vou passar seu atendimento para o artista, combinado?';
+  finalEvent = 'handoff_triggered';
+}
+
 // ── Location question: answer with the saved city/address, not "vou confirmar".
 //    The classifier reads whether the lead asked where the studio is; the
 //    artist's saved data guarantees the answer even when the model defers.
@@ -2160,6 +2179,7 @@ if (event === 'handoff_triggered' || saidHandoff) {
     no_price_row: 'Sem preço para o local',
     no_availability: 'Sem horário disponível no calendário',
     triage_only: 'Triagem concluída (venda completa desativada)',
+    promotion_second: 'Segunda tattoo de promoção 2 por 1 fechada por outra pessoa',
   };
   const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'não especificado';
 

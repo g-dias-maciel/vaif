@@ -44,6 +44,7 @@
         'vague' => 'Descrição vaga',
         'audio_2x' => 'Áudio repetido',
         'no_availability' => 'Sem horário disponível',
+        'promotion_second' => 'Segunda tattoo da promoção 2 por 1',
     ];
     $handoffSummary = $pendingHandoffs
         ->groupBy(fn ($handoff) => $handoffLabels[$handoff->handoff_reason] ?? 'Atendimento')
