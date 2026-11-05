@@ -133,6 +133,34 @@ class GoogleCalendarSyncTest extends TestCase
         $this->assertSame('evt-old', $entry->refresh()->google_event_id);
     }
 
+    public function test_deleting_a_lead_deletes_its_google_events(): void
+    {
+        $artist = $this->artist();
+        [$lead] = $this->booking($artist, ['google_event_id' => 'evt-del']);
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldReceive('deleteEvent')
+                ->once()
+                ->with('artist@example.com', 'evt-del');
+        });
+
+        $this->assertSame(1, app(GoogleCalendarSync::class)->deleteForLead($lead));
+    }
+
+    public function test_deleting_a_lead_without_a_google_calendar_is_a_noop(): void
+    {
+        $artist = $this->artist();
+        $artist->forceFill(['google_calendar_id' => null])->save();
+
+        [$lead] = $this->booking($artist, ['google_event_id' => 'evt-x']);
+
+        $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
+            $mock->shouldNotReceive('deleteEvent');
+        });
+
+        $this->assertSame(0, app(GoogleCalendarSync::class)->deleteForLead($lead->fresh()));
+    }
+
     public function test_a_cancelled_booking_deletes_the_event(): void
     {
         $artist = $this->artist();

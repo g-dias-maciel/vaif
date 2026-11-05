@@ -86,10 +86,30 @@ class SettingsController extends Controller
         $google = app(GoogleCalendarService::class);
         $googleConfigured = $google->isConfigured();
 
+        // Sync state: the Artist must be able to see a broken sharing instead
+        // of silently assuming bookings reach Google.
+        $googleSyncError = null;
+        $googleSyncPending = 0;
+        $googleSyncFailed = 0;
+        $googleSyncedAt = null;
+        if ($artist->hasGoogleCalendar()) {
+            $bookings = CalendarEntry::where('artist_id', $artist->id)->where('kind', 'booking');
+            $googleSyncPending = (clone $bookings)->where('google_sync_pending', true)->count();
+            $googleSyncFailed = (clone $bookings)->whereNotNull('google_sync_error')->count();
+            $googleSyncError = (clone $bookings)->whereNotNull('google_sync_error')
+                ->orderByDesc('updated_at')
+                ->value('google_sync_error');
+            $googleSyncedAt = (clone $bookings)->max('google_synced_at');
+        }
+
         return view('settings.index', [
             'artist' => $artist,
             'googleConfigured' => $googleConfigured,
             'googleServiceEmail' => $googleConfigured ? $google->serviceAccountEmail() : null,
+            'googleSyncError' => $googleSyncError,
+            'googleSyncPending' => $googleSyncPending,
+            'googleSyncFailed' => $googleSyncFailed,
+            'googleSyncedAt' => $googleSyncedAt,
             'promotions' => $artist->promotions()->orderByDesc('created_at')->get(),
             'pricingByKey' => $pricingByKey,
             'sizes' => $sizes,
@@ -526,6 +546,67 @@ class SettingsController extends Controller
             $counts['failed'] > 0
                 ? $summary.'; '.$counts['failed'].' falhou(aram). Tente novamente.'
                 : $summary.'.',
+        );
+    }
+
+    /**
+     * Re-validate the calendar sharing and sync. Surfaces a read-only sharing
+     * instead of failing silently.
+     */
+    public function recheckGoogle(GoogleCalendarService $google, GoogleCalendarSync $sync)
+    {
+        $artist = $this->activeArtist();
+
+        abort_unless($artist && $artist->hasGoogleCalendar(), 403);
+
+        try {
+            $calendar = $google->getCalendar($artist->google_calendar_id);
+        } catch (Throwable $e) {
+            $message = 'Não foi possível acessar a agenda: '.$e->getMessage();
+
+            CalendarEntry::where('artist_id', $artist->id)->where('kind', 'booking')
+                ->update(['google_sync_error' => $message]);
+
+            return back()->with('error', $message);
+        }
+
+        if (in_array($calendar['access_role'] ?? null, ['reader', 'freeBusyReader'], true)) {
+            $message = 'A agenda está compartilhada apenas para leitura. Compartilhe com “Fazer alterações nos eventos”.';
+
+            CalendarEntry::where('artist_id', $artist->id)->where('kind', 'booking')
+                ->update(['google_sync_error' => $message]);
+
+            return back()->with('error', $message);
+        }
+
+        $artist->forceFill([
+            'google_calendar_summary' => $calendar['summary'],
+            'google_calendar_timezone' => $calendar['timezone'],
+        ])->save();
+
+        // The sharing is writable again: clear the old error and retry the queue.
+        CalendarEntry::where('artist_id', $artist->id)->where('kind', 'booking')
+            ->whereNotNull('google_sync_error')
+            ->update(['google_sync_error' => null, 'google_sync_pending' => true]);
+
+        try {
+            $counts = $sync->syncArtist($artist, 50);
+        } catch (Throwable $e) {
+            return back()->with('error', 'Acesso confirmado, mas a sincronização falhou: '.$e->getMessage());
+        }
+
+        $summary = sprintf(
+            '%d criado(s), %d atualizado(s), %d removido(s)',
+            $counts['created'],
+            $counts['updated'],
+            $counts['deleted'],
+        );
+
+        return back()->with(
+            $counts['failed'] > 0 ? 'error' : 'status',
+            $counts['failed'] > 0
+                ? 'Acesso confirmado. '.$summary.'; '.$counts['failed'].' falhou(aram).'
+                : 'Acesso confirmado. '.$summary.'.',
         );
     }
 

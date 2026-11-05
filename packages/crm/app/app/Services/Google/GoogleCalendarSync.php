@@ -92,6 +92,41 @@ class GoogleCalendarSync
     }
 
     /**
+     * Delete the Google events of a lead that is about to be removed.
+     *
+     * The lead deletion cascades to `calendar_entries`, so the reconcile loop
+     * never sees them; without this the events stay orphaned in Google. Best
+     * effort: a Google failure must not block the deletion.
+     */
+    public function deleteForLead(\App\Models\Lead $lead): int
+    {
+        $artist = $lead->artist;
+
+        if (! $artist || ! $artist->hasGoogleCalendar()) {
+            return 0;
+        }
+
+        $calendarId = (string) $artist->google_calendar_id;
+        $deleted = 0;
+
+        $entries = CalendarEntry::where('artist_id', $lead->artist_id)
+            ->where('lead_id', $lead->id)
+            ->whereNotNull('google_event_id')
+            ->get();
+
+        foreach ($entries as $entry) {
+            try {
+                $this->google->deleteEvent($calendarId, (string) $entry->google_event_id);
+                $deleted++;
+            } catch (Throwable $e) {
+                report($e);
+            }
+        }
+
+        return $deleted;
+    }
+
+    /**
      * @return 'created'|'updated'|'deleted'|'skipped'
      */
     private function syncEntry(Artist $artist, CalendarEntry $entry): string

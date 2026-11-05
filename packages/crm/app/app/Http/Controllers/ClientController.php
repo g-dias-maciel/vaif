@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Lead;
+use App\Services\Google\GoogleCalendarSync;
 use Illuminate\Support\Facades\DB;
 
 class ClientController extends Controller
@@ -45,9 +46,14 @@ class ClientController extends Controller
      * Permanently remove a client and all attached history. The UI confirms
      * this in a lightbox before posting.
      */
-    public function destroy(Lead $lead)
+    public function destroy(Lead $lead, GoogleCalendarSync $sync)
     {
         $this->authorize('delete', $lead);
+
+        // `delete_lead` cascades to calendar_entries, so the sync loop would
+        // never see them and the Google events would stay orphaned. Remove them
+        // first (best effort: a Google failure must not block the deletion).
+        $sync->deleteForLead($lead);
 
         $deleted = DB::selectOne('select delete_lead(?, ?, ?) as deleted', [
             $lead->artist_id,

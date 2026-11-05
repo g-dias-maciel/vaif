@@ -57,6 +57,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/config/google', [SettingsController::class, 'connectGoogle'])->name('settings.google.connect');
         Route::post('/config/google/detect', [SettingsController::class, 'detectGoogleCalendars'])->name('settings.google.detect');
         Route::post('/config/google/sync', [SettingsController::class, 'syncGoogle'])->name('settings.google.sync');
+        Route::post('/config/google/recheck', [SettingsController::class, 'recheckGoogle'])->name('settings.google.recheck');
         Route::post('/config/google/disconnect', [SettingsController::class, 'disconnectGoogle'])->name('settings.google.disconnect');
         Route::post('/pricing/bulk', [SettingsController::class, 'storePricingBulk'])->name('pricing.bulk');
         Route::post('/pricing/add-location', [SettingsController::class, 'addLocation'])->name('pricing.add-location');

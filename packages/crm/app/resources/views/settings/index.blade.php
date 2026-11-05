@@ -342,10 +342,38 @@
             </div>
         @endif
 
+        @if (! empty($googleSyncError))
+            <div class="flash error" style="display:block; margin-top:10px;">
+                <strong>Falha ao sincronizar com o Google.</strong> {{ $googleSyncError }}
+                @if ($googleSyncFailed > 0)
+                    ({{ $googleSyncFailed }} agendamento{{ $googleSyncFailed === 1 ? '' : 's' }} com erro.)
+                @endif
+                <br>
+                Confira se a agenda <code>{{ $artist->google_calendar_id }}</code> está compartilhada com
+                <code>{{ $googleServiceEmail ?? 'o e-mail da VAIF' }}</code> com a permissão
+                “Fazer alterações nos eventos” e clique em “Reconferir acesso”.
+            </div>
+        @elseif ($googleSyncPending > 0)
+            <p class="meta" style="margin-top:10px;">
+                {{ $googleSyncPending }} agendamento{{ $googleSyncPending === 1 ? '' : 's' }} na fila para o Google.
+                @if ($googleSyncedAt)
+                    Última sincronização {{ \Illuminate\Support\Carbon::parse($googleSyncedAt)->format('d/m H:i') }}.
+                @endif
+            </p>
+        @elseif ($googleSyncedAt)
+            <p class="meta" style="margin-top:10px;">
+                Tudo sincronizado. Última sincronização {{ \Illuminate\Support\Carbon::parse($googleSyncedAt)->format('d/m H:i') }}.
+            </p>
+        @endif
+
         <div class="actions-row">
             <form method="post" action="{{ route('settings.google.sync') }}" class="inline">
                 @csrf
                 <button type="submit" class="btn btn--small">Sincronizar agora</button>
+            </form>
+            <form method="post" action="{{ route('settings.google.recheck') }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small">Reconferir acesso</button>
             </form>
             <form method="post" action="{{ route('settings.google.disconnect') }}" class="inline">
                 @csrf
