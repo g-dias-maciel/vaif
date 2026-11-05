@@ -4,6 +4,7 @@ namespace Tests\Unit;
 
 use App\Models\Artist;
 use App\Services\WahaService;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 use Tests\TestCase;
 
@@ -93,6 +94,34 @@ class WahaServiceTest extends TestCase
             && $request->url() === 'https://waha.test/api/sessions'
             && $request['name'] === 'default'
             && $request['config']['noweb']['store']['enabled'] === true);
+    }
+
+    public function test_is_saved_contact_requires_an_address_book_name()
+    {
+        Http::fake([
+            'waha.test/api/contacts/all*' => Http::response([
+                ['id' => '5511900000000@c.us', 'phoneNumber' => '5511900000000@s.whatsapp.net', 'name' => 'Salvo'],
+                ['id' => '5511800000000@c.us', 'phoneNumber' => '5511800000000@s.whatsapp.net', 'pushname' => 'Nao Salvo'],
+            ], 200),
+        ]);
+        config(['transport.waha_url' => 'https://waha.test']);
+        Cache::flush();
+
+        $service = WahaService::make();
+        $artist = $this->artist();
+
+        $this->assertTrue($service->isSavedContact($artist, '+5511900000000'));
+        $this->assertFalse($service->isSavedContact($artist, '+5511800000000'));
+        $this->assertFalse($service->isSavedContact($artist, '+5511700000000'));
+    }
+
+    public function test_is_saved_contact_returns_null_when_waha_fails()
+    {
+        Http::fake(['waha.test/*' => Http::response('', 500)]);
+        config(['transport.waha_url' => 'https://waha.test']);
+        Cache::flush();
+
+        $this->assertNull(WahaService::make()->isSavedContact($this->artist(), '+5511900000000'));
     }
 
     public function test_send_text_posts_to_the_session()

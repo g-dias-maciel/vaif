@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Artist;
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Http\Client\PendingRequest;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
 
 /**
@@ -247,9 +248,13 @@ class WahaService
     /**
      * Whether the phone is in the Artist's saved WhatsApp contacts.
      *
-     * Requires the NOWEB store to be enabled on the session. Returns null when
-     * the check cannot be made (store off, WAHA unreachable) so the caller can
-     * fail open and never block a lead on an infrastructure error.
+     * `check-exists` is NOT this check: it answers "is this a registered
+     * WhatsApp number?" (true for anyone). A saved contact is an entry in the
+     * address-book list that has a `name` (a bare `pushname` is the contact's
+     * own profile name, not something the Artist saved).
+     *
+     * Requires the NOWEB store. Returns null when the check cannot be made
+     * (store off, WAHA unreachable) so the caller can fail open.
      */
     public function isSavedContact(Artist $artist, string $phone): ?bool
     {
@@ -263,9 +268,47 @@ class WahaService
             return null;
         }
 
+        $contacts = $this->contacts($artist);
+
+        if ($contacts === null) {
+            return null;
+        }
+
+        foreach ($contacts as $contact) {
+            if (! is_array($contact)) {
+                continue;
+            }
+
+            $numbers = [
+                preg_replace('/\D+/', '', (string) ($contact['phoneNumber'] ?? '')),
+                preg_replace('/\D+/', '', (string) ($contact['id'] ?? '')),
+            ];
+
+            if (in_array($digits, $numbers, true)) {
+                return ! empty($contact['name']);
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The Artist's saved contacts (name + phone), cached briefly because first
+     * contacts are rare but the list can be large.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    private function contacts(Artist $artist): ?array
+    {
+        $cacheKey = 'waha:contacts:'.$artist->id;
+        $cached = Cache::get($cacheKey);
+
+        if (is_array($cached)) {
+            return $cached;
+        }
+
         try {
-            $resp = $this->client()->get('/api/contacts/check-exists', [
-                'phone' => $digits,
+            $resp = $this->client()->get('/api/contacts/all', [
                 'session' => $artist->wa_session_slug,
             ]);
         } catch (ConnectionException) {
@@ -276,7 +319,15 @@ class WahaService
             return null;
         }
 
-        return (bool) ($resp->json('numberExists') ?? false);
+        $contacts = $resp->json();
+
+        if (! is_array($contacts)) {
+            return null;
+        }
+
+        Cache::put($cacheKey, $contacts, 300);
+
+        return $contacts;
     }
 
     /**
