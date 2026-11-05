@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Artist;
+use App\Models\ArtistSetting;
 use App\Models\Lead;
 use App\Models\Project;
 use App\Models\User;
@@ -69,6 +70,31 @@ class LeadAgentFlagTest extends TestCase
 
         $this->assertNull($lead->refresh()->agent_blocked_at);
         $this->assertFalse($lead->agent_blocked);
+    }
+
+    public function test_silencing_a_lead_also_blocks_the_number_globally(): void
+    {
+        $artist = $this->artist();
+        $lead = $this->lead($artist);
+        $user = $this->artistUser($artist);
+
+        // A number already on the list must survive both toggles.
+        ArtistSetting::create([
+            'artist_id' => $artist->id,
+            'blocked_numbers' => ['5599999999999'],
+        ]);
+
+        $this->actingAs($user)->post("/leads/{$lead->id}/agent")->assertRedirect();
+
+        $numbers = $artist->settings()->first()->blocked_numbers;
+        $this->assertContains('5511900000000', $numbers);
+        $this->assertContains('5599999999999', $numbers);
+
+        $this->actingAs($user)->post("/leads/{$lead->id}/agent")->assertRedirect();
+
+        $numbers = $artist->settings()->first()->blocked_numbers;
+        $this->assertNotContains('5511900000000', $numbers);
+        $this->assertContains('5599999999999', $numbers);
     }
 
     public function test_an_artist_cannot_silence_another_artists_lead(): void

@@ -107,15 +107,42 @@ class LeadController extends Controller
     {
         $this->authorize('flagAgent', $lead);
 
-        $blocked = $lead->agent_blocked_at !== null;
+        $blocking = $lead->agent_blocked_at === null;
 
         $lead->forceFill([
-            'agent_blocked_at' => $blocked ? null : now(),
+            'agent_blocked_at' => $blocking ? now() : null,
         ])->save();
 
-        return back()->with('status', $blocked
-            ? 'Agente reativado para este cliente.'
-            : 'Agente silenciado para este cliente. A Beatriz não responderá mais automaticamente.');
+        // Keep the per-artist blocklist in sync. The per-lead flag lives on a
+        // single row; if that Lead is ever re-created (phone re-normalization,
+        // restore, anonymization) the silence would be lost and the agent
+        // would answer again. Writing the number to `blocked_numbers` makes the
+        // block durable and number-level: the "Blocked Number?" gate runs
+        // before the Lead exists, so the number stays blocked.
+        $settings = $lead->artist->settings()->firstOrCreate(['artist_id' => $lead->artist_id]);
+        $digits = preg_replace('/\D+/', '', (string) $lead->phone_e164);
+        $digitsOf = fn (string $n): string => preg_replace('/\D+/', '', $n);
+        $numbers = array_values(array_filter(
+            array_map(fn ($n) => (string) $n, (array) ($settings->blocked_numbers ?? [])),
+            fn (string $n) => $n !== '',
+        ));
+
+        if ($blocking) {
+            if ($digits !== '' && ! in_array($digits, array_map($digitsOf, $numbers), true)) {
+                $numbers[] = $digits;
+            }
+        } else {
+            $numbers = array_values(array_filter(
+                $numbers,
+                fn (string $n) => $digitsOf($n) !== $digits,
+            ));
+        }
+
+        $settings->forceFill(['blocked_numbers' => $numbers])->save();
+
+        return back()->with('status', $blocking
+            ? 'Agente silenciado para este cliente. A Beatriz não responderá mais automaticamente.'
+            : 'Agente reativado para este cliente.');
     }
 
     /**
