@@ -1915,6 +1915,23 @@ function tidyWhatsapp(text) {
   out = out.replace(/como posso te chamar/gi, 'qual o seu nome');
   return out.trim();
 }
+// ── Location question: answer with the saved city/address, not "vou confirmar".
+//    The classifier reads whether the lead asked where the studio is; the
+//    artist's saved data guarantees the answer even when the model defers.
+const locationArtist = $('Resolve Artist').first().json || {};
+const artistCity = String(locationArtist.city || '').trim();
+const artistAddress = String(locationArtist.address || '').trim();
+if (parsed.asks_location === true && artistCity !== '' && !finalReply.includes(artistCity)) {
+  const locationAnswer = 'O estúdio fica em ' + artistCity
+    + (artistAddress ? ', ' + artistAddress : '') + '.';
+  const deferral = /[^.!?]*vou confirmar[^.!?]*localiza[^.!?]*[.!?]?/i;
+  if (deferral.test(finalReply)) {
+    finalReply = finalReply.replace(deferral, locationAnswer).replace(/\s{2,}/g, ' ').trim();
+  } else {
+    finalReply = locationAnswer + ' ' + finalReply;
+  }
+}
+
 finalReply = tidyWhatsapp(finalReply);
 
 // ── Audio handling (deterministic — the model never sees the raw placeholder
