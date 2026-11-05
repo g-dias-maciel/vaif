@@ -252,12 +252,13 @@ class GoogleCalendarSync
     {
         $start = $event['start'] ?? [];
         $end = $event['end'] ?? [];
-        $appTz = (string) config('app.timezone', 'UTC');
 
+        // Store in UTC: the pgsql session runs in UTC, so a Carbon in the app
+        // timezone would be written as a different instant.
         if (isset($start['dateTime'])) {
-            $startAt = CarbonImmutable::parse((string) $start['dateTime'])->setTimezone($appTz);
+            $startAt = CarbonImmutable::parse((string) $start['dateTime'])->utc();
             $endAt = isset($end['dateTime'])
-                ? CarbonImmutable::parse((string) $end['dateTime'])->setTimezone($appTz)
+                ? CarbonImmutable::parse((string) $end['dateTime'])->utc()
                 : $startAt;
 
             return [$startAt, $endAt];
@@ -265,11 +266,9 @@ class GoogleCalendarSync
 
         if (isset($start['date'])) {
             $tz = $timezone !== '' ? $timezone : 'UTC';
-            $startAt = CarbonImmutable::parse((string) $start['date'], $tz)
-                ->startOfDay()
-                ->setTimezone($appTz);
+            $startAt = CarbonImmutable::parse((string) $start['date'], $tz)->startOfDay()->utc();
             $endAt = isset($end['date'])
-                ? CarbonImmutable::parse((string) $end['date'], $tz)->startOfDay()->setTimezone($appTz)
+                ? CarbonImmutable::parse((string) $end['date'], $tz)->startOfDay()->utc()
                 : $startAt->addDay();
 
             if ($endAt <= $startAt) {

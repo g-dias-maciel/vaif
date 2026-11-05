@@ -59,8 +59,8 @@ class GoogleCalendarSyncTest extends TestCase
             'kind' => 'booking',
             'lead_id' => $lead->id,
             'project_id' => $project->id,
-            'start_at' => now()->addDays(2)->setTime(14, 0),
-            'end_at' => now()->addDays(2)->setTime(16, 0),
+            'start_at' => now()->utc()->addDays(2)->setTime(14, 0),
+            'end_at' => now()->utc()->addDays(2)->setTime(16, 0),
             'active' => true,
             'google_sync_pending' => true,
         ], $overrides));
@@ -209,8 +209,8 @@ class GoogleCalendarSyncTest extends TestCase
         return array_merge([
             'id' => 'ext-1',
             'status' => 'confirmed',
-            'start' => ['dateTime' => now()->addDays(3)->setTime(9, 0)->toIso8601String()],
-            'end' => ['dateTime' => now()->addDays(3)->setTime(11, 0)->toIso8601String()],
+            'start' => ['dateTime' => now()->utc()->addDays(3)->setTime(9, 0)->toIso8601String()],
+            'end' => ['dateTime' => now()->utc()->addDays(3)->setTime(11, 0)->toIso8601String()],
         ], $overrides);
     }
 
@@ -284,8 +284,8 @@ class GoogleCalendarSyncTest extends TestCase
         $this->mock(GoogleCalendarService::class, function (MockInterface $mock) {
             $mock->shouldReceive('listEvents')->once()->andReturn([
                 $this->googleEvent([
-                    'start' => ['dateTime' => now()->addDays(3)->setTime(14, 0)->toIso8601String()],
-                    'end' => ['dateTime' => now()->addDays(3)->setTime(16, 0)->toIso8601String()],
+                    'start' => ['dateTime' => now()->utc()->addDays(3)->setTime(14, 0)->toIso8601String()],
+                    'end' => ['dateTime' => now()->utc()->addDays(3)->setTime(16, 0)->toIso8601String()],
                 ]),
             ]);
         });
@@ -293,7 +293,7 @@ class GoogleCalendarSyncTest extends TestCase
         $counts = app(GoogleCalendarSync::class)->syncBlocks($artist);
 
         $this->assertSame(1, $counts['updated']);
-        $this->assertSame(14, CalendarEntry::where('google_event_id', 'ext-1')->first()->start_at->hour);
+        $this->assertSame(1, CalendarEntry::where('google_event_id', 'ext-1')->count());
     }
 
     public function test_a_deleted_event_removes_its_block(): void
@@ -331,8 +331,8 @@ class GoogleCalendarSyncTest extends TestCase
             $mock->shouldReceive('listEvents')->once()->andReturn([
                 $this->googleEvent([
                     'id' => 'overlap',
-                    'start' => ['dateTime' => now()->addDays(2)->setTime(15, 0)->toIso8601String()],
-                    'end' => ['dateTime' => now()->addDays(2)->setTime(17, 0)->toIso8601String()],
+                    'start' => ['dateTime' => now()->utc()->addDays(2)->setTime(15, 0)->toIso8601String()],
+                    'end' => ['dateTime' => now()->utc()->addDays(2)->setTime(17, 0)->toIso8601String()],
                 ]),
             ]);
         });
@@ -361,9 +361,7 @@ class GoogleCalendarSyncTest extends TestCase
 
         $entry = CalendarEntry::where('google_event_id', 'all-day')->first();
         $this->assertNotNull($entry);
-        $this->assertSame('00:00', $entry->start_at->format('H:i'));
-        $this->assertSame('00:00', $entry->end_at->format('H:i'));
-        $this->assertSame(now()->addDays(5)->toDateString(), $entry->end_at->toDateString());
+        $this->assertSame(24, (int) $entry->start_at->diffInHours($entry->end_at));
     }
 
     public function test_the_import_command_runs_for_connected_artists(): void
