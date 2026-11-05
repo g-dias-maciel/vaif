@@ -1516,7 +1516,10 @@ if (!isCoverOrRework && !triageOnly && !discoveryComplete && lead.name && !/\?/.
 // The photo supplied the placement/size: confirm with the lead before the
 // process. The name is often still null on this very turn (it is extracted
 // from the lead's message now), so gate on the reply instead.
-const asksName = /qual (?:é |e )?o seu nome|seu nome|como posso te chamar/i.test(finalReply);
+// Only an actual name question counts. A bare "seu nome" also matches the
+// model's acknowledgement ("agora que sei seu nome"), which used to skip the
+// photo confirmation and jump straight to the process.
+const asksName = /qual (?:é |e )?(?:o )?seu nome|como posso te chamar|posso saber seu nome/i.test(finalReply);
 if (photoDerived && !photoConfirmed && discoveryComplete && !asksName && !isCoverOrRework && !triageOnly) {
   finalReply = photoConfirmationQuestion(lead);
   finalPipeline = current;

@@ -212,5 +212,32 @@ check('keeps the placement from the photo', r.placement_val === 'antebraco', Str
 check('asks the size', /partinha|área média|local inteiro/i.test(r.final_reply), r.final_reply);
 check('does not ask for confirmation yet', !/é isso mesmo\?/i.test(r.final_reply), r.final_reply);
 
+// ── 4. A name acknowledgement is not a name question: the photo must still
+//       be confirmed before the process. (Production session 439a2133.) ──
+console.log('=== "agora que sei seu nome" does not skip the photo confirmation ===');
+r = run({
+  start: lead({
+    placement: 'antebraco',
+    body_zone: 'medio',
+    style: 'realismo',
+    agent_state: {
+      processo_explicado: false,
+      duvidas_eliminadas: false,
+      aguardando_confirmacao_duvidas: false,
+      preco_liberado: false,
+      pending_question: null,
+      photo_confirmed: false,
+      placement_from_photo: true,
+      zone_from_photo: true,
+      style_from_photo: true,
+    },
+  }),
+  leadText: 'pedro',
+  ai: 'Ótimo, Pedro! Agora que sei seu nome, vamos seguir com os detalhes. Como a flor é uma tatuagem nova, vou explicar como funciona o processo do Gabriel. No dia da sua tatuagem, ele vai sentar junto com você.',
+  classifier: classifier({ price_gate: { processo_explicado: true } }),
+});
+check('still asks the photo confirmation', /vi na foto.*é isso mesmo\?/i.test(r.final_reply), r.final_reply);
+check('does not explain the process yet', !/processo do Gabriel|processo de cria/i.test(r.final_reply), r.final_reply);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);
