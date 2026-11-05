@@ -91,6 +91,40 @@ class GoogleCalendarService
     }
 
     /**
+     * Prove the service account can write to the calendar.
+     *
+     * `accessRole` is omitted by Google for a calendar shared directly with a
+     * service account (it only appears in `calendarList`), so the only reliable
+     * check is a throwaway event: create it and delete it.
+     */
+    public function canWrite(string $calendarId): bool
+    {
+        $start = now()->utc()->addMinutes(5);
+        $end = $start->copy()->addMinutes(5);
+
+        try {
+            $probe = $this->createEvent($calendarId, [
+                'summary' => 'VAIF — verificação de acesso',
+                'start' => ['dateTime' => $start->toIso8601String(), 'timeZone' => 'UTC'],
+                'end' => ['dateTime' => $end->toIso8601String(), 'timeZone' => 'UTC'],
+            ]);
+        } catch (GoogleCalendarException) {
+            return false;
+        }
+
+        if (! empty($probe['id'])) {
+            try {
+                $this->deleteEvent($calendarId, (string) $probe['id']);
+            } catch (GoogleCalendarException) {
+                // The write permission was already proven; leaving the probe is
+                // harmless if the cleanup fails.
+            }
+        }
+
+        return true;
+    }
+
+    /**
      * @param  array<string, mixed>  $event
      * @return array<string, mixed>
      */

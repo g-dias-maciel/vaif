@@ -79,6 +79,7 @@ class GoogleCalendarSettingsTest extends TestCase
                     'summary' => 'Agenda da Tattoo',
                     'timezone' => 'America/Sao_Paulo',
                 ]);
+            $mock->shouldReceive('canWrite')->once()->with('artist@example.com')->andReturn(true);
         });
 
         $this->actingAs($user)->get('/config')
@@ -110,6 +111,7 @@ class GoogleCalendarSettingsTest extends TestCase
                 'timezone' => 'America/Sao_Paulo',
                 'access_role' => 'reader',
             ]);
+            $mock->shouldReceive('canWrite')->once()->andReturn(false);
         });
 
         $this->actingAs($user)

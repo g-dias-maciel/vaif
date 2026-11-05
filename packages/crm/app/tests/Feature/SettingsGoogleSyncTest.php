@@ -107,15 +107,15 @@ class SettingsGoogleSyncTest extends TestCase
                 'id' => 'artist@example.com',
                 'summary' => 'Agenda da Tattoo',
                 'timezone' => 'America/Sao_Paulo',
-                'access_role' => 'reader',
             ]);
+            $mock->shouldReceive('canWrite')->andReturn(false);
         });
 
         $this->actingAs($user)->post('/config/google/recheck')->assertRedirect();
 
         $this->assertDatabaseHas('calendar_entries', [
             'artist_id' => $artist->id,
-            'google_sync_error' => 'A agenda está compartilhada apenas para leitura. Compartilhe com “Fazer alterações nos eventos”.',
+            'google_sync_error' => 'Sem permissão de escrita na agenda. Compartilhe com “Fazer alterações nos eventos”.',
         ]);
     }
 }

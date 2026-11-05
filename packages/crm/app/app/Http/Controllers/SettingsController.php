@@ -431,7 +431,9 @@ class SettingsController extends Controller
             return back()->with('error', 'Não foi possível acessar essa agenda: '.$e->getMessage());
         }
 
-        if (in_array($calendar['access_role'] ?? null, ['reader', 'freeBusyReader'], true)) {
+        // `accessRole` is omitted when the calendar is shared directly with the
+        // service account, so probe an actual write.
+        if (! $google->canWrite($calendarId)) {
             return back()->with('error', 'Essa agenda foi compartilhada apenas para leitura. Compartilhe com a permissão “Fazer alterações nos eventos”.');
         }
 
@@ -570,8 +572,8 @@ class SettingsController extends Controller
             return back()->with('error', $message);
         }
 
-        if (in_array($calendar['access_role'] ?? null, ['reader', 'freeBusyReader'], true)) {
-            $message = 'A agenda está compartilhada apenas para leitura. Compartilhe com “Fazer alterações nos eventos”.';
+        if (! $google->canWrite((string) $artist->google_calendar_id)) {
+            $message = 'Sem permissão de escrita na agenda. Compartilhe com “Fazer alterações nos eventos”.';
 
             CalendarEntry::where('artist_id', $artist->id)->where('kind', 'booking')
                 ->update(['google_sync_error' => $message]);
