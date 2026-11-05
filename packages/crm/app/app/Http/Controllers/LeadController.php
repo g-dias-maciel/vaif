@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Services\DepositService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
 
 class LeadController extends Controller
 {
@@ -138,8 +140,11 @@ class LeadController extends Controller
                 'contact_gate_notified_at' => null,
             ])->save();
             $this->syncBlocklist($lead, false);
+            // The held first message was never answered (the flow stops before
+            // the AI). Replay it so Beatriz greets the contact right away.
+            $this->replayHeldMessage($lead);
 
-            return back()->with('status', 'Contato liberado. A Beatriz responde a partir da próxima mensagem.');
+            return back()->with('status', 'Contato liberado. A Beatriz já vai responder.');
         }
 
         $lead->forceFill([
@@ -150,6 +155,83 @@ class LeadController extends Controller
         $this->syncBlocklist($lead, true);
 
         return back()->with('status', 'Contato bloqueado. A Beatriz não responderá mais.');
+    }
+
+    /**
+     * Replay the message the saved-contact gate held, so the agent answers it
+     * now that the artist allowed the contact.
+     */
+    private function replayHeldMessage(Lead $lead): void
+    {
+        $text = trim((string) $lead->contact_gate_message);
+
+        if ($text === '') {
+            return;
+        }
+
+        $session = (string) ($lead->artist?->wa_session_slug ?? '');
+
+        if ($session === '') {
+            return;
+        }
+
+        // `chat_sessions` is Postgres-only (n8n owns it). When available, reuse
+        // the exact chat id the gate saw (LID or @c.us) so the replay lands on
+        // this Lead's conversation instead of opening a new one.
+        $storedChatId = '';
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $storedChatId = (string) DB::table('chat_sessions')
+                ->where('lead_id', $lead->id)
+                ->where('artist_id', $lead->artist_id)
+                ->value('chat_id');
+        }
+
+        $phone = preg_replace('/\D+/', '', (string) $lead->phone_e164);
+        $from = ($storedChatId !== '' && str_contains($storedChatId, ':'))
+            ? explode(':', $storedChatId, 2)[1]
+            : $phone.'@c.us';
+
+        $payload = [
+            'event' => 'message',
+            'session' => $session,
+            'payload' => [
+                'from' => $from,
+                'fromMe' => false,
+                'body' => $text,
+                'type' => 'chat',
+                'hasMedia' => false,
+                'media' => null,
+                '_data' => [
+                    'key' => [
+                        'remoteJid' => $from,
+                        'remoteJidAlt' => $phone.'@s.whatsapp.net',
+                        'fromMe' => false,
+                        'id' => 'replay-'.(string) Str::uuid(),
+                    ],
+                    'pushName' => (string) $lead->name,
+                    'message' => ['conversation' => $text],
+                ],
+            ],
+        ];
+
+        $url = (string) config('transport.waha_webhook_url');
+        $token = (string) config('transport.waha_webhook_token');
+
+        if ($url === '') {
+            return;
+        }
+
+        try {
+            Http::withHeaders($token !== '' ? ['X-VAIF-Webhook-Token' => $token] : [])
+                ->timeout(5)
+                ->post($url, $payload);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return;
+        }
+
+        $lead->forceFill(['contact_gate_message' => null])->save();
     }
 
     /**

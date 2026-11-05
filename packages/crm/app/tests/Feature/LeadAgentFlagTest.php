@@ -9,6 +9,7 @@ use App\Models\Project;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -120,6 +121,37 @@ class LeadAgentFlagTest extends TestCase
         $this->assertSame('blocked', $lead->contact_gate);
         $this->assertNotNull($lead->agent_blocked_at);
         $this->assertContains('5511900000000', $artist->settings()->first()->blocked_numbers);
+    }
+
+    public function test_allowing_a_gated_contact_replays_the_held_message(): void
+    {
+        Http::fake();
+        config([
+            'transport.waha_webhook_url' => 'https://n8n.test/webhook/waha-webhook',
+            'transport.waha_webhook_token' => 'secret',
+        ]);
+
+        $artist = $this->artist();
+        $lead = $this->lead($artist);
+        $lead->forceFill([
+            'contact_gate' => 'pending',
+            'contact_gate_message' => 'oi, quero uma tatuagem',
+        ])->save();
+        $user = $this->artistUser($artist);
+
+        $this->actingAs($user)
+            ->post("/leads/{$lead->id}/contact-gate", ['decision' => 'allow'])
+            ->assertRedirect();
+
+        $lead->refresh();
+        $this->assertSame('allowed', $lead->contact_gate);
+        $this->assertNull($lead->contact_gate_message);
+
+        Http::assertSent(fn ($request) => $request->url() === 'https://n8n.test/webhook/waha-webhook'
+            && $request['session'] === $artist->wa_session_slug
+            && $request['payload']['body'] === 'oi, quero uma tatuagem'
+            && $request['payload']['from'] === '5511900000000@c.us'
+            && in_array('secret', $request->header('X-VAIF-Webhook-Token'), true));
     }
 
     public function test_the_dashboard_lists_pending_saved_contacts(): void

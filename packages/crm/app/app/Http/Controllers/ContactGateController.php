@@ -30,6 +30,7 @@ class ContactGateController extends Controller
             'artist_id' => ['required', 'uuid'],
             'lead_id' => ['required', 'uuid'],
             'phone' => ['required', 'string', 'max:32'],
+            'message' => ['nullable', 'string', 'max:4096'],
         ]);
 
         $lead = Lead::where('id', $data['lead_id'])
@@ -58,7 +59,10 @@ class ContactGateController extends Controller
         // Fail open: if WAHA cannot answer, let the agent handle the lead
         // rather than leaving it unanswered on an infrastructure error.
         if ($saved === true) {
-            $lead->forceFill(['contact_gate' => 'pending'])->save();
+            $lead->forceFill([
+                'contact_gate' => 'pending',
+                'contact_gate_message' => $data['message'] ?? $lead->contact_gate_message,
+            ])->save();
 
             return response()->json(['hold' => true, 'gate' => 'pending']);
         }

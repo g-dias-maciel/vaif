@@ -77,6 +77,7 @@ return new class extends Migration
             $table->dateTime('agent_blocked_at')->nullable();
             $table->string('contact_gate', 16)->nullable();
             $table->dateTime('contact_gate_notified_at')->nullable();
+            $table->text('contact_gate_message')->nullable();
             $table->dateTime('anonymized_at')->nullable();
             $table->timestamps();
 

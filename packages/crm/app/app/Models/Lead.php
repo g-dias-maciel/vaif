@@ -33,6 +33,7 @@ class Lead extends Model
         'agent_blocked_at',
         'contact_gate',
         'contact_gate_notified_at',
+        'contact_gate_message',
         'anonymized_at',
     ];
 
