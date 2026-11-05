@@ -122,6 +122,19 @@ class LeadAgentFlagTest extends TestCase
         $this->assertContains('5511900000000', $artist->settings()->first()->blocked_numbers);
     }
 
+    public function test_the_dashboard_lists_pending_saved_contacts(): void
+    {
+        $artist = $this->artist();
+        $lead = $this->lead($artist);
+        $lead->forceFill(['contact_gate' => 'pending', 'name' => 'Vaif Novo'])->save();
+        $user = $this->artistUser($artist);
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('Contatos salvos aguardando você')
+            ->assertSee('Vaif Novo');
+    }
+
     public function test_an_artist_cannot_silence_another_artists_lead(): void
     {
         $owner = $this->artist('owner');
