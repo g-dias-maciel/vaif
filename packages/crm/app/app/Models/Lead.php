@@ -113,10 +113,39 @@ class Lead extends Model
 
     /**
      * What to show as the Lead's name when they never gave one.
+     *
+     * The WhatsApp profile name is stored as a placeholder on first contact. It
+     * can be a phrase ("Deus No Controle De Tudo"), an emoji or a symbol (".").
+     * Those must not be shown as the lead's name; the phone is displayed next
+     * to it on the cards.
      */
     public function displayName(): string
     {
-        return self::normalizeName($this->name) ?: 'Sem nome';
+        $name = self::normalizeName($this->name);
+
+        if ($name === null || ! self::looksLikePersonName($name)) {
+            return 'Sem nome';
+        }
+
+        return $name;
+    }
+
+    private static function looksLikePersonName(string $name): bool
+    {
+        if (! preg_match('/\p{L}/u', $name)) {
+            return false;
+        }
+
+        if (preg_match('/[\x{1F000}-\x{1FAFF}\x{2600}-\x{27BF}]/u', $name)) {
+            return false;
+        }
+
+        $meaningful = array_filter(
+            preg_split('/\s+/u', trim($name)) ?: [],
+            fn (string $part): bool => ! in_array(mb_strtolower($part), ['da', 'de', 'do', 'das', 'dos', 'e'], true),
+        );
+
+        return count($meaningful) <= 3;
     }
 
     /**
