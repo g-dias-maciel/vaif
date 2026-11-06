@@ -443,6 +443,56 @@
         details.accordion .accordion-body .slot-list { margin-top: 0; }
         details.accordion .accordion-body > .meta:first-child { margin-top: 0; }
 
+        /* Dashboard: a three-KPI summary and three collapsible pipeline lanes
+           instead of one long wall of columns. */
+        .dash-kpis { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-bottom: 20px; }
+        .kpi {
+            display: flex; flex-direction: column; gap: 4px;
+            background: var(--panel); border: 1px solid var(--border);
+            border-radius: 12px; padding: 14px 16px;
+            color: var(--ink); text-decoration: none;
+        }
+        .kpi-value { font-family: 'Montserrat', sans-serif; font-size: 1.4rem; font-weight: 700; color: var(--gold); }
+        .kpi-label { color: var(--muted); font-size: 0.72rem; text-transform: uppercase; letter-spacing: 1px; }
+        .kpi.is-alert { border-color: var(--danger); }
+        .kpi.is-alert .kpi-value { color: var(--danger); }
+
+        .pipeline-head { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin: 28px 0 14px; }
+        .board-search {
+            flex: 1 1 220px; max-width: 320px;
+            background: var(--bg); border: 1px solid var(--border); border-radius: 8px;
+            color: var(--ink); padding: 8px 10px; font-size: 0.85rem;
+        }
+        .board-search:focus { outline: 2px solid var(--gold); outline-offset: 1px; }
+
+        details.pipeline-lane { border: 1px solid var(--border); border-radius: 12px; background: var(--panel); margin-bottom: 14px; }
+        details.pipeline-lane > summary {
+            display: flex; align-items: center; gap: 10px;
+            padding: 12px 16px; cursor: pointer; list-style: none; user-select: none;
+            font-family: 'Montserrat', sans-serif; font-size: 0.95rem; color: var(--ink);
+        }
+        details.pipeline-lane > summary::-webkit-details-marker { display: none; }
+        details.pipeline-lane > summary::after {
+            content: ''; width: 8px; height: 8px; margin-left: auto;
+            border-right: 2px solid var(--muted); border-bottom: 2px solid var(--muted);
+            transform: rotate(45deg); transition: transform 0.15s ease;
+        }
+        details.pipeline-lane[open] > summary::after { transform: rotate(-135deg); }
+        details.pipeline-lane > summary:hover { background: var(--panel-2); border-radius: 12px; }
+        details.pipeline-lane .lane-body { padding: 0 16px 16px; }
+
+        details.cards-more { margin-top: 2px; }
+        details.cards-more > summary { cursor: pointer; color: var(--gold); font-size: 0.78rem; padding: 6px 2px; }
+        details.cards-more > summary::-webkit-details-marker { display: none; }
+        details.cards-more[open] > summary { margin-bottom: 8px; }
+
+        .handoff-group + .handoff-group { margin-top: 18px; }
+        .handoff-group-title {
+            display: flex; align-items: center; gap: 8px;
+            margin: 0 0 8px; font-family: 'Montserrat', sans-serif;
+            font-size: 0.8rem; text-transform: uppercase; letter-spacing: 1px; color: var(--muted);
+        }
+
         .slots { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; max-height: 420px; overflow-y: auto; }
         .slot-option {
             display: block; padding: 12px 14px; background: var(--panel-2); border: 1px solid var(--border);
@@ -524,6 +574,11 @@
             .panel { padding: 16px; }
             details.accordion > summary { padding: 14px 16px; }
             details.accordion .accordion-body { padding: 12px 16px 18px; }
+            .dash-kpis { grid-template-columns: 1fr; gap: 8px; }
+            .kpi { flex-direction: row; align-items: baseline; justify-content: space-between; padding: 12px 14px; }
+            .pipeline-head { gap: 10px; }
+            .board-search { max-width: none; }
+            details.pipeline-lane .lane-body { padding: 0 12px 12px; }
             .board { grid-template-columns: 1fr; gap: 12px; }
             .week-grid { grid-template-columns: repeat(7, minmax(118px, 1fr)); }
             .stat-grid { grid-template-columns: repeat(2, 1fr); gap: 10px; }

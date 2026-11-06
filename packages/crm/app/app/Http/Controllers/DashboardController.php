@@ -8,7 +8,6 @@ use App\Models\Project;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -33,6 +32,7 @@ class DashboardController extends Controller
         $period = Periods::fromRequest($request->query('period'));
         $from = Periods::start($period);
         $closedStatuses = config('crm.closed_pipeline_statuses');
+        $pipeline = config('crm.pipeline_statuses');
 
         $projects = Project::with(['lead', 'acceptedQuote', 'latestQuote', 'payments', 'calendar'])
             ->where('artist_id', $artist->id)
@@ -58,24 +58,14 @@ class DashboardController extends Controller
             ->get();
 
         // In-platform alert: the agent handed this client to the Artist and
-        // the Artist has not taken over the WhatsApp chat yet.
-        $pendingHandoffsQuery = Project::with(['lead'])
+        // the Artist has not resolved the handoff yet. Resolving happens when
+        // the artist replies on WhatsApp (take_chat_control) or clicks
+        // Assumir / Devolver à Beatriz on the dashboard.
+        $pendingHandoffs = Project::with(['lead'])
             ->where('artist_id', $artist->id)
-            ->where('stage_key', 'aguardando_artista');
-
-        // `chat_sessions` is Postgres-only (n8n owns it), so the "artist
-        // already replied" filter can only run against the real database.
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            $pendingHandoffsQuery->whereNotExists(function ($query) use ($artist) {
-                $query->select(DB::raw(1))
-                    ->from('chat_sessions')
-                    ->whereColumn('chat_sessions.lead_id', 'projects.lead_id')
-                    ->where('chat_sessions.artist_id', $artist->id)
-                    ->where('chat_sessions.owner', 'artist');
-            });
-        }
-
-        $pendingHandoffs = $pendingHandoffsQuery
+            ->where('stage_key', 'aguardando_artista')
+            ->whereNull('handoff_resolved_at')
+            ->orderByDesc('handoff_at')
             ->orderByDesc('updated_at')
             ->get();
 
@@ -158,6 +148,44 @@ class DashboardController extends Controller
             $projects->pluck('lead_id')->unique()->filter()->all()
         );
 
+        // Three friendly lanes instead of one wall of nine columns.
+        $liveStages = ['novo', 'qualificando', 'orcamento_enviado', 'aguardando_deposito', 'agendado', 'aguardando_artista'];
+        $closedStages = ['fechado', 'perdido'];
+        $blockedStages = ['bloqueado'];
+
+        $lanes = [
+            'live' => [
+                'label' => 'Em atendimento',
+                'pipeline' => array_intersect_key($pipeline, array_flip($liveStages)),
+                'open' => true,
+            ],
+            'closed' => [
+                'label' => 'Encerrados',
+                'pipeline' => array_intersect_key($pipeline, array_flip($closedStages)),
+                'open' => false,
+            ],
+            'blocked' => [
+                'label' => 'Bloqueados',
+                'pipeline' => array_intersect_key($pipeline, array_flip($blockedStages)),
+                'open' => false,
+            ],
+        ];
+
+        $laneCounts = [];
+        foreach ($lanes as $laneKey => $lane) {
+            $laneCounts[$laneKey] = $projects
+                ->whereIn('stage_key', array_keys($lane['pipeline']))
+                ->count();
+        }
+
+        $needsAttention = $pendingHandoffs->count()
+            + $pendingContactGates->count()
+            + $pendingDeposits->count();
+        $inConversation = $projects
+            ->whereIn('stage_key', ['novo', 'qualificando', 'orcamento_enviado', 'aguardando_deposito', 'aguardando_artista'])
+            ->count();
+        $scheduledCount = $projects->where('stage_key', 'agendado')->count();
+
         return view('dashboard.index', [
             'artist' => $artist,
             'lastMessageAt' => $lastMessageAt,
@@ -166,7 +194,12 @@ class DashboardController extends Controller
             'pendingHandoffs' => $pendingHandoffs,
             'pendingContactGates' => $pendingContactGates,
             'pendingDeposits' => $pendingDeposits,
-            'pipeline' => config('crm.pipeline_statuses'),
+            'pipeline' => $pipeline,
+            'lanes' => $lanes,
+            'laneCounts' => $laneCounts,
+            'needsAttention' => $needsAttention,
+            'inConversation' => $inConversation,
+            'scheduledCount' => $scheduledCount,
             'period' => $period,
             'periodOptions' => Periods::options(),
             'periodLabel' => Periods::label($period),

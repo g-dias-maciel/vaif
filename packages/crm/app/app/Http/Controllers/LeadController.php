@@ -52,6 +52,7 @@ class LeadController extends Controller
         $this->authorize('view', $lead);
 
         return view('leads._conversation', [
+            'lead' => $lead,
             'chatMessages' => $this->latestChatMessages($lead),
             'chatOwner' => $this->chatOwner($lead),
         ]);
@@ -352,6 +353,162 @@ class LeadController extends Controller
         }
 
         return back()->with('status', 'Lead marcado como agendado.');
+    }
+
+    /**
+     * The Artist takes over a handoff: close the pending handoff, move the
+     * project back to a live stage, and silence Beatriz on this chat.
+     */
+    public function acceptHandoff(Project $project)
+    {
+        $this->authorize('resolveHandoff', $project);
+
+        $actor = auth()->user()->isStaff() ? 'staff' : 'artist';
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            try {
+                DB::select('select * from resolve_project_handoff(?, ?, ?)', [
+                    $project->artist_id,
+                    $project->id,
+                    $actor,
+                ]);
+            } catch (\Illuminate\Database\QueryException $e) {
+                return back()->with('error', 'Não foi possível assumir este atendimento.');
+            }
+        }
+
+        $this->takeChatControl($project->lead);
+
+        return back()->with('status', 'Atendimento assumido. A Beatriz está silenciada nesta conversa.');
+    }
+
+    /**
+     * The Artist gives the conversation back to Beatriz. A pending handoff is
+     * resolved so it leaves the dashboard list.
+     */
+    public function returnHandoff(Project $project)
+    {
+        $this->authorize('resolveHandoff', $project);
+
+        $this->returnChatControl($project->lead);
+        $this->resolveOpenHandoff($project->lead, auth()->user()->isStaff() ? 'staff' : 'artist');
+
+        return back()->with('status', 'Conversa devolvida para a Beatriz.');
+    }
+
+    /**
+     * "Devolver para a Beatriz" from the conversation panel: give the chat
+     * back to the agent, and close an open handoff if one exists.
+     */
+    public function returnChat(Lead $lead)
+    {
+        $this->authorize('flagAgent', $lead);
+
+        $this->returnChatControl($lead);
+        $this->resolveOpenHandoff($lead, auth()->user()->isStaff() ? 'staff' : 'artist');
+
+        return back()->with('status', 'Conversa devolvida para a Beatriz.');
+    }
+
+    /**
+     * The chat id the WhatsApp session uses for this Lead. `chat_sessions` is
+     * Postgres-only; fall back to the session:phone convention.
+     */
+    private function chatIdFor(Lead $lead): string
+    {
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $stored = (string) DB::table('chat_sessions')
+                ->where('artist_id', $lead->artist_id)
+                ->where('lead_id', $lead->id)
+                ->orderByDesc('updated_at')
+                ->value('chat_id');
+
+            if ($stored !== '') {
+                return $stored;
+            }
+        }
+
+        $session = (string) ($lead->artist?->wa_session_slug ?? '');
+        $phone = preg_replace('/\D+/', '', (string) $lead->phone_e164);
+
+        return $session !== '' ? $session.':'.$phone.'@c.us' : '';
+    }
+
+    private function takeChatControl(?Lead $lead): void
+    {
+        if ($lead === null || DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $chatId = $this->chatIdFor($lead);
+
+        if ($chatId === '') {
+            return;
+        }
+
+        try {
+            DB::select('select * from take_chat_control(?, ?, ?)', [
+                $lead->artist_id,
+                $chatId,
+                $lead->id,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    private function returnChatControl(?Lead $lead): void
+    {
+        if ($lead === null || DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $chatId = $this->chatIdFor($lead);
+
+        if ($chatId === '') {
+            return;
+        }
+
+        try {
+            DB::select('select * from return_chat_control(?, ?)', [
+                $lead->artist_id,
+                $chatId,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
+    }
+
+    /**
+     * Resolve whichever of the Lead's projects is waiting for the artist.
+     */
+    private function resolveOpenHandoff(?Lead $lead, string $actor): void
+    {
+        if ($lead === null || DB::connection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
+        $projectId = DB::table('projects')
+            ->where('artist_id', $lead->artist_id)
+            ->where('lead_id', $lead->id)
+            ->where('stage_key', 'aguardando_artista')
+            ->whereNull('handoff_resolved_at')
+            ->orderByDesc('updated_at')
+            ->value('id');
+
+        if ($projectId === null) {
+            return;
+        }
+
+        try {
+            DB::select('select * from resolve_project_handoff(?, ?, ?)', [
+                $lead->artist_id,
+                $projectId,
+                $actor,
+            ]);
+        } catch (\Throwable $e) {
+            report($e);
+        }
     }
 
     /**

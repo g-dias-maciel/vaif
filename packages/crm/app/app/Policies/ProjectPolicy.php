@@ -59,6 +59,22 @@ class ProjectPolicy
     }
 
     /**
+     * Whether the user can take over / hand back a project the agent passed
+     * to the Artist.
+     */
+    public function resolveHandoff(User $user, Project $project): bool
+    {
+        if ($user->isStaff()) {
+            return true;
+        }
+
+        return $user->isArtist()
+            && $user->artist_id !== null
+            && $project->artist_id === $user->artist_id
+            && ! in_array($project->stage_key, ['fechado', 'perdido'], true);
+    }
+
+    /**
      * Whether the user can mark this Project as lost (perdido).
      */
     public function markLost(User $user, Project $project): bool

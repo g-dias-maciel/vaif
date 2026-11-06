@@ -152,23 +152,11 @@ class NotifyArtistAttention extends Command
      */
     private function pendingHandoffs(): Collection
     {
-        $query = Project::with(['lead', 'artist.settings'])
+        return Project::with(['lead', 'artist.settings'])
             ->where('stage_key', 'aguardando_artista')
-            ->whereNull('handoff_notified_at');
-
-        // A lead the artist already answered no longer needs the alert. The
-        // table is Postgres-only (n8n's memory/chat control).
-        if (DB::connection()->getDriverName() === 'pgsql') {
-            $query->whereNotExists(function ($sub) {
-                $sub->select(DB::raw(1))
-                    ->from('chat_sessions')
-                    ->whereColumn('chat_sessions.lead_id', 'projects.lead_id')
-                    ->whereColumn('chat_sessions.artist_id', 'projects.artist_id')
-                    ->where('chat_sessions.owner', 'artist');
-            });
-        }
-
-        return $query->get();
+            ->whereNull('handoff_resolved_at')
+            ->whereNull('handoff_notified_at')
+            ->get();
     }
 
     /**

@@ -33,6 +33,21 @@
     @endif
 </div>
 
+<div class="dash-kpis">
+    <a href="#dash-alerts" class="kpi {{ $needsAttention > 0 ? 'is-alert' : '' }}">
+        <span class="kpi-value">{{ $needsAttention }}</span>
+        <span class="kpi-label">precisam de você</span>
+    </a>
+    <div class="kpi">
+        <span class="kpi-value">{{ $inConversation }}</span>
+        <span class="kpi-label">em conversa</span>
+    </div>
+    <div class="kpi">
+        <span class="kpi-value">{{ $scheduledCount }}</span>
+        <span class="kpi-label">agendados</span>
+    </div>
+</div>
+
 <div id="dash-alerts">
 @if ($pendingHandoffs->isNotEmpty())
 @php
@@ -51,46 +66,78 @@
         ->map(fn ($group, $label) => $label.' '.$group->count())
         ->take(3)
         ->implode(' · ');
+    $handoffGroups = $pendingHandoffs
+        ->groupBy(fn ($handoff) => $handoffLabels[$handoff->handoff_reason] ?? 'Atendimento')
+        ->sortKeys();
 @endphp
-<details class="panel accordion" data-accordion="handoffs" style="margin-bottom: 20px; border-color: var(--danger);">
+<details class="panel accordion" data-accordion="handoffs" data-persist="handoffs" style="margin-bottom: 20px; border-color: var(--danger);">
     <summary>
         <h2 class="section-title">Atendimentos aguardando você</h2>
         <span class="tag">{{ $pendingHandoffs->count() }}</span>
         <span class="accordion-hint">{{ $handoffSummary }}</span>
     </summary>
     <div class="accordion-body">
-        <p class="meta">O agente passou estes clientes para você. Abra a conversa ou responda pelo WhatsApp para assumir o atendimento.</p>
+        <p class="meta">O agente passou estes clientes para você. Assuma para continuar no CRM, ou responda pelo WhatsApp — a conversa sai desta lista sozinha.</p>
 
-        <ul class="slot-list">
-            @foreach ($pendingHandoffs as $handoff)
-                <li>
-                    <div class="slot-main">
-                        <strong>
-                            @if ($handoff->lead)
-                                <a href="{{ route('leads.show', $handoff->lead) }}">{{ $handoff->lead->displayName() }}</a>
-                            @else
-                                Cliente
-                            @endif
-                        </strong>
-                        <span>
-                            {{ $handoffLabels[$handoff->handoff_reason] ?? ($handoff->handoff_reason ?: 'Atendimento solicitado') }}
-                            @if ($handoff->lead?->phone_e164)
-                                · {{ $handoff->lead->phone_e164 }}
-                            @endif
-                        </span>
-                        <span class="meta">Atualizado {{ $handoff->updated_at?->format('d/m H:i') }}</span>
-                    </div>
-                    <div class="actions-row">
-                        @if ($handoff->lead)
-                            <a href="{{ route('leads.show', $handoff->lead) }}" class="btn btn--ghost btn--small">Ver conversa</a>
-                            @if ($handoff->lead->whatsapp_url)
-                                <a href="{{ $handoff->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
-                            @endif
-                        @endif
-                    </div>
-                </li>
-            @endforeach
-        </ul>
+        @foreach ($handoffGroups as $groupLabel => $group)
+            <div class="handoff-group">
+                <h3 class="handoff-group-title">
+                    {{ $groupLabel }}
+                    <span class="tag">{{ $group->count() }}</span>
+                </h3>
+                <ul class="slot-list">
+                    @foreach ($group as $handoff)
+                        @php
+                            $waitingSince = $handoff->handoff_at ?? $handoff->updated_at;
+                            $waitingMin = $waitingSince ? (int) $waitingSince->diffInMinutes(now()) : null;
+                            $waitingLabel = $waitingMin === null
+                                ? null
+                                : ($waitingMin < 60
+                                    ? $waitingMin.' min'
+                                    : ($waitingMin < 1440
+                                        ? intdiv($waitingMin, 60).' h'
+                                        : intdiv($waitingMin, 1440).' d'));
+                        @endphp
+                        <li>
+                            <div class="slot-main">
+                                <strong>
+                                    @if ($handoff->lead)
+                                        <a href="{{ route('leads.show', $handoff->lead) }}">{{ $handoff->lead->displayName() }}</a>
+                                    @else
+                                        Cliente
+                                    @endif
+                                </strong>
+                                <span>
+                                    {{ $handoffLabels[$handoff->handoff_reason] ?? ($handoff->handoff_reason ?: 'Atendimento solicitado') }}
+                                    @if ($handoff->lead?->phone_e164)
+                                        · {{ $handoff->lead->phone_e164 }}
+                                    @endif
+                                </span>
+                                @if ($waitingLabel)
+                                    <span class="meta">Aguardando há {{ $waitingLabel }}</span>
+                                @endif
+                            </div>
+                            <div class="actions-row">
+                                @if ($handoff->lead)
+                                    <a href="{{ route('leads.show', $handoff->lead) }}" class="btn btn--ghost btn--small">Ver conversa</a>
+                                    @if ($handoff->lead->whatsapp_url)
+                                        <a href="{{ $handoff->lead->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
+                                    @endif
+                                @endif
+                                <form method="post" action="{{ route('projects.handoff.accept', $handoff) }}" class="inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn--small">Assumir</button>
+                                </form>
+                                <form method="post" action="{{ route('projects.handoff.return', $handoff) }}" class="inline">
+                                    @csrf
+                                    <button type="submit" class="btn btn--ghost btn--small">Devolver à Beatriz</button>
+                                </form>
+                            </div>
+                        </li>
+                    @endforeach
+                </ul>
+            </div>
+        @endforeach
     </div>
 </details>
 @endif
@@ -234,9 +281,9 @@
 </div>
 </div>
 
-<div id="dash-pipeline">
-<div style="display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; margin: 28px 0 14px;">
+<div class="pipeline-head">
     <h2 class="section-title" style="margin: 0;">Pipeline</h2>
+    <input type="search" id="board-search" class="board-search" placeholder="Buscar por nome ou telefone" autocomplete="off">
     <form method="get" action="{{ route('dashboard') }}" class="period-form" style="margin: 0;">
         <label for="period">Período</label>
         <select name="period" id="period" onchange="this.form.submit()">
@@ -249,7 +296,30 @@
         @endif
     </form>
 </div>
-@include('partials.project-board', ['projects' => $projects, 'pipeline' => $pipeline, 'readonly' => false, 'agentAction' => true])
+
+<div id="dash-pipeline">
+    @foreach ($lanes as $laneKey => $lane)
+        @php($laneEmpty = ($laneCounts[$laneKey] ?? 0) === 0)
+        <details class="pipeline-lane" data-persist="lane-{{ $laneKey }}" @if ($lane['open']) open @endif>
+            <summary>
+                {{ $lane['label'] }}
+                <span class="tag">{{ $laneCounts[$laneKey] ?? 0 }}</span>
+            </summary>
+            <div class="lane-body">
+                @if ($laneEmpty)
+                    <p class="meta">Nenhum cliente aqui.</p>
+                @else
+                    @include('partials.project-board', [
+                        'projects' => $projects,
+                        'pipeline' => $lane['pipeline'],
+                        'readonly' => false,
+                        'agentAction' => true,
+                        'cardLimit' => $laneKey === 'live' ? 6 : 4,
+                    ])
+                @endif
+            </div>
+        </details>
+    @endforeach
 </div>
 
 @push('scripts')
@@ -257,6 +327,31 @@
 (function () {
     const sections = ['dash-status', 'dash-alerts', 'dash-revenue', 'dash-agenda', 'dash-pipeline'];
     const stamp = document.getElementById('dash-updated');
+    const search = document.getElementById('board-search');
+
+    function applyBoardFilter() {
+        if (!search) return;
+
+        const query = search.value.trim().toLowerCase();
+        const cards = document.querySelectorAll('#dash-pipeline .card');
+
+        cards.forEach(function (card) {
+            card.style.display = (!query || card.textContent.toLowerCase().includes(query)) ? '' : 'none';
+        });
+
+        // Matching a card hidden behind "Ver todos" is useless unless the
+        // expander opens. Do not close it again when the query clears, so the
+        // artist keeps whatever they opened.
+        if (query) {
+            document.querySelectorAll('#dash-pipeline details.cards-more').forEach(function (details) {
+                details.open = true;
+            });
+        }
+    }
+
+    if (search) {
+        search.addEventListener('input', applyBoardFilter);
+    }
 
     async function refresh() {
         if (document.hidden) return;
@@ -276,12 +371,12 @@
 
             const doc = new DOMParser().parseFromString(await res.text(), 'text/html');
 
-            // The alerts section is replaced wholesale, so remember which
-            // accordions the artist opened or the list would collapse under
-            // them every 15 seconds.
-            const openAccordions = Array.from(
-                document.querySelectorAll('#dash-alerts details[data-accordion][open]')
-            ).map(function (el) { return el.dataset.accordion; });
+            // The alerts and pipeline sections are replaced wholesale, so
+            // remember which disclosures the artist opened or the lists would
+            // collapse under them every 15 seconds.
+            const openDetails = Array.from(
+                document.querySelectorAll('#dash-alerts details[data-persist][open], #dash-pipeline details[data-persist][open]')
+            ).map(function (el) { return el.dataset.persist; });
 
             sections.forEach(function (id) {
                 const next = doc.getElementById(id);
@@ -289,10 +384,13 @@
                 if (next && current) current.innerHTML = next.innerHTML;
             });
 
-            openAccordions.forEach(function (key) {
-                const el = document.querySelector('#dash-alerts details[data-accordion="' + key + '"]');
-                if (el) el.open = true;
+            openDetails.forEach(function (key) {
+                document.querySelectorAll('details[data-persist="' + key + '"]').forEach(function (el) {
+                    el.open = true;
+                });
             });
+
+            applyBoardFilter();
 
             if (stamp) {
                 stamp.textContent = new Date().toLocaleTimeString('pt-BR', {

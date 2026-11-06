@@ -29,7 +29,7 @@ class HandoffAlertTest extends TestCase
             'name' => 'Artist Handoff',
             'status' => 'live',
             'timezone' => 'America/Sao_Paulo',
-            'wa_session_slug' => 'handoff',
+            'wa_session_slug' => 'handoff-'.Str::lower(Str::random(8)),
         ]);
     }
 
@@ -96,15 +96,84 @@ class HandoffAlertTest extends TestCase
         $this->assertStringContainsString('Cover-up 1', $response->getContent());
     }
 
-    public function test_the_alert_disappears_after_the_artist_takes_over_the_chat(): void
+    public function test_each_handoff_offers_assumir_and_devolver(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $this->handoff($artist);
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('Assumir')
+            ->assertSee('Devolver à Beatriz')
+            ->assertSee('Aguardando há');
+    }
+
+    public function test_a_resolved_handoff_leaves_the_dashboard_list(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $lead = $this->handoff($artist);
+
+        Project::where('lead_id', $lead->id)->first()
+            ->forceFill(['handoff_resolved_at' => now()])
+            ->save();
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertDontSee('Atendimentos aguardando você');
+    }
+
+    public function test_another_artist_cannot_resolve_the_handoff(): void
+    {
+        $owner = $this->artist();
+        $other = $this->artist();
+        $lead = $this->handoff($owner);
+        $project = Project::where('lead_id', $lead->id)->first();
+        $user = $this->user($other);
+
+        $this->assertFalse($user->can('resolveHandoff', $project));
+
+        $this->actingAs($user)
+            ->post('/projects/'.$project->id.'/handoff/accept')
+            ->assertForbidden();
+    }
+
+    public function test_the_artist_can_assume_a_handoff(): void
     {
         if (DB::connection()->getDriverName() !== 'pgsql') {
-            $this->markTestSkipped('chat_sessions is Postgres-only.');
+            $this->markTestSkipped('Requires the Postgres RPCs (see packages/crm/db/tests/v2_contract.sql).');
         }
 
         $artist = $this->artist();
         $user = $this->user($artist);
         $lead = $this->handoff($artist);
+        $project = Project::where('lead_id', $lead->id)->first();
+
+        $this->actingAs($user)
+            ->post('/projects/'.$project->id.'/handoff/accept')
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $project->refresh();
+        $this->assertSame('qualificando', $project->stage_key);
+        $this->assertNotNull($project->handoff_resolved_at);
+
+        $this->assertSame('artist', DB::table('chat_sessions')
+            ->where('lead_id', $lead->id)
+            ->value('owner'));
+    }
+
+    public function test_the_artist_can_hand_a_handoff_back_to_beatriz(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Requires the Postgres RPCs (see packages/crm/db/tests/v2_contract.sql).');
+        }
+
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $lead = $this->handoff($artist);
+        $project = Project::where('lead_id', $lead->id)->first();
 
         DB::table('chat_sessions')->insert([
             'artist_id' => $artist->id,
@@ -116,8 +185,44 @@ class HandoffAlertTest extends TestCase
             'updated_at' => now(),
         ]);
 
+        $this->actingAs($user)
+            ->post('/projects/'.$project->id.'/handoff/return')
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $project->refresh();
+        $this->assertSame('qualificando', $project->stage_key);
+        $this->assertNotNull($project->handoff_resolved_at);
+
+        $this->assertSame('agent', DB::table('chat_sessions')
+            ->where('lead_id', $lead->id)
+            ->value('owner'));
+    }
+
+    public function test_the_alert_disappears_after_the_artist_takes_over_the_chat(): void
+    {
+        if (DB::connection()->getDriverName() !== 'pgsql') {
+            $this->markTestSkipped('Requires the Postgres RPCs (see packages/crm/db/tests/v2_contract.sql).');
+        }
+
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $lead = $this->handoff($artist);
+
+        // The artist replies from WhatsApp: n8n calls take_chat_control, which
+        // resolves the handoff and moves the project to a live stage.
+        DB::select('select * from take_chat_control(?, ?, ?)', [
+            $artist->id,
+            'handoff:'.$lead->phone_e164,
+            $lead->id,
+        ]);
+
         $this->actingAs($user)->get('/')
             ->assertOk()
             ->assertDontSee('Atendimentos aguardando você');
+
+        $project = Project::where('lead_id', $lead->id)->first();
+        $this->assertSame('qualificando', $project->stage_key);
+        $this->assertNotNull($project->handoff_resolved_at);
     }
 }

@@ -6,115 +6,42 @@
     // Triage-only artists schedule and close leads manually.
     $triageOnly = isset($artist) && ! ($artist->settings?->full_selling ?? true);
     $lastMessageAt = $lastMessageAt ?? [];
+    // Optional cap per column: the rest goes behind a "Ver todos" expander so
+    // a busy stage does not turn the dashboard into an endless list.
+    $cardLimit = $cardLimit ?? null;
 @endphp
 
 <div class="board">
     @foreach ($pipeline as $key => $label)
-        <section class="column">
+        @php
+            $items = $grouped->get($key) ?? collect();
+            $visible = $cardLimit ? $items->take($cardLimit) : $items;
+            $hidden = $cardLimit ? $items->slice($cardLimit) : collect();
+        @endphp
+        <section class="column" data-stage="{{ $key }}">
             <h2 class="column-title">
                 {{ $label }}
-                <span class="count">{{ $grouped->get($key)?->count() ?? 0 }}</span>
+                <span class="count">{{ $items->count() }}</span>
             </h2>
             <div class="cards">
-                @forelse ($grouped->get($key) ?? collect() as $project)
-                    <div class="card">
-                        <div class="card-head">
-                            <strong>
-                                @if (! $readonly && $project->lead)
-                                    <a href="{{ route('leads.show', $project->lead) }}">{{ $project->lead->displayName() }}</a>
-                                @else
-                                    {{ $project->lead?->displayName() ?? 'Sem nome' }}
-                                @endif
-                                @if ($project->is_returning)
-                                    <span class="tag">Recorrente</span>
-                                @endif
-                                @if ($agentAction && $project->lead?->agent_blocked)
-                                    <span class="tag tag-muted">Agente silenciado</span>
-                                @endif
-                            </strong>
-                            <span class="phone">{{ $project->lead?->phone_e164 }}</span>
+                @foreach ($visible as $project)
+                    @include('partials.project-card')
+                @endforeach
+
+                @if ($hidden->isNotEmpty())
+                    <details class="cards-more" data-persist="stage-{{ $key }}">
+                        <summary>Ver todos ({{ $items->count() }})</summary>
+                        <div class="cards">
+                            @foreach ($hidden as $project)
+                                @include('partials.project-card')
+                            @endforeach
                         </div>
+                    </details>
+                @endif
 
-                        @if ($project->placement || $project->body_zone || $project->style)
-                            <div class="meta">
-                                {{ collect([$project->placement_label, $project->body_zone_label, $project->style])->filter()->implode(' · ') }}
-                            </div>
-                        @endif
-
-                        <div class="meta">
-                            @php($lastAt = $lastMessageAt[$project->lead_id] ?? null)
-                            Última mensagem: {{ $lastAt ? $lastAt->format('d/m H:i') : '—' }}
-                        </div>
-
-                        @if ($project->charged_price_cents !== null)
-                            <div class="meta price">R$ {{ number_format($project->charged_price_cents / 100, 2, ',', '.') }}</div>
-                        @endif
-
-                        @if ($project->deposit)
-                            <div class="meta">Sinal: R$ {{ number_format($project->deposit->amount_cents / 100, 2, ',', '.') }}</div>
-                        @endif
-
-                        @if ($project->booked_at)
-                            <div class="meta gold">{{ $project->booked_at->format('d/m/Y H:i') }}</div>
-                        @endif
-
-                        @unless ($readonly)
-                            <div class="actions">
-                                @if ($project->whatsapp_url)
-                                    <a href="{{ $project->whatsapp_url }}" target="_blank" rel="noopener" class="btn btn--whatsapp btn--small">WhatsApp</a>
-                                @endif
-                                @php($handoff = $project->stage_key === 'aguardando_artista')
-                                @if ($triageOnly || $handoff)
-                                    @if (! in_array($project->stage_key, ['agendado', 'fechado', 'perdido'], true))
-                                        <form method="post" action="{{ route('projects.schedule', $project) }}" class="inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn--small"
-                                                onclick="return confirm('Marcar este lead como agendado?');">Agendar</button>
-                                        </form>
-                                    @endif
-                                    @if (! in_array($project->stage_key, ['fechado', 'perdido'], true))
-                                        <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
-                                            @csrf
-                                            <button type="submit" class="btn btn--small"
-                                                onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Finalizar</button>
-                                        </form>
-                                    @endif
-                                @elseif ($project->booked_at && ! in_array($project->stage_key, ['fechado', 'perdido'], true))
-                                    <form method="post" action="{{ route('projects.complete', $project) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn--small"
-                                            onclick="return confirm('Confirmar que a tattoo foi feita? O cliente será marcado como recorrente.');">Tattoo feita</button>
-                                    </form>
-                                @endif
-                                @if ($agentAction && $project->lead)
-                                    @can('flagAgent', $project->lead)
-                                        <form method="post" action="{{ route('leads.agent.toggle', $project->lead) }}" class="inline">
-                                            @csrf
-                                            @if ($project->lead->agent_blocked)
-                                                <button type="submit" class="btn btn--icon is-active" title="Reativar agente" aria-label="Reativar agente">
-                                                    <x-icon name="bell" />
-                                                </button>
-                                            @else
-                                                <button type="submit" class="btn btn--icon" title="Silenciar agente" aria-label="Silenciar agente"
-                                                    onclick="return confirm('Silenciar a Beatriz para este cliente? Ela deixará de responder automaticamente.');">
-                                                    <x-icon name="bell-off" />
-                                                </button>
-                                            @endif
-                                        </form>
-                                    @endcan
-                                @elseif ($project->stage_key !== 'perdido')
-                                    <form method="post" action="{{ route('projects.mark-lost', $project) }}" class="inline">
-                                        @csrf
-                                        <button type="submit" class="btn btn--danger btn--small"
-                                            onclick="return confirm('Marcar este projeto como perdido?');">Marcar perdido</button>
-                                    </form>
-                                @endif
-                            </div>
-                        @endunless
-                    </div>
-                @empty
+                @if ($items->isEmpty())
                     <div class="empty">—</div>
-                @endforelse
+                @endif
             </div>
         </section>
     @endforeach
