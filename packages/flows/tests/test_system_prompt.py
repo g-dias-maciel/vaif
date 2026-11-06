@@ -559,6 +559,9 @@ check("prompt asks the doubts question only once",
       "UMA ÚNICA VEZ" in template and "REGRA DA ÚLTIMA LINHA" not in template)
 check("start_turn returns the scratch state",
       "start_turn" in nodes["Start Turn"]["parameters"]["query"])
+check("Patch Lead saves the stated name through set_lead_name",
+      "set_lead_name" in nodes["Patch Lead"]["parameters"]["query"]
+      and "upsert_lead" not in nodes["Patch Lead"]["parameters"]["query"])
 check("agent text threads preco_liberado",
       "preco_liberado=" in AGENT_TEXT_JS)
 check("agent text exposes a precomputed signal amount",

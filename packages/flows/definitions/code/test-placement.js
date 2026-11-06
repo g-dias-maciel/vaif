@@ -233,5 +233,100 @@ r = runParse({
 });
 check('no placement from a drawing', r.placement_val === null, String(r.placement_val));
 
+// ── 9. Forearm + hand: the classifier sees the forearm, the hand extension is
+//       persisted and the price turn hands off instead of asking the region
+//       again (the "Não fiquei não" turn mentions neither). ──
+console.log('=== Forearm + hand is handed off, not re-asked ===');
+r = runParse({
+  start: start({ placement: 'braco', body_zone: null, style: 'blackwork', agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'seria da mão até a junta do cotovelo',
+  classifier: classifier({
+    qualification: { placement: 'antebraco', body_zone: 'grande', tipo_tatuagem: 'nova' },
+    whole_arm: true,
+    hand_extension: true,
+  }),
+});
+check('forearm is stored', r.placement_val === 'antebraco', String(r.placement_val));
+check('whole_arm is not set for the forearm', r.chat_state.whole_arm === false, String(r.chat_state.whole_arm));
+check('hand extension is persisted', r.chat_state.hand_extension === true, String(r.chat_state.hand_extension));
+
+r = runParse({
+  start: start({ placement: 'antebraco', body_zone: 'grande', style: 'blackwork', first_tattoo: false, agent_state: {
+    processo_explicado: true, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: true, preco_liberado: false,
+    hand_extension: true,
+  } }),
+  leadText: 'não fiquei não',
+  classifier: classifier({ doubts_cleared: true }),
+  agentOutput: 'Para o antebraço fica R$ 1.200,00 à vista ou em até 6x de R$ 200,00 sem juros.',
+});
+check('does not invent a forearm-only price', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+check('does not ask the region again', !/parte de fora do braço|antebraço\?/i.test(r.final_reply), r.final_reply);
+check('hands off to the artist', /confirmar o valor/i.test(r.final_reply), r.final_reply);
+check('stage is awaiting the artist', r.stage_key === 'aguardando_artista', r.stage_key);
+
+// ── 10. Whole upper arm: persisted across the uninformative price turn. ──
+console.log('=== Whole upper arm survives the price turn ===');
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'grande', style: 'blackwork', agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'quero do ombro ao cotovelo',
+  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'grande' }, whole_arm: true }),
+});
+check('whole arm is persisted', r.chat_state.whole_arm === true, String(r.chat_state.whole_arm));
+
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'grande', style: 'blackwork', first_tattoo: false, agent_state: {
+    processo_explicado: true, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: true, preco_liberado: false,
+    whole_arm: true,
+  } }),
+  leadText: 'não fiquei não',
+  classifier: classifier({
+    doubts_cleared: true,
+    price_match: { match: true, placement: 'braco', body_zone: 'grande', confidence: 'alta', reason: 'braço grande' },
+  }),
+  agentOutput: 'Para o braço fica R$ 2.000,00 à vista.',
+});
+check('ambiguous whole arm is not quoted', !/R\$\s*\d/.test(r.final_reply), r.final_reply);
+check('does not re-ask the region', !/parte de fora do braço/i.test(r.final_reply), r.final_reply);
+check('hands off', /confirmar o valor/i.test(r.final_reply), r.final_reply);
+
+// ── 11. A new placement clears the persisted composite flags. ──
+console.log('=== A placement change clears the composite flags ===');
+r = runParse({
+  start: start({ placement: 'braco', agent_state: {
+    whole_arm: true, hand_extension: true, processo_explicado: false,
+    duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'na verdade é nas costas',
+  classifier: classifier({ qualification: { placement: 'costas' } }),
+});
+check('placement changes to the back', r.placement_val === 'costas', String(r.placement_val));
+check('whole arm is cleared', r.chat_state.whole_arm === false, String(r.chat_state.whole_arm));
+check('hand extension is cleared', r.chat_state.hand_extension === false, String(r.chat_state.hand_extension));
+
+// ── 12. Both sides of the arm: persisted across the uninformative price turn. ──
+console.log('=== Both sides survive the price turn ===');
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'fechamento', style: 'realismo' }),
+  leadText: 'parte de fora e de dentro',
+  classifier: classifier({ qualification: { placement: 'braco', body_zone: 'fechamento' }, both_sides: true }),
+});
+check('both sides are persisted', r.chat_state.both_sides === true, String(r.chat_state.both_sides));
+
+r = runParse({
+  start: start({ placement: 'braco', body_zone: 'fechamento', style: 'realismo', agent_state: {
+    processo_explicado: true, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: true, preco_liberado: false,
+    both_sides: true,
+  } }),
+  leadText: 'não fiquei não',
+  classifier: classifier({ doubts_cleared: true }),
+  agentOutput: 'Certo.',
+});
+check('sums both sides', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
+check('stage advances to the quote', r.stage_key === 'orcamento_enviado', r.stage_key);
+
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

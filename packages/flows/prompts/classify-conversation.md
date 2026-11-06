@@ -39,6 +39,10 @@ Nunca deixe um campo como null só porque a palavra está escrita de forma errad
 ## Campos de qualificação (extraia SOMENTE da mensagem do lead — NUNCA da resposta da Beatriz)
 
 - placement: braco_externo, braco_interno, antebraco, panturrilha, tornozelo, pescoco, costela, costas, barriga, ombro, pulso, braco, peito, perna, coxa, dedo, mao, pe
+  - Leia a região exata antes de decidir: "mão até a junta do cotovelo", "antebraço pegando na mão", "do pulso ao cotovelo" → `antebraco` (a mão vira `hand_extension`).
+  - "ombro ao cotovelo" / "parte de cima do braço" → `braco` + `whole_arm: true`.
+  - "braço inteiro" / "do ombro à mão" → `braco` + `whole_arm: true` (e `hand_extension: true` se citou a mão).
+  - "braço" sozinho → `braco` genérico. NUNCA escolha `braco_externo`/`braco_interno` sem o lead dizer o lado.
 - body_zone: pequeno, medio, grande, fechamento
   - fechamento: "o [local] inteiro", "fechamento", "fechar o [local]", "completo", "cobrir tudo", "o [local] todo"
   - grande: "quase tudo", "a maior parte", "grande"
@@ -84,7 +88,8 @@ Valores SEMPRE em centavos. R$600 = 60000. R$180 = 18000.
 - `answers_previous`: a resposta do lead à pergunta anterior da Beatriz (`[Beatriz perguntou antes]`). `yes` para qualquer afirmativa ("sim", "s", "ss", "isso", "ok", "beleza", "pode", "uhum"), mesmo abreviada ou com erro. `no` para negativa ("não", "n", "ainda não"). `other` quando ele pergunta outra coisa ou muda de assunto. `null` quando não havia pergunta.
 - `cannot_send_photo`: true quando o lead diz que não tem/consegue mandar a foto ("não tenho foto", "apaguei", "não tenho mais"). false caso contrário.
 - `both_sides`: true quando o lead quer a tatuagem dos dois lados do braço ("parte de fora e de dentro", "os dois lados").
-- `whole_arm`: true quando o lead descreve o braço inteiro ("do ombro ao cotovelo").
+- `whole_arm`: true SOMENTE quando o lead descreve o braço de cima para baixo ("do ombro ao cotovelo", "braço inteiro"). NUNCA marque `whole_arm` quando o lead fala do antebraço ("mão até o cotovelo"): nesse caso use `placement: antebraco`.
+- `hand_extension`: true quando a tatuagem avança para a mão ("pegando na mão", "até a mão", "do pulso até os dedos"). false quando não mencionou.
 - `objection`: o motivo de NÃO fechar agora, quando o lead hesita. `decision` (precisa falar com alguém), `price` (valor), `timing` (horário/dia), `doubt` (dor, resultado, medo), `vague` ("vou pensar", "depois"). `null` quando não há hesitação.
   - `price` também quando ele só confirma que é o valor: "seria o preço", "é o valor mesmo", "o preço pesou", "achei alto", "queria mais barato". Isso NÃO é `asks_for_price`.
   - `price` também quando ele hesita sobre o dinheiro sem dizer "preço": "não sei se consigo (pagar)", "não sei se vai dar", "tá caro ainda", "estou sem o valor agora", "acho que não consigo". Depois que a Beatriz já ofereceu um valor, hesitação contínua sobre dinheiro continua `price`, NUNCA `decision`.
@@ -102,7 +107,7 @@ Se o lead pediu, aceitou ou está negociando um orçamento, escolha EXATAMENTE U
 
 - Copie `placement` e `body_zone` exatamente como aparecem na tabela.
 - NUNCA invente preço, linha ou combinação que não esteja na tabela. O sistema usa apenas a linha escolhida para buscar o valor; se ela não existir, o atendimento vai para o artista.
-- Use `match: false` quando: o local não estiver claro, a cobertura não estiver clara, a região tiver partes com preços diferentes ("braço" sem dizer externo/interno), ou qualquer dúvida.
+- Use `match: false` quando: o local não estiver claro, a cobertura não estiver clara, a região tiver partes com preços diferentes ("braço" sem dizer externo/interno), ou qualquer dúvida. Exemplo: a tabela tem `braco_externo` e `braco_interno` com preços diferentes e o lead só disse "braço" → `match: false`, não escolha um dos lados.
 - Se a linha depender de algo que o lead não disse, NÃO adivinhe.
 - Escolha a linha pelo LOCAL e COBERTURA, nunca pelo valor: se houver promoção ativa, o sistema aplica o multiplicador depois. Não calcule nem sugira preço promocional.
 
@@ -163,6 +168,7 @@ Antes do JSON: `name` é o nome que o LEAD disse sobre si (ex.: "meu nome é Ana
   "cannot_send_photo": true or false,
   "both_sides": true or false,
   "whole_arm": true or false,
+  "hand_extension": true or false,
   "asks_for_price": true or false,
   "wants_artist": true or false,
   "asks_location": true or false,

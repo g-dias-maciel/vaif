@@ -880,10 +880,30 @@ const placementFromVision = !aiPlacement && !lead.placement && !!visionPlacement
 const styleNow = aiStyle || lead.style || visionStyle || null;
 // Provenance: a style read only from the photo is a hint, confirmed with the lead.
 const styleFromVision = !aiStyle && !lead.style && !!visionStyle;
-// The lead described the whole upper arm (ombro ao cotovelo) or both sides
-// (parte de fora e de dentro): the classifier reads it, no keyword list.
-const leadGaveSpecificArea = parsed.whole_arm === true;
-const leadGaveBothSides = parsed.both_sides === true;
+// The lead described the whole upper arm (ombro ao cotovelo), both sides
+// (parte de fora e de dentro) or a piece that reaches the hand. The classifier
+// reads it per message, but the price gate often opens on a later turn (the
+// lead's "não tenho dúvidas" mentions none of those details), so the flags are
+// persisted and re-read until the placement changes.
+const ARM_UPPER = ['braco', 'braco_externo', 'braco_interno'];
+const ARM_ANY = ['braco', 'braco_externo', 'braco_interno', 'antebraco', 'ombro', 'pulso', 'mao', 'dedo'];
+const placementChanged = !!aiPlacement && aiPlacement !== lead.placement;
+const storedFlag = function (name) {
+  return placementChanged ? false : state[name] === true;
+};
+// A forearm/hand description can never be the "whole upper arm", even if the
+// classifier sets whole_arm by mistake.
+const wholeArmNow = (parsed.whole_arm === true || storedFlag('whole_arm'))
+  && ARM_UPPER.indexOf(placementNow) >= 0;
+const leadGaveBothSides = (parsed.both_sides === true || storedFlag('both_sides'))
+  && ARM_UPPER.indexOf(placementNow) >= 0;
+const handExtension = (parsed.hand_extension === true || storedFlag('hand_extension'))
+  && ARM_ANY.indexOf(placementNow) >= 0;
+const leadGaveSpecificArea = wholeArmNow;
+// A piece that reaches the hand spans two priced regions and has no single row.
+// The whole upper arm is left to the existing row lookup: if the two sides cost
+// the same the table is unambiguous, otherwise the persisted flag hands off.
+const requiresArtistQuote = handExtension;
 
 function newReferenceQuestion(lead) {
   const type = lead.tattoo_type || TIPO_DB[tipoDeterministic] || null;
@@ -1194,10 +1214,12 @@ const aiPriceRow = (aiPriceMatch.match === true
     }) || null)
   : null;
 const firstQuote = !triageOnly && !precoLiberadoJa && gateJustOpened && !goingToArtist && !isCoverOrRework && !openQuote
+  && !requiresArtistQuote
   ? deterministicQuote(null, aiPriceRow)
   : null;
 const asksForPrice = parsed.asks_for_price === true;
 const repeatedQuote = !triageOnly && !firstQuote && precoLiberadoJa && asksForPrice && !goingToArtist && !isCoverOrRework
+  && !requiresArtistQuote
   && parsed.objection !== 'decision'
   && !/R\$\s*\d/.test(finalReply)
   ? deterministicQuote(
@@ -1239,6 +1261,7 @@ const promoPriceCents = offerLive && promoTableCents > 0
 // open quote keeps price protection.
 const promotionQuote = !triageOnly && !firstQuote && !repeatedQuote && !isCoverOrRework
   && offerLive && replyHasPrice && !openQuote && !goingToArtist
+  && !requiresArtistQuote
   && promoPriceCents > 0
   // Only the raw table price (the model ignored the promotion) or a price
   // above the promotion is rewritten; a negotiated discount below it is kept.
@@ -1267,7 +1290,7 @@ if (firstQuote) {
   // Do not re-open doubts if the checkpoint was answered but there is no exact
   // price row yet. Ask only for the missing placement detail or state that the
   // artist will confirm the price.
-  const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides;
+  const genericPlacement = ['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides && !handExtension;
   const artistName = $('Resolve Artist').first().json.name || 'artista';
   const openQuotePrice = openQuote ? Number(offer.open_quote_first_price) || 0 : 0;
   const openQuoteReply = openQuotePrice > 0 ? deterministicQuote(openQuotePrice) : null;
@@ -1302,7 +1325,7 @@ if (quoteMissingRow) {
     // leave the model's reply untouched
   } else if (!bodyZoneNow) {
     finalReply = 'Só pra eu te passar o valor certinho. Nesse local, é uma tattoo pequena, média, grande ou fechamento?';
-  } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides) {
+  } else if (['braco', 'perna'].includes(placementNow) && !leadGaveSpecificArea && !leadGaveBothSides && !handExtension) {
     finalReply = placementNow === 'braco'
       ? 'Só pra eu te passar o valor certinho: é a parte de fora do braço, a de dentro, ou o antebraço?'
       : 'Só pra eu te passar o valor certinho: é na coxa ou na panturrilha?';
@@ -1312,6 +1335,18 @@ if (quoteMissingRow) {
     finalEvent = 'handoff_triggered';
     finalHandoff = 'no_price_row';
   }
+}
+
+// A piece that reaches the hand spans two priced regions (forearm + hand) and
+// has no single row in the artist's table. Never quote part of it: hand the
+// composition to the artist instead of re-asking a region the lead already gave.
+if (requiresArtistQuote && priceGateOpen && !goingToArtist && !isCoverOrRework
+    && /R\$\s*\d/.test(finalReply)) {
+  const artistName = $('Resolve Artist').first().json.name || 'artista';
+  finalReply = `Vou confirmar o valor certinho com o ${artistName} e já te retorno.`;
+  finalPipeline = 'aguardando_artista';
+  finalEvent = 'handoff_triggered';
+  finalHandoff = 'no_price_row';
 }
 
 // ── Handoff output guard: if the handoff was suppressed (false cover-up /
@@ -2050,6 +2085,11 @@ return [{ json: {
     duvidas_eliminadas: duvidasEliminadas,
     aguardando_confirmacao_duvidas: isAudio ? checkpointWasPending : aguardandoConfirmacaoDuvidas,
     photo_confirmed: isCoverOrRework ? false : photoConfirmed,
+    // Composite placement context must survive the turns between discovery and
+    // the price gate. Reset whenever the lead changes the placement.
+    whole_arm: wholeArmNow,
+    both_sides: leadGaveBothSides,
+    hand_extension: handExtension,
     placement_from_photo: isCoverOrRework ? false
       : (photoConfirmed ? false : (placementFromVision || (state.placement_from_photo === true && !aiPlacement))),
     zone_from_photo: isCoverOrRework ? false
@@ -3548,7 +3588,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         {
             "parameters": {
                 "operation": "executeQuery",
-                "query": "SELECT * FROM upsert_lead($1::uuid, $2::text, $3::text, 'whatsapp') WHERE NULLIF($3, '') IS NOT NULL;",
+                "query": "SELECT * FROM set_lead_name($1::uuid, $2::text, $3::text);",
                 "options": {
                     "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.phone_e164, $('Parse Classification').first().json.name_val] }}"
                 },
