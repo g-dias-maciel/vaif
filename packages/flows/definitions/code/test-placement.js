@@ -39,7 +39,7 @@ const ROWS = [
   { placement: 'braco', body_zone: 'fechamento', table_price: 20000 },
 ];
 
-function runParse({ start, leadText, classifier, agentOutput, rows, photo = null }) {
+function runParse({ start, leadText, classifier, agentOutput, rows, photo = null, rawContent = null }) {
   const $ = (name) => ({
     isExecuted: name === 'Parse Reference Analysis' ? !!photo : undefined,
     first: () => {
@@ -53,7 +53,7 @@ function runParse({ start, leadText, classifier, agentOutput, rows, photo = null
       return { json: {} };
     },
   });
-  const input = { first: () => ({ json: { choices: [{ message: { content: JSON.stringify(classifier) } }] } }) };
+  const input = { first: () => ({ json: { choices: [{ message: { content: rawContent !== null ? rawContent : JSON.stringify(classifier) } }] } }) };
   return new Function('$', '$input', parseCode)($, input)[0].json;
 }
 
@@ -327,6 +327,21 @@ r = runParse({
 });
 check('sums both sides', /R\$\s*200,00/.test(r.final_reply), r.final_reply);
 check('stage advances to the quote', r.stage_key === 'orcamento_enviado', r.stage_key);
+
+// ── 13. A fenced JSON response (Claude) is parsed like raw JSON. ──
+console.log('=== Fenced classifier JSON is accepted ===');
+r = runParse({
+  start: start({ placement: 'braco', body_zone: null, style: 'blackwork', agent_state: {
+    processo_explicado: false, duvidas_eliminadas: false, aguardando_confirmacao_duvidas: false, preco_liberado: false,
+  } }),
+  leadText: 'seria da mão até a junta do cotovelo',
+  rawContent: '```json\n' + JSON.stringify(classifier({
+    qualification: { placement: 'antebraco', body_zone: 'grande', tipo_tatuagem: 'nova' },
+    hand_extension: true,
+  })) + '\n```',
+});
+check('fenced JSON is parsed', r.placement_val === 'antebraco', String(r.placement_val));
+check('fenced JSON keeps the hand extension', r.chat_state.hand_extension === true, String(r.chat_state.hand_extension));
 
 console.log('\n=== Results: ' + passes + ' passed, ' + failures + ' failed ===');
 process.exit(failures === 0 ? 0 : 1);

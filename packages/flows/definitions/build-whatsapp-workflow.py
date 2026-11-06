@@ -656,7 +656,7 @@ BUILD_CLASSIFICATION_PROMPT_JS = (
     "\n"
     "return [{ json: {\n"
     "  body: {\n"
-    "    model: 'openai/gpt-4o-mini',\n"
+    "    model: 'anthropic/claude-haiku-5.5',\n"
     "    temperature: 0,\n"
     "    messages: [\n"
     "      { role: 'system', content: filled },\n"
@@ -677,8 +677,9 @@ Responda SOMENTE JSON: {"agree": true ou false, "confidence": "alta | media | ba
 
 BUILD_PRICE_CRITIQUE_JS = """const resp = $('Classify Conversation').first().json;
 const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 let parsed = {};
-try { parsed = JSON.parse(content); } catch (e) {}
+try { parsed = JSON.parse(cleaned); } catch (e) {}
 const match = parsed.price_match || {};
 const rows = $('Build System Prompt').first().json.pricing_rows || [];
 const lead = $('Debounce Resolve').first().json.combined_text || '';
@@ -698,7 +699,7 @@ const table = rows.length
   : '(sem tabela cadastrada)';
 
 const body = {
-  model: 'openai/gpt-4o-mini',
+  model: 'anthropic/claude-haiku-5.5',
   temperature: 0,
   messages: [
     { role: 'system', content: __CRITIC_SYSTEM__ },
@@ -717,8 +718,9 @@ BUILD_PRICE_CRITIQUE_JS = BUILD_PRICE_CRITIQUE_JS.replace('__CRITIC_SYSTEM__', j
 
 PARSE_PRICE_CRITIQUE_JS = """const resp = $input.first().json || {};
 const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 let parsed = {};
-try { parsed = JSON.parse(content); } catch (e) {}
+try { parsed = JSON.parse(cleaned); } catch (e) {}
 return [{ json: { price_critique: {
   agree: parsed.agree === true,
   confidence: parsed.confidence || 'baixa',
@@ -740,8 +742,10 @@ try {
   priceCritique = null;
 }
 const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+// Some models (Claude in particular) wrap the JSON in a markdown fence.
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
 let parsed;
-try { parsed = JSON.parse(content); } catch(e) { parsed = {}; }
+try { parsed = JSON.parse(cleaned); } catch(e) { parsed = {}; }
 
 const q = parsed.qualification || {};
 const p = parsed.pricing || {};

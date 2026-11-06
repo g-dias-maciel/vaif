@@ -545,6 +545,14 @@ check("doubts are cleared by the classifier, with a short-message guard",
       "parsed.doubts_cleared === true" in parse_js
       and "trim().length <= 160" in parse_js
       and "doubts_cleared" in classify_template)
+check("classifier maps the forearm/hand anatomy",
+      "mão até a junta do cotovelo" in classify_template
+      and "hand_extension" in classify_template
+      and "NUNCA marque `whole_arm` quando o lead fala do antebraço" in classify_template)
+check("classifier and price critic use the upgraded model, the chat model does not",
+      "anthropic/claude-haiku-5.5" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
+      and "anthropic/claude-haiku-5.5" in nodes["Build Price Critique"]["parameters"]["jsCode"]
+      and nodes["OpenRouter Chat Model"]["parameters"]["model"] == "openai/gpt-4o-mini")
 check("prompt has the cover-up/rework qualify-process-handoff flow",
       "## Cobertura e reforma" in template
       and "NUNCA dê preço" in template
