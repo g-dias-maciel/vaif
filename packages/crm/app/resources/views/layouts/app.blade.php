@@ -321,6 +321,7 @@
 
         .week-nav { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; flex-wrap: wrap; }
         .week-range { font-family: 'Montserrat', sans-serif; font-size: 1.25rem; color: var(--ink); }
+        #dash-agenda { scroll-margin-top: 16px; }
         .week-scroll {
             overflow-x: auto;
             overflow-y: hidden;
@@ -387,6 +388,7 @@
         .btn--danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); padding: 7px 14px; }
         .btn--danger:hover { background: var(--danger); color: #0A0A0A; opacity: 1; }
         .btn--small { padding: 6px 12px; font-size: 0.68rem; }
+        .btn.is-muted { opacity: 0.45; cursor: default; }
         .btn--icon {
             display: inline-flex; align-items: center; justify-content: center;
             width: 34px; height: 34px; padding: 0; border-radius: 8px;
@@ -555,6 +557,7 @@
             }
             .sidebar.open { transform: translateX(0); }
             .app-main { margin-left: 0; }
+            #dash-agenda { scroll-margin-top: 72px; }
             .mobile-bar {
                 display: flex; align-items: center; gap: 10px;
                 position: sticky; top: 0; z-index: 30;

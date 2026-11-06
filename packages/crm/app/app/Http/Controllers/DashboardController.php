@@ -117,6 +117,7 @@ class DashboardController extends Controller
         }
 
         $weekStart = $ref->startOfWeek(CarbonImmutable::MONDAY);
+        $todayWeekStart = now()->toImmutable()->startOfWeek(CarbonImmutable::MONDAY);
 
         $slots = CalendarEntry::with(['lead', 'project'])
             ->where('artist_id', $artist->id)
@@ -211,6 +212,7 @@ class DashboardController extends Controller
             'weekRange' => $weekStart->format('d/m').' – '.$weekStart->addDays(6)->format('d/m/Y'),
             'prevWeek' => $weekStart->subDays(7)->toDateString(),
             'nextWeek' => $weekStart->addDays(7)->toDateString(),
+            'isCurrentWeek' => $weekStart->toDateString() === $todayWeekStart->toDateString(),
         ]);
     }
 }

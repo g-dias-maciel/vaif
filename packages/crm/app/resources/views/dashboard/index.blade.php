@@ -245,9 +245,14 @@
 <h2 class="section-title" style="margin-top: 8px;">Agenda da semana</h2>
 
 <div class="week-nav">
-    <a href="{{ route('dashboard', ['week' => $prevWeek, 'period' => $period]) }}" class="btn btn--ghost btn--small">&larr;</a>
+    <a href="{{ route('dashboard', ['week' => $prevWeek, 'period' => $period]) }}#dash-agenda" class="btn btn--ghost btn--small" aria-label="Semana anterior">&larr;</a>
     <span class="week-range">{{ $weekRange }}</span>
-    <a href="{{ route('dashboard', ['week' => $nextWeek, 'period' => $period]) }}" class="btn btn--ghost btn--small">&rarr;</a>
+    <a href="{{ route('dashboard', ['week' => $nextWeek, 'period' => $period]) }}#dash-agenda" class="btn btn--ghost btn--small" aria-label="Próxima semana">&rarr;</a>
+    @if ($isCurrentWeek)
+        <span class="btn btn--ghost btn--small is-muted" aria-current="date">Hoje</span>
+    @else
+        <a href="{{ route('dashboard', ['period' => $period]) }}#dash-agenda" class="btn btn--ghost btn--small">Hoje</a>
+    @endif
     <span class="meta">{{ $weekCount }} agendamento(s) na semana</span>
 </div>
 

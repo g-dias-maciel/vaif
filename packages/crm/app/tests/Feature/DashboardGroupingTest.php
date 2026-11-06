@@ -126,4 +126,21 @@ class DashboardGroupingTest extends TestCase
             ->assertOk()
             ->assertSee('Parado há');
     }
+
+    public function test_the_week_navigation_stays_on_the_agenda_and_offers_today(): void
+    {
+        $artist = $this->artist();
+        $user = $this->user($artist);
+        $nextWeek = now()->startOfWeek()->addWeek()->toDateString();
+
+        $this->actingAs($user)->get('/?week='.$nextWeek)
+            ->assertOk()
+            ->assertSee('#dash-agenda', false)
+            ->assertSee('>Hoje</a>', false);
+
+        $this->actingAs($user)->get('/')
+            ->assertOk()
+            ->assertSee('is-muted', false)
+            ->assertSee('aria-current="date"', false);
+    }
 }
