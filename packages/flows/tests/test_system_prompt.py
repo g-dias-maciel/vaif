@@ -549,10 +549,10 @@ check("classifier maps the forearm/hand anatomy",
       "mão até a junta do cotovelo" in classify_template
       and "hand_extension" in classify_template
       and "NUNCA marque `whole_arm` quando o lead fala do antebraço" in classify_template)
-check("classifier and price critic use the upgraded model, the chat model does not",
+check("agent, classifier and price critic use Claude Haiku 5.5",
       "anthropic/claude-haiku-5.5" in nodes["Build Classification Prompt"]["parameters"]["jsCode"]
       and "anthropic/claude-haiku-5.5" in nodes["Build Price Critique"]["parameters"]["jsCode"]
-      and nodes["OpenRouter Chat Model"]["parameters"]["model"] == "openai/gpt-4o-mini")
+      and nodes["OpenRouter Chat Model"]["parameters"]["model"] == "anthropic/claude-haiku-5.5")
 check("prompt has the cover-up/rework qualify-process-handoff flow",
       "## Cobertura e reforma" in template
       and "NUNCA dê preço" in template

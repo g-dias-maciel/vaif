@@ -3247,7 +3247,7 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         },
         # 17. OpenRouter Chat Model (sub-node)
         {
-            "parameters": {"model": "openai/gpt-4o-mini", "options": {"maxTokens": 2000}},
+            "parameters": {"model": "anthropic/claude-haiku-5.5", "options": {"maxTokens": 2000}},
             "type": "@n8n/n8n-nodes-langchain.lmChatOpenRouter",
             "typeVersion": 1,
             "position": [2600, -520],

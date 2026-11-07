@@ -1130,7 +1130,7 @@
     },
     {
       "parameters": {
-        "model": "openai/gpt-4o-mini",
+        "model": "anthropic/claude-haiku-5.5",
         "options": {
           "maxTokens": 2000
         }
