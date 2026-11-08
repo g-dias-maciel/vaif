@@ -123,7 +123,7 @@ class WahaService
             'events' => ['message', 'presence.update'],
         ];
 
-        // n8n now rejects unauthenticated webhook calls. A recreated session
+        // The CRM webhook rejects unauthenticated calls. A recreated session
         // must keep sending the shared header or every message is dropped.
         $webhookToken = (string) config('transport.waha_webhook_token');
 
@@ -176,6 +176,63 @@ class WahaService
         }
 
         return $this->start($artist);
+    }
+
+    /**
+     * Point an existing session at a new webhook **without re-linking**.
+     *
+     * WAHA's `PUT /api/sessions/{name}` stops and starts the session with the
+     * new config but keeps the WhatsApp authentication, so the artist never
+     * scans the QR again. The current config is merged rather than replaced so
+     * the NOWEB store and metadata survive.
+     */
+    public function updateWebhook(Artist $artist, ?string $url = null, ?string $token = null): bool
+    {
+        $slug = (string) $artist->wa_session_slug;
+
+        if ($slug === '') {
+            return false;
+        }
+
+        try {
+            $current = $this->client()->get("/api/sessions/{$slug}");
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        if (! $current->successful()) {
+            return false;
+        }
+
+        $config = $current->json('config');
+        $config = is_array($config) ? $config : [];
+
+        $webhook = [
+            'url' => $url ?: (string) config('transport.waha_webhook_url'),
+            'events' => ['message', 'presence.update'],
+        ];
+
+        $webhookToken = $token !== null ? $token : (string) config('transport.waha_webhook_token');
+
+        if ($webhookToken !== '') {
+            $webhook['customHeaders'] = [[
+                'name' => 'X-VAIF-Webhook-Token',
+                'value' => $webhookToken,
+            ]];
+        }
+
+        $config['webhooks'] = [$webhook];
+
+        try {
+            $resp = $this->client()->put("/api/sessions/{$slug}", [
+                'name' => $slug,
+                'config' => $config,
+            ]);
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $resp->successful();
     }
 
     /**

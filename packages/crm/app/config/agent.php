@@ -47,11 +47,6 @@ return [
         'retries' => (int) env('AGENT_AI_RETRIES', 2),
     ],
 
-    'telegram' => [
-        'token' => env('TELEGRAM_OPS_BOT_TOKEN'),
-        'webhook_secret' => env('TELEGRAM_OPS_WEBHOOK_SECRET'),
-    ],
-
     'eval' => [
         'enabled' => (bool) env('AGENT_EVAL_ENABLED', false),
         'scenarios' => base_path('tests/Agent/Scenarios'),

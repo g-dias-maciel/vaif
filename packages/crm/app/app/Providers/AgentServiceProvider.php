@@ -8,12 +8,10 @@ use App\Services\Agent\AiClient;
 use App\Services\Agent\ClaimExtractor;
 use App\Services\Agent\ContactGate;
 use App\Services\Agent\DatabaseAgentStore;
-use App\Services\Agent\HandoffNotifier;
 use App\Services\Agent\OpenRouterClient;
 use App\Services\Agent\PreflightClassifier;
 use App\Services\Agent\PromptBuilder;
 use App\Services\Agent\ReplyValidator;
-use App\Services\Agent\TelegramNotifier;
 use App\Services\Agent\TurnProcessor;
 use App\Services\Agent\WahaTransport;
 use App\Services\Agent\MessageTransport;
@@ -31,7 +29,6 @@ class AgentServiceProvider extends ServiceProvider
         $this->app->singleton(AiClient::class, OpenRouterClient::class);
         $this->app->singleton(WahaService::class, fn () => WahaService::make());
         $this->app->singleton(MessageTransport::class, WahaTransport::class);
-        $this->app->singleton(HandoffNotifier::class, TelegramNotifier::class);
         $this->app->singleton(ContactGate::class);
         $this->app->singleton(AgentMedia::class, fn ($app) => new AgentMedia(
             $app->make(OpenRouterClient::class),
@@ -55,7 +52,6 @@ class AgentServiceProvider extends ServiceProvider
             $app->make(ClaimExtractor::class),
             $app->make(ReplyValidator::class),
             $app->make(MessageTransport::class),
-            $app->make(HandoffNotifier::class),
             $app->make(ContactGate::class),
             $app->make(AgentMedia::class),
         ));

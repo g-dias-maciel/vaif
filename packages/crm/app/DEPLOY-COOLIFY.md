@@ -134,7 +134,6 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `AGENT_QUIET_MS` | `6000` (debounce silence) |
 | `AGENT_MAX_WAIT_MS` | `20000` |
 | `AGENT_TYPING_GRACE_MS` | `30000` |
-| `TELEGRAM_OPS_BOT_TOKEN` | bot token used for handoff notifications |
 | `AGENT_EVAL_ENABLED` | `false` in production |
 
 The entrypoint starts `php artisan queue:work --queue=agent` next to the
@@ -150,11 +149,33 @@ Do this per artist, after the agent has been exercised with the fake cases:
 2. Run `php artisan agent:eval` with a real key and review
    `storage/app/agent-evals/`.
 3. Keep the artist `suspended` until you are ready to answer.
-4. Relink (or recreate) the WAHA session so it picks up
-   `WAHA_WEBHOOK_URL=/api/webhooks/waha` and `WAHA_WEBHOOK_TOKEN`.
+4. Point the existing session at the CRM **in place** — no QR re-scan:
+
+   ```bash
+   php artisan agent:webhook adriano-studio-madri
+   # or every session at once, after approval:
+   php artisan agent:webhook --all
+   ```
+
+   This calls WAHA `PUT /api/sessions/{name}` and merges the new webhook into
+   the current config, so the WhatsApp authentication, NOWEB store and
+   metadata are preserved. WAHA stops and starts the session internally, but
+   the artist does not reconnect.
 5. Watch `agent_ingest_drops`, `agent_turns` and `storage/logs/queue.log`.
-6. Rollback: point `WAHA_WEBHOOK_URL` back at the n8n webhook and relink; the
-   n8n workflow (`packages/flows`) is kept until the CRM path has parity.
+6. Rollback: point the same sessions back at the n8n webhook:
+
+   ```bash
+   php artisan agent:webhook --all \
+     --url=https://n8n.vaif.com.br/webhook/waha-webhook \
+     --token=<n8n webhook token>
+   ```
+
+   The n8n workflow (`packages/flows`) is kept until the CRM path has parity.
+   If the CRM webhook token is the same shared secret, `--token` can be omitted.
+
+> WAHA Core does not persist per-session config across a WAHA container
+> restart. After restarting WAHA, re-run `agent:webhook` (or configure a global
+> webhook) before assuming the agent is still receiving messages.
 
 ---
 

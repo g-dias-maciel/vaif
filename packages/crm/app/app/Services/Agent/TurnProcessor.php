@@ -15,7 +15,6 @@ class TurnProcessor
         private readonly ClaimExtractor $claims,
         private readonly ReplyValidator $validator,
         private readonly MessageTransport $transport,
-        private readonly ?HandoffNotifier $notifier = null,
         private readonly ?ContactGate $gate = null,
         private readonly ?AgentMedia $media = null,
     ) {
@@ -194,10 +193,6 @@ class TurnProcessor
 
         if ($send) {
             $this->sendReply($artist, $chatId, (string) $validation['final_reply']);
-        }
-
-        if (! empty($apply['handoff']) && $this->notifier !== null) {
-            $this->notifier->notify($artist, $start, $facts, $apply);
         }
 
         return [
