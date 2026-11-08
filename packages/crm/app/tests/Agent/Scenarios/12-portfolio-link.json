@@ -1,0 +1,39 @@
+{
+  "name": "portfolio-link",
+  "description": "When the lead asks for photos, the agent sends the configured portfolio link and nothing invented.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000012",
+  "chat_id": "eval:5511900000012@c.us",
+  "message": "Você tem foto de trabalhos parecidos?",
+  "turn": {
+    "name": "Karen",
+    "is_new": true,
+    "stage_key": "novo",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "not_ready", "missing": "tipo", "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_portfolio", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Dá uma olhada no meu trabalho aqui: https://instagram.com/estudio.eva",
+    "claims": {"claims": []}
+  },
+  "expect": {
+    "ok": true,
+    "resolution": "accepted",
+    "sent": true,
+    "reply_contains": ["https://instagram.com/estudio.eva"]
+  }
+}

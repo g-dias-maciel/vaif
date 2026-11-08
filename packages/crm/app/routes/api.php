@@ -4,6 +4,7 @@ use App\Http\Controllers\ContactGateController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\ReferenceController;
+use App\Http\Controllers\WahaWebhookController;
 use Illuminate\Support\Facades\Route;
 
 /*
@@ -18,6 +19,9 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::get('/up', HealthController::class);
+
+// WAHA (WhatsApp transport) → the in-CRM agent. Replaces the n8n webhook.
+Route::post('/webhooks/waha', WahaWebhookController::class)->middleware('throttle:600,1');
 
 Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('throttle:30,1');
 

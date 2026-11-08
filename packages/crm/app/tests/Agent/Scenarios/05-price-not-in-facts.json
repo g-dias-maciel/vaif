@@ -1,0 +1,41 @@
+{
+  "name": "price-not-in-facts",
+  "description": "The agent under-quotes. The validator replaces it with the authoritative table/quote price.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000005",
+  "chat_id": "eval:5511900000005@c.us",
+  "message": "Faz um desconto? Quanto fica?",
+  "turn": {
+    "name": "Elisa",
+    "is_new": false,
+    "stage_key": "orcamento_enviado",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {"preco_liberado": true}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "ready", "missing": null, "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "negotiate", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Consigo fazer por R$ 450,00.",
+    "claims": {"claims": [{"type": "price", "cents": 45000}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_price",
+    "sent": true,
+    "reply_contains": ["R$ 600,00"],
+    "reply_not_contains": ["450"],
+    "violations": ["price_not_in_facts"]
+  }
+}

@@ -110,12 +110,51 @@ keep artists logged in across redeploys.
 |---|---|
 | `WAHA_API_URL` | `https://waha.vaif.com.br` (or `http://<internal>:3000`) |
 | `WAHA_API_KEY` | WAHA API key |
-| `WAHA_WEBHOOK_URL` | `https://n8n.vaif.com.br/webhook/waha-webhook` |
-| `ONBOARD_WEBHOOK_TOKEN` | shared secret used by the n8n onboarding flow |
+| `WAHA_WEBHOOK_URL` | `https://crm.vaif.com.br/api/webhooks/waha` |
+| `WAHA_WEBHOOK_TOKEN` | shared header token WAHA sends to the CRM webhook |
+| `ONBOARD_WEBHOOK_TOKEN` | shared secret used by the onboarding flow |
 | `MEMBER_AREA_URL` | `https://membros.vaif.com.br/` (optional) |
 
-`ONBOARD_WEBHOOK_TOKEN` is what n8n sends when provisioning a CRM login for a
-new artist. It must match the value in the onboarding workflow.
+`ONBOARD_WEBHOOK_TOKEN` is what the onboarding workflow sends when provisioning
+a CRM login for a new artist. It must match the value in the workflow.
+
+### WhatsApp agent (Beatriz)
+
+The agent runs inside the CRM now; n8n is no longer on the message path.
+
+| Variable | Value |
+|---|---|
+| `QUEUE_CONNECTION` | `database` (required — the agent job uses it) |
+| `OPENROUTER_API_KEY` | OpenRouter key |
+| `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` |
+| `AGENT_MODEL` | `anthropic/claude-haiku-5.5` (or the current production model) |
+| `AGENT_AUDIO_MODEL` | `google/gemini-2.5-flash` |
+| `AGENT_VISION_MODEL` | `google/gemini-2.5-flash` |
+| `AGENT_QUEUE` | `agent` |
+| `AGENT_QUIET_MS` | `6000` (debounce silence) |
+| `AGENT_MAX_WAIT_MS` | `20000` |
+| `AGENT_TYPING_GRACE_MS` | `30000` |
+| `TELEGRAM_OPS_BOT_TOKEN` | bot token used for handoff notifications |
+| `AGENT_EVAL_ENABLED` | `false` in production |
+
+The entrypoint starts `php artisan queue:work --queue=agent` next to the
+scheduler and restarts it if it exits. The `jobs` table is created by
+`app/database/migrations/2026_11_08_000003_create_jobs_table.php`; run
+`php artisan migrate --force` once (the deploy job already does this).
+
+### Switching WAHA to the CRM
+
+Do this per artist, after the agent has been exercised with the fake cases:
+
+1. Run `php artisan agent:simulate` — all scripted cases must pass.
+2. Run `php artisan agent:eval` with a real key and review
+   `storage/app/agent-evals/`.
+3. Keep the artist `suspended` until you are ready to answer.
+4. Relink (or recreate) the WAHA session so it picks up
+   `WAHA_WEBHOOK_URL=/api/webhooks/waha` and `WAHA_WEBHOOK_TOKEN`.
+5. Watch `agent_ingest_drops`, `agent_turns` and `storage/logs/queue.log`.
+6. Rollback: point `WAHA_WEBHOOK_URL` back at the n8n webhook and relink; the
+   n8n workflow (`packages/flows`) is kept until the CRM path has parity.
 
 ---
 

@@ -17,10 +17,10 @@ return [
 
     'waha_api_key' => env('WAHA_API_KEY'),
 
-    'waha_webhook_url' => env('WAHA_WEBHOOK_URL', 'https://n8n.vaif.com.br/webhook/waha-webhook'),
+    'waha_webhook_url' => env('WAHA_WEBHOOK_URL', 'https://crm.vaif.com.br/api/webhooks/waha'),
 
-    // Shared header required by the n8n WAHA webhook. Falls back to the internal
-    // CRM token so a session recreated from the UI keeps authenticating.
+    // Shared header required by the CRM WAHA webhook. Falls back to the
+    // internal CRM token so a session recreated from the UI keeps authenticating.
     'waha_webhook_token' => env('WAHA_WEBHOOK_TOKEN', env('CRM_INTERNAL_TOKEN')),
 
     // Shared secret for internal automation (n8n → CRM reference uploads).

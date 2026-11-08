@@ -1,0 +1,41 @@
+{
+  "name": "valid-price",
+  "description": "A fully qualified lead receives exactly the fact price; nothing is rewritten.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000004",
+  "chat_id": "eval:5511900000004@c.us",
+  "message": "Pode me passar o valor?",
+  "turn": {
+    "name": "Diego",
+    "is_new": true,
+    "stage_key": "qualificando",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "ready", "missing": null, "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix", "credit_card"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": "flor"},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {}, "confidence": 0.95},
+    "agent": "Fica R$ 600,00 à vista. Quer ver os horários disponíveis?",
+    "claims": {"claims": [{"type": "price", "cents": 60000}]}
+  },
+  "expect": {
+    "ok": true,
+    "resolution": "accepted",
+    "repaired": false,
+    "sent": true,
+    "reply_contains": ["R$ 600,00"],
+    "max_slots": 0
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "price-without-row",
+  "description": "No table price for the placement/size. The agent must defer to the artist instead of inventing a number.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000003",
+  "chat_id": "eval:5511900000003@c.us",
+  "message": "E uma tattoo fechando o antebraço, quanto fica?",
+  "turn": {
+    "name": "Carla",
+    "is_new": true,
+    "stage_key": "qualificando",
+    "tattoo_type": "new",
+    "placement": "antebraço",
+    "body_zone": "local inteiro",
+    "style": "blackwork",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "no_price_row", "base_cents": null, "offered_cents": null, "deposit_cents": null, "open_quote": false, "promotion": null},
+    "availability": {"status": "ready", "missing": null, "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "antebraço", "body_zone": "local inteiro", "style": "blackwork", "first_tattoo": false, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Fica R$ 750,00.",
+    "claims": {"claims": [{"type": "price", "cents": 75000}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_price_unknown",
+    "sent": true,
+    "reply_contains": ["confirmar"],
+    "reply_not_contains": ["R$"],
+    "violations": ["price_without_row"]
+  }
+}

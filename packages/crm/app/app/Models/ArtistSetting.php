@@ -27,6 +27,12 @@ class ArtistSetting extends Model
         'deposit_type',
         'deposit_value',
         'pix_key',
+        'portfolio_url',
+        'reschedule_policy_hours',
+        'cancellation_policy_hours',
+        'payment_methods',
+        'allow_hold_slot',
+        'guarantee_price',
         'instagram_handle',
         'whatsapp_number',
         'address',
@@ -45,6 +51,9 @@ class ArtistSetting extends Model
         'working_hours' => 'array',
         'ai_active_hours' => 'array',
         'pricing_extras' => 'array',
+        'payment_methods' => 'array',
+        'allow_hold_slot' => 'boolean',
+        'guarantee_price' => 'boolean',
         'floor_pct' => 'decimal:2',
     ];
 

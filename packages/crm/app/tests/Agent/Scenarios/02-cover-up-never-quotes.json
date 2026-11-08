@@ -1,0 +1,42 @@
+{
+  "name": "cover-up-never-quotes",
+  "description": "Cover-up must never receive a price before the artist evaluates the tattoo. The validator replaces the reply even if repair is empty.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000002",
+  "chat_id": "eval:5511900000002@c.us",
+  "message": "Quero cobrir uma tatuagem antiga nas costas",
+  "turn": {
+    "name": "Bruno",
+    "is_new": true,
+    "stage_key": "novo",
+    "tattoo_type": "cover_up",
+    "placement": "costas",
+    "body_zone": "local inteiro",
+    "style": "realismo",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 90000, "offered_cents": 90000, "deposit_cents": 27000, "open_quote": false, "promotion": null},
+    "availability": {"status": "not_ready", "missing": "tipo", "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "cover_up", "placement": "costas", "body_zone": "local inteiro", "style": "realismo", "first_tattoo": false, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {"cover_up": true}, "confidence": 0.95},
+    "agent": "Fica R$ 900,00 à vista!",
+    "claims": {"claims": [{"type": "price", "cents": 90000}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_cover_up",
+    "repaired": false,
+    "sent": true,
+    "reply_contains": ["avaliar"],
+    "reply_not_contains": ["R$", "900"],
+    "violations": ["coverup_never_quotes"]
+  }
+}

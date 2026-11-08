@@ -59,6 +59,16 @@ php artisan view:cache
 echo "[entrypoint] starting the scheduler"
 su -s /bin/sh www-data -c "php artisan schedule:work" >/dev/null 2>&1 &
 
+# --- Agent queue -------------------------------------------------------------
+# The WhatsApp agent uses Laravel's database queue (no Redis in this
+# deployment). The loop restarts the worker if it exits, so a fatal error in
+# one turn never leaves the agent deaf.
+echo "[entrypoint] starting the agent queue worker"
+su -s /bin/sh www-data -c 'while true; do
+    php artisan queue:work --queue=agent --sleep=1 --tries=3 --timeout=120 --memory=256
+    sleep 2
+done' >> storage/logs/queue.log 2>&1 &
+
 # --- Serve -------------------------------------------------------------------
 echo "[entrypoint] starting php-fpm + nginx"
 php-fpm -D

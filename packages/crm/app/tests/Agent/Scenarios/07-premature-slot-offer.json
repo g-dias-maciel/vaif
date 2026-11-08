@@ -1,0 +1,41 @@
+{
+  "name": "premature-slot-offer",
+  "description": "Availability was not requested and the facts are not ready. The agent asks for qualification first.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000007",
+  "chat_id": "eval:5511900000007@c.us",
+  "message": "Quanto custa?",
+  "turn": {
+    "name": "Gabi",
+    "is_new": true,
+    "stage_key": "novo",
+    "tattoo_type": "new",
+    "placement": null,
+    "body_zone": null,
+    "style": null,
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "no_price_row", "base_cents": null, "offered_cents": null, "deposit_cents": null, "open_quote": false, "promotion": null},
+    "availability": {"status": "not_ready", "missing": "local", "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": null, "body_zone": null, "style": null, "first_tattoo": null, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Tenho terça às 14h!",
+    "claims": {"claims": [{"type": "slot_offer", "slot_id": "s1", "start_at": "2026-11-10T17:00:00+00:00"}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_premature_slots",
+    "sent": true,
+    "reply_contains": ["Antes de horários"],
+    "reply_not_contains": ["terça"],
+    "violations": ["slot_before_availability_intent"]
+  }
+}

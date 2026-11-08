@@ -1,0 +1,46 @@
+{
+  "name": "promotion-price",
+  "description": "An active promotion changes the price to present; the promotion price is grounded and accepted.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000013",
+  "chat_id": "eval:5511900000013@c.us",
+  "message": "Quanto fica uma tattoo média no braço?",
+  "turn": {
+    "name": "Lia",
+    "is_new": true,
+    "stage_key": "qualificando",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {
+      "status": "ready",
+      "base_cents": 60000,
+      "offered_cents": 60000,
+      "deposit_cents": 9000,
+      "open_quote": false,
+      "promotion": {"name": "2 por 1", "multiplier": 0.5, "price_cents": 30000}
+    },
+    "availability": {"status": "not_ready", "missing": "tipo", "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Com a promoção 2 por 1, fica R$ 300,00 à vista: fazendo uma, você ganha outra do mesmo tamanho.",
+    "claims": {"claims": [{"type": "price", "cents": 30000}]}
+  },
+  "expect": {
+    "ok": true,
+    "resolution": "accepted",
+    "sent": true,
+    "reply_contains": ["300,00"]
+  }
+}

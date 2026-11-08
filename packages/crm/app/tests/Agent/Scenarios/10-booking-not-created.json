@@ -1,0 +1,49 @@
+{
+  "name": "booking-not-created",
+  "description": "The agent confirms a booking that the backend never wrote. The validator replaces it with the real slots.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000010",
+  "chat_id": "eval:5511900000010@c.us",
+  "message": "Fechado, terça às 14h então",
+  "turn": {
+    "name": "João",
+    "is_new": false,
+    "stage_key": "orcamento_enviado",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {
+      "status": "ready",
+      "missing": null,
+      "slots": [
+        {"id": "s1", "label": "terça, 10/11, às 14h", "start_at": "2026-11-10T17:00:00+00:00"},
+        {"id": "s2", "label": "quarta, 11/11, às 10h", "start_at": "2026-11-11T13:00:00+00:00"}
+      ]
+    },
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "close", "entities": {}, "flags": {}, "confidence": 0.95},
+    "agent": "Agendado para terça às 14h!",
+    "claims": {"claims": [{"type": "booking_confirmed"}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_slots",
+    "sent": true,
+    "reply_contains": ["Tenho estes horários"],
+    "reply_not_contains": ["Agendado"],
+    "max_slots": 2,
+    "violations": ["booking_not_created"]
+  }
+}

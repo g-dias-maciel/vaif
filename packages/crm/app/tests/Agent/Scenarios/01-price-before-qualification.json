@@ -1,0 +1,43 @@
+{
+  "name": "price-before-qualification",
+  "description": "The lead asks for a price before the size is known. The reply is repaired to ask for the missing discovery.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000001",
+  "chat_id": "eval:5511900000001@c.us",
+  "message": "Quanto fica uma tattoo no braço?",
+  "turn": {
+    "name": "Ana",
+    "is_new": true,
+    "stage_key": "novo",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": null,
+    "style": "fine line",
+    "agent_state": {}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "not_ready", "missing": "tamanho", "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix", "credit_card"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": null, "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_price", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Fica R$ 600,00 à vista!",
+    "claims": {"claims": [{"type": "price", "cents": 60000}]},
+    "repair": {"reply": "Antes de falar de valor, me conta o tamanho: é uma tattoo pequena, uma área média ou o braço inteiro?", "claims": []}
+  },
+  "expect": {
+    "ok": true,
+    "resolution": "accepted",
+    "repaired": true,
+    "sent": true,
+    "reply_contains": ["tamanho"],
+    "reply_not_contains": ["R$"],
+    "original_violations": ["price_before_qualification"]
+  }
+}

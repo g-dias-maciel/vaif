@@ -1,0 +1,47 @@
+{
+  "name": "valid-booking-confirmation",
+  "description": "The backend created the booking this turn; confirming it is grounded and passes untouched.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000011",
+  "chat_id": "eval:5511900000011@c.us",
+  "message": "Fechado, terça às 14h então",
+  "turn": {
+    "name": "João",
+    "is_new": false,
+    "stage_key": "orcamento_enviado",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {},
+    "active_booking_id": "00000000-0000-4000-8000-0000000000c1"
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {
+      "status": "ready",
+      "missing": null,
+      "slots": [
+        {"id": "s1", "label": "terça, 10/11, às 14h", "start_at": "2026-11-10T17:00:00+00:00"}
+      ]
+    },
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": true, "start_at": "2026-11-10T17:00:00+00:00", "created_this_turn": true},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "close", "entities": {"selected_slot_start": "2026-11-10T17:00:00+00:00"}, "flags": {}, "confidence": 0.95},
+    "agent": "Fechado! Te espero terça às 14h. O sinal de R$ 180,00 é no PIX.",
+    "claims": {"claims": [{"type": "booking_confirmed"}, {"type": "deposit", "cents": 18000}]}
+  },
+  "expect": {
+    "ok": true,
+    "resolution": "accepted",
+    "repaired": false,
+    "sent": true,
+    "reply_contains": ["terça", "180,00"]
+  }
+}

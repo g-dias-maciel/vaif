@@ -352,6 +352,34 @@ class WahaService
         return $resp->successful();
     }
 
+    public function startTyping(Artist $artist, string $chatId): bool
+    {
+        return $this->presence($artist, $chatId, 'typing');
+    }
+
+    public function stopTyping(Artist $artist, string $chatId): bool
+    {
+        return $this->presence($artist, $chatId, 'paused');
+    }
+
+    private function presence(Artist $artist, string $chatId, string $state): bool
+    {
+        if (! $artist->wa_session_slug || $chatId === '') {
+            return false;
+        }
+
+        try {
+            $response = $this->client()->post('/api/'.$artist->wa_session_slug.'/presence', [
+                'chatId' => $chatId,
+                'presence' => $state,
+            ]);
+        } catch (ConnectionException) {
+            return false;
+        }
+
+        return $response->successful();
+    }
+
     private function client(): PendingRequest
     {
         $client = Http::baseUrl($this->baseUrl)->acceptJson()->timeout(5);

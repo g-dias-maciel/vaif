@@ -1,0 +1,42 @@
+{
+  "name": "condition-not-in-facts",
+  "description": "The agent invents a 7-day reschedule window while the CRM says 48 hours.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000009",
+  "chat_id": "eval:5511900000009@c.us",
+  "message": "Se eu precisar remarcar, até quando posso?",
+  "turn": {
+    "name": "Iara",
+    "is_new": false,
+    "stage_key": "agendado",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {},
+    "active_booking_id": "00000000-0000-4000-8000-0000000000c1"
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "ready", "missing": null, "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": true, "start_at": "2026-11-10T17:00:00+00:00", "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_policy", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "Pode remarcar até 7 dias antes, sem problema.",
+    "claims": {"claims": [{"type": "condition", "key": "reschedule", "value": "7 dias"}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_condition",
+    "sent": true,
+    "reply_contains": ["confirmar"],
+    "reply_not_contains": ["7 dias"],
+    "violations": ["condition_not_in_facts"]
+  }
+}

@@ -1,0 +1,41 @@
+{
+  "name": "deposit-without-booking",
+  "description": "The agent asks for the deposit before a slot exists. The validator refuses and asks for the day first.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000008",
+  "chat_id": "eval:5511900000008@c.us",
+  "message": "Como faço pra pagar o sinal?",
+  "turn": {
+    "name": "Hugo",
+    "is_new": false,
+    "stage_key": "orcamento_enviado",
+    "tattoo_type": "new",
+    "placement": "braço",
+    "body_zone": "área média",
+    "style": "fine line",
+    "agent_state": {"preco_liberado": true}
+  },
+  "facts": {
+    "pricing": {"status": "ready", "base_cents": 60000, "offered_cents": 60000, "deposit_cents": 18000, "open_quote": false, "promotion": null},
+    "availability": {"status": "ready", "missing": null, "slots": []},
+    "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
+    "booking": {"active": false, "start_at": null, "created_this_turn": false},
+    "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
+    "client": {"returning": false},
+    "portfolio": {"url": "https://instagram.com/estudio.eva"},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "ask_deposit", "entities": {}, "flags": {}, "confidence": 0.9},
+    "agent": "O sinal é R$ 180,00 no PIX, pode mandar.",
+    "claims": {"claims": [{"type": "deposit", "cents": 18000}]},
+    "repair": {"reply": "", "claims": []}
+  },
+  "expect": {
+    "resolution": "canonical_deposit",
+    "sent": true,
+    "reply_contains": ["Antes do sinal"],
+    "reply_not_contains": ["R$"],
+    "violations": ["deposit_without_booking"]
+  }
+}

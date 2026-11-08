@@ -1,0 +1,165 @@
+<?php
+
+namespace App\Services\Agent\Eval;
+
+use App\Services\Agent\AiClient;
+use App\Services\Agent\ClaimExtractor;
+use App\Services\Agent\PreflightClassifier;
+use App\Services\Agent\PromptBuilder;
+use App\Services\Agent\ReplyValidator;
+use App\Services\Agent\TurnProcessor;
+
+/**
+ * Runs one fake case through the real pipeline and checks the result.
+ */
+class Evaluator
+{
+    public function __construct(
+        private readonly AiClient $ai,
+        private readonly string $model = 'eval',
+    ) {
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    public function run(Scenario $scenario): array
+    {
+        config(['agent.humanize' => false]);
+
+        $artist = $scenario->artist();
+        $store = new FixtureAgentStore($scenario->data);
+        $transport = new ArrayTransport();
+
+        $processor = new TurnProcessor(
+            $store,
+            $this->ai,
+            new PromptBuilder(),
+            new PreflightClassifier($this->ai, $this->model),
+            new ClaimExtractor($this->ai, $this->model),
+            new ReplyValidator(),
+            $transport,
+        );
+
+        $startedAt = microtime(true);
+
+        try {
+            $result = $processor->process(
+                $artist,
+                $scenario->chatId(),
+                $scenario->phone(),
+                $scenario->message(),
+                $scenario->leadName(),
+                true,
+            );
+        } catch (\Throwable $e) {
+            return [
+                'scenario' => $scenario->name(),
+                'pass' => false,
+                'failures' => ['exception: '.$e->getMessage()],
+                'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+            ];
+        }
+
+        $validation = is_array($result['validation'] ?? null) ? $result['validation'] : [];
+        $rules = array_values(array_filter(array_map(
+            fn ($v) => is_array($v) ? (string) ($v['rule'] ?? '') : (string) $v,
+            $validation['violations'] ?? [],
+        )));
+
+        $originalRules = array_values(array_filter(array_map(
+            fn ($v) => is_array($v) ? (string) ($v['rule'] ?? '') : (string) $v,
+            $validation['original_violations'] ?? [],
+        )));
+
+        $report = [
+            'scenario' => $scenario->name(),
+            'message' => $scenario->message(),
+            'intent' => $result['preflight']['intent'] ?? null,
+            'resolution' => $validation['resolution'] ?? ($result['skipped'] ?? null),
+            'reply' => $result['reply'] ?? ($validation['final_reply'] ?? ''),
+            'ok' => $validation['ok'] ?? null,
+            'violations' => $rules,
+            'original_violations' => $originalRules,
+            'repaired' => (bool) ($result['repaired'] ?? false),
+            'sent' => $transport->sent,
+            'offered_slots' => count($validation['offered_slots'] ?? []),
+            'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ];
+
+        $failures = $this->check($scenario->expect(), $report, $result);
+
+        $report['failures'] = $failures;
+        $report['pass'] = $failures === [];
+
+        return $report;
+    }
+
+    /**
+     * @return array<int, string>
+     */
+    private function check(array $expect, array $report, array $result): array
+    {
+        $failures = [];
+        $reply = $this->norm((string) $report['reply']);
+
+        if (array_key_exists('ok', $expect) && (bool) $expect['ok'] !== (bool) $report['ok']) {
+            $failures[] = 'expected ok='.($expect['ok'] ? 'true' : 'false').', got '.var_export($report['ok'], true);
+        }
+
+        if (isset($expect['resolution']) && (string) $expect['resolution'] !== (string) $report['resolution']) {
+            $failures[] = 'expected resolution '.$expect['resolution'].', got '.$report['resolution'];
+        }
+
+        if (isset($expect['intent']) && (string) $expect['intent'] !== (string) $report['intent']) {
+            $failures[] = 'expected intent '.$expect['intent'].', got '.$report['intent'];
+        }
+
+        if (array_key_exists('repaired', $expect) && (bool) $expect['repaired'] !== $report['repaired']) {
+            $failures[] = 'expected repaired='.($expect['repaired'] ? 'true' : 'false');
+        }
+
+        if (array_key_exists('sent', $expect) && (bool) $expect['sent'] !== ($report['sent'] !== [])) {
+            $failures[] = 'expected sent='.($expect['sent'] ? 'true' : 'false');
+        }
+
+        if (isset($expect['max_slots']) && $report['offered_slots'] > (int) $expect['max_slots']) {
+            $failures[] = 'offered '.$report['offered_slots'].' slots, max '.$expect['max_slots'];
+        }
+
+        foreach ((array) ($expect['violations'] ?? []) as $rule) {
+            if (! in_array((string) $rule, $report['violations'], true)) {
+                $failures[] = "expected validator rule '{$rule}'";
+            }
+        }
+
+        foreach ((array) ($expect['original_violations'] ?? []) as $rule) {
+            if (! in_array((string) $rule, $report['original_violations'], true)) {
+                $failures[] = "expected original validator rule '{$rule}'";
+            }
+        }
+
+        foreach ((array) ($expect['reply_contains'] ?? []) as $needle) {
+            if (! str_contains($reply, $this->norm((string) $needle))) {
+                $failures[] = "reply must contain '{$needle}'";
+            }
+        }
+
+        foreach ((array) ($expect['reply_not_contains'] ?? []) as $needle) {
+            if (str_contains($reply, $this->norm((string) $needle))) {
+                $failures[] = "reply must not contain '{$needle}'";
+            }
+        }
+
+        if (isset($expect['max_latency_ms']) && $report['latency_ms'] > (int) $expect['max_latency_ms']) {
+            $failures[] = 'latency '.$report['latency_ms'].'ms over limit';
+        }
+
+        return $failures;
+    }
+
+    private function norm(string $value): string
+    {
+        return mb_strtolower(trim($value));
+    }
+}
