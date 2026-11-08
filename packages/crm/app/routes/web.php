@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\ArtistController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordSetupController;
@@ -8,9 +9,7 @@ use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
-use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\LeadController;
-use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\PromotionAdminController;
 use App\Http\Controllers\Sales\BacklogController;
 use App\Http\Controllers\Sales\CampaignController;
@@ -133,6 +132,17 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:sales,staff')->prefix('sales')->name('sales.')->group(function () {
         Route::get('/', SalesDashboardController::class)->name('dashboard');
         Route::get('/pipeline', [ProspectController::class, 'index'])->name('pipeline');
+
+        Route::get('/prospects/create', [ProspectController::class, 'create'])->name('prospects.create');
+        Route::post('/prospects', [ProspectController::class, 'store'])->name('prospects.store');
+        Route::get('/prospects/{prospect}', [ProspectController::class, 'show'])->name('prospects.show');
+        Route::get('/prospects/{prospect}/edit', [ProspectController::class, 'edit'])->name('prospects.edit');
+        Route::put('/prospects/{prospect}', [ProspectController::class, 'update'])->name('prospects.update');
+        Route::post('/prospects/{prospect}/stage', [ProspectController::class, 'updateStage'])->name('prospects.stage');
+        Route::post('/prospects/{prospect}/next-action', [ProspectController::class, 'updateNextAction'])->name('prospects.next-action');
+        Route::post('/prospects/{prospect}/activities', [ProspectController::class, 'storeActivity'])->name('prospects.activities.store');
+        Route::post('/prospects/{prospect}/activities/{activity}/complete', [ProspectController::class, 'completeActivity'])->name('prospects.activities.complete');
+
         Route::get('/backlog', [BacklogController::class, 'index'])->name('backlog');
         Route::post('/backlog/{prospect}/promote', [BacklogController::class, 'promote'])->name('backlog.promote');
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');

@@ -95,5 +95,4 @@ class CreateStaffUser extends Command
 
         return self::SUCCESS;
     }
-
 }

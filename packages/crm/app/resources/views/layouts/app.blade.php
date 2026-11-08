@@ -721,7 +721,7 @@
                     <div class="who">
                         <span class="who-avatar" title="{{ $navArtist?->displayName() ?: $navUser->name }}">{{ mb_substr($navArtist?->displayName() ?: $navUser->name, 0, 1) }}</span>
                         <span class="who-name">{{ $navUser->name }}</span>
-                        <span class="who-role">{{ $navUser->isArtist() ? 'Artista' : 'Equipe VAIF' }}</span>
+                        <span class="who-role">{{ $navUser->isArtist() ? 'Artista' : ($navUser->isSales() ? 'Vendas' : 'Equipe VAIF') }}</span>
                         @if (! $navUser->isArtist() && $navArtist)
                             <span class="who-context">Visualizando: {{ $navArtist->displayName() }}</span>
                         @endif

@@ -64,4 +64,24 @@ class ProspectActivity extends Model
     {
         return $query->whereNull('completed_at');
     }
+
+    public function typeLabel(): string
+    {
+        return match ($this->type) {
+            self::TYPE_CALL => 'Ligação',
+            self::TYPE_WHATSAPP => 'WhatsApp',
+            self::TYPE_NOTE => 'Nota',
+            self::TYPE_TASK => 'Tarefa',
+            self::TYPE_STAGE_CHANGE => 'Mudança de estágio',
+            self::TYPE_HANDOFF => 'Handoff',
+            self::TYPE_IMPORT => 'Importação',
+            self::TYPE_CONTRACT => 'Contrato',
+            default => ucfirst((string) $this->type),
+        };
+    }
+
+    public function isTaskOpen(): bool
+    {
+        return $this->type === self::TYPE_TASK && $this->completed_at === null;
+    }
 }

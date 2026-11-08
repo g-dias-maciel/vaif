@@ -71,7 +71,7 @@
                 @foreach ($prospects as $prospect)
                     <tr>
                         <td>
-                            <strong>{{ $prospect->name }}</strong>
+                            <a href="{{ route('sales.prospects.show', $prospect) }}"><strong>{{ $prospect->name }}</strong></a>
                             <div class="sales-sub">
                                 {{ $prospect->displayPhone() }}
                                 @if ($prospect->instagram)

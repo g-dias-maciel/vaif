@@ -12,6 +12,7 @@
             <p class="meta" style="margin-top:6px;">{{ $prospects->count() }} prospect(s) neste filtro.</p>
         </div>
         <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <a href="{{ route('sales.prospects.create') }}" class="btn">Novo prospect</a>
             <a href="{{ route('sales.backlog') }}" class="btn btn--ghost">Ver backlog</a>
             <a href="{{ route('sales.dashboard') }}" class="btn btn--ghost">Cockpit</a>
         </div>
@@ -70,7 +71,7 @@
                 @foreach ($prospects as $prospect)
                     <tr>
                         <td>
-                            <strong>{{ $prospect->name }}</strong>
+                            <a href="{{ route('sales.prospects.show', $prospect) }}"><strong>{{ $prospect->name }}</strong></a>
                             <div class="sales-sub">
                                 {{ $prospect->displayPhone() }}
                                 @if ($prospect->instagram)

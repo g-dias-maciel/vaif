@@ -273,6 +273,41 @@ class Prospect extends Model
         return 'R$ '.number_format($this->revenue_monthly_cents / 100, 0, ',', '.');
     }
 
+    /**
+     * Normalize a Brazilian phone number to E.164 (`+55...`). Returns null for
+     * input that cannot be a 10/11-digit number or an already-prefixed one.
+     */
+    public static function normalizePhone(mixed $raw): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $raw) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        if (str_starts_with($digits, '55') && strlen($digits) > 11) {
+            return strlen($digits) <= 13 ? '+'.$digits : null;
+        }
+
+        if (strlen($digits) === 10 || strlen($digits) === 11) {
+            return '+55'.$digits;
+        }
+
+        return null;
+    }
+
+    public function whatsappUrl(): ?string
+    {
+        $digits = preg_replace('/\D+/', '', (string) $this->whatsapp_e164) ?? '';
+
+        return $digits !== '' ? 'https://wa.me/'.$digits : null;
+    }
+
+    public function instagramUrl(): ?string
+    {
+        return $this->instagram ? 'https://instagram.com/'.$this->instagram : null;
+    }
+
     public function displayPhone(): string
     {
         $digits = preg_replace('/\D+/', '', (string) $this->whatsapp_e164) ?? '';
