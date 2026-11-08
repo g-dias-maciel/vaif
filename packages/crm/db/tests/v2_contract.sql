@@ -42,7 +42,7 @@ insert into artist_settings (artist_id, display_name, deposit_value, working_hou
    '{"seg":["09:00-12:00","14:00-18:00"],"ter":["09:00-12:00","14:00-18:00"],
      "qua":["09:00-12:00","14:00-18:00"],"qui":["09:00-12:00","14:00-18:00"],
      "sex":["09:00-12:00","14:00-18:00"],"sab":["09:00-13:00"]}'::jsonb),
-  (pg_temp.artist_b(), 'Artist B',
+  (pg_temp.artist_b(), 'Artist B', 30,
    '{"seg":["09:00-12:00","14:00-18:00"]}'::jsonb);
 
 update artist_settings
