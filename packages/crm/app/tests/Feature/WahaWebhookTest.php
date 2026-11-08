@@ -160,6 +160,24 @@ class WahaWebhookTest extends TestCase
         Queue::assertPushed(ProcessWhatsAppTurn::class, fn (ProcessWhatsAppTurn $job) => $job->phone === '5511911112222');
     }
 
+    public function test_a_blocked_number_is_ignored_in_both_directions(): void
+    {
+        Queue::fake();
+        $artist = $this->artist('live', 'draft');
+        $artist->settings->update(['blocked_numbers' => ['5511900000001']]);
+
+        $this->sendWebhook($this->message())->assertOk()->assertJson(['ignored' => 'blocked']);
+        $this->assertSame([], $this->store->accumulated);
+
+        $this->sendWebhook($this->message(['fromMe' => true, 'body' => 'Oi, mãe']))
+            ->assertOk()
+            ->assertJson(['ignored' => 'blocked']);
+
+        $this->assertSame([], $this->store->controls);
+        $this->assertSame([], $this->store->artistMessages);
+        Queue::assertNothingPushed();
+    }
+
     public function test_group_messages_are_ignored(): void
     {
         Queue::fake();

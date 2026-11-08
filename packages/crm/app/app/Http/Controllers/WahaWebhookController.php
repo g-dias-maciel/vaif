@@ -76,14 +76,17 @@ class WahaWebhookController extends Controller
             return response()->json(['ignored' => 'no_phone']);
         }
 
+        // Blocked numbers are ignored in both directions. For a `fromMe`
+        // message the artist is the sender, so checking only `from` would miss
+        // the personal chat; the recipient and chat JIDs are checked too.
+        if ($this->isBlockedPayload($artist, $payload)) {
+            return response()->json(['ignored' => 'blocked']);
+        }
+
         if (($payload['fromMe'] ?? false) === true) {
             $this->takeover($artist, $session, $payload, $store, $drafts);
 
             return response()->json(['ok' => true, 'from_me' => true]);
-        }
-
-        if ($this->isBlocked($artist, $phone)) {
-            return response()->json(['ignored' => 'blocked']);
         }
 
         if (! $this->inActiveHours($artist)) {
@@ -201,11 +204,34 @@ class WahaWebhookController extends Controller
         return preg_replace('/\D/', '', preg_replace('/@.*$/', '', $jid) ?? '') ?? '';
     }
 
-    private function isBlocked(Artist $artist, string $phone): bool
+    private function isBlockedPayload(Artist $artist, array $payload): bool
     {
-        foreach ((array) ($artist->settings?->blocked_numbers ?? []) as $blocked) {
-            if ($this->digits((string) $blocked) === $phone) {
-                return true;
+        $blocked = (array) ($artist->settings?->blocked_numbers ?? []);
+
+        if ($blocked === []) {
+            return false;
+        }
+
+        $key = is_array($payload['_data']['key'] ?? null) ? $payload['_data']['key'] : [];
+        $jids = array_filter([
+            (string) ($payload['from'] ?? ''),
+            (string) ($payload['to'] ?? ''),
+            (string) ($key['remoteJid'] ?? ''),
+            (string) ($key['remoteJidAlt'] ?? ''),
+            (string) ($key['senderPn'] ?? ''),
+        ]);
+
+        foreach ($blocked as $number) {
+            $digits = $this->digits((string) $number);
+
+            if ($digits === '') {
+                continue;
+            }
+
+            foreach ($jids as $jid) {
+                if ($this->digits($jid) === $digits) {
+                    return true;
+                }
             }
         }
 
