@@ -495,7 +495,7 @@ begin
   perform pg_temp.ok(q.kind = 'promotion', 'quote kind is promotion');
   perform pg_temp.ok(q.promotion_id = promo.id, 'quote references the promotion');
   perform pg_temp.ok(q.offered_price_cents = 120000, 'offered = 2x base, got ' || q.offered_price_cents);
-  perform pg_temp.ok(q.second_cap_cents = 60000, 'second tattoo cap = base price');
+  perform pg_temp.ok(q.second_cap_cents is null, 'the second tattoo has no price cap');
   perform pg_temp.ok(q.valid_until > now(), 'promotion quote has an expiry');
 
   -- Cross-tenant promotion use is refused.
