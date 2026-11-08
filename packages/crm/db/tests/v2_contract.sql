@@ -1068,8 +1068,8 @@ begin
     'facts are persisted as jsonb');
 
   perform pg_temp.ok(
-    (select grounding_mode from artist_settings where artist_id = pg_temp.artist_a()) = 'off',
-    'grounding is off by default');
+    (select grounding_mode from artist_settings where artist_id = pg_temp.artist_a()) = 'enforce',
+    'grounding is enforced by default');
 end;
 $$;
 
