@@ -55,6 +55,25 @@ class DraftStore
      * Attach one artist WhatsApp message to the draft. Multiple bubbles in the
      * same minute are concatenated so the comparison sees the full answer.
      */
+    public function attachArtistReplyAt(AgentDraft $draft, string $text, ?\DateTimeInterface $at = null): AgentDraft
+    {
+        $text = trim($text);
+
+        if ($text === '' || $draft->status === AgentDraft::STATUS_COMPARED || $draft->artist_reply !== null) {
+            return $draft;
+        }
+
+        $repliedAt = $at ? \Carbon\CarbonImmutable::instance($at) : now();
+
+        $draft->artist_reply = $text;
+        $draft->artist_replied_at = $repliedAt;
+        $draft->response_seconds = max(0, (int) $draft->created_at->diffInSeconds($repliedAt));
+        $draft->status = AgentDraft::STATUS_REPLIED;
+        $draft->save();
+
+        return $draft;
+    }
+
     public function attachArtistReply(AgentDraft $draft, string $text): AgentDraft
     {
         $text = trim($text);

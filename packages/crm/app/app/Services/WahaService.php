@@ -66,6 +66,37 @@ class WahaService
     }
 
     /**
+     * Stored messages for one chat (NOWEB store only).
+     *
+     * Returns null when WAHA is unreachable or the session has no store.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function chatMessages(Artist $artist, string $chatJid, int $limit = 200): ?array
+    {
+        if (! $artist->wa_session_slug || $chatJid === '') {
+            return null;
+        }
+
+        try {
+            $resp = $this->client()->get(
+                '/api/'.$artist->wa_session_slug.'/chats/'.rawurlencode($chatJid).'/messages',
+                ['limit' => $limit, 'downloadMedia' => 'false'],
+            );
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $resp->successful()) {
+            return null;
+        }
+
+        $data = $resp->json();
+
+        return is_array($data) ? $data : null;
+    }
+
+    /**
      * Current session status + webhook target, for the calibration page.
      *
      * @return array{status: string, me: ?string, url: ?string, events: array<int, string>, has_token: bool}|null

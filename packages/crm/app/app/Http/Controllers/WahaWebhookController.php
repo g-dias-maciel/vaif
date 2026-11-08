@@ -163,7 +163,18 @@ class WahaWebhookController extends Controller
         }
 
         $text = trim((string) ($payload['body'] ?? '')) ?: '[MÍDIA ENVIADA]';
-        $store->recordArtistMessage($artist->id, $chatId, $text);
+        $waMessageId = trim((string) ($payload['id'] ?? ''));
+        $at = isset($payload['timestamp'])
+            ? \Carbon\CarbonImmutable::createFromTimestamp((int) $payload['timestamp'])->toIso8601String()
+            : null;
+
+        $store->recordArtistMessage(
+            $artist->id,
+            $chatId,
+            $text,
+            $waMessageId !== '' ? $waMessageId : null,
+            $at,
+        );
 
         // Pair the artist's answer with the newest copilot draft for this chat.
         $draft = $drafts->latestOpenForChat($artist->id, $chatId);

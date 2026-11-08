@@ -148,9 +148,36 @@ class FixtureAgentStore implements AgentStore
         $this->controls[] = $chatId;
     }
 
-    public function recordArtistMessage(string $artistId, string $chatId, string $text): void
-    {
-        $this->artistMessages[] = ['chat_id' => $chatId, 'text' => $text];
+    public function recordArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        ?string $waMessageId = null,
+        ?string $at = null,
+    ): void {
+        $this->artistMessages[] = [
+            'chat_id' => $chatId,
+            'text' => $text,
+            'wa_message_id' => $waMessageId,
+            'at' => $at,
+        ];
+    }
+
+    public function importArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        string $waMessageId,
+        ?string $at = null,
+    ): bool {
+        $this->artistMessages[] = [
+            'chat_id' => $chatId,
+            'text' => $text,
+            'wa_message_id' => $waMessageId,
+            'at' => $at,
+        ];
+
+        return true;
     }
 
     public function bufferAccumulate(string $artistId, string $chatId, string $text): array

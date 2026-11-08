@@ -256,24 +256,123 @@ class DatabaseAgentStore implements AgentStore
         );
     }
 
-    public function recordArtistMessage(string $artistId, string $chatId, string $text): void
+    public function recordArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        ?string $waMessageId = null,
+        ?string $at = null,
+    ): void {
+        $leadId = $this->leadIdForChat($artistId, $chatId);
+
+        if ($leadId === null || ($waMessageId !== null && $this->artistMessageExists($leadId, $waMessageId))) {
+            return;
+        }
+
+        $this->insertArtistMessage($leadId, $text, $waMessageId, $at);
+    }
+
+    public function importArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        string $waMessageId,
+        ?string $at = null,
+    ): bool {
+        $leadId = $this->leadIdForChat($artistId, $chatId);
+
+        if ($leadId === null) {
+            return false;
+        }
+
+        if ($this->artistMessageExists($leadId, $waMessageId)) {
+            return false;
+        }
+
+        // Live captures before the backfill did not store the WAHA id. Avoid
+        // importing the same text twice when it lands at nearly the same time.
+        if ($at !== null) {
+            $atTime = \Carbon\CarbonImmutable::parse($this->normalizeTimestamp($at));
+
+            $duplicate = DB::table('agent_memory.chat_memory')
+                ->where('session_id', $leadId)
+                ->whereRaw("message->>'type' = 'ai'")
+                ->whereRaw("message->'additional_kwargs'->>'author' = 'artist'")
+                ->whereRaw("message->>'content' = ?", [$text])
+                ->whereBetween('created_at', [
+                    $atTime->copy()->subSeconds(10),
+                    $atTime->copy()->addSeconds(10),
+                ])
+                ->exists();
+
+            if ($duplicate) {
+                return false;
+            }
+        }
+
+        $this->insertArtistMessage($leadId, $text, $waMessageId, $at);
+
+        return true;
+    }
+
+    private function leadIdForChat(string $artistId, string $chatId): ?string
     {
+        $row = DB::selectOne(
+            'select lead_id from chat_sessions where artist_id = ?::uuid and chat_id = ? limit 1',
+            [$artistId, $chatId]
+        );
+
+        return $row?->lead_id ? (string) $row->lead_id : null;
+    }
+
+    private function artistMessageExists(string $leadId, string $waMessageId): bool
+    {
+        $row = DB::selectOne(
+            "select 1 from agent_memory.chat_memory
+              where session_id = ?
+                and message->'additional_kwargs'->>'wa_message_id' = ?
+              limit 1",
+            [$leadId, $waMessageId]
+        );
+
+        return $row !== null;
+    }
+
+    private function insertArtistMessage(string $leadId, string $text, ?string $waMessageId, ?string $at): void
+    {
+        $kwargs = ['author' => 'artist'];
+
+        if ($waMessageId !== null && $waMessageId !== '') {
+            $kwargs['wa_message_id'] = $waMessageId;
+        }
+
         $message = $this->json([
             'type' => 'ai',
             'content' => $text,
-            'additional_kwargs' => ['author' => 'artist'],
+            'additional_kwargs' => $kwargs,
             'response_metadata' => [],
             'tool_calls' => [],
             'invalid_tool_calls' => [],
         ]);
 
+        if ($at === null || $at === '') {
+            DB::statement(
+                'insert into agent_memory.chat_memory (session_id, message) values (?, ?::jsonb)',
+                [$leadId, $message]
+            );
+
+            return;
+        }
+
         DB::statement(
-            'insert into agent_memory.chat_memory (session_id, message)
-             select cs.lead_id, ?::jsonb
-               from chat_sessions cs
-              where cs.artist_id = ?::uuid and cs.chat_id = ?',
-            [$message, $artistId, $chatId]
+            'insert into agent_memory.chat_memory (session_id, message, created_at) values (?, ?::jsonb, ?::timestamptz)',
+            [$leadId, $message, $this->normalizeTimestamp($at)]
         );
+    }
+
+    private function normalizeTimestamp(string $value): string
+    {
+        return preg_replace('/([+-]\d{2})$/', '$1:00', $value) ?? $value;
     }
 
     public function bufferAccumulate(string $artistId, string $chatId, string $text): array

@@ -56,7 +56,26 @@ interface AgentStore
      * Persist a message the artist typed on their own phone, so the agent's
      * memory matches what the lead actually received.
      */
-    public function recordArtistMessage(string $artistId, string $chatId, string $text): void;
+    public function recordArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        ?string $waMessageId = null,
+        ?string $at = null,
+    ): void;
+
+    /**
+     * Import a historical artist message from the WAHA store.
+     *
+     * Returns false when the chat has no lead or the message is already known.
+     */
+    public function importArtistMessage(
+        string $artistId,
+        string $chatId,
+        string $text,
+        string $waMessageId,
+        ?string $at = null,
+    ): bool;
 
     /**
      * Appends to the chat's pending burst and returns the resulting row; its
