@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * An Artist prospect in VAIF's own sales pipeline.
@@ -149,6 +150,23 @@ class Prospect extends Model
     public function contracts(): HasMany
     {
         return $this->hasMany(ProspectContract::class, 'prospect_id');
+    }
+
+    public function activeContract(): HasOne
+    {
+        return $this->hasOne(ProspectContract::class, 'prospect_id')
+            ->where('status', ProspectContract::STATUS_ACTIVE)
+            ->latestOfMany('start_date');
+    }
+
+    public function invoices(): HasMany
+    {
+        return $this->hasMany(BillingInvoice::class, 'prospect_id')->orderByDesc('period_start');
+    }
+
+    public function payments(): HasMany
+    {
+        return $this->hasMany(BillingPayment::class, 'prospect_id')->orderByDesc('paid_at');
     }
 
     public function scopeActive(Builder $query): Builder

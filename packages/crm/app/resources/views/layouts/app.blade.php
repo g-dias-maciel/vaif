@@ -691,6 +691,27 @@
                             </div>
                         @endif
 
+                        @if ($navUser->isStaff())
+                            <div class="nav-group">
+                                <span class="nav-group-label">Financeiro</span>
+                                <a href="{{ route('finance.dashboard') }}" class="nav-item {{ request()->routeIs('finance.dashboard') ? 'is-active' : '' }}">
+                                    <x-icon name="chart" /> <span>Visão financeira</span>
+                                </a>
+                                <a href="{{ route('finance.invoices.index') }}" class="nav-item {{ request()->routeIs('finance.invoices.*') ? 'is-active' : '' }}">
+                                    <x-icon name="promo" /> <span>Cobranças</span>
+                                </a>
+                                <a href="{{ route('finance.clients') }}" class="nav-item {{ request()->routeIs('finance.clients') || request()->routeIs('finance.contracts.*') ? 'is-active' : '' }}">
+                                    <x-icon name="users" /> <span>Clientes e contratos</span>
+                                </a>
+                                <a href="{{ route('finance.payments.index') }}" class="nav-item {{ request()->routeIs('finance.payments.*') ? 'is-active' : '' }}">
+                                    <x-icon name="grid" /> <span>Pagamentos</span>
+                                </a>
+                                <a href="{{ route('finance.settings') }}" class="nav-item {{ request()->routeIs('finance.settings*') ? 'is-active' : '' }}">
+                                    <x-icon name="settings" /> <span>Configuração financeira</span>
+                                </a>
+                            </div>
+                        @endif
+
                         @if ($navUser->isStaff() && session('staff_artist_id') && $navArtist)
                             <div class="nav-group">
                                 <span class="nav-group-label">{{ $navArtist->displayName() }}</span>

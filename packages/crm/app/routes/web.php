@@ -9,6 +9,11 @@ use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\Finance\ContractController as FinanceContractController;
+use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
+use App\Http\Controllers\Finance\InvoiceController as FinanceInvoiceController;
+use App\Http\Controllers\Finance\PaymentController as FinancePaymentController;
+use App\Http\Controllers\Finance\SettingController as FinanceSettingController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\PromotionAdminController;
 use App\Http\Controllers\Sales\BacklogController;
@@ -147,5 +152,29 @@ Route::middleware('auth')->group(function () {
         Route::get('/backlog', [BacklogController::class, 'index'])->name('backlog');
         Route::post('/backlog/{prospect}/promote', [BacklogController::class, 'promote'])->name('backlog.promote');
         Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
+    });
+
+    // ---- Finance (staff only; a `finance` role can join this group later) ----
+    Route::middleware('role:staff')->prefix('finance')->name('finance.')->group(function () {
+        Route::get('/', [FinanceDashboardController::class, 'index'])->name('dashboard');
+        Route::get('/clients', [FinanceDashboardController::class, 'clients'])->name('clients');
+
+        Route::get('/clients/{prospect}/contract/create', [FinanceContractController::class, 'create'])->name('contracts.create');
+        Route::post('/clients/{prospect}/contract', [FinanceContractController::class, 'store'])->name('contracts.store');
+        Route::get('/contracts/{contract}/edit', [FinanceContractController::class, 'edit'])->name('contracts.edit');
+        Route::put('/contracts/{contract}', [FinanceContractController::class, 'update'])->name('contracts.update');
+
+        Route::get('/invoices', [FinanceInvoiceController::class, 'index'])->name('invoices.index');
+        Route::get('/invoices/create', [FinanceInvoiceController::class, 'create'])->name('invoices.create');
+        Route::post('/invoices', [FinanceInvoiceController::class, 'store'])->name('invoices.store');
+        Route::get('/invoices/{invoice}', [FinanceInvoiceController::class, 'show'])->name('invoices.show');
+        Route::post('/invoices/{invoice}/cancel', [FinanceInvoiceController::class, 'cancel'])->name('invoices.cancel');
+        Route::get('/invoices/{invoice}/receipt', [FinanceInvoiceController::class, 'receipt'])->name('invoices.receipt');
+
+        Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
+        Route::post('/payments', [FinancePaymentController::class, 'store'])->name('payments.store');
+
+        Route::get('/settings', [FinanceSettingController::class, 'edit'])->name('settings');
+        Route::put('/settings', [FinanceSettingController::class, 'update'])->name('settings.update');
     });
 });
