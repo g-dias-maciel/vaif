@@ -6,11 +6,16 @@ use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AnalyticsController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\OnboardController;
 use App\Http\Controllers\PromotionAdminController;
+use App\Http\Controllers\Sales\BacklogController;
+use App\Http\Controllers\Sales\CampaignController;
+use App\Http\Controllers\Sales\ProspectController;
+use App\Http\Controllers\Sales\SalesDashboardController;
 use App\Http\Controllers\SettingsController;
 use App\Models\Lead;
 use Illuminate\Support\Facades\Route;
@@ -105,6 +110,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');
 
+        Route::get('/copilot', [CopilotController::class, 'index'])->name('copilot.index');
+        Route::post('/copilot/generate', [CopilotController::class, 'generate'])->name('copilot.generate');
+        Route::get('/copilot/{report}', [CopilotController::class, 'show'])->name('copilot.show');
+
         Route::get('/calibration', [CalibrationController::class, 'index'])->name('calibration.index');
         Route::get('/calibration/{artist}', [CalibrationController::class, 'show'])->name('calibration.show');
         Route::post('/calibration/{artist}/mode', [CalibrationController::class, 'updateMode'])->name('calibration.mode');
@@ -118,5 +127,14 @@ Route::middleware('auth')->group(function () {
         Route::post('/promotions/{promotion}/activate', [PromotionAdminController::class, 'activate'])->name('promotions.activate');
         Route::post('/promotions/{promotion}/pause', [PromotionAdminController::class, 'pause'])->name('promotions.pause');
         Route::post('/promotions/{promotion}/end', [PromotionAdminController::class, 'end'])->name('promotions.end');
+    });
+
+    // ---- Internal sales CRM (VAIF's own pipeline) ----
+    Route::middleware('role:sales,staff')->prefix('sales')->name('sales.')->group(function () {
+        Route::get('/', SalesDashboardController::class)->name('dashboard');
+        Route::get('/pipeline', [ProspectController::class, 'index'])->name('pipeline');
+        Route::get('/backlog', [BacklogController::class, 'index'])->name('backlog');
+        Route::post('/backlog/{prospect}/promote', [BacklogController::class, 'promote'])->name('backlog.promote');
+        Route::get('/campaigns', [CampaignController::class, 'index'])->name('campaigns.index');
     });
 });

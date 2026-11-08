@@ -34,6 +34,21 @@ class Kernel extends ConsoleKernel
         $schedule->command('crm:notify-ingest-drops')
             ->everyFiveMinutes()
             ->withoutOverlapping(10);
+
+        // Staff Copilot: deterministic ops facts + narrative.
+        if (config('copilot.enabled', true)) {
+            $copilotTz = (string) config('copilot.timezone', 'America/Sao_Paulo');
+
+            $schedule->command('copilot:report ops')
+                ->dailyAt((string) config('copilot.daily_time', '08:00'))
+                ->timezone($copilotTz)
+                ->withoutOverlapping(20);
+
+            $schedule->command('copilot:report calibration')
+                ->weeklyOn((int) config('copilot.weekly_day', 1), (string) config('copilot.weekly_time', '08:10'))
+                ->timezone($copilotTz)
+                ->withoutOverlapping(30);
+        }
     }
 
     /**

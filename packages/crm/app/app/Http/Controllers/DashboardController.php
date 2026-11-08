@@ -24,6 +24,10 @@ class DashboardController extends Controller
      */
     public function __invoke(Request $request)
     {
+        if ($request->user()?->isSales()) {
+            return redirect()->route('sales.dashboard');
+        }
+
         $artist = $this->activeArtist();
 
         if (! $artist) {

@@ -620,7 +620,7 @@
         <div class="app-shell">
             <aside class="sidebar" id="sidebar">
                 <div class="sidebar-head">
-                    <a class="brand" href="{{ $navUser->isArtist() ? route('dashboard') : route('artists.index') }}">VAIF <span>CRM</span></a>
+                    <a class="brand" href="{{ $navUser->isArtist() ? route('dashboard') : ($navUser->isSales() ? route('sales.dashboard') : route('artists.index')) }}">VAIF <span>CRM</span></a>
                     <button type="button" class="collapse-btn" id="collapseBtn" aria-label="Recolher menu" title="Recolher menu">
                         <x-icon name="chevrons-left" />
                     </button>
@@ -655,20 +655,43 @@
                             </a>
                         </div>
                     @else
-                        <div class="nav-group">
-                            <span class="nav-group-label">Equipe VAIF</span>
-                            <a href="{{ route('artists.index') }}" class="nav-item {{ request()->routeIs('artists.*') ? 'is-active' : '' }}">
-                                <x-icon name="users" /> <span>Artistas</span>
-                            </a>
-                            <a href="{{ route('promotions.index') }}" class="nav-item {{ request()->routeIs('promotions.*') ? 'is-active' : '' }}">
-                                <x-icon name="promo" /> <span>Promoções</span>
-                            </a>
-                            <a href="{{ route('calibration.index') }}" class="nav-item {{ request()->routeIs('calibration.*') ? 'is-active' : '' }}">
-                                <x-icon name="chart" /> <span>Calibração</span>
-                            </a>
-                        </div>
+                        @if ($navUser->isStaff())
+                            <div class="nav-group">
+                                <span class="nav-group-label">Equipe VAIF</span>
+                                <a href="{{ route('artists.index') }}" class="nav-item {{ request()->routeIs('artists.*') ? 'is-active' : '' }}">
+                                    <x-icon name="users" /> <span>Artistas</span>
+                                </a>
+                                <a href="{{ route('promotions.index') }}" class="nav-item {{ request()->routeIs('promotions.*') ? 'is-active' : '' }}">
+                                    <x-icon name="promo" /> <span>Promoções</span>
+                                </a>
+                                <a href="{{ route('calibration.index') }}" class="nav-item {{ request()->routeIs('calibration.*') ? 'is-active' : '' }}">
+                                    <x-icon name="chart" /> <span>Calibração</span>
+                                </a>
+                                <a href="{{ route('copilot.index') }}" class="nav-item {{ request()->routeIs('copilot.*') ? 'is-active' : '' }}">
+                                    <x-icon name="grid" /> <span>Copiloto</span>
+                                </a>
+                            </div>
+                        @endif
 
-                        @if (session('staff_artist_id') && $navArtist)
+                        @if ($navUser->isSales() || $navUser->isStaff())
+                            <div class="nav-group">
+                                <span class="nav-group-label">Vendas</span>
+                                <a href="{{ route('sales.dashboard') }}" class="nav-item {{ request()->routeIs('sales.dashboard') ? 'is-active' : '' }}">
+                                    <x-icon name="chart" /> <span>Cockpit</span>
+                                </a>
+                                <a href="{{ route('sales.pipeline') }}" class="nav-item {{ request()->routeIs('sales.pipeline') ? 'is-active' : '' }}">
+                                    <x-icon name="grid" /> <span>Pipeline</span>
+                                </a>
+                                <a href="{{ route('sales.backlog') }}" class="nav-item {{ request()->routeIs('sales.backlog') ? 'is-active' : '' }}">
+                                    <x-icon name="users" /> <span>Backlog</span>
+                                </a>
+                                <a href="{{ route('sales.campaigns.index') }}" class="nav-item {{ request()->routeIs('sales.campaigns.*') ? 'is-active' : '' }}">
+                                    <x-icon name="promo" /> <span>Campanhas</span>
+                                </a>
+                            </div>
+                        @endif
+
+                        @if ($navUser->isStaff() && session('staff_artist_id') && $navArtist)
                             <div class="nav-group">
                                 <span class="nav-group-label">{{ $navArtist->displayName() }}</span>
                                 <a href="{{ route('dashboard') }}" class="nav-item {{ request()->routeIs('dashboard') ? 'is-active' : '' }}">
@@ -717,7 +740,7 @@
             <div class="app-main">
                 <div class="mobile-bar">
                     <button class="nav-toggle" id="navToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar">&#9776;</button>
-                    <a class="brand" href="{{ $navUser->isArtist() ? route('dashboard') : route('artists.index') }}">VAIF <span>CRM</span></a>
+                    <a class="brand" href="{{ $navUser->isArtist() ? route('dashboard') : ($navUser->isSales() ? route('sales.dashboard') : route('artists.index')) }}">VAIF <span>CRM</span></a>
                 </div>
 
                 <main>

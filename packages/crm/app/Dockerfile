@@ -13,17 +13,18 @@
 FROM php:8.2.35-fpm-alpine
 
 # --- PHP extensions ----------------------------------------------------------
-#   pdo_pgsql -> shared Supabase Postgres (the SDR agent writes the same tables)
-#   mbstring  -> required by Laravel
-#   opcache   -> tuned in deploy/php.ini
+#   pdo_pgsql  -> shared Supabase Postgres (the SDR agent writes the same tables)
+#   pdo_sqlite -> one-off `sales:import-leads` parses the MySQL dump in memory
+#   mbstring   -> required by Laravel
+#   opcache    -> tuned in deploy/php.ini
 #
-# libpq / oniguruma are the *runtime* libraries the compiled extensions link
-# against: they are installed as world packages so `apk del .build-deps` (which
-# prunes orphaned dependencies) cannot remove them. unzip is needed by Composer
-# to extract package archives (`--prefer-dist`).
-RUN apk add --no-cache nginx libpq oniguruma unzip \
-    && apk add --no-cache --virtual .build-deps postgresql-dev oniguruma-dev \
-    && docker-php-ext-install -j"$(nproc)" pdo_pgsql mbstring opcache \
+# libpq / oniguruma / sqlite are the *runtime* libraries the compiled extensions
+# link against: they are installed as world packages so `apk del .build-deps`
+# (which prunes orphaned dependencies) cannot remove them. unzip is needed by
+# Composer to extract package archives (`--prefer-dist`).
+RUN apk add --no-cache nginx libpq oniguruma unzip sqlite-libs \
+    && apk add --no-cache --virtual .build-deps postgresql-dev oniguruma-dev sqlite-dev \
+    && docker-php-ext-install -j"$(nproc)" pdo_pgsql pdo_sqlite mbstring opcache \
     && apk del .build-deps \
     && rm -rf /var/cache/apk/*
 

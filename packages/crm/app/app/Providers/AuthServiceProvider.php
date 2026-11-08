@@ -3,11 +3,15 @@
 namespace App\Providers;
 
 use App\Models\CalendarEntry;
+use App\Models\Campaign;
 use App\Models\Lead;
 use App\Models\Project;
+use App\Models\Prospect;
 use App\Policies\BookingPolicy;
+use App\Policies\CampaignPolicy;
 use App\Policies\LeadPolicy;
 use App\Policies\ProjectPolicy;
+use App\Policies\ProspectPolicy;
 use Illuminate\Foundation\Support\Providers\AuthServiceProvider as ServiceProvider;
 
 class AuthServiceProvider extends ServiceProvider
@@ -21,6 +25,8 @@ class AuthServiceProvider extends ServiceProvider
         Lead::class => LeadPolicy::class,
         Project::class => ProjectPolicy::class,
         CalendarEntry::class => BookingPolicy::class,
+        Prospect::class => ProspectPolicy::class,
+        Campaign::class => CampaignPolicy::class,
     ];
 
     /**

@@ -134,6 +134,12 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `AGENT_CALIBRATION_MIN_COMPARED` | `40` |
 | `AGENT_CALIBRATION_MIN_ACCEPTABLE` | `0.9` |
 | `AGENT_CALIBRATION_MIN_RESPONSE` | `0.9` |
+| `COPILOT_ENABLED` | `true` |
+| `COPILOT_MODEL` | stronger model for the weekly analysis (optional) |
+| `COPILOT_RECIPIENTS` | staff e-mails, comma-separated (empty = all staff users) |
+| `COPILOT_DAILY_TIME` | `08:00` |
+| `COPILOT_WEEKLY_DAY` | `1` (Monday) |
+| `COPILOT_WEEKLY_TIME` | `08:10` |
 | `AGENT_QUEUE` | `agent` |
 | `AGENT_QUIET_MS` | `6000` (debounce silence) |
 | `AGENT_MAX_WAIT_MS` | `20000` |

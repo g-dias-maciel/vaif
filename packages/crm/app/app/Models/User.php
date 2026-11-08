@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Laravel\Sanctum\HasApiTokens;
@@ -13,7 +14,10 @@ class User extends Authenticatable
     use HasApiTokens, HasFactory, Notifiable;
 
     public const ROLE_ARTIST = 'artist';
+
     public const ROLE_STAFF = 'staff';
+
+    public const ROLE_SALES = 'sales';
 
     /**
      * The attributes that are mass assignable.
@@ -61,5 +65,18 @@ class User extends Authenticatable
     public function isArtist(): bool
     {
         return $this->role === self::ROLE_ARTIST;
+    }
+
+    public function isSales(): bool
+    {
+        return $this->role === self::ROLE_SALES;
+    }
+
+    /**
+     * Artist prospects owned by this sales user.
+     */
+    public function prospects(): HasMany
+    {
+        return $this->hasMany(Prospect::class, 'owner_id');
     }
 }
