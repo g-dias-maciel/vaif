@@ -31,15 +31,22 @@ class ContractController extends Controller
     {
         $prospect->load(['artist', 'contracts']);
 
+        $derived = $prospect->raw_payload['derived'] ?? [];
+        $suggestedMonthly = isset($derived['value_cents']) && $derived['value_cents'] > 0
+            ? (int) $derived['value_cents']
+            : null;
+        $suggestedStart = $derived['start_date'] ?? now()->toDateString();
+
         return view('finance.contracts.form', [
             'prospect' => $prospect,
             'contract' => new ProspectContract([
                 'prospect_id' => $prospect->id,
                 'plan' => ProspectContract::PLAN_SEMESTRAL,
+                'monthly_value_cents' => $suggestedMonthly,
                 'billing_mode' => 'pix',
                 'payment_method' => 'pix',
                 'status' => ProspectContract::STATUS_ACTIVE,
-                'start_date' => now()->toDateString(),
+                'start_date' => $suggestedStart,
                 'billing_day' => 10,
             ]),
             'today' => now()->toDateString(),
@@ -173,13 +180,20 @@ class ContractController extends Controller
             $nextCharge = null;
         } elseif ($billingMode === 'card') {
             $nextInvoice = null;
-            $nextCharge = $nextCharge ?: $start->copy()->addMonthNoOverflow()->toDateString();
+            $nextCharge = $nextCharge ?: ($start->copy()->startOfDay()->gte(now()->startOfDay())
+                ? $start->copy()->addMonthNoOverflow()->toDateString()
+                : null);
         } elseif ($plan === ProspectContract::PLAN_MEMBERS_AREA) {
             // One-off 697: no recurring invoice unless staff sets a date.
             $nextInvoice = $nextInvoice ?: null;
             $nextCharge = null;
         } else {
-            $nextInvoice = $nextInvoice ?: $start->toDateString();
+            // Do not create months of retroactive invoices for an existing
+            // client: if the start date is in the past, wait for staff to set
+            // the next open billing date.
+            $nextInvoice = $nextInvoice ?: ($start->copy()->startOfDay()->gte(now()->startOfDay())
+                ? $start->toDateString()
+                : null);
             $nextCharge = null;
         }
 

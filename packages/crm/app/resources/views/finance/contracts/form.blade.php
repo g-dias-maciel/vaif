@@ -156,6 +156,7 @@
             <p class="fin-note" style="margin-bottom:10px;">
                 O contrato não cria login, convite ou tarefa de onboarding. Para o 697, o valor mensal é zerado e o total deve ser R$ 697.
                 A cobrança PIX é gerada pelo comando diário quando a data chega; o cartão é registrado como pagamento.
+                <strong>Para clientes já existentes, informe a próxima cobrança em aberto</strong> — assim o sistema não gera meses retroativos.
             </p>
             <button type="submit" class="btn">{{ $editing ? 'Salvar contrato' : 'Criar contrato' }}</button>
         </div>
