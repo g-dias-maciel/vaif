@@ -48,7 +48,7 @@ class WahaWebhookController extends Controller
         // A suspended artist normally receives nothing. Draft mode is the
         // exception: it is safe to read and prepare a suggestion, and it never
         // sends to the lead. Use reply_mode=off to stop drafting too.
-        $drafting = ($artist->settings?->reply_mode ?? 'auto') === 'draft';
+        $drafting = ($artist->settings?->reply_mode ?? 'draft') === 'draft';
 
         if ($artist->status === 'suspended' && ! $drafting) {
             $store->logDrop($artist->id, $session, $this->digits($this->senderJid($payload, false)), $this->chatId($session, $payload), 'artist_suspended', $body);

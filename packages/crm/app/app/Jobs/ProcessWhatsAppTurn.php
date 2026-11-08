@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Schema;
 
 /**
  * Debounced grounded turn for one WhatsApp chat.
@@ -46,9 +47,21 @@ class ProcessWhatsAppTurn implements ShouldQueue
             return;
         }
 
-        $mode = (string) ($artist->settings?->reply_mode ?? 'auto');
+        $mode = (string) ($artist->settings?->reply_mode ?? 'draft');
 
         if ($artist->status === 'suspended' && $mode !== 'draft') {
+            return;
+        }
+
+        // Never send when the calibration schema is missing: an unmigrated
+        // deployment must fail safe to "no reply".
+        if ($mode === 'draft' && ! Schema::hasTable('agent_drafts')) {
+            Log::warning('Draft turn skipped: agent_drafts table is missing', [
+                'artist_id' => $artist->id,
+                'chat_id' => $this->chatId,
+            ]);
+            $store->bufferClear($artist->id, $this->chatId);
+
             return;
         }
 

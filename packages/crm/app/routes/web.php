@@ -4,6 +4,7 @@ use App\Http\Controllers\ArtistController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
+use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\AnalyticsController;
@@ -103,6 +104,11 @@ Route::middleware('auth')->group(function () {
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');
         Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');
+
+        Route::get('/calibration', [CalibrationController::class, 'index'])->name('calibration.index');
+        Route::get('/calibration/{artist}', [CalibrationController::class, 'show'])->name('calibration.show');
+        Route::post('/calibration/{artist}/mode', [CalibrationController::class, 'updateMode'])->name('calibration.mode');
+        Route::post('/calibration/{artist}/webhook', [CalibrationController::class, 'updateWebhook'])->name('calibration.webhook');
 
         Route::get('/promotions', [PromotionAdminController::class, 'index'])->name('promotions.index');
         Route::get('/promotions/create', [PromotionAdminController::class, 'create'])->name('promotions.create');

@@ -18,11 +18,16 @@ class CalibrationReport
      */
     public function forArtist(Artist $artist, int $days = 30): array
     {
-        $all = AgentDraft::query()
-            ->where('artist_id', $artist->id)
-            ->where('created_at', '>=', now()->subDays(max(1, $days)))
-            ->orderBy('created_at')
-            ->get();
+        try {
+            $all = AgentDraft::query()
+                ->where('artist_id', $artist->id)
+                ->where('created_at', '>=', now()->subDays(max(1, $days)))
+                ->orderBy('created_at')
+                ->get();
+        } catch (\Throwable $e) {
+            // The calibration migration may not have been applied yet.
+            return $this->emptyReport($artist, $days);
+        }
 
         $eligible = $all->reject(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_SUPERSEDED);
         $answered = $eligible->filter(fn (AgentDraft $d) => $d->artist_reply !== null);
@@ -92,7 +97,7 @@ class CalibrationReport
         return [
             'artist_id' => $artist->id,
             'artist' => $artist->name,
-            'reply_mode' => $artist->settings?->reply_mode ?? 'auto',
+            'reply_mode' => $artist->settings?->reply_mode ?? 'draft',
             'days' => $days,
             'totals' => [
                 'drafts' => $all->count(),
@@ -119,6 +124,44 @@ class CalibrationReport
             'gates' => $gates,
             'warnings' => $warnings,
             'passed' => collect($gates)->every(fn ($gate) => ! $gate['hard'] || $gate['pass']),
+        ];
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function emptyReport(Artist $artist, int $days): array
+    {
+        return [
+            'artist_id' => $artist->id,
+            'artist' => $artist->name,
+            'reply_mode' => $artist->settings?->reply_mode ?? 'draft',
+            'days' => $days,
+            'totals' => [
+                'drafts' => 0,
+                'eligible' => 0,
+                'answered' => 0,
+                'compared' => 0,
+                'pending' => 0,
+                'replied' => 0,
+                'expired' => 0,
+                'superseded' => 0,
+                'unsafe_drafts' => 0,
+                'artist_violations' => 0,
+                'median_response_seconds' => null,
+            ],
+            'rates' => [
+                'response' => 0.0,
+                'acceptable' => 0.0,
+                'covered_question' => 0.0,
+                'tone_avg' => null,
+            ],
+            'intents' => [],
+            'verdicts' => [],
+            'prompt_versions' => [],
+            'gates' => [],
+            'warnings' => [],
+            'passed' => false,
         ];
     }
 

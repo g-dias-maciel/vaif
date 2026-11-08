@@ -6,6 +6,7 @@ use App\Models\Artist;
 use App\Models\ArtistSetting;
 use App\Services\Agent\CalibrationReport;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -25,6 +26,12 @@ class AgentPromote extends Command
 
     public function handle(CalibrationReport $report): int
     {
+        if (! Schema::hasColumn('artist_settings', 'reply_mode')) {
+            $this->error('Calibration schema is missing. Apply packages/crm/db/migrations/0033_agent_calibration.sql.');
+
+            return self::FAILURE;
+        }
+
         $target = (string) $this->option('to');
 
         if (! in_array($target, ['off', 'draft', 'auto'], true)) {
@@ -56,7 +63,7 @@ class AgentPromote extends Command
             }
         }
 
-        $previous = $artist->settings?->reply_mode ?? 'auto';
+        $previous = $artist->settings?->reply_mode ?? 'draft';
 
         ArtistSetting::updateOrCreate(
             ['artist_id' => $artist->id],

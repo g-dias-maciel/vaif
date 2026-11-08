@@ -152,26 +152,17 @@ Do this per artist, after the agent has been exercised with the fake cases:
 1. Run `php artisan agent:simulate` — all scripted cases must pass.
 2. Run `php artisan agent:eval` with a real key and review
    `storage/app/agent-evals/`.
-3. Set the artist to draft mode (no sends). `draft` also works while the
-   artist is `suspended`; use `off` to stop drafting. Keep the artist out of
-   the auto-reply path until the calibration gates pass:
+3. In the CRM, open **Calibração** (`/calibration`), select the artist and set
+   the mode to **draft**. `draft` also works while the artist is `suspended`;
+   use `off` to stop drafting. Keep the artist out of the auto-reply path until
+   the calibration gates pass.
+4. On the same page, click **Apontar para o CRM**. It calls WAHA
+   `PUT /api/sessions/{name}` and merges the new webhook into the current
+   config, so the WhatsApp authentication, NOWEB store and metadata are
+   preserved. WAHA stops and starts the session internally, but the artist does
+   not reconnect. The **Voltar para o n8n** button is the rollback.
 
-   ```bash
-   php artisan agent:promote <session-slug> --to=draft
-   ```
-
-4. Point the existing session at the CRM **in place** — no QR re-scan:
-
-   ```bash
-   php artisan agent:webhook adriano-studio-madri
-   # or every session at once, after approval:
-   php artisan agent:webhook --all
-   ```
-
-   This calls WAHA `PUT /api/sessions/{name}` and merges the new webhook into
-   the current config, so the WhatsApp authentication, NOWEB store and
-   metadata are preserved. WAHA stops and starts the session internally, but
-   the artist does not reconnect.
+   CLI equivalents (for automation) are `agent:promote` and `agent:webhook`.
 5. Have the artist answer normally. Watch the lead page's **Sugestões da
    Beatriz** panel and run:
 

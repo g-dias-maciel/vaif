@@ -19,6 +19,9 @@
     <a href="{{ route('promotions.index', ['artist_id' => $artist->id]) }}" class="btn btn--ghost">
         Promoções do artista
     </a>
+    <a href="{{ route('calibration.show', $artist) }}" class="btn btn--ghost">
+        Calibração do agente
+    </a>
 </div>
 
 <h2 class="section-title">Agendamentos</h2>

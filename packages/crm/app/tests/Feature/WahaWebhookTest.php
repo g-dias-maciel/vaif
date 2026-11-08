@@ -30,14 +30,22 @@ class WahaWebhookTest extends TestCase
         $this->app->instance(AgentStore::class, $this->store);
     }
 
-    private function artist(string $status = 'live'): Artist
+    private function artist(string $status = 'live', string $mode = 'auto'): Artist
     {
-        return Artist::create([
+        $artist = Artist::create([
             'name' => 'Artist Agent',
             'status' => $status,
             'timezone' => 'America/Sao_Paulo',
             'wa_session_slug' => 'agent-artist',
         ]);
+
+        ArtistSetting::create([
+            'artist_id' => $artist->id,
+            'display_name' => 'Artist Agent',
+            'reply_mode' => $mode,
+        ]);
+
+        return $artist;
     }
 
     private function sendWebhook(array $body, string $token = 'waha-secret')
@@ -108,8 +116,7 @@ class WahaWebhookTest extends TestCase
     public function test_a_suspended_artist_in_draft_mode_still_gets_a_draft(): void
     {
         Queue::fake();
-        $artist = $this->artist('suspended');
-        ArtistSetting::create(['artist_id' => $artist->id, 'reply_mode' => 'draft']);
+        $artist = $this->artist('suspended', 'draft');
 
         $this->sendWebhook($this->message())->assertOk()->assertJson(['queued' => true]);
 
@@ -181,8 +188,7 @@ class WahaWebhookTest extends TestCase
     public function test_an_artist_reply_is_paired_with_the_pending_draft(): void
     {
         Queue::fake();
-        $artist = $this->artist();
-        ArtistSetting::create(['artist_id' => $artist->id, 'reply_mode' => 'draft']);
+        $artist = $this->artist('live', 'draft');
 
         $draft = AgentDraft::create([
             'artist_id' => $artist->id,

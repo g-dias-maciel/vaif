@@ -6,6 +6,7 @@ use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Services\Agent\CalibrationReport;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 /**
@@ -23,6 +24,12 @@ class AgentCalibrationReport extends Command
 
     public function handle(CalibrationReport $report): int
     {
+        if (! Schema::hasTable('agent_drafts') || ! Schema::hasColumn('artist_settings', 'reply_mode')) {
+            $this->error('Calibration schema is missing. Apply packages/crm/db/migrations/0033_agent_calibration.sql.');
+
+            return self::FAILURE;
+        }
+
         $days = max(1, (int) $this->option('days'));
         $artists = $this->artists();
 

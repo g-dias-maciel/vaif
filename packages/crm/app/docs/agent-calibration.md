@@ -20,32 +20,29 @@ report.
 
 ## Running a pilot
 
+Staff use the **Calibração** page in the CRM (`/calibration`) for everything.
+The same actions remain available as artisan commands for automation.
+
 1. Make sure the artist has prices, policies, portfolio, hours and handoff
    triggers configured.
-2. Set the mode explicitly:
-
-   ```bash
-   php artisan agent:promote adriano-studio-madri --to=draft
-   ```
-
+2. Open `/calibration`, select the artist and set the mode to **draft**.
    `draft` is allowed even while the artist is `suspended`: the webhook reads
-   and drafts, but never sends. Use `reply_mode=off` if drafting should stop
-   too.
+   and drafts, but never sends. Use **off** if drafting should stop too.
 
-3. Point only that artist's WAHA session at the CRM:
-
-   ```bash
-   php artisan agent:webhook adriano-studio-madri
-   ```
+3. On the same page, click **Apontar para o CRM**. It uses WAHA
+   `PUT /api/sessions/{name}`, preserves the WhatsApp authentication and does
+   not require a QR scan.
 
    Do **not** add the CRM as a second webhook while n8n is still active; n8n
-   would auto-reply and the artist would not be the one answering.
+   would auto-reply and the artist would not be the one answering. The
+   **Voltar para o n8n** button is the rollback.
 
 4. The artist keeps answering from the same WhatsApp. Every `fromMe` message is
    captured by the webhook and paired with the newest open draft.
 5. The lead page shows a **Sugestões da Beatriz** panel with the draft, the
    artist's reply and the comparison verdict.
-6. Check the scoreboard:
+6. Check the scoreboard: the calibration page shows the gates, rates, intents
+   and the latest draft-vs-artist pairs. The CLI is equivalent:
 
    ```bash
    php artisan agent:calibration-report adriano-studio-madri --days=30
@@ -104,13 +101,16 @@ Soft warning: core intent coverage (`ask_price`, `ask_availability`, `qualify`,
 Configuration: `config/agent.php` → `calibration`, or
 `AGENT_CALIBRATION_MIN_*` env vars.
 
-Promote only after the gates pass and the artist signs off:
+Promote only after the gates pass and the artist signs off. On the calibration
+page, select **auto** and save; if the gates fail, the form blocks it. The
+explicit **Forçar auto mesmo sem os gates** checkbox is the audited override.
+The CLI equivalent is:
 
 ```bash
 php artisan agent:promote adriano-studio-madri --to=auto
 ```
 
-`--force` exists for an explicit human override; do not use it silently.
+`--force` exists for the same explicit override; do not use it silently.
 
 ## What to inspect
 

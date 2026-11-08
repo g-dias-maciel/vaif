@@ -66,6 +66,42 @@ class WahaService
     }
 
     /**
+     * Current session status + webhook target, for the calibration page.
+     *
+     * @return array{status: string, me: ?string, url: ?string, events: array<int, string>, has_token: bool}|null
+     */
+    public function webhookInfo(Artist $artist): ?array
+    {
+        if (! $artist->wa_session_slug) {
+            return null;
+        }
+
+        try {
+            $resp = $this->client()->get("/api/sessions/{$artist->wa_session_slug}");
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $resp->successful()) {
+            return null;
+        }
+
+        $data = $resp->json() ?? [];
+        $hooks = $data['config']['webhooks'] ?? [];
+        $hook = is_array($hooks) && isset($hooks[0]) && is_array($hooks[0]) ? $hooks[0] : null;
+        $events = is_array($hook['events'] ?? null) ? $hook['events'] : [];
+        $headers = is_array($hook['customHeaders'] ?? null) ? $hook['customHeaders'] : [];
+
+        return [
+            'status' => (string) ($data['status'] ?? 'UNKNOWN'),
+            'me' => $this->normalizeMe($data['me'] ?? null),
+            'url' => is_array($hook) ? (string) ($hook['url'] ?? '') : null,
+            'events' => array_values(array_map('strval', $events)),
+            'has_token' => $headers !== [],
+        ];
+    }
+
+    /**
      * Base64 PNG of the session QR code, or null.
      *
      * WAHA only serves the QR while the session is in SCAN_QR_CODE; a freshly

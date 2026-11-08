@@ -32,14 +32,22 @@ class ProcessWhatsAppTurnTest extends TestCase
         config(['agent.humanize' => false]);
     }
 
-    private function artist(): Artist
+    private function artist(string $mode = 'auto'): Artist
     {
-        return Artist::create([
+        $artist = Artist::create([
             'name' => 'Artist Job',
             'status' => 'live',
             'timezone' => 'America/Sao_Paulo',
             'wa_session_slug' => 'job-artist',
         ]);
+
+        ArtistSetting::create([
+            'artist_id' => $artist->id,
+            'display_name' => 'Artist Job',
+            'reply_mode' => $mode,
+        ]);
+
+        return $artist;
     }
 
     private function processor(FixtureAgentStore $store, ArrayTransport $transport, array $script): TurnProcessor
@@ -113,12 +121,7 @@ class ProcessWhatsAppTurnTest extends TestCase
 
     public function test_draft_mode_stores_a_suggestion_and_sends_nothing(): void
     {
-        $artist = $this->artist();
-        ArtistSetting::create([
-            'artist_id' => $artist->id,
-            'display_name' => 'Eva',
-            'reply_mode' => 'draft',
-        ]);
+        $artist = $this->artist('draft');
 
         $scenario = $this->scenario();
         $store = new FixtureAgentStore($scenario->data);

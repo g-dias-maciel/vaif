@@ -663,6 +663,9 @@
                             <a href="{{ route('promotions.index') }}" class="nav-item {{ request()->routeIs('promotions.*') ? 'is-active' : '' }}">
                                 <x-icon name="promo" /> <span>Promoções</span>
                             </a>
+                            <a href="{{ route('calibration.index') }}" class="nav-item {{ request()->routeIs('calibration.*') ? 'is-active' : '' }}">
+                                <x-icon name="chart" /> <span>Calibração</span>
+                            </a>
                         </div>
 
                         @if (session('staff_artist_id') && $navArtist)

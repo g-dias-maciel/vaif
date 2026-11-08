@@ -19,6 +19,10 @@ return [
 
     'waha_webhook_url' => env('WAHA_WEBHOOK_URL', 'https://crm.vaif.com.br/api/webhooks/waha'),
 
+    // Rollback target used by the calibration page / agent:webhook command.
+    'n8n_webhook_url' => env('N8N_WAHA_WEBHOOK_URL', 'https://n8n.vaif.com.br/webhook/waha-webhook'),
+    'n8n_webhook_token' => env('N8N_WAHA_WEBHOOK_TOKEN'),
+
     // Shared header required by the CRM WAHA webhook. Falls back to the
     // internal CRM token so a session recreated from the UI keeps authenticating.
     'waha_webhook_token' => env('WAHA_WEBHOOK_TOKEN', env('CRM_INTERNAL_TOKEN')),
