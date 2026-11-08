@@ -156,7 +156,9 @@ class WahaService
     {
         $webhook = [
             'url' => (string) config('transport.waha_webhook_url'),
-            'events' => ['message', 'presence.update'],
+            // message.any is required to capture the artist's own replies
+            // (fromMe). The CRM ignores source=api (its own sends).
+            'events' => ['message.any', 'presence.update'],
         ];
 
         // The CRM webhook rejects unauthenticated calls. A recreated session
@@ -222,7 +224,7 @@ class WahaService
      * scans the QR again. The current config is merged rather than replaced so
      * the NOWEB store and metadata survive.
      */
-    public function updateWebhook(Artist $artist, ?string $url = null, ?string $token = null): bool
+    public function updateWebhook(Artist $artist, ?string $url = null, ?string $token = null, ?array $events = null): bool
     {
         $slug = (string) $artist->wa_session_slug;
 
@@ -245,7 +247,7 @@ class WahaService
 
         $webhook = [
             'url' => $url ?: (string) config('transport.waha_webhook_url'),
-            'events' => ['message', 'presence.update'],
+            'events' => $events ?: ['message.any', 'presence.update'],
         ];
 
         $webhookToken = $token !== null ? $token : (string) config('transport.waha_webhook_token');

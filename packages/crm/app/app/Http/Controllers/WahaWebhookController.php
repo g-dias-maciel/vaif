@@ -62,18 +62,12 @@ class WahaWebhookController extends Controller
             return response()->json(['ok' => true]);
         }
 
-        if ($event !== 'message') {
+        if (! in_array($event, ['message', 'message.any'], true)) {
             return response()->json(['ignored' => 'event']);
         }
 
         if ($this->isGroup($payload)) {
             return response()->json(['ignored' => 'group']);
-        }
-
-        $phone = $this->digits($this->senderJid($payload, true));
-
-        if ($phone === '') {
-            return response()->json(['ignored' => 'no_phone']);
         }
 
         // Blocked numbers are ignored in both directions. For a `fromMe`
@@ -84,9 +78,21 @@ class WahaWebhookController extends Controller
         }
 
         if (($payload['fromMe'] ?? false) === true) {
+            // message.any also echoes what the CRM itself sent through the
+            // WAHA API. Those are not artist takeovers.
+            if (($payload['source'] ?? '') === 'api') {
+                return response()->json(['ignored' => 'api_message']);
+            }
+
             $this->takeover($artist, $session, $payload, $store, $drafts);
 
             return response()->json(['ok' => true, 'from_me' => true]);
+        }
+
+        $phone = $this->digits($this->senderJid($payload, true));
+
+        if ($phone === '') {
+            return response()->json(['ignored' => 'no_phone']);
         }
 
         if (! $this->inActiveHours($artist)) {
@@ -136,6 +142,19 @@ class WahaWebhookController extends Controller
     private function takeover(Artist $artist, string $session, array $payload, AgentStore $store, DraftStore $drafts): void
     {
         $chatId = $this->chatId($session, $payload);
+
+        // Outgoing payloads can carry the phone JID while the inbound turn
+        // created the chat session from the LID. Resolve the existing chat by
+        // the recipient phone so the artist message and the draft meet.
+        $recipientPhone = $this->fromMeRecipientPhone($payload);
+
+        if ($recipientPhone !== '') {
+            $existing = $store->chatIdForPhone($artist->id, $recipientPhone);
+
+            if ($existing !== null) {
+                $chatId = $existing;
+            }
+        }
 
         try {
             $store->takeControl($artist->id, $chatId, null);
@@ -191,12 +210,41 @@ class WahaWebhookController extends Controller
         return str_ends_with($from, '@lid') && $alt !== '' ? $alt : $from;
     }
 
+    private function fromMeRecipientPhone(array $payload): string
+    {
+        $key = is_array($payload['_data']['key'] ?? null) ? $payload['_data']['key'] : [];
+
+        foreach ([
+            $key['remoteJidAlt'] ?? null,
+            $key['senderPn'] ?? null,
+            $payload['to'] ?? null,
+            $key['remoteJid'] ?? null,
+        ] as $jid) {
+            $phone = $this->digits((string) $jid);
+
+            if ($phone !== '') {
+                return $phone;
+            }
+        }
+
+        return '';
+    }
+
     private function chatId(string $session, array $payload): string
     {
         $key = is_array($payload['_data']['key'] ?? null) ? $payload['_data']['key'] : [];
-        $from = (string) ($payload['from'] ?? $key['remoteJid'] ?? '');
 
-        return $session.':'.$from;
+        // `remoteJid` is the conversation JID in both directions. For an
+        // outgoing message `from` is the artist's own account, not the chat.
+        $jid = (string) ($key['remoteJid'] ?? '');
+
+        if ($jid === '') {
+            $jid = (string) (($payload['fromMe'] ?? false) === true
+                ? ($payload['to'] ?? $payload['from'] ?? '')
+                : ($payload['from'] ?? ''));
+        }
+
+        return $session.':'.$jid;
     }
 
     private function digits(string $jid): string

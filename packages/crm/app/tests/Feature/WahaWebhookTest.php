@@ -54,10 +54,10 @@ class WahaWebhookTest extends TestCase
             ->postJson('/api/webhooks/waha', $body);
     }
 
-    private function message(array $payload = []): array
+    private function message(array $payload = [], string $event = 'message'): array
     {
         return [
-            'event' => 'message',
+            'event' => $event,
             'session' => 'agent-artist',
             'payload' => array_merge([
                 'id' => 'ABC123',
@@ -187,6 +187,67 @@ class WahaWebhookTest extends TestCase
 
         $this->assertSame([], $this->store->accumulated);
         Queue::assertNothingPushed();
+    }
+
+    public function test_message_any_is_accepted_for_inbound_messages(): void
+    {
+        Queue::fake();
+        $this->artist();
+
+        $this->sendWebhook($this->message([], 'message.any'))->assertOk()->assertJson(['queued' => true]);
+
+        Queue::assertPushed(ProcessWhatsAppTurn::class);
+    }
+
+    public function test_a_from_me_message_from_the_phone_takes_over_using_the_chat_jid(): void
+    {
+        Queue::fake();
+        $this->artist('live', 'draft');
+
+        $this->sendWebhook([
+            'event' => 'message.any',
+            'session' => 'agent-artist',
+            'payload' => [
+                'fromMe' => true,
+                'source' => 'app',
+                'from' => '553599968249@c.us',
+                'to' => '5511900000001@c.us',
+                'body' => 'Oi, aqui é a Eva',
+                '_data' => [
+                    'key' => [
+                        'remoteJid' => '5511900000001@c.us',
+                        'remoteJidAlt' => '5511900000001@s.whatsapp.net',
+                        'fromMe' => true,
+                    ],
+                ],
+            ],
+        ])->assertOk()->assertJson(['from_me' => true]);
+
+        $this->assertSame(['agent-artist:5511900000001@c.us'], $this->store->controls);
+        $this->assertSame('agent-artist:5511900000001@c.us', $this->store->artistMessages[0]['chat_id']);
+        $this->assertSame('Oi, aqui é a Eva', $this->store->artistMessages[0]['text']);
+    }
+
+    public function test_a_from_me_message_sent_by_the_api_is_not_an_artist_takeover(): void
+    {
+        Queue::fake();
+        $this->artist('live', 'draft');
+
+        $this->sendWebhook([
+            'event' => 'message.any',
+            'session' => 'agent-artist',
+            'payload' => [
+                'fromMe' => true,
+                'source' => 'api',
+                'from' => '553599968249@c.us',
+                'to' => '5511900000001@c.us',
+                'body' => 'Resposta automática',
+                '_data' => ['key' => ['remoteJid' => '5511900000001@c.us', 'fromMe' => true]],
+            ],
+        ])->assertOk()->assertJson(['ignored' => 'api_message']);
+
+        $this->assertSame([], $this->store->controls);
+        $this->assertSame([], $this->store->artistMessages);
     }
 
     public function test_the_artist_replying_takes_over_the_chat(): void

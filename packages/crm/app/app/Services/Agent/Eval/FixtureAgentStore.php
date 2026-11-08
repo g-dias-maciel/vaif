@@ -138,6 +138,11 @@ class FixtureAgentStore implements AgentStore
         return $this->owner;
     }
 
+    public function chatIdForPhone(string $artistId, string $phone): ?string
+    {
+        return null;
+    }
+
     public function takeControl(string $artistId, string $chatId, ?string $leadId = null): void
     {
         $this->controls[] = $chatId;

@@ -226,6 +226,28 @@ class DatabaseAgentStore implements AgentStore
         return $owner ?: 'agent';
     }
 
+    public function chatIdForPhone(string $artistId, string $phone): ?string
+    {
+        $digits = preg_replace('/\D/', '', $phone) ?? '';
+
+        if ($digits === '') {
+            return null;
+        }
+
+        $row = DB::selectOne(
+            "select cs.chat_id
+               from chat_sessions cs
+               join leads l on l.id = cs.lead_id
+              where cs.artist_id = ?::uuid
+                and l.phone_e164 = normalize_phone(?)
+              order by cs.updated_at desc
+              limit 1",
+            [$artistId, $digits]
+        );
+
+        return $row?->chat_id ? (string) $row->chat_id : null;
+    }
+
     public function takeControl(string $artistId, string $chatId, ?string $leadId = null): void
     {
         DB::selectOne(

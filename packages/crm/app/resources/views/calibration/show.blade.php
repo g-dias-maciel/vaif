@@ -217,14 +217,17 @@
 </div>
 
 <div class="panel">
-    <h2 class="section-title" style="margin-top:0;">Últimos rascunhos</h2>
+    <h2 class="section-title" style="margin-top:0;">Conversas com sugestões</h2>
+    <p class="meta">{{ $draftTotal ?? 0 }} rascunho(s) em {{ $draftGroups->count() ?? 0 }} conversa(s), agrupados por lead.</p>
 
-    @forelse ($drafts as $draft)
+    @forelse ($draftGroups as $group)
+        @php($draft = $group['latest'])
         @php($judge = $draft->comparison['judge'] ?? null)
         @php($det = $draft->comparison['deterministic'] ?? null)
         <div class="calib-draft">
             <h3>
-                {{ $draft->intent ?: '—' }}
+                {{ $group['lead_name'] ?: 'Conversa sem nome' }}
+                <span class="calib-chip">{{ $group['count'] }} sugestõe(s)</span>
                 <span class="calib-chip">{{ $draft->status }}</span>
                 @if ($judge)
                     <span class="calib-chip {{ ($judge['acceptable'] ?? false) ? 'calib-chip--ok' : 'calib-chip--bad' }}">
@@ -234,7 +237,9 @@
                 <span class="meta" style="float:right;">{{ $draft->created_at?->format('d/m H:i') }} · {{ $draft->model }}</span>
             </h3>
 
-            <div class="meta" style="margin-bottom:6px;">Lead</div>
+            <div class="meta" style="margin-bottom:6px;">Chat: <code>{{ $group['chat_id'] }}</code></div>
+
+            <div class="meta" style="margin-bottom:6px;">Mensagem do lead</div>
             <div class="calib-message" style="margin-bottom:10px;">{{ $draft->lead_text }}</div>
 
             <div class="meta" style="margin-bottom:6px;">Beatriz (não enviado)</div>
@@ -276,6 +281,32 @@
             @endif
 
             <div class="meta" style="margin-top:6px;">Prompt {{ $draft->prompt_version ?: '—' }} · {{ $draft->latency_ms }}ms</div>
+
+            @if ($group['history']->isNotEmpty())
+                <details style="margin-top:12px;">
+                    <summary class="meta" style="cursor:pointer;">Ver sugestões anteriores ({{ $group['history']->count() }})</summary>
+
+                    <div style="margin-top:8px;">
+                        @foreach ($group['history'] as $old)
+                            @php($oldJudge = $old->comparison['judge'] ?? null)
+                            <div style="border-top:1px solid var(--border); padding:8px 0;">
+                                <div class="meta">
+                                    {{ $old->created_at?->format('d/m H:i') }}
+                                    · {{ $old->intent ?: '—' }}
+                                    · {{ $old->status }}
+                                    @if ($oldJudge)
+                                        · {{ $oldJudge['verdict'] ?? '' }}
+                                    @endif
+                                </div>
+                                <div class="calib-message" style="opacity:.8;">{{ \Illuminate\Support\Str::limit($old->draft_reply, 180) }}</div>
+                                @if ($old->artist_reply)
+                                    <div class="meta">Artista: {{ \Illuminate\Support\Str::limit($old->artist_reply, 160) }}</div>
+                                @endif
+                            </div>
+                        @endforeach
+                    </div>
+                </details>
+            @endif
         </div>
     @empty
         <p class="meta">Nenhum rascunho ainda. Quando o artista estiver em draft e a sessão apontar para o CRM, as sugestões aparecem aqui e na página do lead.</p>

@@ -40,18 +40,40 @@ class CalibrationController extends Controller
 
         try {
             $drafts = AgentDraft::query()
+                ->with('lead:id,name')
                 ->where('artist_id', $artist->id)
                 ->orderByDesc('created_at')
-                ->limit(40)
+                ->limit(200)
                 ->get();
         } catch (\Throwable $e) {
             $drafts = collect();
         }
 
+        // Group by conversation. A busy chat produces several drafts; showing
+        // 40 flat cards hides which one is the current suggestion.
+        $draftGroups = $drafts
+            ->groupBy(fn (AgentDraft $draft) => $draft->lead_id ?: $draft->chat_id)
+            ->map(function ($group) {
+                $sorted = $group->sortByDesc('created_at')->values();
+                $latest = $sorted->first();
+
+                return [
+                    'latest' => $latest,
+                    'count' => $sorted->count(),
+                    'history' => $sorted->slice(1, 8)->values(),
+                    'lead_name' => $latest?->lead?->name,
+                    'chat_id' => $latest?->chat_id,
+                ];
+            })
+            ->sortByDesc(fn ($group) => $group['latest']?->created_at)
+            ->take(20)
+            ->values();
+
         return view('calibration.show', [
             'artist' => $artist,
             'report' => $report->forArtist($artist, 30),
-            'drafts' => $drafts,
+            'draftGroups' => $draftGroups,
+            'draftTotal' => $drafts->count(),
             'webhook' => $waha->webhookInfo($artist),
             'crmWebhookUrl' => (string) config('transport.waha_webhook_url'),
             'n8nWebhookUrl' => (string) config('transport.n8n_webhook_url'),
@@ -119,7 +141,11 @@ class CalibrationController extends Controller
             ? (string) config('transport.waha_webhook_token')
             : (config('transport.n8n_webhook_token') ? (string) config('transport.n8n_webhook_token') : null);
 
-        $ok = $waha->updateWebhook($artist, $url, $token);
+        $events = $target === 'crm'
+            ? ['message.any', 'presence.update']
+            : ['message', 'presence.update'];
+
+        $ok = $waha->updateWebhook($artist, $url, $token, $events);
 
         Log::info('Agent webhook switch attempted', [
             'artist_id' => $artist->id,

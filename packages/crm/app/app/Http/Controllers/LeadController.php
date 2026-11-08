@@ -38,7 +38,7 @@ class LeadController extends Controller
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
             'chatMessages' => $this->latestChatMessages($lead),
-            'drafts' => $this->latestDrafts($lead),
+            'draftSummary' => $this->latestDrafts($lead),
             'eventLabels' => config('crm.event_labels'),
             'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
             'chatOwner' => $this->chatOwner($lead),
@@ -56,7 +56,7 @@ class LeadController extends Controller
         return view('leads._conversation', [
             'lead' => $lead,
             'chatMessages' => $this->latestChatMessages($lead),
-            'drafts' => $this->latestDrafts($lead),
+            'draftSummary' => $this->latestDrafts($lead),
             'chatOwner' => $this->chatOwner($lead),
         ]);
     }
@@ -84,21 +84,35 @@ class LeadController extends Controller
     }
 
     /**
-     * Copilot drafts for this Lead, newest last so they read in order.
+     * One active copilot suggestion plus a collapsed history.
+     *
+     * A busy chat can generate several drafts; showing all of them at once
+     * makes the conversation unreadable.
+     *
+     * @return array{latest: ?AgentDraft, history: \Illuminate\Support\Collection<int, AgentDraft>, count: int}
      */
-    private function latestDrafts(Lead $lead)
+    private function latestDrafts(Lead $lead): array
     {
         try {
-            return AgentDraft::query()
+            $drafts = AgentDraft::query()
                 ->where('lead_id', $lead->id)
                 ->orderByDesc('created_at')
-                ->limit(10)
-                ->get()
-                ->reverse()
-                ->values();
+                ->limit(40)
+                ->get();
         } catch (\Throwable $e) {
-            return collect();
+            return ['latest' => null, 'history' => collect(), 'count' => 0];
         }
+
+        $latest = $drafts->first(fn (AgentDraft $draft) => $draft->isOpen()) ?: $drafts->first();
+        $history = $latest
+            ? $drafts->where('id', '!=', $latest->id)->take(10)->values()
+            : collect();
+
+        return [
+            'latest' => $latest,
+            'history' => $history,
+            'count' => $drafts->count(),
+        ];
     }
 
     private function latestChatMessages(Lead $lead)

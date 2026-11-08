@@ -191,7 +191,7 @@ class CalibrationPanelTest extends TestCase
 
             return $request['config']['webhooks'][0]['url'] === 'https://crm.test/api/webhooks/waha'
                 && $request['config']['webhooks'][0]['customHeaders'][0]['value'] === 'crm-token'
-                && $request['config']['webhooks'][0]['events'] === ['message', 'presence.update'];
+                && $request['config']['webhooks'][0]['events'] === ['message.any', 'presence.update'];
         });
     }
 }

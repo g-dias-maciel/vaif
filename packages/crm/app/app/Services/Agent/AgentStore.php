@@ -44,6 +44,12 @@ interface AgentStore
 
     public function chatOwner(string $artistId, string $chatId): string;
 
+    /**
+     * Existing WhatsApp chat id for a lead phone. Used when an outgoing
+     * (`fromMe`) payload carries a different JID form than the inbound one.
+     */
+    public function chatIdForPhone(string $artistId, string $phone): ?string;
+
     public function takeControl(string $artistId, string $chatId, ?string $leadId = null): void;
 
     /**

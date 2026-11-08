@@ -52,8 +52,12 @@ class AgentWebhook extends Command
         $rows = [];
         $failed = 0;
 
+        $events = str_contains($url, 'n8n.')
+            ? ['message', 'presence.update']
+            : ['message.any', 'presence.update'];
+
         foreach ($artists as $artist) {
-            $ok = $waha->updateWebhook($artist, $url, $token);
+            $ok = $waha->updateWebhook($artist, $url, $token, $events);
             if (! $ok) {
                 $failed++;
             }
