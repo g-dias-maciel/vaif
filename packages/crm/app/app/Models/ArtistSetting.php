@@ -22,6 +22,7 @@ class ArtistSetting extends Model
         'specialties',
         'excluded_styles',
         'full_selling',
+        'reply_mode',
         'blocked_numbers',
         'floor_pct',
         'deposit_type',

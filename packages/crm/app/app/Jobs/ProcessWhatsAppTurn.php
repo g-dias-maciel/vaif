@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Artist;
 use App\Services\Agent\AgentStore;
+use App\Services\Agent\DraftProcessor;
 use App\Services\Agent\TurnProcessor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -37,11 +38,23 @@ class ProcessWhatsAppTurn implements ShouldQueue
     ) {
     }
 
-    public function handle(AgentStore $store, TurnProcessor $processor): void
+    public function handle(AgentStore $store, TurnProcessor $processor, ?DraftProcessor $draftProcessor = null): void
     {
         $artist = Artist::with('settings')->find($this->artistId);
 
-        if (! $artist || $artist->status === 'suspended') {
+        if (! $artist) {
+            return;
+        }
+
+        $mode = (string) ($artist->settings?->reply_mode ?? 'auto');
+
+        if ($artist->status === 'suspended' && $mode !== 'draft') {
+            return;
+        }
+
+        if ($mode === 'off') {
+            $store->bufferClear($artist->id, $this->chatId);
+
             return;
         }
 
@@ -81,8 +94,9 @@ class ProcessWhatsAppTurn implements ShouldQueue
             return;
         }
 
-        // The artist took over from their phone while the burst was waiting.
-        if ($store->chatOwner($artist->id, $this->chatId) === 'artist') {
+        // In auto mode an artist takeover silences the agent. In draft mode the
+        // artist is expected to answer, and we still want the suggestion.
+        if ($mode === 'auto' && $store->chatOwner($artist->id, $this->chatId) === 'artist') {
             $store->bufferClear($artist->id, $this->chatId);
 
             return;
@@ -97,11 +111,20 @@ class ProcessWhatsAppTurn implements ShouldQueue
         }
 
         try {
-            $result = $processor->process($artist, $this->chatId, $this->phone, $text, $this->name);
+            if ($mode === 'draft') {
+                if ($draftProcessor === null) {
+                    throw new \RuntimeException('DraftProcessor is not bound.');
+                }
+
+                $result = $draftProcessor->draft($artist, $this->chatId, $this->phone, $text, $this->name, $this->msgAt);
+            } else {
+                $result = $processor->process($artist, $this->chatId, $this->phone, $text, $this->name);
+            }
         } catch (\Throwable $e) {
             Log::error('WhatsApp agent turn failed', [
                 'artist_id' => $artist->id,
                 'chat_id' => $this->chatId,
+                'mode' => $mode,
                 'error' => $e->getMessage(),
             ]);
 

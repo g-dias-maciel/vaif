@@ -6,6 +6,7 @@ use App\Services\Agent\AiClient;
 use App\Services\Agent\ClaimExtractor;
 use App\Services\Agent\PreflightClassifier;
 use App\Services\Agent\PromptBuilder;
+use App\Services\Agent\ReplyComposer;
 use App\Services\Agent\ReplyValidator;
 use App\Services\Agent\TurnProcessor;
 
@@ -31,13 +32,17 @@ class Evaluator
         $store = new FixtureAgentStore($scenario->data);
         $transport = new ArrayTransport();
 
+        $prompts = new PromptBuilder();
         $processor = new TurnProcessor(
             $store,
-            $this->ai,
-            new PromptBuilder(),
+            new ReplyComposer(
+                $this->ai,
+                $prompts,
+                new ClaimExtractor($this->ai, $this->model),
+                new ReplyValidator(),
+            ),
+            $prompts,
             new PreflightClassifier($this->ai, $this->model),
-            new ClaimExtractor($this->ai, $this->model),
-            new ReplyValidator(),
             $transport,
         );
 

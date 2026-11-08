@@ -25,9 +25,22 @@ interface AgentStore
     public function remember(string $leadId, string $leadText, string $reply): void;
 
     /**
+     * Store only the lead's message. Used by draft mode: the draft must never
+     * enter the live conversation as an AI message.
+     */
+    public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void;
+
+    /**
+     * Latest message the artist typed on their own phone after a given time.
+     *
+     * @return array{content: string, created_at: mixed}|null
+     */
+    public function latestArtistMessageAfter(string $leadId, string $after): ?array;
+
+    /**
      * @return array<int, array{role: string, content: string}>
      */
-    public function history(string $leadId, int $limit = 8): array;
+    public function history(string $leadId, int $limit = 8, ?string $before = null): array;
 
     public function chatOwner(string $artistId, string $chatId): string;
 

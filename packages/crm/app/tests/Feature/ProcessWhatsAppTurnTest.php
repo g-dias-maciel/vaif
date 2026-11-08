@@ -3,14 +3,19 @@
 namespace Tests\Feature;
 
 use App\Jobs\ProcessWhatsAppTurn;
+use App\Models\AgentDraft;
 use App\Models\Artist;
+use App\Models\ArtistSetting;
 use App\Services\Agent\ClaimExtractor;
+use App\Services\Agent\DraftProcessor;
+use App\Services\Agent\DraftStore;
 use App\Services\Agent\Eval\ArrayTransport;
 use App\Services\Agent\Eval\FixtureAgentStore;
 use App\Services\Agent\Eval\Scenario;
 use App\Services\Agent\Eval\ScriptedAiClient;
 use App\Services\Agent\PreflightClassifier;
 use App\Services\Agent\PromptBuilder;
+use App\Services\Agent\ReplyComposer;
 use App\Services\Agent\ReplyValidator;
 use App\Services\Agent\TurnProcessor;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -40,14 +45,18 @@ class ProcessWhatsAppTurnTest extends TestCase
     private function processor(FixtureAgentStore $store, ArrayTransport $transport, array $script): TurnProcessor
     {
         $ai = new ScriptedAiClient($script);
+        $prompts = new PromptBuilder();
 
         return new TurnProcessor(
             $store,
-            $ai,
-            new PromptBuilder(),
+            new ReplyComposer(
+                $ai,
+                $prompts,
+                new ClaimExtractor($ai, 'scripted'),
+                new ReplyValidator(),
+            ),
+            $prompts,
             new PreflightClassifier($ai, 'scripted'),
-            new ClaimExtractor($ai, 'scripted'),
-            new ReplyValidator(),
             $transport,
         );
     }
@@ -100,6 +109,48 @@ class ProcessWhatsAppTurnTest extends TestCase
 
         $this->assertSame([], $transport->sent);
         $this->assertSame(['job-artist:5511@c.us'], $store->cleared);
+    }
+
+    public function test_draft_mode_stores_a_suggestion_and_sends_nothing(): void
+    {
+        $artist = $this->artist();
+        ArtistSetting::create([
+            'artist_id' => $artist->id,
+            'display_name' => 'Eva',
+            'reply_mode' => 'draft',
+        ]);
+
+        $scenario = $this->scenario();
+        $store = new FixtureAgentStore($scenario->data);
+        $transport = new ArrayTransport();
+        $ai = new ScriptedAiClient($scenario->script());
+        $prompts = new PromptBuilder();
+
+        $draftProcessor = new DraftProcessor(
+            $store,
+            new ReplyComposer($ai, $prompts, new ClaimExtractor($ai, 'scripted'), new ReplyValidator()),
+            $prompts,
+            new PreflightClassifier($ai, 'scripted'),
+            new DraftStore(),
+        );
+
+        $msgAt = date('c', time() - 30);
+        $store->state = [
+            'pending' => 'Pode me passar o valor?',
+            'last_msg_at' => $msgAt,
+            'last_typing_at' => null,
+            'typing_state' => 'paused',
+        ];
+
+        $job = new ProcessWhatsAppTurn($artist->id, 'job-artist:5511@c.us', '5511', 'Diego', $msgAt);
+        $job->handle($store, $this->processor($store, $transport, $scenario->script()), $draftProcessor);
+
+        $this->assertSame([], $transport->sent);
+        $this->assertSame([], $store->applied);
+        $this->assertSame(['job-artist:5511@c.us'], $store->cleared);
+        $this->assertSame(1, AgentDraft::count());
+        $this->assertStringContainsString('R$ 600,00', AgentDraft::firstOrFail()->draft_reply);
+        $this->assertCount(1, $store->rememberedHumans);
     }
 
     public function test_a_quiet_buffer_runs_the_grounded_turn(): void

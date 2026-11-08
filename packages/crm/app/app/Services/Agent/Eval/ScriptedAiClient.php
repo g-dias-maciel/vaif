@@ -43,6 +43,7 @@ class ScriptedAiClient implements AiClient
             str_contains($system, 'Preflight — interpretar') => 'preflight',
             str_contains($system, 'Claims — o que a resposta') => 'claims',
             str_contains($system, 'Reparar a resposta') => 'repair',
+            str_contains($system, 'Calibração — comparar') => 'judge',
             default => 'agent',
         };
     }

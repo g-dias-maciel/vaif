@@ -112,12 +112,88 @@ class DatabaseAgentStore implements AgentStore
         );
     }
 
-    public function history(string $leadId, int $limit = 8): array
+    public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void
     {
-        $rows = DB::select(
-            'select message from agent_memory.chat_memory where session_id = ? order by id desc limit ?',
-            [$leadId, $limit]
+        $human = $this->json([
+            'type' => 'human',
+            'content' => $leadText,
+            'additional_kwargs' => [],
+            'response_metadata' => [],
+            'tool_calls' => [],
+            'invalid_tool_calls' => [],
+        ]);
+
+        if ($at === null || $at === '') {
+            DB::statement(
+                'insert into agent_memory.chat_memory (session_id, message) values (?, ?::jsonb)',
+                [$leadId, $human]
+            );
+
+            return;
+        }
+
+        $normalized = preg_replace('/([+-]\d{2})$/', '$1:00', $at) ?? $at;
+
+        DB::statement(
+            'insert into agent_memory.chat_memory (session_id, message, created_at) values (?, ?::jsonb, ?::timestamptz)',
+            [$leadId, $human, $normalized]
         );
+    }
+
+    public function latestArtistMessageAfter(string $leadId, string $after): ?array
+    {
+        if ($after === '') {
+            return null;
+        }
+
+        $normalized = preg_replace('/([+-]\d{2})$/', '$1:00', $after) ?? $after;
+
+        $row = DB::selectOne(
+            "select message, created_at
+               from agent_memory.chat_memory
+              where session_id = ?
+                and message->'additional_kwargs'->>'author' = 'artist'
+                and created_at > ?::timestamptz
+              order by created_at desc
+              limit 1",
+            [$leadId, $normalized]
+        );
+
+        if ($row === null) {
+            return null;
+        }
+
+        $message = $this->decode($row->message ?? null);
+        $content = $message['content'] ?? '';
+
+        if (is_array($content)) {
+            $content = implode("\n", array_filter(array_map(
+                fn ($part) => is_array($part) ? ($part['text'] ?? '') : (string) $part,
+                $content,
+            )));
+        }
+
+        return ['content' => trim((string) $content), 'created_at' => $row->created_at ?? null];
+    }
+
+    public function history(string $leadId, int $limit = 8, ?string $before = null): array
+    {
+        if ($before !== null && $before !== '') {
+            $normalized = preg_replace('/([+-]\d{2})$/', '$1:00', $before) ?? $before;
+            $rows = DB::select(
+                'select message from agent_memory.chat_memory
+                  where session_id = ? and created_at < ?::timestamptz
+                  order by created_at desc, id desc limit ?',
+                [$leadId, $normalized, $limit]
+            );
+        } else {
+            $rows = DB::select(
+                'select message from agent_memory.chat_memory
+                  where session_id = ?
+                  order by created_at desc, id desc limit ?',
+                [$leadId, $limit]
+            );
+        }
 
         $out = [];
         foreach (array_reverse($rows) as $row) {

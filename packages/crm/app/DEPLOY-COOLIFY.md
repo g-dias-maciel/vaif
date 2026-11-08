@@ -130,6 +130,10 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `AGENT_MODEL` | `anthropic/claude-haiku-5.5` (or the current production model) |
 | `AGENT_AUDIO_MODEL` | `google/gemini-2.5-flash` |
 | `AGENT_VISION_MODEL` | `google/gemini-2.5-flash` |
+| `AGENT_JUDGE_MODEL` | model used to compare drafts with artist replies |
+| `AGENT_CALIBRATION_MIN_COMPARED` | `40` |
+| `AGENT_CALIBRATION_MIN_ACCEPTABLE` | `0.9` |
+| `AGENT_CALIBRATION_MIN_RESPONSE` | `0.9` |
 | `AGENT_QUEUE` | `agent` |
 | `AGENT_QUIET_MS` | `6000` (debounce silence) |
 | `AGENT_MAX_WAIT_MS` | `20000` |
@@ -148,7 +152,14 @@ Do this per artist, after the agent has been exercised with the fake cases:
 1. Run `php artisan agent:simulate` — all scripted cases must pass.
 2. Run `php artisan agent:eval` with a real key and review
    `storage/app/agent-evals/`.
-3. Keep the artist `suspended` until you are ready to answer.
+3. Set the artist to draft mode (no sends). `draft` also works while the
+   artist is `suspended`; use `off` to stop drafting. Keep the artist out of
+   the auto-reply path until the calibration gates pass:
+
+   ```bash
+   php artisan agent:promote <session-slug> --to=draft
+   ```
+
 4. Point the existing session at the CRM **in place** — no QR re-scan:
 
    ```bash
@@ -161,8 +172,17 @@ Do this per artist, after the agent has been exercised with the fake cases:
    the current config, so the WhatsApp authentication, NOWEB store and
    metadata are preserved. WAHA stops and starts the session internally, but
    the artist does not reconnect.
-5. Watch `agent_ingest_drops`, `agent_turns` and `storage/logs/queue.log`.
-6. Rollback: point the same sessions back at the n8n webhook:
+5. Have the artist answer normally. Watch the lead page's **Sugestões da
+   Beatriz** panel and run:
+
+   ```bash
+   php artisan agent:calibration-report <session-slug> --days=30
+   ```
+
+   `agent:promote <session-slug> --to=auto` only when the hard gates pass.
+6. Watch `agent_ingest_drops`, `agent_turns`, `agent_drafts` and
+   `storage/logs/queue.log`.
+7. Rollback: point the same sessions back at the n8n webhook:
 
    ```bash
    php artisan agent:webhook --all \

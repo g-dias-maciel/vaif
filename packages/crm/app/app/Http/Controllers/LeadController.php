@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\AgentDraft;
 use App\Models\ChatMessage;
 use App\Models\Lead;
 use App\Models\Note;
@@ -37,6 +38,7 @@ class LeadController extends Controller
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
             'chatMessages' => $this->latestChatMessages($lead),
+            'drafts' => $this->latestDrafts($lead),
             'eventLabels' => config('crm.event_labels'),
             'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
             'chatOwner' => $this->chatOwner($lead),
@@ -54,6 +56,7 @@ class LeadController extends Controller
         return view('leads._conversation', [
             'lead' => $lead,
             'chatMessages' => $this->latestChatMessages($lead),
+            'drafts' => $this->latestDrafts($lead),
             'chatOwner' => $this->chatOwner($lead),
         ]);
     }
@@ -80,6 +83,24 @@ class LeadController extends Controller
         }
     }
 
+    /**
+     * Copilot drafts for this Lead, newest last so they read in order.
+     */
+    private function latestDrafts(Lead $lead)
+    {
+        try {
+            return AgentDraft::query()
+                ->where('lead_id', $lead->id)
+                ->orderByDesc('created_at')
+                ->limit(10)
+                ->get()
+                ->reverse()
+                ->values();
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
     private function latestChatMessages(Lead $lead)
     {
         // `agent_memory` is Postgres-only (n8n's memory schema); SQLite local
@@ -92,6 +113,7 @@ class LeadController extends Controller
         // messages. They are internal JSON (availability rows, booking rows,
         // etc.) and must never appear in the artist-facing transcript.
         return $lead->chatMessages()
+            ->orderByDesc('created_at')
             ->orderByDesc('id')
             ->limit(120)
             ->get()

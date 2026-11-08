@@ -2,9 +2,12 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CompareDraft;
 use App\Jobs\ProcessWhatsAppTurn;
+use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Services\Agent\AgentStore;
+use App\Services\Agent\DraftStore;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -18,7 +21,7 @@ use Illuminate\Support\Facades\Log;
  */
 class WahaWebhookController extends Controller
 {
-    public function __invoke(Request $request, AgentStore $store)
+    public function __invoke(Request $request, AgentStore $store, DraftStore $drafts)
     {
         $expected = (string) config('agent.webhook_token');
         $provided = (string) ($request->header('X-VAIF-Webhook-Token') ?: $request->header('X-Crm-Token'));
@@ -42,7 +45,12 @@ class WahaWebhookController extends Controller
             return response()->json(['ignored' => 'unknown_session']);
         }
 
-        if ($artist->status === 'suspended') {
+        // A suspended artist normally receives nothing. Draft mode is the
+        // exception: it is safe to read and prepare a suggestion, and it never
+        // sends to the lead. Use reply_mode=off to stop drafting too.
+        $drafting = ($artist->settings?->reply_mode ?? 'auto') === 'draft';
+
+        if ($artist->status === 'suspended' && ! $drafting) {
             $store->logDrop($artist->id, $session, $this->digits($this->senderJid($payload, false)), $this->chatId($session, $payload), 'artist_suspended', $body);
 
             return response()->json(['ignored' => 'artist_suspended']);
@@ -69,7 +77,7 @@ class WahaWebhookController extends Controller
         }
 
         if (($payload['fromMe'] ?? false) === true) {
-            $this->takeover($artist, $session, $payload, $store);
+            $this->takeover($artist, $session, $payload, $store, $drafts);
 
             return response()->json(['ok' => true, 'from_me' => true]);
         }
@@ -122,7 +130,7 @@ class WahaWebhookController extends Controller
      * The artist answered from their own phone: the bot must stop for this chat
      * and keep the artist's message in the conversation memory.
      */
-    private function takeover(Artist $artist, string $session, array $payload, AgentStore $store): void
+    private function takeover(Artist $artist, string $session, array $payload, AgentStore $store, DraftStore $drafts): void
     {
         $chatId = $this->chatId($session, $payload);
 
@@ -134,6 +142,21 @@ class WahaWebhookController extends Controller
 
         $text = trim((string) ($payload['body'] ?? '')) ?: '[MÍDIA ENVIADA]';
         $store->recordArtistMessage($artist->id, $chatId, $text);
+
+        // Pair the artist's answer with the newest copilot draft for this chat.
+        $draft = $drafts->latestOpenForChat($artist->id, $chatId);
+
+        if ($draft === null || $drafts->hasNewerLeadMessage($draft)) {
+            return;
+        }
+
+        $drafts->attachArtistReply($draft, $text);
+
+        if ($draft->status === AgentDraft::STATUS_REPLIED) {
+            CompareDraft::dispatch((string) $draft->id)
+                ->delay(now()->addMinute())
+                ->onQueue((string) config('agent.queue', 'agent'));
+        }
     }
 
     private function isGroup(array $payload): bool

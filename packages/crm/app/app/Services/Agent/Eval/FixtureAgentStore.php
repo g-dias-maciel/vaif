@@ -23,6 +23,9 @@ class FixtureAgentStore implements AgentStore
     /** @var array<int, array{lead: string, text: string, reply: string}> */
     public array $remembered = [];
 
+    /** @var array<int, array{lead: string, text: string}> */
+    public array $rememberedHumans = [];
+
     /** @var array<int, string> */
     public array $drops = [];
 
@@ -115,7 +118,17 @@ class FixtureAgentStore implements AgentStore
         $this->remembered[] = ['lead' => $leadId, 'text' => $leadText, 'reply' => $reply];
     }
 
-    public function history(string $leadId, int $limit = 8): array
+    public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void
+    {
+        $this->rememberedHumans[] = ['lead' => $leadId, 'text' => $leadText, 'at' => $at];
+    }
+
+    public function latestArtistMessageAfter(string $leadId, string $after): ?array
+    {
+        return null;
+    }
+
+    public function history(string $leadId, int $limit = 8, ?string $before = null): array
     {
         return array_slice($this->scenario['history'] ?? [], -$limit);
     }

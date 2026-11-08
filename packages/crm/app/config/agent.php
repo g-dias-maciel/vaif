@@ -38,6 +38,24 @@ return [
         'eval' => env('AGENT_EVAL_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
         'audio' => env('AGENT_AUDIO_MODEL', 'google/gemini-2.5-flash'),
         'vision' => env('AGENT_VISION_MODEL', 'google/gemini-2.5-flash'),
+        'judge' => env('AGENT_JUDGE_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
+    ],
+
+    'calibration' => [
+        'min_compared' => (int) env('AGENT_CALIBRATION_MIN_COMPARED', 40),
+        'min_acceptable_rate' => (float) env('AGENT_CALIBRATION_MIN_ACCEPTABLE', 0.9),
+        'min_response_rate' => (float) env('AGENT_CALIBRATION_MIN_RESPONSE', 0.9),
+        'min_per_intent' => (int) env('AGENT_CALIBRATION_MIN_PER_INTENT', 5),
+        'core_intents' => [
+            'ask_price' => 5,
+            'ask_availability' => 5,
+            'qualify' => 5,
+            'objection' => 5,
+            'close' => 5,
+            'reschedule' => 5,
+            'aftercare' => 5,
+            'coverup' => 5,
+        ],
     ],
 
     'openrouter' => [

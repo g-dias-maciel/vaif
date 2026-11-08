@@ -9,11 +9,9 @@ class TurnProcessor
 {
     public function __construct(
         private readonly AgentStore $store,
-        private readonly AiClient $ai,
+        private readonly ReplyComposer $composer,
         private readonly PromptBuilder $prompts,
         private readonly PreflightClassifier $preflight,
-        private readonly ClaimExtractor $claims,
-        private readonly ReplyValidator $validator,
         private readonly MessageTransport $transport,
         private readonly ?ContactGate $gate = null,
         private readonly ?AgentMedia $media = null,
@@ -81,28 +79,13 @@ class TurnProcessor
         );
 
         $history = $this->store->history((string) $start['lead_id']);
-        $messages = $this->prompts->messages($artist, $start, $facts, $effectiveText, $history);
 
-        $reply = $this->ai->chat($messages, (string) config('agent.models.agent'));
-        $claims = $this->claims->extract($reply, $facts);
-        $validation = $this->validator->validate($facts, $claims, $reply, $preflight);
-        $originalViolations = $validation['violations'];
-        $repaired = false;
+        $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);
+        $validation = $composed['validation'];
+        $originalViolations = $composed['original_violations'];
+        $repaired = $composed['repaired'];
 
-        if (! $validation['ok'] && $validation['repairable']) {
-            $repair = $this->repair($facts, $validation, $reply);
-            if ($repair['reply'] !== '') {
-                $second = $this->validator->validate($facts, $repair['claims'], $repair['reply'], $preflight);
-                if ($second['final_reply'] !== '') {
-                    $second['repaired'] = true;
-                    $second['original_violations'] = $originalViolations;
-                    $validation = $second;
-                    $repaired = true;
-                }
-            }
-        }
-
-        $turnId = $this->turnId($chatId, $leadText);
+        $turnId = TurnId::make($chatId, $leadText);
 
         $apply = $this->store->apply([
             'artist_id' => $artist->id,
@@ -236,28 +219,6 @@ class TurnProcessor
         }
     }
 
-    /**
-     * @return array{reply: string, claims: array<int, array<string, mixed>>}
-     */
-    private function repair(array $facts, array $validation, string $original): array
-    {
-        $system = (string) file_get_contents(resource_path('prompts/repair-reply.md'));
-
-        $content = $this->ai->chat([
-            ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => 'FATOS:\n'.Json::string($facts)
-                .'\n\nVIOLAÇÕES:\n'.Json::string($validation['violations'])
-                .'\n\nRESPOSTA ATUAL:\n'.$original],
-        ], (string) config('agent.models.repair'));
-
-        $parsed = Json::parse($content);
-
-        return [
-            'reply' => trim((string) ($parsed['reply'] ?? '')),
-            'claims' => is_array($parsed['claims'] ?? null) ? array_values(array_filter($parsed['claims'], 'is_array')) : [],
-        ];
-    }
-
     private function sendReply(Artist $artist, string $chatId, string $reply): void
     {
         $reply = trim($reply);
@@ -315,18 +276,6 @@ class TurnProcessor
         }
 
         return $chunks === [] ? [$reply] : $chunks;
-    }
-
-    private function turnId(string $chatId, string $leadText): string
-    {
-        $bucket = (int) floor(time() / 600);
-        $hash = hash('sha256', $chatId.'|'.$leadText.'|'.$bucket);
-
-        return substr($hash, 0, 8).'-'
-            .substr($hash, 8, 4).'-4'
-            .substr($hash, 13, 3).'-8'
-            .substr($hash, 17, 3).'-'
-            .substr($hash, 20, 12);
     }
 
     private function sameInstant(string $a, string $b): bool

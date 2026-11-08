@@ -2,12 +2,16 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\CompareDraft;
 use App\Jobs\ProcessWhatsAppTurn;
+use App\Models\AgentDraft;
 use App\Models\Artist;
+use App\Models\ArtistSetting;
 use App\Services\Agent\AgentStore;
 use App\Services\Agent\Eval\FixtureAgentStore;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Queue;
+use Illuminate\Support\Str;
 use Tests\TestCase;
 
 class WahaWebhookTest extends TestCase
@@ -64,6 +68,14 @@ class WahaWebhookTest extends TestCase
             \App\Services\Agent\TurnProcessor::class,
             $this->app->make(\App\Services\Agent\TurnProcessor::class)
         );
+        $this->assertInstanceOf(
+            \App\Services\Agent\DraftProcessor::class,
+            $this->app->make(\App\Services\Agent\DraftProcessor::class)
+        );
+        $this->assertInstanceOf(
+            \App\Services\Agent\DraftComparator::class,
+            $this->app->make(\App\Services\Agent\DraftComparator::class)
+        );
     }
 
     public function test_it_rejects_a_wrong_token(): void
@@ -91,6 +103,19 @@ class WahaWebhookTest extends TestCase
 
         $this->assertSame(['artist_suspended'], $this->store->drops);
         Queue::assertNothingPushed();
+    }
+
+    public function test_a_suspended_artist_in_draft_mode_still_gets_a_draft(): void
+    {
+        Queue::fake();
+        $artist = $this->artist('suspended');
+        ArtistSetting::create(['artist_id' => $artist->id, 'reply_mode' => 'draft']);
+
+        $this->sendWebhook($this->message())->assertOk()->assertJson(['queued' => true]);
+
+        $this->assertSame([], $this->store->drops);
+        $this->assertCount(1, $this->store->accumulated);
+        Queue::assertPushed(ProcessWhatsAppTurn::class);
     }
 
     public function test_a_message_is_buffered_and_the_grounded_turn_is_queued(): void
@@ -151,6 +176,31 @@ class WahaWebhookTest extends TestCase
         $this->assertSame(['agent-artist:5511900000001@c.us'], $this->store->controls);
         $this->assertSame('Oi, aqui é a Eva', $this->store->artistMessages[0]['text']);
         Queue::assertNothingPushed();
+    }
+
+    public function test_an_artist_reply_is_paired_with_the_pending_draft(): void
+    {
+        Queue::fake();
+        $artist = $this->artist();
+        ArtistSetting::create(['artist_id' => $artist->id, 'reply_mode' => 'draft']);
+
+        $draft = AgentDraft::create([
+            'artist_id' => $artist->id,
+            'chat_id' => 'agent-artist:5511900000001@c.us',
+            'turn_id' => (string) Str::uuid(),
+            'lead_text' => 'Quanto fica?',
+            'draft_reply' => 'Fica R$ 600,00.',
+            'status' => AgentDraft::STATUS_PENDING,
+        ]);
+
+        $this->sendWebhook($this->message(['fromMe' => true, 'body' => 'Oi, aqui é a Eva']))->assertOk();
+
+        $draft->refresh();
+        $this->assertSame('Oi, aqui é a Eva', $draft->artist_reply);
+        $this->assertSame(AgentDraft::STATUS_REPLIED, $draft->status);
+        $this->assertNotNull($draft->response_seconds);
+
+        Queue::assertPushed(CompareDraft::class, fn (CompareDraft $job) => $job->draftId === $draft->id);
     }
 
     public function test_presence_update_records_typing(): void
