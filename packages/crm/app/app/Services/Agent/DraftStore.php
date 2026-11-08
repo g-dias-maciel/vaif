@@ -36,13 +36,19 @@ class DraftStore
 
     public function latestOpenForChat(string $artistId, string $chatId): ?AgentDraft
     {
-        return AgentDraft::query()
-            ->where('artist_id', $artistId)
-            ->where('chat_id', $chatId)
-            ->whereIn('status', [AgentDraft::STATUS_PENDING, AgentDraft::STATUS_REPLIED])
-            ->where('created_at', '>=', now()->subDay())
-            ->orderByDesc('created_at')
-            ->first();
+        try {
+            return AgentDraft::query()
+                ->where('artist_id', $artistId)
+                ->where('chat_id', $chatId)
+                ->whereIn('status', [AgentDraft::STATUS_PENDING, AgentDraft::STATUS_REPLIED])
+                ->where('created_at', '>=', now()->subDay())
+                ->orderByDesc('created_at')
+                ->first();
+        } catch (\Throwable $e) {
+            // Before the calibration migration, the message path must still
+            // work; there is simply nothing to pair.
+            return null;
+        }
     }
 
     /**
