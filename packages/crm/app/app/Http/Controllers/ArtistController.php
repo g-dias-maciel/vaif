@@ -2,18 +2,16 @@
 
 namespace App\Http\Controllers;
 
-use App\Mail\ArtistInvite;
 use App\Models\Artist;
 use App\Models\CalendarEntry;
 use App\Models\ChatMessage;
 use App\Models\Project;
 use App\Models\User;
+use App\Services\ArtistInviteService;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 
@@ -287,16 +285,7 @@ class ArtistController extends Controller
 
     private function sendInvite(User $user): bool
     {
-        try {
-            $token = Password::broker()->createToken($user);
-            Mail::to($user->email)->send(new ArtistInvite($user, $token));
-
-            return true;
-        } catch (\Throwable $e) {
-            report($e);
-
-            return false;
-        }
+        return app(ArtistInviteService::class)->send($user);
     }
 
     private function defaultWorkingHours(): array

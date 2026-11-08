@@ -105,8 +105,69 @@
         <button type="submit" class="btn btn--small">Mover estágio</button>
     </form>
 
-    <p class="meta" style="margin-top:8px;">Ganho será habilitado quando o handoff entrar na próxima fase. Use Proposta por enquanto.</p>
+    <p class="meta" style="margin-top:8px;">O estágio Ganho é concluído pelo handoff, disponível quando o prospect está em Proposta.</p>
 </div>
+
+@if ($prospect->stage_key === 'proposta' && $prospect->artist_id === null && $prospect->handoff_at === null)
+<div class="panel" style="margin-top:18px;">
+    <h2 class="section-title" style="margin-top:0;">Handoff</h2>
+    <p class="meta" style="margin-bottom:14px;">Conclua o handoff para criar o cliente, o contrato e o checklist de onboarding. Para 697, os campos de artista são ignorados.</p>
+
+    <form method="post" action="{{ route('sales.prospects.handoff', $prospect) }}" class="sales-form">
+        @csrf
+
+        <label>
+            Plano
+            <select name="plan">
+                <option value="mensal" @selected(old('plan', 'semestral') === 'mensal')>Mensal — R$ 3.250</option>
+                <option value="semestral" @selected(old('plan', 'semestral') === 'semestral')>Semestral — R$ 1.800</option>
+                <option value="twelve_months" @selected(old('plan') === 'twelve_months')>12 meses — R$ 1.500</option>
+                <option value="full_service" @selected(old('plan') === 'full_service')>Full service — R$ 15.000</option>
+                <option value="members_area" @selected(old('plan') === 'members_area')>697 — Área de membros</option>
+            </select>
+        </label>
+
+        <label>
+            Valor mensal (R$)
+            <input type="number" step="0.01" min="0" name="monthly_value" value="{{ old('monthly_value', 1800) }}">
+        </label>
+
+        <label>
+            Início
+            <input type="date" name="start_date" value="{{ old('start_date', now()->toDateString()) }}">
+        </label>
+
+        <label>
+            Dia de cobrança
+            <input type="number" min="1" max="31" name="billing_day" value="{{ old('billing_day', 10) }}">
+        </label>
+
+        <label>
+            E-mail do artista
+            <input type="email" name="artist_email" value="{{ old('artist_email') }}">
+        </label>
+
+        <label>
+            WhatsApp do artista
+            <input type="text" name="whatsapp_number" value="{{ old('whatsapp_number', $prospect->displayPhone()) }}">
+        </label>
+
+        <label>
+            Instagram do artista
+            <input type="text" name="instagram_handle" value="{{ old('instagram_handle', $prospect->instagram) }}">
+        </label>
+
+        <label>
+            Timezone
+            <input type="text" name="timezone" value="{{ old('timezone', 'America/Sao_Paulo') }}">
+        </label>
+
+        <div class="full">
+            <button type="submit" class="btn">Concluir handoff</button>
+        </div>
+    </form>
+</div>
+@endif
 
 <div class="panel" style="margin-top:18px;">
     <h2 class="section-title" style="margin-top:0;">Próxima ação</h2>
@@ -184,6 +245,12 @@
 
 <div class="panel" style="margin-top:18px;">
     <h2 class="section-title" style="margin-top:0;">Contrato</h2>
+
+    @if ($prospect->handoff_at)
+        <p class="meta" style="margin-bottom:12px;">
+            Handoff concluído em {{ $prospect->handoff_at->format('d/m/Y H:i') }}@if ($prospect->artist_id) · Artista vinculado @endif.
+        </p>
+    @endif
 
     @if ($prospect->contracts->isEmpty())
         <p class="meta">Sem contrato. O handoff entra na próxima fase.</p>

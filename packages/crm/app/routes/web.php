@@ -142,6 +142,7 @@ Route::middleware('auth')->group(function () {
         Route::post('/prospects/{prospect}/next-action', [ProspectController::class, 'updateNextAction'])->name('prospects.next-action');
         Route::post('/prospects/{prospect}/activities', [ProspectController::class, 'storeActivity'])->name('prospects.activities.store');
         Route::post('/prospects/{prospect}/activities/{activity}/complete', [ProspectController::class, 'completeActivity'])->name('prospects.activities.complete');
+        Route::post('/prospects/{prospect}/handoff', [ProspectController::class, 'handoff'])->name('prospects.handoff');
 
         Route::get('/backlog', [BacklogController::class, 'index'])->name('backlog');
         Route::post('/backlog/{prospect}/promote', [BacklogController::class, 'promote'])->name('backlog.promote');

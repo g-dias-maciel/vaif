@@ -3,6 +3,7 @@
 namespace App\Http\Controllers\Sales;
 
 use App\Http\Controllers\Controller;
+use App\Http\Requests\Sales\HandoffRequest;
 use App\Http\Requests\Sales\StoreActivityRequest;
 use App\Http\Requests\Sales\StoreProspectRequest;
 use App\Http\Requests\Sales\UpdateProspectRequest;
@@ -12,6 +13,7 @@ use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\ProspectStage;
 use App\Models\User;
+use App\Services\Sales\ProspectHandoffService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -294,6 +296,27 @@ class ProspectController extends Controller
         }
 
         return back()->with('status', 'Atividade registrada.');
+    }
+
+    public function handoff(
+        HandoffRequest $request,
+        Prospect $prospect,
+        ProspectHandoffService $service,
+    ): RedirectResponse {
+        Gate::authorize('handoff', $prospect);
+        $this->ensureCanWork($request, $prospect);
+
+        $result = $service->handoff($prospect, $request->validated(), $request->user());
+
+        $message = 'Handoff concluído.';
+
+        if (! $result['invite_sent']) {
+            $message .= ' O convite do artista não pôde ser enviado; reenvie em Artistas.';
+        }
+
+        return redirect()
+            ->route('sales.prospects.show', $prospect)
+            ->with('status', $message);
     }
 
     public function completeActivity(Request $request, Prospect $prospect, ProspectActivity $activity): RedirectResponse
