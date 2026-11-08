@@ -929,6 +929,7 @@ declare
   slot2      record;
   booking1   calendar_entries;
   booking2   calendar_entries;
+  active_id  uuid;
   turn       record;
   phone      text := '11 94444-3333';
   dropped    agent_ingest_drops;
@@ -979,8 +980,8 @@ begin
   perform pg_temp.ok(booking2.start_at = slot2.start_at, 'the booking uses the requested slot');
   perform pg_temp.ok(booking2.google_sync_pending, 'the reschedule queues a Google sync');
 
-  select * into booking1 from get_active_booking_by_phone(pg_temp.artist_a(), phone);
-  perform pg_temp.ok(booking1.id = booking2.id,
+  select id into active_id from get_active_booking_by_phone(pg_temp.artist_a(), phone);
+  perform pg_temp.ok(active_id = booking2.id,
     'get_active_booking_by_phone returns the rescheduled booking');
 
   -- A suspended artist still resolves, so the workflow can log the drop.
