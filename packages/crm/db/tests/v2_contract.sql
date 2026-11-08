@@ -1092,6 +1092,10 @@ begin
   select * into proj_g from create_project(
     pg_temp.artist_a(), lead_g.id, null, null);
 
+  -- The chat session is where `apply_grounded_turn` stores pending_question.
+  perform start_turn(
+    pg_temp.artist_a(), 'slug-a:grounded', '11 92222-1111', 'Placeholder', 'whatsapp');
+
   res := apply_grounded_turn(
     pg_temp.artist_a(), lead_g.id, proj_g.id, 'slug-a:grounded',
     gen_random_uuid(), 'qualify', '{}'::jsonb,
