@@ -49,6 +49,18 @@ class Kernel extends ConsoleKernel
                 ->timezone($copilotTz)
                 ->withoutOverlapping(30);
         }
+
+        // Finance: generate the PIX invoices that are due and flag overdue
+        // balances. Card charges are recorded manually or by the MP webhook.
+        $schedule->command('finance:generate-invoices')
+            ->dailyAt('06:00')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping(30);
+
+        $schedule->command('finance:mark-overdue')
+            ->dailyAt('06:10')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping(30);
     }
 
     /**
