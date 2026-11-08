@@ -237,6 +237,19 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Notion pipeline sync
+    |--------------------------------------------------------------------------
+    |
+    | The n8n workflow reuses its Notion credential, normalizes each pipeline
+    | page and POSTs it to the CRM. The token falls back to the sales ingest
+    | token so a single server-to-server secret can be used until Notion sync
+    | gets its own rotation.
+    |
+    */
+    'notion_sync_token' => env('NOTION_SYNC_TOKEN', env('SALES_INGEST_TOKEN')),
+
+    /*
+    |--------------------------------------------------------------------------
     | Admin alerts
     |--------------------------------------------------------------------------
     |

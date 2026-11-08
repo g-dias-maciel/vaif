@@ -1,0 +1,10 @@
+Name,Telefone,Instagram,Email,Status Contrato,Inicio Contrato,Valor de Fechamento,Pipeline,Proximo Contato,Last edited time,Endereço
+Ana Cliente,+55 11 90000-0001,https://www.instagram.com/ana.cliente/,ana@example.com,Ativo,"June 1, 2026","R$1,800.00",Cliente,10/11/2026,2026-11-09T12:00:00Z,"Rua A, 10, São Paulo - SP"
+Beto Lead,11 90000-0002,https://www.instagram.com/beto.lead/, , , , ,Contato Iniciado,09/11/2026,2026-11-08T12:00:00Z,
+Beto Lead Atualizado,11 90000-0002,https://www.instagram.com/beto.lead/,beto@example.com, , , ,Remarketing,09/11/2026,2026-11-09T13:00:00Z,
+Sem Telefone,+,https://www.instagram.com/sem.telefone/,sem@example.com, , , ,Contato Iniciado, ,2026-11-09T14:00:00Z,
+Cliente Pausado,11 90000-0005,https://www.instagram.com/cliente.pausado/,pausado@example.com,Pausado, , ,Cliente, ,2026-11-09T15:00:00Z,
+,11 90000-0006,https://www.instagram.com/sem.nome/, , , , ,Lead Novo, ,2026-11-09T16:00:00Z,
+Lead Zero,011 90000-0007,https://www.instagram.com/lead.zero/, , , , ,Contato Iniciado, ,2026-11-09T17:00:00Z,
+Cliente Suspenso,11 90000-0008,https://www.instagram.com/cliente.suspenso/,suspenso@example.com,Ativo,"July 1, 2026","R$1,500.00",Cliente, ,2026-11-09T18:00:00Z,
+Cliente Promovido,11 90000-0009,https://www.instagram.com/cliente.promovido/,promovido@example.com,Ativo,"August 1, 2026","R$2,000.00",Cliente, ,2026-11-09T19:00:00Z,

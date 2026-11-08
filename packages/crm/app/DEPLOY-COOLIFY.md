@@ -114,6 +114,7 @@ keep artists logged in across redeploys.
 | `WAHA_WEBHOOK_TOKEN` | shared header token WAHA sends to the CRM webhook |
 | `ONBOARD_WEBHOOK_TOKEN` | shared secret used by the onboarding flow |
 | `SALES_INGEST_TOKEN` | bearer token for the LP calculator → internal sales CRM |
+| `NOTION_SYNC_TOKEN` | bearer token for the n8n Notion pipeline sync (optional; falls back to `SALES_INGEST_TOKEN`) |
 | `MEMBER_AREA_URL` | `https://membros.vaif.com.br/` (optional) |
 
 `ONBOARD_WEBHOOK_TOKEN` is what the onboarding workflow sends when provisioning
@@ -123,6 +124,11 @@ a CRM login for a new artist. It must match the value in the workflow.
 use to push new Artist prospects into the internal pipeline
 (`POST /api/sales/prospects`). Set the exact same value as `CRM_INGEST_TOKEN`
 in the LP app.
+
+`NOTION_SYNC_TOKEN` protects `POST /api/sales/notion-sync`. It is optional: when
+unset, the endpoint uses `SALES_INGEST_TOKEN`. The n8n workflow should send
+`Authorization: Bearer <token>` and a body shaped like
+`{"pages": [ ... ]}`. See `docs/notion-pipeline-sync.md` for the field mapping.
 
 ### WhatsApp agent (Beatriz)
 

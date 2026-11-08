@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\NotionSyncController;
 use App\Http\Controllers\Api\SalesIngestController;
 use App\Http\Controllers\ContactGateController;
 use App\Http\Controllers\HealthController;
@@ -29,6 +30,10 @@ Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('
 // LP calculator / diagnostic form → internal sales pipeline.
 Route::post('/sales/prospects', SalesIngestController::class)
     ->middleware(['sales.ingest', 'throttle:120,1']);
+
+// n8n Notion pipeline sync → clients + backlog.
+Route::post('/sales/notion-sync', NotionSyncController::class)
+    ->middleware(['sales.ingest:crm.notion_sync_token', 'throttle:60,1']);
 
 // Internal automation (n8n): attach WhatsApp reference media/links.
 Route::post('/references', [ReferenceController::class, 'store'])->middleware('throttle:120,1');

@@ -7,18 +7,20 @@ use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 /**
- * Bearer-token guard for the calculator → internal CRM ingest endpoint.
+ * Bearer-token guard for server-to-server ingest endpoints (calculator and
+ * Notion sync). The token is read from the config key passed to the route, so
+ * one middleware can protect both feeds with independent secrets.
  */
 class EnsureSalesIngestToken
 {
-    public function handle(Request $request, Closure $next): Response
+    public function handle(Request $request, Closure $next, string $configKey = 'crm.sales_ingest_token'): Response
     {
-        $expected = (string) config('crm.sales_ingest_token');
+        $expected = (string) config($configKey);
 
         if ($expected === '') {
             return response()->json([
                 'ok' => false,
-                'error' => 'sales ingest is not configured',
+                'error' => 'ingest is not configured',
             ], 503);
         }
 
