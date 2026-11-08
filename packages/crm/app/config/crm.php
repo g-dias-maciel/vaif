@@ -14,15 +14,15 @@ return [
     */
 
     'pipeline_statuses' => [
-        'novo'                => 'Novo',
-        'qualificando'        => 'Qualificando',
-        'orcamento_enviado'   => 'Orçamento enviado',
+        'novo' => 'Novo',
+        'qualificando' => 'Qualificando',
+        'orcamento_enviado' => 'Orçamento enviado',
         'aguardando_deposito' => 'Aguardando sinal',
-        'agendado'            => 'Agendado',
-        'aguardando_artista'  => 'Aguardando artista',
-        'fechado'             => 'Fechado',
-        'perdido'             => 'Perdido',
-        'bloqueado'           => 'Bloqueado',
+        'agendado' => 'Agendado',
+        'aguardando_artista' => 'Aguardando artista',
+        'fechado' => 'Fechado',
+        'perdido' => 'Perdido',
+        'bloqueado' => 'Bloqueado',
     ],
 
     /*
@@ -223,6 +223,17 @@ return [
     */
 
     'onboard_webhook_token' => env('ONBOARD_WEBHOOK_TOKEN'),
+
+    /*
+    |--------------------------------------------------------------------------
+    | Internal sales CRM
+    |--------------------------------------------------------------------------
+    |
+    | Bearer token used by the LP calculator (and the diagnostic form) to push
+    | new Artist prospects into the internal pipeline.
+    |
+    */
+    'sales_ingest_token' => env('SALES_INGEST_TOKEN'),
 
     /*
     |--------------------------------------------------------------------------

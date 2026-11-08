@@ -113,10 +113,16 @@ keep artists logged in across redeploys.
 | `WAHA_WEBHOOK_URL` | `https://crm.vaif.com.br/api/webhooks/waha` |
 | `WAHA_WEBHOOK_TOKEN` | shared header token WAHA sends to the CRM webhook |
 | `ONBOARD_WEBHOOK_TOKEN` | shared secret used by the onboarding flow |
+| `SALES_INGEST_TOKEN` | bearer token for the LP calculator → internal sales CRM |
 | `MEMBER_AREA_URL` | `https://membros.vaif.com.br/` (optional) |
 
 `ONBOARD_WEBHOOK_TOKEN` is what the onboarding workflow sends when provisioning
 a CRM login for a new artist. It must match the value in the workflow.
+
+`SALES_INGEST_TOKEN` is the bearer token the LP calculator and diagnostic form
+use to push new Artist prospects into the internal pipeline
+(`POST /api/sales/prospects`). Set the exact same value as `CRM_INGEST_TOKEN`
+in the LP app.
 
 ### WhatsApp agent (Beatriz)
 

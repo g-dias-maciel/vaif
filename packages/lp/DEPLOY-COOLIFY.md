@@ -38,6 +38,8 @@ runtime via `getenv()` in the PHP API files.
 | `N8N_AGENDA_WEBHOOK_URL` | n8n webhook for artist agenda availability + block/unblock (webhook path `calendar`) | optional |
 | `N8N_ONBOARD_WEBHOOK_URL` | n8n webhook for artist onboarding — validate/status/consume QR connect (webhook path `onboard-api`). Set to `https://n8n.vaif.com.br/webhook/onboard-api`. Without it `/onboard/*` shows "Em manutenção" | required for `/onboard/*` |
 | `N8N_DIAGNOSTICO_WEBHOOK_URL` | n8n webhook for the free diagnostic form (`/api/leads/diagnostico.php`) — leads are sent to Telegram approval then emailed. Set to `https://n8n.vaif.com.br/webhook/diagnostico` | optional |
+| `CRM_INGEST_URL` | Internal CRM ingest endpoint: `https://crm.vaif.com.br/api/sales/prospects` | required for the sales CRM |
+| `CRM_INGEST_TOKEN` | Bearer token for the CRM ingest endpoint; must match `SALES_INGEST_TOKEN` in the CRM | required for the sales CRM |
 | `ARTISTS_ADMIN_TOKEN` | Secret token that unlocks the artist review panel at `/artistas-admin/<token>`. Falls back to `API_CREATE_KEY` if unset. Generate something long and random. | required for the review panel |
 
 Use Coolify's **`@` secret/database linking** if you attach a Coolify-managed

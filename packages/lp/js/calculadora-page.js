@@ -1,5 +1,16 @@
 /* VAIF Calculadora Page — Page-Specific Scripts */
 
+/* UTM capture for the internal CRM. */
+window.vaifUtms = function () {
+    const params = new URLSearchParams(window.location.search);
+    const utms = {};
+    ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].forEach(function (key) {
+        const value = params.get(key);
+        if (value) utms[key] = value;
+    });
+    return utms;
+};
+
 function scrollToCalculator() {
     scrollToSection(document.getElementById('progressWrapper'));
 }
@@ -38,7 +49,8 @@ async function handleLeadSubmit(event) {
             nome: form.nome.value,
             whatsapp: form.whatsapp.value,
             instagram: form.instagram.value,
-            ...window.calcData
+            ...window.calcData,
+            ...window.vaifUtms()
         };
 
         const response = await fetch('/api/leads/submit.php', {

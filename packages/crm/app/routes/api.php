@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\Api\SalesIngestController;
 use App\Http\Controllers\ContactGateController;
 use App\Http\Controllers\HealthController;
 use App\Http\Controllers\OnboardController;
@@ -24,6 +25,10 @@ Route::get('/up', HealthController::class);
 Route::post('/webhooks/waha', WahaWebhookController::class)->middleware('throttle:600,1');
 
 Route::post('/onboard/login', [OnboardController::class, 'login'])->middleware('throttle:30,1');
+
+// LP calculator / diagnostic form → internal sales pipeline.
+Route::post('/sales/prospects', SalesIngestController::class)
+    ->middleware(['sales.ingest', 'throttle:120,1']);
 
 // Internal automation (n8n): attach WhatsApp reference media/links.
 Route::post('/references', [ReferenceController::class, 'store'])->middleware('throttle:120,1');

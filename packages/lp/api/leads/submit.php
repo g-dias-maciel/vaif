@@ -2,6 +2,8 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Methods: POST');
 
+require_once __DIR__.'/crm_ingest.php';
+
 $json = file_get_contents('php://input');
 $data = json_decode($json, true);
 
@@ -57,7 +59,11 @@ try {
         exit;
     }
 
-    // 4. 👇 Disparar para o n8n INSTANTANEAMENTE se o insert no banco der certo
+    // 4. Forward to the internal CRM. Non-blocking: the LP still succeeds if
+    // the CRM is down, and the MySQL row remains the fallback.
+    notify_crm($json);
+
+    // 5. 👇 Disparar para o n8n INSTANTANEAMENTE se o insert no banco der certo
     if ($n8nLeadWebhookUrl) {
         $ch = curl_init($n8nLeadWebhookUrl);
         curl_setopt($ch, CURLOPT_POST, 1);

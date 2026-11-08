@@ -1806,7 +1806,7 @@
                         <img class="carousel-photo" src="/img/dinho_resultado.webp" alt="Dinho Tattoo" loading="lazy" decoding="async">
                         <p class="carousel-instagram"><a href="https://instagram.com/dinho_tattoo091" target="_blank" rel="noopener noreferrer">@dinho_tattoo091</a></p>
                         <div class="carousel-result">De <span>R$ 15k</span> para <span>R$ 48k</span> em 75 dias</div>
-                        <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio. Já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
+                    <p class="carousel-quote">Já trabalho com a VAIF faz 4 anos e meio. Já trabalhei com outros profissionais, inclusive famosos no meio do marketing, e nenhum deles me trouxe tantos resultados quanto a VAIF.</p>
                     </div>
 
                 </div>
@@ -2099,6 +2099,16 @@
             }
         }
 
+        window.vaifUtms = window.vaifUtms || function () {
+            const params = new URLSearchParams(window.location.search);
+            const utms = {};
+            ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'].forEach(function (key) {
+                const value = params.get(key);
+                if (value) utms[key] = value;
+            });
+            return utms;
+        };
+
         async function handleLeadSubmit(event) {
             event.preventDefault();
             const form = event.target;
@@ -2122,7 +2132,8 @@
                     nome: form.nome.value,
                     whatsapp: form.whatsapp.value,
                     instagram: form.instagram.value,
-                    ...window.calcData
+                    ...window.calcData,
+                    ...window.vaifUtms()
                 };
 
                 const response = await fetch('/api/leads/submit.php', {

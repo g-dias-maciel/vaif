@@ -2,6 +2,8 @@
 header('Content-Type: application/json');
 header('Access-Control-Allow-Methods: POST');
 
+require_once __DIR__.'/crm_ingest.php';
+
 $json = file_get_contents('php://input');
 $data = json_decode($json, true);
 
@@ -58,6 +60,10 @@ if ($host && $dbname && $user && $pass) {
 } else {
     error_log('Warning: DB env vars not set, diagnostic lead not persisted');
 }
+
+// Forward to the internal CRM before the n8n dependency: the CRM is the
+// pipeline of record, n8n only builds the diagnostic delivery.
+notify_crm($json);
 
 $n8nDiagnosticoWebhookUrl = getenv('N8N_DIAGNOSTICO_WEBHOOK_URL');
 
