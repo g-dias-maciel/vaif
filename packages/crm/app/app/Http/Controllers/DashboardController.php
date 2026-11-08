@@ -8,6 +8,7 @@ use App\Models\Project;
 use App\Support\Periods;
 use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class DashboardController extends Controller
 {
@@ -77,6 +78,18 @@ class DashboardController extends Controller
             ->where('artist_id', $artist->id)
             ->where('contact_gate', 'pending')
             ->orderByDesc('updated_at')
+            ->get();
+
+        // Inbound messages the agent deliberately did not answer (paused
+        // artist, unknown session). The table is the durable evidence; this
+        // badge is how the artist sees it without waiting for the e-mail.
+        // Keep the badge visible for a day, not just until the digest e-mail
+        // goes out: the drop is still a client waiting.
+        $ingestDrops = DB::table('agent_ingest_drops')
+            ->where('artist_id', $artist->id)
+            ->where('created_at', '>=', now()->subDay())
+            ->orderByDesc('created_at')
+            ->limit(10)
             ->get();
 
         $pendingDeposits = Project::with(['lead', 'payments', 'calendar'])
@@ -181,7 +194,8 @@ class DashboardController extends Controller
 
         $needsAttention = $pendingHandoffs->count()
             + $pendingContactGates->count()
-            + $pendingDeposits->count();
+            + $pendingDeposits->count()
+            + $ingestDrops->count();
         $inConversation = $projects
             ->whereIn('stage_key', ['novo', 'qualificando', 'orcamento_enviado', 'aguardando_deposito', 'aguardando_artista'])
             ->count();
@@ -195,6 +209,7 @@ class DashboardController extends Controller
             'pendingHandoffs' => $pendingHandoffs,
             'pendingContactGates' => $pendingContactGates,
             'pendingDeposits' => $pendingDeposits,
+            'ingestDrops' => $ingestDrops,
             'pipeline' => $pipeline,
             'lanes' => $lanes,
             'laneCounts' => $laneCounts,

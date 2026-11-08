@@ -29,6 +29,11 @@ class Kernel extends ConsoleKernel
         $schedule->command('crm:notify-artist-attention')
             ->everyMinute()
             ->withoutOverlapping(10);
+
+        // A message the agent deliberately did not answer must stay visible.
+        $schedule->command('crm:notify-ingest-drops')
+            ->everyFiveMinutes()
+            ->withoutOverlapping(10);
     }
 
     /**

@@ -92,15 +92,15 @@ promotion snapshotting and LGPD anonymisation.
 
 ```bash
 createdb vaif_v2_test
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0001_schema_v2.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0002_functions_v2.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0003_roles_v2.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0004_active_booking.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0005_deposit_stage.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0006_tattoo_completed.sql
-psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f migrations/0007_artist_notifications.sql
+for f in migrations/*.sql; do
+  psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f "$f"
+done
 psql -d vaif_v2_test -v ON_ERROR_STOP=1 -f tests/v2_contract.sql
 ```
+
+Apply **all** migrations in filename order. The contract test covers the
+availability status (`booking_options_v2`), phone-level reschedule lookup,
+visible ingest drops and the handoff SLA clock.
 
 CI runs exactly this on `postgres:17-alpine` (`.github/workflows/crm-db.yml`), and
 also restores the production baseline dump to prove it is still restorable.

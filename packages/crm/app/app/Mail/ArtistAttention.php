@@ -20,11 +20,15 @@ class ArtistAttention extends Mailable
      * @param  array<int, array{name: string, amount: string, url: string}>  $deposits
      * @param  array<int, array{name: string, phone: ?string, url: string}>  $contacts
      */
+    /**
+     * @param  string  $stage  first | reminder | escalation
+     */
     public function __construct(
         public Artist $artist,
         public array $handoffs = [],
         public array $deposits = [],
         public array $contacts = [],
+        public string $stage = 'first',
     ) {
     }
 
@@ -32,8 +36,14 @@ class ArtistAttention extends Mailable
     {
         $count = count($this->handoffs) + count($this->deposits) + count($this->contacts);
 
+        $subject = match ($this->stage) {
+            'escalation' => '[URGENTE] '.$count.' cliente'.($count === 1 ? '' : 's').' sem resposta sua',
+            'reminder' => 'Lembrete: '.$count.' cliente'.($count === 1 ? '' : 's').' ainda aguardando você',
+            default => $count.' cliente'.($count === 1 ? '' : 's').' aguardando você',
+        };
+
         return $this
-            ->subject($count.' cliente'.($count === 1 ? '' : 's').' aguardando você')
-            ->view('emails.artist-attention');
+            ->subject($subject)
+            ->view('emails.artist-attention', ['stage' => $this->stage]);
     }
 }

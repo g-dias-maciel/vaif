@@ -122,6 +122,8 @@ check("sales mode injected", "MODO VENDA COMPLETA" in rendered)
 print("=== Workflow wiring ===")
 wf = load_json("beatriz-whatsapp-agent.json")
 nodes = {n["name"]: n for n in wf["nodes"]}
+PREFLIGHT_PROMPT = open(os.path.join(FLOWS_ROOT, "prompts/preflight-classify.md"), encoding="utf-8").read()
+CLAIMS_PROMPT = open(os.path.join(FLOWS_ROOT, "prompts/extract-claims.md"), encoding="utf-8").read()
 
 check("the WAHA webhook requires header authentication",
       nodes["WAHA Webhook"]["parameters"].get("authentication") == "headerAuth"
@@ -181,12 +183,56 @@ check("Build System Prompt injects the sales mode",
       "{{MODO_VENDA}}" in bsp["parameters"]["jsCode"]
       and "artist.full_selling" in bsp["parameters"]["jsCode"])
 
-check("Artist Found? routes through the group-chat and blocked-number guards to Route Event",
+check("Artist Found? routes through group, paused-artist and blocked-number guards to Route Event",
       wf["connections"]["Artist Found?"]["main"][0][0]["node"] == "Group Chat?"
       and wf["connections"]["Group Chat?"]["main"][0] == []
-      and wf["connections"]["Group Chat?"]["main"][1][0]["node"] == "Blocked Number?"
+      and wf["connections"]["Group Chat?"]["main"][1][0]["node"] == "Artist Paused?"
+      and wf["connections"]["Artist Paused?"]["main"][0][0]["node"] == "Log Paused Inbound"
+      and wf["connections"]["Artist Paused?"]["main"][1][0]["node"] == "Blocked Number?"
       and wf["connections"]["Blocked Number?"]["main"][0] == []
       and wf["connections"]["Blocked Number?"]["main"][1][0]["node"] == "Route Event")
+check("grounding shadow branch is wired after the reply is sent",
+      wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Enforce Agent Path?"
+      and wf["connections"]["Stop Typing"]["main"][0][1]["node"] == "Grounding Gate?"
+      and wf["connections"]["Grounding Gate?"]["main"][0][0]["node"] == "Build Shadow Preflight"
+      and wf["connections"]["Validate Shadow Reply"]["main"][0][0]["node"] == "Log Shadow Turn")
+check("grounding facts come from the SQL contract",
+      "build_turn_facts(" in nodes["Shadow Facts"]["parameters"]["query"]
+      and "grounding_mode" in nodes["Resolve Artist"]["parameters"]["query"])
+check("enforce interprets, books, loads facts, applies state and validates before send",
+      wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Grounding Facts?"
+      and wf["connections"]["Grounding Facts?"]["main"][0][0]["node"] == "Build Enforce Preflight"
+      and wf["connections"]["Build Enforce Preflight"]["main"][0][0]["node"] == "Enforce Preflight"
+      and wf["connections"]["Parse Enforce Preflight"]["main"][0][0]["node"] == "Book Enforce Slot"
+      and wf["connections"]["Book Enforce Slot"]["main"][0][0]["node"] == "Load Enforce Facts"
+      and wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Enforce Agent Path?"
+      and wf["connections"]["Enforce Agent Path?"]["main"][0][0]["node"] == "Build Enforce Claims"
+      and wf["connections"]["Enforce Agent Path?"]["main"][1][0]["node"] == "Load Booking"
+      and wf["connections"]["Build Enforce Claims"]["main"][0][0]["node"] == "Extract Enforce Claims"
+      and wf["connections"]["Validate Enforce Reply"]["main"][0][0]["node"] == "Repair Needed?"
+      and wf["connections"]["Repair Needed?"]["main"][0][0]["node"] == "Build Repair"
+      and wf["connections"]["Repair Needed?"]["main"][1][0]["node"] == "Resolve Final Reply"
+      and wf["connections"]["Validate Repaired Reply"]["main"][0][0]["node"] == "Resolve Final Reply"
+      and wf["connections"]["Resolve Final Reply"]["main"][0][0]["node"] == "Apply Grounded Turn"
+      and wf["connections"]["Apply Grounded Turn"]["main"][0][0]["node"] == "Duplicate?"
+      and wf["connections"]["Duplicate?"]["main"][1][0]["node"] == "Store Enforce Slots"
+      and wf["connections"]["Store Enforce Slots"]["main"][0][0]["node"] == "Sync Grounded Memory"
+      and wf["connections"]["Sync Grounded Memory"]["main"][0][0]["node"] == "Log Enforce Turn"
+      and wf["connections"]["Log Enforce Turn"]["main"][0][0]["node"] == "Build Humanize Delay")
+check("enforce prompt carries the facts block",
+      "FATOS DESTE TURNO" in nodes["Build System Prompt"]["parameters"]["jsCode"])
+check("the agent has no data tools at all",
+      not any("ai_tool" in conn for conn in wf["connections"].values())
+      and "Write Quote" not in nodes
+      and "Request Deposit" not in nodes)
+check("the apply step is idempotent",
+      "apply_grounded_turn_once(" in nodes["Apply Grounded Turn"]["parameters"]["query"])
+check("preflight and claims prompts are present and structured",
+      "\"intent\"" in PREFLIGHT_PROMPT and "is_reschedule" in PREFLIGHT_PROMPT
+      and "\"claims\"" in CLAIMS_PROMPT and "slot_offer" in CLAIMS_PROMPT)
+
+check("unknown sessions are logged instead of silently dropped",
+      wf["connections"]["Missing Session Log"]["main"][0][0]["node"] == "Log Unknown Session")
 check("blocked numbers are loaded and compared as digits",
       "blocked_numbers" in nodes["Resolve Artist"]["parameters"]["query"]
       and "blocked_numbers" in nodes["Blocked Number?"]["parameters"]["conditions"]["conditions"][0]["leftValue"]
@@ -210,6 +256,7 @@ check("Debounce Resolve → Debounce Decision (process → Clear Buffer, wait �
 check("Patch Chat State → humanize → Split Reply → Send WAHA → Aggregate → Stop Typing → handoff",
       wf["connections"]["Ensure Quote"]["main"][0][0]["node"] == "Patch Chat State"
       and wf["connections"]["Patch Chat State"]["main"][0][0]["node"] == "Build Humanize Delay"
+      and wf["connections"]["Log Enforce Turn"]["main"][0][0]["node"] == "Build Humanize Delay"
       and wf["connections"]["Build Humanize Delay"]["main"][0][0]["node"] == "Send Typing"
       and wf["connections"]["Send Typing"]["main"][0][0]["node"] == "Humanize Delay"
       and wf["connections"]["Humanize Delay"]["main"][0][0]["node"] == "Split Reply"
@@ -231,7 +278,9 @@ check("Clear Buffer → Check Chat Owner → Start Turn → Contact Gate → Age
       and wf["connections"]["Build References"]["main"][0][0]["node"] == "Save References"
       and wf["connections"]["Save References"]["main"][0][0]["node"] == "Load Offer"
       and wf["connections"]["Load Offer"]["main"][0][0]["node"] == "Load Pricing"
-      and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Build System Prompt"
+      and wf["connections"]["Load Pricing"]["main"][0][0]["node"] == "Grounding Facts?"
+      and wf["connections"]["Grounding Facts?"]["main"][1][0]["node"] == "Build System Prompt"
+      and wf["connections"]["Load Enforce Facts"]["main"][0][0]["node"] == "Build System Prompt"
       and wf["connections"]["Build System Prompt"]["main"][0][0]["node"] == "Analyze Audio?")
 check("audio turns are transcribed, text turns bypass audio and both reach Analyze Reference?",
       [c["node"] for c in wf["connections"]["Analyze Audio?"]["main"][0]] == ["Fetch Audio"]
@@ -286,8 +335,9 @@ check("agent context exposes referencia_visual from start_turn",
       "referencia_visual=" in AGENT_TEXT_JS
       and "reference_analysis" in AGENT_TEXT_JS
       and "referencia_visual" in template)
-check("AI Agent → Load Booking → Build Classification Prompt → Classify → Critique → Parse",
-      wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Load Booking"
+check("legacy path: Enforce Agent Path? false → Load Booking → Build Classification Prompt → Classify → Critique → Parse",
+      wf["connections"]["AI Agent"]["main"][0][0]["node"] == "Enforce Agent Path?"
+      and wf["connections"]["Enforce Agent Path?"]["main"][1][0]["node"] == "Load Booking"
       and wf["connections"]["Load Booking"]["main"][0][0]["node"] == "Build Classification Prompt"
       and wf["connections"]["Build Classification Prompt"]["main"][0][0]["node"] == "Classify Conversation"
       and wf["connections"]["Classify Conversation"]["main"][0][0]["node"] == "Build Price Critique"
@@ -338,38 +388,35 @@ check("first reply asks the name and acknowledges the lead's request",
 
 # ── 3d. Date offers: exactly two options, labels, preferred day fallback ──
 print("=== Date offer ===")
-check("Check Availability uses the two-option RPC",
-      "booking_options(" in nodes["Check Availability"]["parameters"]["query"]
-      and "label" in nodes["Check Availability"]["parameters"]["query"])
-check("Check Availability reads the lead's own message for the day",
-      "combined_text" in nodes["Check Availability"]["parameters"]["query"]
-      or "combined_text" in str(nodes["Check Availability"]["parameters"].get("options", {}).get("queryReplacement", "")))
-check("Check Availability accepts a time window",
-      "preferred_time" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"]
-      and "$5" in nodes["Check Availability"]["parameters"]["query"])
-check("Check Availability is gated by qualification",
-      "project_booking_ready(" in nodes["Check Availability"]["parameters"]["query"])
+check("preflight extracts the requested day, window and chosen slot",
+      "requested_day" in PREFLIGHT_PROMPT
+      and "requested_window" in PREFLIGHT_PROMPT
+      and "selected_slot_start" in PREFLIGHT_PROMPT
+      and "opcoes_oferecidas" in PREFLIGHT_PROMPT)
+check("facts block lists only the real slots",
+      "Horários disponíveis" in nodes["Build System Prompt"]["parameters"]["jsCode"]
+      and "SOMENTE estes" in nodes["Build System Prompt"]["parameters"]["jsCode"])
+check("backend books the chosen slot, not the model",
+      "book_slot(" in nodes["Book Enforce Slot"]["parameters"]["query"]
+      and "reschedule_booking(" in nodes["Book Enforce Slot"]["parameters"]["query"]
+      and "selected_slot_start" in nodes["Book Enforce Slot"]["parameters"]["options"]["queryReplacement"])
+check("offered slots are stored for the next turn",
+      "patch_chat_state(" in nodes["Store Enforce Slots"]["parameters"]["query"]
+      and "offered_slots" in nodes["Store Enforce Slots"]["parameters"]["options"]["queryReplacement"])
 check("prompt injects the studio city and address",
       "{{CIDADE}}" in template and "{{ENDERECO}}" in template)
 check("prompt allows at most one question per message",
       "No máximo UMA pergunta por mensagem" in template)
-check("Check Availability accepts an explicit preferred_day (audio transcript)",
-      "preferred_day" in nodes["Check Availability"]["parameters"]["options"]["queryReplacement"])
-check("agent tools parameterise every value (no SQL injection via $fromAI)",
-      all(
-          "$fromAI" not in nodes[name]["parameters"]["query"]
-          and "queryReplacement" in nodes[name]["parameters"].get("options", {})
-          for name in ["Write Quote", "Request Deposit", "Check Availability", "Book Slot"]
-      ))
+check("the agent exposes no SQL tools to the model",
+      not any("ai_tool" in conn for conn in wf["connections"].values()))
 check("prompt only offers two options",
       "REGRA DAS DUAS OPÇÕES" in template
       and "no máximo 2 opções" in template)
 check("prompt asks for a day only after the two options are refused",
-      "SE O LEAD RECUSAR AS DUAS OPÇÕES" in template
+      "Se o lead recusar as duas opções" in template
       and "Qual dia funciona melhor" in template)
-check("prompt lets the tool resolve the day from the lead's message",
-      "A ferramenta lê a mensagem do lead" in template
-      and "não precisa calcular" in template)
+check("prompt uses the facts for the requested day",
+      "Na próxima mensagem o sistema carrega os horários desse dia" in template)
 check("data_hoje uses the artist timezone",
       "toLocaleDateString('en-CA'" in AGENT_TEXT_JS
       and "timeZone" in AGENT_TEXT_JS)
@@ -497,7 +544,7 @@ check("prompt blocks the deposit when the PIX key is missing",
       "(informe a chave PIX)" in template and "NÃO peça sinal" in template)
 check("prompt has a hard deposit gate after booking",
       "GATE DO SINAL" in template
-      and "depois que o lead escolheu um horário E o Book Slot confirmou" in template
+      and "depois que o lead escolheu um horário E os FATOS mostrarem a reserva confirmada" in template
       and "NUNCA peça sinal na mesma mensagem" in template)
 check("output gate replaces a premature sinal with a date prompt",
       "hasActiveBooking" in parse_js

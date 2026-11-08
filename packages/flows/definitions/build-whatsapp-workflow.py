@@ -4,7 +4,7 @@
 Core:
   Resolve Artist → Debounce (buffer + wait for burst) → Start Turn
     → Load Offer → Load Pricing → Build System Prompt
-    → AI Agent (GPT-4o-mini + Postgres Chat Memory + tools)
+    → AI Agent (Claude Haiku 5.5 + Postgres Chat Memory + tools)
     → Build Classification Prompt → Classify (OpenRouter) → Parse Classification
     → Build Project Patch → Patch Project → Ensure Quote / Write Promotion Quote
     → Patch Chat State → reply → Build Handoff Message → Send Notification?
@@ -38,6 +38,12 @@ WhatsApp-only behaviours (no Telegram equivalent):
     reply so the agent does not answer instantly.
   - Price gate: the creative-process explanation and the lead's explicit
     "no more doubts" are persisted/guarded so a quote can't be sent early.
+  - Availability truth: `booking_options_v2` returns `ready` / `not_ready` /
+    `no_slots` / `error`; an incomplete project can never be reported as full.
+  - Reschedule: `start_turn` exposes the phone-level booking, and the
+    `Reschedule Slot` tool moves it instead of creating a second one.
+  - Paused artist: a suspended artist is still resolved; the inbound is
+    written to `agent_ingest_drops` and stops there instead of disappearing.
 """
 import json, os
 
@@ -46,6 +52,9 @@ FLOWS_ROOT = os.path.dirname(BASE)  # packages/flows/
 
 SYSTEM_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/beatriz-system.md")).read()
 CLASSIFY_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/classify-conversation.md")).read()
+PREFLIGHT_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/preflight-classify.md")).read()
+CLAIMS_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/extract-claims.md")).read()
+REPAIR_PROMPT_TEMPLATE = open(os.path.join(FLOWS_ROOT, "prompts/repair-reply.md")).read()
 
 # ── Credentials (n8n instance) ──
 POSTGRES = {"postgres": {"id": "Fw3dgkcXV7Bblry5", "name": "agent-db"}}
@@ -86,12 +95,14 @@ SELECT (r->'artist'->>'id')::uuid                                        AS id,
        r->'settings'->>'address'                                         AS address,
        r->'settings'->>'city'                                            AS city,
        COALESCE(r->'settings'->'blocked_numbers', '[]'::jsonb)           AS blocked_numbers,
+       COALESCE(r->'settings'->>'grounding_mode', 'off')                 AS grounding_mode,
        true                                                              AS found
 FROM found
 UNION ALL
 SELECT NULL::uuid, $1::text, NULL::text, NULL::text, NULL::text,
        '{}'::jsonb, '[]'::jsonb, '[]'::jsonb, true, NULL::numeric, 'percent',
        NULL::integer, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, NULL::text, '[]'::jsonb,
+       'off'::text,
        false
 WHERE NOT EXISTS (SELECT 1 FROM found)
 LIMIT 1;"""
@@ -100,7 +111,7 @@ LIMIT 1;"""
 #    own data (name, PIX, Instagram, sinal, piso, price table). ──
 BUILD_SYSTEM_PROMPT_JS = (
     "const artist = $('Resolve Artist').first().json;\n"
-    "const pricing = $input.all().map(i => i.json).filter(r => r && r.placement);\n"
+    "const pricing = $('Load Pricing').all().map(i => i.json).filter(r => r && r.placement);\n"
     "\n"
     "const formatBRL = (cents) => (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });\n"
     "\n"
@@ -169,6 +180,58 @@ BUILD_SYSTEM_PROMPT_JS = (
     "  prompt = prompt.split(k).join(v);\n"
     "}\n"
     "\n"
+    "// Grounded price facts: only injected when the artist is in enforce mode.\n"
+    "let groundedFacts = null;\n"
+    "try { groundedFacts = $('Load Enforce Facts').first().json.facts; } catch (e) { groundedFacts = null; }\n"
+    "if (groundedFacts && groundedFacts.pricing) {\n"
+    "  const gp = groundedFacts.pricing || {};\n"
+    "  const gc = groundedFacts.conditions || {};\n"
+    "  const gb = groundedFacts.booking || {};\n"
+    "  const gfmt = (cents) => (Number(cents || 0) / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });\n"
+    "  const g = ['', '## FATOS DESTE TURNO (fonte: CRM)'];\n"
+    "  if (gp.status === 'ready') {\n"
+    "    g.push('- Preço de tabela: ' + gfmt(gp.base_cents) + ' à vista. Este é o ÚNICO preço que você pode afirmar neste turno.');\n"
+    "  } else {\n"
+    "    g.push('- Preço: não disponível para este local/tamanho. NÃO informe valor; pergunte o que falta ou faça handoff.');\n"
+    "  }\n"
+    "  if (gp.deposit_cents) g.push('- Sinal: ' + gfmt(gp.deposit_cents) + '.');\n"
+    "  g.push('- PIX: ' + (gc.pix_available ? 'disponível' : 'não configurado') + '.');\n"
+    "  if (gc.reschedule_hours != null) g.push('- Remarcação: até ' + gc.reschedule_hours + ' horas antes.');\n"
+    "  else g.push('- Remarcação: política não configurada. NÃO afirme prazo; diga que vai confirmar com o artista.');\n"
+    "  if (gc.cancellation_hours != null) g.push('- Cancelamento: até ' + gc.cancellation_hours + ' horas antes.');\n"
+    "  const gm = Array.isArray(gc.payment_methods) ? gc.payment_methods : [];\n"
+    "  if (gm.length > 0) g.push('- Pagamento: ' + gm.join(', ') + (gc.pix_available ? ' e PIX' : '') + '.');\n"
+    "  else if (gc.pix_available) g.push('- Pagamento: PIX.');\n"
+    "  g.push('- Segurar horário: ' + (gc.allow_hold_slot ? 'permitido' : 'NÃO permitido sem sinal'));\n"
+    "  g.push('- Garantir preço: ' + (gc.guarantee_price ? 'permitido conforme o orçamento' : 'NÃO permitido'));\n"
+    "  const gport = groundedFacts.portfolio || {};\n"
+    "  if (gport.url) {\n"
+    "    g.push('- Portfólio: ' + gport.url + ' (envie este link quando pedirem fotos; não invente outro).');\n"
+    "  } else {\n"
+    "    g.push('- Portfólio: link não configurado. Diga que vai pedir ao artista; NÃO prometa fotos.');\n"
+    "  }\n"
+    "  const gcl = groundedFacts.client || {};\n"
+    "  if (gcl.returning) {\n"
+    "    g.push('- Cliente: já tem histórico com o estúdio' + (gcl.last_booking_at ? ' (último atendimento: ' + String(gcl.last_booking_at).slice(0, 10) + ')' : '') + '. Não trate como lead novo.');\n"
+    "  }\n"
+    "  const gIntent = (groundedFacts.turn || {}).intent || 'other';\n"
+    "  const gWantsSlots = ['ask_availability', 'choose_slot', 'close', 'reschedule'].includes(gIntent);\n"
+    "  const ga = groundedFacts.availability || {};\n"
+    "  if (gWantsSlots && ga.status === 'ready' && Array.isArray(ga.slots) && ga.slots.length > 0) {\n"
+    "    g.push('- Horários disponíveis (ofereça SOMENTE estes, no máximo 2): ' + ga.slots.map(s => s.id + ' ' + s.label).join(' | ') + '.');\n"
+    "  } else if (gWantsSlots && ga.status === 'no_slots') {\n"
+    "    g.push('- Horários: nenhum para o período pedido. Diga que esse dia está cheio e pergunte outro dia.');\n"
+    "  } else if (gWantsSlots) {\n"
+    "    g.push('- Horários: ainda não é possível oferecer. Falta: ' + (ga.missing || 'qualificação') + '. NÃO diga que a agenda está cheia; pergunte o que falta.');\n"
+    "  }\n"
+    "  if (gb.created_this_turn && gb.start_at) {\n"
+    "    g.push('- O horário ' + gb.start_at + ' foi reservado agora. Confirme para o lead.');\n"
+    "  }\n"
+    "  if (gb.active && gb.start_at) g.push('- Agendamento atual: ' + gb.start_at + '.');\n"
+    "  g.push('REGRA: não invente preço, desconto, parcela, condição ou prazo. Se o dado não estiver nos FATOS, não afirme.');\n"
+    "  prompt += '\\n' + g.join('\\n');\n"
+    "}\n"
+    "\n"
     "return [{ json: { system_message: prompt, pricing_rows: pricing.map(p => ({ placement: p.placement, body_zone: p.body_zone, table_price: Number(p.base_price_cents) })), offer: { promo_active: promoActive, name: offer.name || null, description: offer.description || null, multiplier: Number(offer.multiplier) || 0, open_quote: openQuote, open_quote_first_price: Number(offer.open_quote_offered_cents) || null } } }];"
 )
 
@@ -191,6 +254,9 @@ AGENT_TEXT_EXPR = (
     "+ ' preco_liberado=' + ((($('Start Turn').first().json.agent_state || {}).preco_liberado) ? 'sim' : 'nao') "
     "+ ' duvidas_eliminadas=' + ((($('Start Turn').first().json.agent_state || {}).duvidas_eliminadas) ? 'sim' : 'nao') "
     "+ ' aguardando_confirmacao_duvidas=' + ((($('Start Turn').first().json.agent_state || {}).aguardando_confirmacao_duvidas) ? 'sim' : 'nao') "
+    "+ ' remarcacao=' + (function(){ var t = String(($('Debounce Resolve').first().json.combined_text || '')).toLowerCase(); return /remarc|remarca|desmarc|mudar (?:o )?(?:dia|horario|horário)|trocar (?:o )?(?:dia|horario|horário)|nao vou (?:conseguir )?(?:ir|comparecer)|não vou (?:conseguir )?(?:ir|comparecer)/.test(t) ? 'sim' : 'nao'; })() "
+    "+ ' agendamento_atual=' + ($('Start Turn').first().json.active_booking_start || '?') "
+    "+ ' agendamento_atual_id=' + ($('Start Turn').first().json.active_booking_id || '?') "
     "+ ' primeira_mensagem=' + (($('Start Turn').first().json.is_new || $('Debounce Start').first().json.replay) ? 'sim' : 'nao') "
     "+ ' preco_tabela=' + ($('Start Turn').first().json.table_price_cents || '?') "
     "+ ' preco_negociado=' + ($('Start Turn').first().json.quoted_price_cents || '?') "
@@ -561,7 +627,10 @@ PRESENCE_UPSERT_QUERY = (
 # ── Humanize: scale the pause before replying to the reply length, clamped so
 #    it never feels instant nor sluggish. Deterministic (no Math.random) so the
 #    behaviour is reproducible and testable. ──
-HUMANIZE_DELAY_JS = """const out = ($('Parse Classification').first().json.final_reply || $('AI Agent').first().json.output || '').toString();
+HUMANIZE_DELAY_JS = """const validated = (function () {
+  try { return $('Resolve Final Reply').first().json.final_reply || ''; } catch (e) { return ''; }
+})();
+const out = (validated || $('Parse Classification').first().json.final_reply || $('AI Agent').first().json.output || '').toString();
 const words = out.trim().split(/\\s+/).filter(Boolean).length;
 
 let secs = 0.8 + words / 3.2;              // ~3.2 palavras por segundo
@@ -572,7 +641,10 @@ return [{ json: { delay_seconds: Math.round(secs * 10) / 10 } }];"""
 
 # ── Split the reply into WhatsApp-sized paragraphs. Long messages get cut
 #    off (and are hard to read); each paragraph becomes its own sendText call.
-SPLIT_REPLY_JS = r"""const raw = ($('Parse Classification').first().json.final_reply || '').toString().trim();
+SPLIT_REPLY_JS = r"""const validated = (function () {
+  try { return $('Resolve Final Reply').first().json.final_reply || ''; } catch (e) { return ''; }
+})();
+const raw = (validated || $('Parse Classification').first().json.final_reply || '').toString().trim();
 const paragraphs = raw.split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
 const chunks = [];
 
@@ -795,6 +867,11 @@ const triageOnly = artist.full_selling === false || artist.full_selling === 'fal
 let audioTranscript = null;
 try { audioTranscript = $('Parse Audio').first().json.transcript || null; } catch (e) {}
 const rawLead = (audioTranscript || $('Debounce Resolve').first().json.combined_text || '').toLowerCase();
+// A reschedule is a different job: never re-qualify an existing client. The
+// phone-level booking from `start_turn` proves the lead already has a slot.
+const rescheduleIntent = /remarc|remarca|desmarc|mudar\s+(?:o\s+)?(?:dia|hor[aá]rio)|trocar\s+(?:o\s+)?(?:dia|hor[aá]rio)|n[aã]o\s+vou\s+(?:conseguir\s+)?(?:ir|comparecer)/.test(rawLead)
+  || parsed.reschedule === true;
+const rescheduleMode = !!(rescheduleIntent && lead.active_booking_id);
 // The schema stores English enum values; the prompt/classifier vocabulary is PT.
 const TIPO_DB = { nova: 'new', cobertura: 'cover_up', reforma: 'rework' };
 const TIPO_PT = ['nova', 'cobertura', 'reforma'];
@@ -1493,7 +1570,7 @@ if (isCoverOrRework && processoExplicado && current !== 'aguardando_artista' && 
 // explanation, then answer the lead's questions without repeating it. A loop
 // here used to trap leads who had already said "não tenho dúvidas".
 const shouldAskDoubts = !triageOnly && !duvidasEliminadas && !precoLiberadoJa && !goingToArtist && !isCoverOrRework
-  && processoExplicado && !checkpointWasPending && qualificationReady;
+  && processoExplicado && !checkpointWasPending && qualificationReady && !rescheduleMode;
 if (shouldAskDoubts && !priceGateViolation && !hasPrice && finalReply.trim()) {
   let trimmed = finalReply.trim();
 
@@ -2017,7 +2094,103 @@ if (isAudio) {
   }
 }
 
-const pendingNext = detectPendingQuestion(audioFinalReply, isCoverOrRework);
+// ── Availability truth guard ──
+// An unqualified project can make `Check Availability` return zero rows. The
+// model used to read that as "a agenda está cheia". Never allow that claim
+// while placement/zone are missing.
+const availabilityClaim = /(n[ãa]o\s+(?:h[áa]|temos|tem)\s+(?:disponibilidade|hor[áa]rio|vaga)|sem\s+(?:disponibilidade|hor[áa]rio|vaga)|agenda\s+(?:cheia|lotada)|infelizmente[^.!?]{0,60}(?:disponibilidade|cheio|lotado))/i;
+if (availabilityClaim.test(audioFinalReply) && (!placementNow || !bodyZoneNow)) {
+  audioFinalReply = discoveryFallback({
+    ...lead,
+    tattoo_type: TIPO_DB[tipoDeterministic] || lead.tattoo_type,
+  });
+  audioPipeline = current;
+  audioEvent = null;
+  audioHandoff = null;
+}
+
+// ── Reschedule guard ──
+// Keep the existing slot, skip discovery, and never hand off a reschedule.
+if (rescheduleMode) {
+  const bookingLabel = (function () {
+    try {
+      const tz = ($('Resolve Artist').first().json || {}).timezone || 'America/Sao_Paulo';
+      const d = new Date(lead.active_booking_start);
+      if (isNaN(d.getTime())) return 'o horário combinado';
+      return d.toLocaleDateString('pt-BR', { timeZone: tz, day: '2-digit', month: '2-digit' })
+        + ' às ' + d.toLocaleTimeString('pt-BR', { timeZone: tz, hour: '2-digit', minute: '2-digit' });
+    } catch (e) { return 'o horário combinado'; }
+  })();
+
+  const reasksQualification = /(primeira tatuagem|onde no corpo|qual (?:o )?estilo|significado|voc[êe] j[áa] tem|quantas tatuagens)/i;
+  if (reasksQualification.test(audioFinalReply)) {
+    audioFinalReply = 'Claro! Seu horário atual é ' + bookingLabel + '. Qual dia funciona melhor para você?';
+  }
+
+  audioFinalReply = audioFinalReply
+    .replace(/\s*(?:antes de falarmos de valores,?\s*)?(?:mais|ficou) alguma d[uú]vida\?\s*$/i, '')
+    .trim();
+  if (!audioFinalReply) {
+    audioFinalReply = 'Claro! Seu horário atual é ' + bookingLabel + '. Qual dia funciona melhor para você?';
+  }
+
+  audioPipeline = current;
+  audioEvent = null;
+  audioHandoff = null;
+}
+
+let pendingNext = detectPendingQuestion(audioFinalReply, isCoverOrRework);
+
+// ── Existing client in aftercare ──
+// The agent only knows how to sell a new tattoo. A client talking about
+// ointment, healing or the aftercare video is the artist's, not the SDR's.
+if (parsed.aftercare === true && !isCoverOrRework && !rescheduleMode && !goingToArtist) {
+  const careName = $('Resolve Artist').first().json.name || 'artista';
+  audioFinalReply = 'Que bom que você já é cliente! Vou passar para o ' + careName
+    + ' te ajudar com os cuidados, combinado?';
+  audioPipeline = 'aguardando_artista';
+  audioEvent = 'handoff_triggered';
+  audioHandoff = 'client_service';
+  pendingNext = null;
+}
+
+// ── Stuck-loop guard ──
+// The same pending question asked twice with no state change is a loop, not a
+// conversation. The second repeat hands the lead to the artist. A qualified
+// lead that still has no price after three turns is also handed off: silence is
+// worse than asking for help.
+const repeatKey = pendingNext;
+const repeatedQuestion = !!repeatKey
+  && repeatKey === state.pending_question
+  && !['nome', 'confirmar_foto', 'duvidas'].includes(repeatKey);
+const repeatCount = repeatedQuestion ? Number(state.repeat_count || 0) + 1 : 0;
+
+const qualifiedTurns = (qualificationReady && !precoLiberadoJa && !hasPrice
+  && !isCoverOrRework && !triageOnly && !rescheduleMode)
+  ? Number(state.qualified_turns || 0) + 1
+  : 0;
+
+const alreadyHandingOff = audioEvent === 'handoff_triggered' || audioPipeline === 'aguardando_artista';
+const canAskForHelp = !goingToArtist && !alreadyHandingOff && !rescheduleMode
+  && !isCoverOrRework && !triageOnly;
+
+if (canAskForHelp && repeatCount >= 2) {
+  const helpName = $('Resolve Artist').first().json.name || 'artista';
+  audioFinalReply = 'Vou passar seu atendimento para o ' + helpName
+    + ' para ele te ajudar com a referência, combinado?';
+  audioPipeline = 'aguardando_artista';
+  audioEvent = 'handoff_triggered';
+  audioHandoff = 'ambiguous_reference';
+  pendingNext = null;
+} else if (canAskForHelp && qualifiedTurns >= 3 && !shouldAskDoubts && !quoteActuallySent) {
+  const helpName = $('Resolve Artist').first().json.name || 'artista';
+  audioFinalReply = 'Vou passar seu atendimento para o ' + helpName
+    + ' para ele te ajudar com o valor e o horário, combinado?';
+  audioPipeline = 'aguardando_artista';
+  audioEvent = 'handoff_triggered';
+  audioHandoff = 'gate_stuck';
+  pendingNext = null;
+}
 
 // Quote state to persist: the deterministic quote (when the model did not
 // produce one) becomes a real `quotes` row via the Ensure Quote node.
@@ -2106,6 +2279,8 @@ return [{ json: {
     last_agent_message: String(audioFinalReply || '').slice(-600),
     last_lead_message: String(audioTranscript || rawCombined || '').slice(-400),
     pending_question: pendingNext,
+    repeat_count: repeatCount,
+    qualified_turns: qualifiedTurns,
     cover_photo: isCoverOrRework ? coverPhotoNow : undefined,
     new_reference: isCoverOrRework ? newReferenceNow : undefined,
     new_ref_asked: isCoverOrRework ? (newRefAsked || pendingNext === 'foto_nova') : undefined,
@@ -2145,15 +2320,21 @@ return [{ json: {
 #    → fechado/perdido, deposit → confirmado/perdido). Same output shape as
 #    the Telegram testbed; artist first-name variants keep the handoff
 #    fallback working in multi-tenant mode. ──
-BUILD_HANDOFF_MESSAGE_JS = r"""const parseData = $('Parse Classification').first().json;
-const updateData = $('Patch Project').first().json;
+BUILD_HANDOFF_MESSAGE_JS = r"""let parseData = {};
+let updateData = {};
+let grounded = {};
+try { parseData = $('Parse Classification').first().json || {}; } catch (e) {}
+try { updateData = $('Patch Project').first().json || {}; } catch (e) {}
+try { grounded = $('Apply Grounded Turn').first().json.result || {}; } catch (e) {}
+
 const leadData = $('Start Turn').first().json;
 const artistData = $('Resolve Artist').first().json;
-const agentOutput = (($('Parse Classification').first().json.final_reply) || ($('AI Agent').first().json.output) || '').toLowerCase();
+const agentOutput = ((parseData.final_reply) || ($('AI Agent').first().json.output) || '').toLowerCase();
 
-const event = (parseData && parseData.event_type) || null;
+const event = parseData.event_type || grounded.event_type || null;
 const status = (updateData && updateData.stage_key)
-  || (parseData && parseData.stage_key)
+  || parseData.stage_key
+  || grounded.stage_key
   || '';
 
 // Per-artist ops Telegram group (handoff/deposit confirm buttons). Required —
@@ -2211,7 +2392,7 @@ if (!opsChatId) {
 
 // ── Handoff ──
 if (event === 'handoff_triggered' || saidHandoff) {
-  const projectId = (parseData && parseData.project_id) || '';
+  const projectId = parseData.project_id || leadData.project_id || '';
   const reasonMap = {
     cover_up: 'Cover-up',
     reforma: 'Reforma de tatuagem',
@@ -2221,11 +2402,15 @@ if (event === 'handoff_triggered' || saidHandoff) {
     audio_2x: 'Áudio/sticker repetido',
     pix_missing: 'PIX não configurado',
     no_price_row: 'Sem preço para o local',
+    gate_stuck: 'Preço não liberado após a qualificação',
+    ambiguous_reference: 'Referência ambígua após repetição',
+    client_service: 'Cliente antigo / pós-tatuagem',
     no_availability: 'Sem horário disponível no calendário',
     triage_only: 'Triagem concluída (venda completa desativada)',
     promotion_second: 'Segunda tattoo de promoção 2 por 1 fechada por outra pessoa',
   };
-  const reason = reasonMap[parseData.handoff_reason] || parseData.handoff_reason || 'não especificado';
+  const reason = reasonMap[parseData.handoff_reason || grounded.handoff_reason]
+    || parseData.handoff_reason || grounded.handoff_reason || 'não especificado';
 
   const msg = [
     '<b>\u{1F514} Handoff: Lead precisa de atenção</b>',
@@ -2248,9 +2433,10 @@ if (event === 'handoff_triggered' || saidHandoff) {
 
 // ── Deposit requested ──
 if (event === 'deposit_requested' || saidDeposit) {
-  const projectId = parseData.project_id || '';
-  const amount = parseData.deposit_amount_cents
-    ? 'R$ ' + (parseData.deposit_amount_cents / 100).toFixed(2).replace('.', ',')
+  const projectId = parseData.project_id || leadData.project_id || '';
+  const depositCents = parseData.deposit_amount_cents || grounded.deposit_cents || null;
+  const amount = depositCents
+    ? 'R$ ' + (depositCents / 100).toFixed(2).replace('.', ',')
     : 'valor pendente';
   const dm = [
     '<b>\u{1F4B0} Sinal solicitado</b>',
@@ -2275,6 +2461,702 @@ if (event === 'deposit_requested' || saidDeposit) {
 
 // ── No match — no notification ──
 return [{ json: { send: false } }];"""
+
+
+
+# =============================================================================
+# Grounded turns — Pass 0 (shadow)
+#
+# These nodes run after the AI Agent on a side branch. They interpret the lead,
+# load authoritative facts, extract claims from the legacy reply and validate
+# them. Nothing here changes the reply: rows are written to `agent_turn_log`.
+# =============================================================================
+PREFLIGHT_SYSTEM_JSON = json.dumps(PREFLIGHT_PROMPT_TEMPLATE)
+CLAIMS_SYSTEM_JSON = json.dumps(CLAIMS_PROMPT_TEMPLATE)
+
+SHADOW_FACTS_QUERY = (
+    "SELECT build_turn_facts($1::uuid, $2::uuid, $3::text, $4::text, $5::jsonb) AS facts;"
+)
+
+LOG_SHADOW_TURN_QUERY = (
+    "SELECT log_agent_turn("
+    "$1::uuid, $2::uuid, $3::uuid, $4::uuid, $5::text, $6::text, $7::text, "
+    "$8::numeric, $9::jsonb, $10::text, $11::jsonb, $12::jsonb, $13::text, "
+    "$14::text, $15::integer, $16::boolean, $17::jsonb);"
+)
+
+BUILD_SHADOW_PREFLIGHT_JS = r"""const st = $('Start Turn').first().json || {};
+const artist = $('Resolve Artist').first().json || {};
+let lead = ($('Debounce Resolve').first().json.combined_text || '').trim();
+try {
+  const transcript = $('Parse Audio').first().json.transcript;
+  if (transcript) lead = String(transcript).trim();
+} catch (e) {}
+const state = st.agent_state || {};
+const timezone = artist.timezone || 'America/Sao_Paulo';
+const today = new Date().toLocaleDateString('en-CA', { timeZone: timezone });
+const offered = Array.isArray(state.offered_slots) ? state.offered_slots : [];
+
+const context = [
+  'data_hoje=' + today,
+  'pipeline=' + (st.stage_key || '?'),
+  'tipo=' + (st.tattoo_type || '?'),
+  'placement=' + (st.placement || '?'),
+  'zona=' + (st.body_zone || '?'),
+  'estilo=' + (st.style || '?'),
+  'primeira_tatuagem=' + (st.first_tattoo === true ? 'sim' : (st.first_tattoo === false ? 'nao' : '?')),
+  'significado=' + (st.meaning || '?'),
+  'agendamento_atual=' + (st.active_booking_start || '?'),
+  'pergunta_pendente=' + (state.pending_question || '?'),
+  'opcoes_oferecidas=' + JSON.stringify(offered)
+].join('\n');
+
+const turnSeed = String($('Debounce Resolve').first().json.chat_id || '') + '|' + String(lead || '') + '|' + Math.floor(Date.now() / 600000);
+const turnId = (function () {
+  function hash(str, seed) {
+    let x = seed >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      x ^= str.charCodeAt(i);
+      x = Math.imul(x, 16777619) >>> 0;
+    }
+    return x;
+  }
+  const a = hash(turnSeed, 2166136261).toString(16).padStart(8, '0');
+  const b = hash(turnSeed, 2166136262).toString(16).padStart(8, '0');
+  const c = hash(turnSeed, 2166136263).toString(16).padStart(8, '0');
+  const d = hash(turnSeed, 2166136264).toString(16).padStart(8, '0');
+  return a + '-' + b.slice(0, 4) + '-4' + c.slice(0, 3) + '-8' + d.slice(0, 3)
+    + '-' + (b.slice(4) + c.slice(3) + d.slice(3)).slice(0, 12);
+})();
+
+const body = {
+  model: 'anthropic/claude-haiku-5.5',
+  temperature: 0,
+  messages: [
+    { role: 'system', content: __PREFLIGHT_SYSTEM__ },
+    { role: 'user', content: 'CONTEXTO:\n' + context + '\n\nMENSAGEM DO LEAD:\n' + lead }
+  ]
+};
+
+return [{ json: { body, lead, context, turn_id: turnId } }];"""
+BUILD_SHADOW_PREFLIGHT_JS = BUILD_SHADOW_PREFLIGHT_JS.replace('__PREFLIGHT_SYSTEM__', PREFLIGHT_SYSTEM_JSON)
+
+PARSE_SHADOW_PREFLIGHT_JS = r"""const resp = $input.first().json || {};
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+let parsed = {};
+try { parsed = JSON.parse(cleaned); } catch (e) { parsed = {}; }
+
+const entities = (parsed.entities && typeof parsed.entities === 'object') ? parsed.entities : {};
+const flags = (parsed.flags && typeof parsed.flags === 'object') ? parsed.flags : {};
+const confidence = Number(parsed.confidence);
+
+return [{ json: {
+  intent: typeof parsed.intent === 'string' ? parsed.intent : 'other',
+  entities,
+  flags,
+  confidence: Number.isFinite(confidence) ? Math.max(0, Math.min(1, confidence)) : 0,
+} }];"""
+
+BUILD_SHADOW_CLAIMS_JS = r"""const reply = $('AI Agent').first().json.output || '';
+const facts = $('Shadow Facts').first().json.facts || {};
+const body = {
+  model: 'anthropic/claude-haiku-5.5',
+  temperature: 0,
+  messages: [
+    { role: 'system', content: __CLAIMS_SYSTEM__ },
+    { role: 'user', content: 'FATOS:\n' + JSON.stringify(facts) + '\n\nRESPOSTA DA BEATRIZ:\n' + reply }
+  ]
+};
+
+return [{ json: { body, reply, facts } }];"""
+BUILD_SHADOW_CLAIMS_JS = BUILD_SHADOW_CLAIMS_JS.replace('__CLAIMS_SYSTEM__', CLAIMS_SYSTEM_JSON)
+
+PARSE_SHADOW_CLAIMS_JS = r"""const resp = $input.first().json || {};
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{"claims":[]}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+let parsed = {};
+try { parsed = JSON.parse(cleaned); } catch (e) { parsed = {}; }
+
+const claims = Array.isArray(parsed.claims) ? parsed.claims : [];
+
+return [{ json: { claims } }];"""
+
+VALIDATE_SHADOW_REPLY_JS = r"""const facts = $('Shadow Facts').first().json.facts || {};
+const pre = $('Parse Shadow Preflight').first().json || {};
+const claims = ($input.first().json.claims || []);
+const reply = $('AI Agent').first().json.output || '';
+
+const violations = [];
+const add = (claim, rule, expected, actual) => violations.push({ claim, rule, expected, actual });
+
+const pricing = facts.pricing || {};
+const availability = facts.availability || {};
+const project = facts.project || {};
+const conditions = facts.conditions || {};
+const booking = facts.booking || {};
+const studio = facts.studio || {};
+
+const slots = Array.isArray(availability.slots) ? availability.slots : [];
+const slotIds = new Set(slots.map(s => s.id));
+const tz = studio.timezone || 'America/Sao_Paulo';
+const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const bookedStart = booking.active && booking.start_at
+  ? new Date(booking.start_at).toISOString()
+  : null;
+const slotDates = new Set(slots.map(s => {
+  const d = new Date(s.start_at);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { timeZone: tz });
+}));
+const allowedPrices = new Set(
+  [pricing.base_cents, pricing.offered_cents, pricing.promotion && pricing.promotion.price_cents]
+    .map(v => Number(v))
+    .filter(v => Number.isFinite(v) && v > 0)
+);
+
+const knownField = {
+  type: !!project.tattoo_type,
+  placement: !!project.placement,
+  body_zone: !!project.body_zone,
+  style: !!project.style,
+  first_tattoo: project.first_tattoo !== null && project.first_tattoo !== undefined,
+  meaning: !!project.meaning,
+};
+
+const isCover = project.tattoo_type === 'cover_up' || project.tattoo_type === 'rework';
+const discoveryComplete = !!(project.tattoo_type && project.placement && project.body_zone && project.style);
+
+let slotOffers = 0;
+
+for (const claim of claims) {
+  if (!claim || typeof claim !== 'object') {
+    add(claim, 'invalid_claim');
+    continue;
+  }
+
+  switch (claim.type) {
+    case 'price': {
+      const cents = Number(claim.cents);
+      if (isCover) add(claim, 'coverup_never_quotes');
+      else if (pricing.status !== 'ready') add(claim, 'price_without_row', 'ready', pricing.status);
+      else if (!discoveryComplete) add(claim, 'price_before_qualification');
+      else if (!allowedPrices.has(cents)) add(claim, 'price_not_in_facts', Array.from(allowedPrices), cents);
+      break;
+    }
+    case 'deposit': {
+      const cents = Number(claim.cents);
+      if (!Number.isFinite(Number(pricing.deposit_cents)) || cents !== Number(pricing.deposit_cents)) {
+        add(claim, 'deposit_mismatch', pricing.deposit_cents, cents);
+      }
+      if (!(booking.active === true || booking.created_this_turn === true)) {
+        add(claim, 'deposit_without_booking');
+      }
+      break;
+    }
+    case 'slot_offer': {
+      slotOffers += 1;
+      const claimedStart = claim.start_at ? new Date(claim.start_at).toISOString() : null;
+      // The slot just booked by this turn is no longer in the agenda, but the
+      // reply may legitimately mention it when confirming.
+      if (bookedStart && claimedStart === bookedStart) break;
+      if (availability.status !== 'ready') add(claim, 'availability_not_ready', 'ready', availability.status);
+      else if (!claim.slot_id || !slotIds.has(String(claim.slot_id))) {
+        add(claim, 'slot_not_offered', Array.from(slotIds), claim.slot_id || claim.start_at || null);
+      }
+      break;
+    }
+    case 'day_offer': {
+      const day = String(claim.date || '').slice(0, 10);
+      const bookedDay = bookedStart
+        ? new Date(bookedStart).toLocaleDateString('en-CA', { timeZone: tz })
+        : null;
+      if (!slotDates.has(day) && day !== bookedDay) {
+        add(claim, 'day_without_slots', Array.from(slotDates), day);
+      }
+      break;
+    }
+    case 'no_availability':
+      if (availability.status !== 'no_slots') add(claim, 'availability_exists', 'no_slots', availability.status);
+      break;
+    case 'booking_confirmed':
+      if (booking.created_this_turn !== true) add(claim, 'booking_not_created');
+      break;
+    case 'handoff':
+      if (!(pre.flags && (pre.flags.needs_human || pre.flags.wants_artist))
+          && !['aftercare', 'coverup'].includes(pre.intent)
+          && pricing.status !== 'no_price_row') {
+        add(claim, 'handoff_not_needed', 'needs_human', pre.intent);
+      }
+      break;
+    case 'condition': {
+      const key = String(claim.key || '');
+      const value = String(claim.value || '');
+      if (key === 'deposit') {
+        const digits = Number(value.replace(/[^0-9]/g, ''));
+        const matchesPercent = Number.isFinite(digits) && digits === Number(conditions.deposit_value);
+        const matchesCents = Number.isFinite(digits) && digits === Number(pricing.deposit_cents);
+        const mentionsPix = norm(value).includes('pix');
+        if (!(matchesPercent || matchesCents || (mentionsPix && conditions.pix_available === true))) {
+          add(claim, 'deposit_condition_mismatch', conditions.deposit_value, value);
+        }
+      } else if (key === 'payment') {
+        if (norm(value).includes('pix') && conditions.pix_available === true) break;
+        add(claim, 'condition_not_in_facts', 'pix', value);
+      } else {
+        add(claim, 'condition_not_in_facts', key, value);
+      }
+      break;
+    }
+    case 'promise': {
+      const allowed = Array.isArray(conditions.allowed_promises) ? conditions.allowed_promises : [];
+      if (!allowed.includes(String(claim.key || ''))) add(claim, 'promise_not_allowed', allowed, claim.key);
+      break;
+    }
+    case 'location': {
+      if (!studio.city || !norm(claim.city).includes(norm(studio.city))) {
+        add(claim, 'location_mismatch', studio.city, claim.city);
+      }
+      break;
+    }
+    case 'question': {
+      const field = String(claim.field || '');
+      if (field !== 'name' && field !== 'photo' && field !== 'doubts' && field !== 'other' && knownField[field]) {
+        add(claim, 'question_known_field', field, true);
+      }
+      break;
+    }
+    default:
+      add(claim, 'unknown_claim_type', null, claim.type);
+  }
+}
+
+if (slotOffers > 2) add({ type: 'slot_offer' }, 'too_many_slots', 2, slotOffers);
+
+return [{ json: {
+  ok: violations.length === 0,
+  violations,
+  resolution: 'shadow',
+  reply_length: String(reply).length,
+} }];"""
+
+
+# =============================================================================
+# Grounded turns — Pass 1 (price enforcement)
+#
+# In enforce mode the model may phrase the reply, but the price is checked
+# against `build_turn_facts`. A wrong price is replaced by the exact canonical
+# price. Other claims are logged for later passes.
+# =============================================================================
+BUILD_ENFORCE_CLAIMS_JS = r"""const reply = $('AI Agent').first().json.output || '';
+const facts = $('Load Enforce Facts').first().json.facts || {};
+const turnSeed = String($('Debounce Resolve').first().json.chat_id || '') + '|' + String($('Debounce Resolve').first().json.combined_text || '') + '|' + Math.floor(Date.now() / 600000);
+const turnId = (function () {
+  function hash(str, seed) {
+    let x = seed >>> 0;
+    for (let i = 0; i < str.length; i++) {
+      x ^= str.charCodeAt(i);
+      x = Math.imul(x, 16777619) >>> 0;
+    }
+    return x;
+  }
+  const a = hash(turnSeed, 2166136261).toString(16).padStart(8, '0');
+  const b = hash(turnSeed, 2166136262).toString(16).padStart(8, '0');
+  const c = hash(turnSeed, 2166136263).toString(16).padStart(8, '0');
+  const d = hash(turnSeed, 2166136264).toString(16).padStart(8, '0');
+  return a + '-' + b.slice(0, 4) + '-4' + c.slice(0, 3) + '-8' + d.slice(0, 3)
+    + '-' + (b.slice(4) + c.slice(3) + d.slice(3)).slice(0, 12);
+})();
+const body = {
+  model: 'anthropic/claude-haiku-5.5',
+  temperature: 0,
+  messages: [
+    { role: 'system', content: __CLAIMS_SYSTEM__ },
+    { role: 'user', content: 'FATOS:\n' + JSON.stringify(facts) + '\n\nRESPOSTA DA BEATRIZ:\n' + reply }
+  ]
+};
+
+return [{ json: { body, reply, facts, turn_id: turnId } }];"""
+BUILD_ENFORCE_CLAIMS_JS = BUILD_ENFORCE_CLAIMS_JS.replace('__CLAIMS_SYSTEM__', CLAIMS_SYSTEM_JSON)
+
+PARSE_ENFORCE_CLAIMS_JS = r"""const resp = $input.first().json || {};
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{"claims":[]}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+let parsed = {};
+try { parsed = JSON.parse(cleaned); } catch (e) { parsed = {}; }
+
+const claims = Array.isArray(parsed.claims) ? parsed.claims : [];
+
+return [{ json: { claims } }];"""
+
+BUILD_REPAIR_JS = r"""const facts = $('Load Enforce Facts').first().json.facts || {};
+const validation = $('Validate Enforce Reply').first().json || {};
+const original = validation.original_reply || $('AI Agent').first().json.output || '';
+const violations = validation.violations || [];
+const body = {
+  model: 'anthropic/claude-haiku-5.5',
+  temperature: 0,
+  messages: [
+    { role: 'system', content: __REPAIR_SYSTEM__ },
+    { role: 'user', content: 'FATOS:\n' + JSON.stringify(facts)
+        + '\n\nVIOLAÇÕES:\n' + JSON.stringify(violations)
+        + '\n\nRESPOSTA ATUAL:\n' + original }
+  ]
+};
+
+return [{ json: { body, original, violations } }];"""
+BUILD_REPAIR_JS = BUILD_REPAIR_JS.replace('__REPAIR_SYSTEM__', json.dumps(REPAIR_PROMPT_TEMPLATE))
+
+PARSE_REPAIR_JS = r"""const resp = $input.first().json || {};
+const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';
+const cleaned = String(content).trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+let parsed = {};
+try { parsed = JSON.parse(cleaned); } catch (e) { parsed = {}; }
+
+return [{ json: {
+  reply: String(parsed.reply || '').trim(),
+  claims: Array.isArray(parsed.claims) ? parsed.claims : [],
+} }];"""
+
+RESOLVE_FINAL_REPLY_JS = r"""let repaired = null;
+try { repaired = $('Validate Repaired Reply').first().json; } catch (e) { repaired = null; }
+
+const original = $('Validate Enforce Reply').first().json || {};
+const usable = repaired
+  && typeof repaired.final_reply === 'string'
+  && repaired.final_reply.trim() !== '';
+const final = usable ? repaired : original;
+const out = Object.assign({}, final, {
+  repaired: !!usable,
+  original_violations: original.violations || [],
+});
+
+if (usable && final.ok === true) out.resolution = 'repaired';
+
+return [{ json: out }];"""
+
+VALIDATE_ENFORCE_REPLY_JS = r"""const facts = $('Load Enforce Facts').first().json.facts || {};
+const claims = ($input.first().json.claims || []);
+const reply = $('AI Agent').first().json.output || '';
+
+const pricing = facts.pricing || {};
+const availability = facts.availability || {};
+const project = facts.project || {};
+const booking = facts.booking || {};
+const conditions = facts.conditions || {};
+const norm = (v) => String(v || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim();
+const isCover = project.tattoo_type === 'cover_up' || project.tattoo_type === 'rework';
+const discoveryComplete = !!(project.tattoo_type && project.placement
+  && project.body_zone && project.style);
+
+// The deterministic quote engine has already applied the table + floor. Its
+// values are authoritative too, so a legitimate negotiated price is not
+// rewritten to the table price.
+const allowedPrices = new Set(
+  [
+    pricing.base_cents,
+    pricing.offered_cents,
+    pricing.promotion && pricing.promotion.price_cents,
+  ]
+    .map(v => Number(v))
+    .filter(v => Number.isFinite(v) && v > 0)
+);
+
+const slots = Array.isArray(availability.slots) ? availability.slots : [];
+const slotIds = new Set(slots.map(s => s.id));
+const tz = (facts.studio || {}).timezone || 'America/Sao_Paulo';
+const slotDates = new Set(slots.map(s => {
+  const d = new Date(s.start_at);
+  return isNaN(d.getTime()) ? '' : d.toLocaleDateString('en-CA', { timeZone: tz });
+}));
+const bookedStart = booking.active && booking.start_at
+  ? new Date(booking.start_at).toISOString()
+  : null;
+
+const intent = (facts.turn || {}).intent || 'other';
+const slotIntent = ['ask_availability', 'choose_slot', 'close', 'reschedule'].includes(intent);
+
+const violations = [];
+let resolution = 'accepted';
+let finalReply = reply;
+let offeredSlots = [];
+let hasPriceViolation = false;
+let hasAvailabilityViolation = false;
+let hasPrematureSlot = false;
+let hasBookingViolation = false;
+let hasDepositViolation = false;
+let hasConditionViolation = false;
+let effectiveClaims = claims.slice();
+
+for (const claim of claims) {
+  if (!claim || typeof claim !== 'object') continue;
+
+  if (claim.type === 'price') {
+    const cents = Number(claim.cents);
+    if (isCover) {
+      violations.push({ claim, rule: 'coverup_never_quotes' });
+      hasPriceViolation = true;
+    } else if (pricing.status !== 'ready') {
+      violations.push({ claim, rule: 'price_without_row', expected: 'ready', actual: pricing.status });
+      hasPriceViolation = true;
+    } else if (!discoveryComplete) {
+      violations.push({ claim, rule: 'price_before_qualification' });
+      hasPriceViolation = true;
+    } else if (!allowedPrices.has(cents)) {
+      violations.push({ claim, rule: 'price_not_in_facts', expected: Array.from(allowedPrices), actual: cents });
+      hasPriceViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'slot_offer') {
+    if (!slotIntent) {
+      violations.push({ claim, rule: 'slot_before_availability_intent', expected: 'ask_availability', actual: intent });
+      hasAvailabilityViolation = true;
+      hasPrematureSlot = true;
+      continue;
+    }
+    const claimedStart = claim.start_at ? new Date(claim.start_at).toISOString() : null;
+    if (bookedStart && claimedStart === bookedStart) {
+      const bookedSlot = slots.find(s => new Date(s.start_at).toISOString() === bookedStart);
+      if (bookedSlot) offeredSlots.push(bookedSlot);
+      continue;
+    }
+    if (availability.status !== 'ready') {
+      violations.push({ claim, rule: 'availability_not_ready', expected: 'ready', actual: availability.status });
+      hasAvailabilityViolation = true;
+    } else if (!claim.slot_id || !slotIds.has(String(claim.slot_id))) {
+      violations.push({ claim, rule: 'slot_not_offered', expected: Array.from(slotIds), actual: claim.slot_id || claim.start_at || null });
+      hasAvailabilityViolation = true;
+    } else {
+      const slot = slots.find(s => s.id === String(claim.slot_id));
+      if (slot) offeredSlots.push(slot);
+    }
+    continue;
+  }
+
+  if (claim.type === 'day_offer') {
+    if (!slotIntent) {
+      violations.push({ claim, rule: 'slot_before_availability_intent', expected: 'ask_availability', actual: intent });
+      hasAvailabilityViolation = true;
+      hasPrematureSlot = true;
+      continue;
+    }
+    const day = String(claim.date || '').slice(0, 10);
+    const bookedDay = bookedStart
+      ? new Date(bookedStart).toLocaleDateString('en-CA', { timeZone: tz })
+      : null;
+    if (!slotDates.has(day) && day !== bookedDay) {
+      violations.push({ claim, rule: 'day_without_slots', expected: Array.from(slotDates), actual: day });
+      hasAvailabilityViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'no_availability') {
+    if (availability.status !== 'no_slots') {
+      violations.push({ claim, rule: 'availability_exists', expected: 'no_slots', actual: availability.status });
+      hasAvailabilityViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'deposit') {
+    const cents = Number(claim.cents);
+    const expected = Number(pricing.deposit_cents);
+    if (!Number.isFinite(expected) || cents !== expected) {
+      violations.push({ claim, rule: 'deposit_mismatch', expected, actual: cents });
+      hasDepositViolation = true;
+    }
+    if (!(booking.active === true || booking.created_this_turn === true)) {
+      violations.push({ claim, rule: 'deposit_without_booking' });
+      hasDepositViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'condition') {
+    const key = String(claim.key || '');
+    const value = String(claim.value || '');
+    const digits = Number(value.replace(/[^0-9]/g, ''));
+    const methods = Array.isArray(conditions.payment_methods) ? conditions.payment_methods : [];
+    const normalized = norm(value);
+
+    let valid = false;
+    if (key === 'deposit') {
+      const depValue = Number(conditions.deposit_value);
+      const depCents = Number(pricing.deposit_cents);
+      const mentionsPix = normalized.includes('pix');
+      valid = (Number.isFinite(digits) && (digits === depValue || digits === depCents))
+        || (mentionsPix && conditions.pix_available === true);
+    } else if (key === 'reschedule') {
+      valid = conditions.reschedule_hours != null && digits === Number(conditions.reschedule_hours);
+    } else if (key === 'cancellation') {
+      valid = conditions.cancellation_hours != null && digits === Number(conditions.cancellation_hours);
+    } else if (key === 'payment') {
+      const isPix = normalized.includes('pix') && (conditions.pix_available === true || methods.includes('pix'));
+      const isCard = /(cartao|credito|debito)/.test(normalized)
+        && (methods.includes('credit_card') || methods.includes('debit_card'));
+      const isCash = /(dinheiro|especie)/.test(normalized) && methods.includes('cash');
+      const isInstallments = normalized.includes('parcel') && methods.includes('installments');
+      valid = isPix || isCard || isCash || isInstallments;
+    }
+
+    if (!valid) {
+      violations.push({ claim, rule: 'condition_not_in_facts', expected: key, actual: value });
+      hasConditionViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'promise') {
+    const key = String(claim.key || '');
+    let valid = false;
+    if (key === 'hold_slot') valid = conditions.allow_hold_slot === true;
+    else if (key === 'guarantee_price') valid = conditions.guarantee_price === true;
+    else if (key === 'discount') valid = Number(pricing.offered_cents) < Number(pricing.base_cents);
+
+    if (!valid) {
+      violations.push({ claim, rule: 'promise_not_allowed', expected: key, actual: true });
+      hasConditionViolation = true;
+    }
+    continue;
+  }
+
+  if (claim.type === 'booking_confirmed') {
+    if (booking.created_this_turn !== true) {
+      violations.push({ claim, rule: 'booking_not_created' });
+      hasBookingViolation = true;
+    }
+  }
+}
+
+const slotOfferCount = claims.filter(c => c && c.type === 'slot_offer').length;
+if (slotOfferCount > 2) {
+  violations.push({ claim: { type: 'slot_offer' }, rule: 'too_many_slots', expected: 2, actual: slotOfferCount });
+  hasAvailabilityViolation = true;
+}
+
+if (violations.length > 0) {
+  const canonicalCents = Number(
+    pricing.offered_cents
+    || pricing.base_cents
+    || (pricing.promotion && pricing.promotion.price_cents)
+    || 0
+  );
+
+  if (hasPriceViolation) {
+    if (pricing.status === 'ready' && !isCover && canonicalCents > 0) {
+      const value = (canonicalCents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      finalReply = 'Perfeito! Fica ' + value + ' à vista.';
+      resolution = 'canonical_price';
+      offeredSlots = [];
+      effectiveClaims = [{ type: 'price', cents: canonicalCents }];
+    } else {
+      // No trustworthy price row: the legacy gate already owns this case.
+      resolution = 'kept_legacy';
+    }
+  } else if (hasDepositViolation) {
+    const deposit = Number(pricing.deposit_cents);
+    if (deposit > 0 && (booking.active === true || booking.created_this_turn === true)) {
+      const value = (deposit / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      finalReply = 'O sinal fica ' + value + ' no PIX.';
+      resolution = 'canonical_deposit';
+      effectiveClaims = [{ type: 'deposit', cents: deposit }];
+    } else {
+      finalReply = 'Antes do sinal, precisamos confirmar o horário. Qual dia funciona para você?';
+      resolution = 'canonical_deposit';
+      effectiveClaims = [];
+    }
+    offeredSlots = [];
+  } else if (hasConditionViolation) {
+    const promiseKeys = claims.filter(c => c && (c.type === 'promise' || c.type === 'condition')).map(c => c.key);
+    if (promiseKeys.includes('hold_slot')) {
+      finalReply = 'Não consigo segurar o horário sem o sinal. Quer seguir com a reserva?';
+    } else if (promiseKeys.includes('guarantee_price') || promiseKeys.includes('discount')) {
+      const cents = Number(pricing.offered_cents || pricing.base_cents || 0);
+      const value = (cents / 100).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+      finalReply = cents > 0
+        ? 'Não consigo garantir esse valor além do combinado. O valor atual é ' + value + '.'
+        : 'Não consigo garantir esse valor além do combinado.';
+    } else if (promiseKeys.includes('payment')) {
+      finalReply = 'Vou confirmar as formas de pagamento com o artista.';
+    } else {
+      finalReply = 'Vou confirmar essa política com o artista antes de te responder.';
+    }
+    resolution = 'canonical_condition';
+    offeredSlots = [];
+    effectiveClaims = [];
+  } else if (hasPrematureSlot) {
+    finalReply = 'Antes de horários, me conta mais sobre a tatuagem que você quer fazer?';
+    resolution = 'canonical_premature_slots';
+    offeredSlots = [];
+    effectiveClaims = [];
+  } else if (hasAvailabilityViolation || hasBookingViolation) {
+    if (availability.status === 'ready' && slots.length > 0) {
+      const labels = slots.slice(0, 2).map(s => s.label).join(' ou ');
+      finalReply = 'Tenho estes horários: ' + labels + '. Qual fica melhor para você?';
+      resolution = 'canonical_slots';
+      offeredSlots = slots.slice(0, 2);
+      effectiveClaims = [];
+    } else if (availability.status === 'no_slots') {
+      finalReply = 'Não tenho horário nesse dia. Qual outro dia funciona para você?';
+      resolution = 'canonical_no_slots';
+      offeredSlots = [];
+      effectiveClaims = [];
+    } else {
+      const missing = String(availability.missing || '');
+      if (missing.includes('local')) {
+        finalReply = 'Onde no corpo você quer fazer?';
+      } else if (missing.includes('tamanho')) {
+        finalReply = 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?';
+      } else if (missing.includes('tipo')) {
+        finalReply = 'A tatuagem que você quer é nova, uma cobertura ou uma reforma?';
+      } else {
+        finalReply = 'Me conta mais sobre a tatuagem que você quer fazer?';
+      }
+      resolution = 'canonical_missing';
+      offeredSlots = [];
+      effectiveClaims = [];
+    }
+  } else {
+    resolution = 'kept_legacy';
+  }
+}
+
+// A confirmed booking closes the offer list; the next turn starts clean.
+if (booking.created_this_turn === true) offeredSlots = [];
+
+// One entry per slot, first occurrence wins.
+const seenSlots = new Set();
+offeredSlots = offeredSlots.filter(s => {
+  if (!s || !s.id || seenSlots.has(s.id)) return false;
+  seenSlots.add(s.id);
+  return true;
+});
+
+const priceClaims = effectiveClaims.filter(c => c && c.type === 'price');
+const ensureQuoteWrote = pricing.open_quote === true;
+const needsQuote = resolution === 'canonical_price'
+  || (priceClaims.length > 0 && !ensureQuoteWrote && resolution !== 'kept_legacy');
+
+return [{ json: {
+  ok: violations.length === 0,
+  final_reply: finalReply,
+  violations,
+  resolution,
+  needs_quote: needsQuote,
+  offered_slots: offeredSlots,
+  effective_claims: effectiveClaims,
+  original_reply: reply,
+  repairable: violations.length > 0 && resolution !== 'kept_legacy',
+} }];"""
+
+# Same validator, but the reply/claims come from the repair model. No duplicated
+# rules: if the validator changes, both paths change together.
+VALIDATE_REPAIRED_REPLY_JS = VALIDATE_ENFORCE_REPLY_JS.replace(
+    "const reply = $('AI Agent').first().json.output || '';",
+    "const reply = ($input.first().json.reply || '');"
+)
 
 WF = {
     "name": "Beatriz WhatsApp Agent",
@@ -2374,6 +3256,52 @@ WF = {
             "id": "group-chat-0000-0000-0000-000000000001",
             "name": "Group Chat?",
         },
+        # 3a2b. Artist Paused? — a suspended artist must not swallow inbound
+        #      messages. Resolve returns the row (status included); this branch
+        #      records the drop and stops, so the message is visible.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "artist-paused-cond-0000",
+                            "leftValue": "={{ $json.status }}",
+                            "rightValue": "suspended",
+                            "operator": {"type": "string", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [780, -120],
+            "id": "artist-paused-0000-0000-0000-000000000001",
+            "name": "Artist Paused?",
+        },
+        # 3a2c. Log Paused Inbound — durable evidence + admin digest upstream.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM log_ingest_drop($1::uuid, $2::text, $3::text, $4::text, 'artist_suspended', $5::jsonb);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('WAHA Webhook').first().json.body.session, (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var k = (p._data && p._data.key) || {}; var from = String(p.from || k.remoteJid || ''); var alt = String(k.remoteJidAlt || k.senderPn || ''); var jid = (from.endsWith('@lid') && alt) ? alt : from; return jid.replace(/@.*$/, '').replace(/\D/g, ''); })(), (function(){ var b = $('WAHA Webhook').first().json.body || {}; var p = b.payload || {}; var from = String(p.from || ''); return String(b.session || 'unknown') + ':' + from; })(), JSON.stringify($('WAHA Webhook').first().json.body || {})] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 400],
+            "id": "log-paused-0000-0000-0000-000000000001",
+            "name": "Log Paused Inbound",
+            "credentials": POSTGRES,
+        },
         # 3a3. Blocked Number? — per-artist blocklist. Drop before Route Event,
         #      so a blocked number never creates a Lead, buffer or reply.
         {
@@ -2461,6 +3389,22 @@ return [{ json: { error: true, reason: 'session_not_found', session_slug: slug }
             "position": [780, 240],
             "id": "d4e5f6a7-8b9c-0d1e-2f3b-4a5b6c7d8e9f",
             "name": "Missing Session Log",
+        },
+        # 4b. Log Unknown Session — an unknown WAHA slug is a drop, not a log line.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM log_ingest_drop(NULL::uuid, $1::text, NULL::text, NULL::text, 'session_not_found', $2::jsonb);",
+                "options": {
+                    "queryReplacement": "={{ [$('WAHA Webhook').first().json.body.session, JSON.stringify($('WAHA Webhook').first().json.body || {})] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [1040, 260],
+            "id": "log-unknown-0000-0000-0000-000000000001",
+            "name": "Log Unknown Session",
+            "credentials": POSTGRES,
         },
         # 5. Check AI Window — silent outside the artist's AI active window.
         #    Also flags from_me (the ARTIST replying in WhatsApp) so a separate
@@ -3304,70 +4248,6 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "name": "Load Booking",
             "credentials": POSTGRES,
         },
-        # 21. Write Quote Tool
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT * FROM write_quote($1::uuid, $2::uuid, NULLIF($3::text, 'undefined')::integer, NULLIF($4::text, 'undefined')::integer);",
-                "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('base_price', 'Preço de tabela em centavos de real', 'number'), $fromAI('offered_price', 'Preço final negociado em centavos de real. Sem desconto, use o mesmo valor de base_price', 'number')] }}"
-                },
-            },
-            "type": "n8n-nodes-base.postgresTool",
-            "typeVersion": 2.6,
-            "position": [2600, -840],
-            "id": "p2a3b4c5-6d7e-8a9b-0c1d-2e3f4a5b6c7d",
-            "name": "Write Quote",
-            "credentials": POSTGRES,
-        },
-        # 22. Request Deposit Tool
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT * FROM request_deposit($1::uuid, $2::uuid, NULLIF($3::text, 'undefined')::integer);",
-                "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('amount', 'Valor do sinal em centavos de real (ex: R$180 = 18000)', 'number')] }}"
-                },
-            },
-            "type": "n8n-nodes-base.postgresTool",
-            "typeVersion": 2.6,
-            "position": [2600, -960],
-            "id": "p3a4b5c6-7d8e-9a0b-1c2d-3e4f5a6b7c8d",
-            "name": "Request Deposit",
-            "credentials": POSTGRES,
-        },
-        # 23. Check Availability Tool
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT o.start_at, o.end_at, o.label FROM booking_options($1::uuid, now(), now() + interval '60 days', COALESCE(NULLIF($2::text, 'undefined')::integer, 120), COALESCE(NULLIF(NULLIF($3::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined')), COALESCE(NULLIF(NULLIF($5::text, ''), 'undefined'), NULLIF(NULLIF($4::text, ''), 'undefined'))) o WHERE project_booking_ready($6::uuid, $1::uuid);",
-                "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $fromAI('duration_min', 'Duração mínima em minutos — padrão 120', 'number'), $fromAI('preferred_day', 'Dia ou data que o lead pediu (ex.: sábado, 07/11, 2026-11-07). Preencha quando ele recusar as opções e disser um dia.', 'string'), $('Debounce Resolve').first().json.combined_text || '', $fromAI('preferred_time', 'Horário/janela que o lead pediu (ex.: depois das 14h, de manhã, 16h). Preencha quando ele disser um horário.', 'string'), $('Start Turn').first().json.project_id] }}"
-                },
-            },
-            "type": "n8n-nodes-base.postgresTool",
-            "typeVersion": 2.6,
-            "position": [2600, -1080],
-            "id": "p4a5b6c7-8d9e-0a1b-2c3d-4e5f6a7b8c9d",
-            "name": "Check Availability",
-            "credentials": POSTGRES,
-        },
-        # 24. Book Slot Tool
-        {
-            "parameters": {
-                "operation": "executeQuery",
-                "query": "SELECT * FROM book_slot($1::uuid, $2::uuid, $3::timestamptz, COALESCE(NULLIF($4::text, 'undefined')::integer, 120));",
-                "options": {
-                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $fromAI('start_at', 'Data/horário de início no formato ISO 8601 COM ANO, ex: 2026-08-15T14:00:00-03:00'), $fromAI('duration_min', 'Duração em minutos usada no Check Availability — padrão 120', 'number')] }}"
-                },
-            },
-            "type": "n8n-nodes-base.postgresTool",
-            "typeVersion": 2.6,
-            "position": [2600, -1200],
-            "id": "p5a6b7c8-9d0e-1a2b-3c4d-5e6f7a8b9c0d",
-            "name": "Book Slot",
-            "credentials": POSTGRES,
-        },
         # 25. Build Classification Prompt
         {
             "parameters": {
@@ -3842,6 +4722,559 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "id": "hf-if-0000-0000-0000-000000000001",
             "name": "Send Notification?",
         },
+        # 35b. Grounding Gate? — shadow/enforce modes only. The legacy reply
+        #      path stays first; this branch never changes what is sent.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "grounding-gate-cond-0000",
+                            "leftValue": "={{ ($('Resolve Artist').first().json.grounding_mode || 'off') === 'shadow' }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [5720, 960],
+            "id": "grounding-gate-0000-0000-0000-000000000001",
+            "name": "Grounding Gate?",
+        },
+        # 35c. Build Shadow Preflight — lead message + state for the intent AI.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_SHADOW_PREFLIGHT_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5980, 900],
+            "id": "shadow-preflight-build-0000-0000-000000000001",
+            "name": "Build Shadow Preflight",
+        },
+        # 35d. Shadow Preflight — AI intent/entities. No reply generated.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [6240, 900],
+            "id": "shadow-preflight-http-0000-0000-000000000001",
+            "name": "Shadow Preflight",
+            "credentials": OPENROUTER,
+        },
+        # 35e. Parse Shadow Preflight — strict JSON, safe defaults.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_SHADOW_PREFLIGHT_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [6500, 900],
+            "id": "shadow-preflight-parse-0000-0000-000000000001",
+            "name": "Parse Shadow Preflight",
+        },
+        # 35f. Shadow Facts — authoritative facts from SQL only.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": SHADOW_FACTS_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Start Turn').first().json.phone_e164, $('Parse Shadow Preflight').first().json.intent, JSON.stringify($('Parse Shadow Preflight').first().json.entities || {})] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [6760, 900],
+            "id": "shadow-facts-0000-0000-0000-000000000001",
+            "name": "Shadow Facts",
+            "credentials": POSTGRES,
+        },
+        # 35g. Build Shadow Claims — reply + facts for the claims AI.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_SHADOW_CLAIMS_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [7020, 900],
+            "id": "shadow-claims-build-0000-0000-000000000001",
+            "name": "Build Shadow Claims",
+        },
+        # 35h. Shadow Claims — structured claims about what the reply asserted.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [7280, 900],
+            "id": "shadow-claims-http-0000-0000-000000000001",
+            "name": "Shadow Claims",
+            "credentials": OPENROUTER,
+        },
+        # 35i. Parse Shadow Claims.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_SHADOW_CLAIMS_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [7540, 900],
+            "id": "shadow-claims-parse-0000-0000-000000000001",
+            "name": "Parse Shadow Claims",
+        },
+        # 35j. Validate Shadow Reply — every claim must exist in the facts.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": VALIDATE_SHADOW_REPLY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [7800, 900],
+            "id": "shadow-validate-0000-0000-000000000001",
+            "name": "Validate Shadow Reply",
+        },
+        # 35k. Log Shadow Turn — audit only; the legacy reply is already sent.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": LOG_SHADOW_TURN_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$('Build Shadow Preflight').first().json.turn_id, $('Resolve Artist').first().json.id, $('Start Turn').first().json.lead_id, $('Start Turn').first().json.project_id, ($('Debounce Resolve').first().json.chat_id || ''), ($('Resolve Artist').first().json.grounding_mode || 'shadow'), $('Parse Shadow Preflight').first().json.intent, $('Parse Shadow Preflight').first().json.confidence, JSON.stringify($('Shadow Facts').first().json.facts || {}), ($('AI Agent').first().json.output || ''), JSON.stringify($('Parse Shadow Claims').first().json.claims || []), JSON.stringify($('Validate Shadow Reply').first().json.violations || []), $('Validate Shadow Reply').first().json.resolution, 'anthropic/claude-haiku-5.5', null, false, JSON.stringify([])] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [8060, 900],
+            "id": "shadow-log-0000-0000-000000000001",
+            "name": "Log Shadow Turn",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
+        # 19b. Grounding Facts? — enforce mode loads authoritative facts before
+        #      the prompt is built. Shadow/off keep the legacy prompt.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "grounding-facts-cond-0000",
+                            "leftValue": "={{ ($('Resolve Artist').first().json.grounding_mode || 'off') === 'enforce' }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [2860, -1180],
+            "id": "grounding-facts-gate-0000-0000-000000000001",
+            "name": "Grounding Facts?",
+        },
+        # 19b2. Build Enforce Preflight — interpret the lead before loading slots.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_SHADOW_PREFLIGHT_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [2860, -1360],
+            "id": "enforce-preflight-build-0000-0000-000000000001",
+            "name": "Build Enforce Preflight",
+        },
+        # 19b3. Enforce Preflight — AI intent/entities.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [3120, -1360],
+            "id": "enforce-preflight-http-0000-0000-000000000001",
+            "name": "Enforce Preflight",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+        },
+        # 19b4. Parse Enforce Preflight.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_SHADOW_PREFLIGHT_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [3380, -1360],
+            "id": "enforce-preflight-parse-0000-0000-000000000001",
+            "name": "Parse Enforce Preflight",
+        },
+        # 19b5. Book Enforce Slot — the lead chose an offered slot, so the
+        #       backend books it before the agent confirms. No model tool.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT * FROM book_slot($1::uuid, $2::uuid, NULLIF($3::text, '')::timestamptz, 120) WHERE $4::uuid IS NULL AND $5::text IN ('choose_slot', 'close') AND NULLIF($3::text, '') IS NOT NULL AND (jsonb_array_length($6::jsonb) = 0 OR EXISTS (SELECT 1 FROM jsonb_array_elements($6::jsonb) s WHERE (s->>'start_at')::timestamptz = NULLIF($3::text, '')::timestamptz)) UNION ALL SELECT * FROM reschedule_booking($1::uuid, $4::uuid, NULLIF($3::text, '')::timestamptz) WHERE $4::uuid IS NOT NULL AND $5::text IN ('choose_slot', 'reschedule', 'close') AND NULLIF($3::text, '') IS NOT NULL AND (jsonb_array_length($6::jsonb) = 0 OR EXISTS (SELECT 1 FROM jsonb_array_elements($6::jsonb) s WHERE (s->>'start_at')::timestamptz = NULLIF($3::text, '')::timestamptz));",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Parse Enforce Preflight').first().json.entities.selected_slot_start || '', $('Start Turn').first().json.active_booking_id, $('Parse Enforce Preflight').first().json.intent, JSON.stringify(($('Start Turn').first().json.agent_state || {}).offered_slots || [])] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [3640, -1360],
+            "id": "book-enforce-slot-0000-0000-000000000001",
+            "name": "Book Enforce Slot",
+            "credentials": POSTGRES,
+            "alwaysOutputData": True,
+            "onError": "continueRegularOutput",
+        },
+        # 19c. Load Enforce Facts — same SQL contract as shadow, no AI needed.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT build_turn_facts($1::uuid, $2::uuid, $3::text, $4::text, $5::jsonb) AS facts;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.project_id, $('Start Turn').first().json.phone_e164, $('Parse Enforce Preflight').first().json.intent, JSON.stringify($('Parse Enforce Preflight').first().json.entities || {})] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [3120, -1240],
+            "id": "load-enforce-facts-0000-0000-000000000001",
+            "name": "Load Enforce Facts",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
+        # 31a. Enforce Agent Path? — enforce bypasses the legacy classifier.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "enforce-agent-path-cond-0000",
+                            "leftValue": "={{ ($('Resolve Artist').first().json.grounding_mode || 'off') === 'enforce' }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [5000, 860],
+            "id": "enforce-agent-path-0000-0000-000000000001",
+            "name": "Enforce Agent Path?",
+        },
+        # 31c. Build Enforce Claims — reply + facts for the claims AI.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_ENFORCE_CLAIMS_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5260, 700],
+            "id": "enforce-claims-build-0000-0000-000000000001",
+            "name": "Build Enforce Claims",
+            "onError": "continueRegularOutput",
+        },
+        # 31d. Extract Enforce Claims — structured claims about the reply.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [5520, 700],
+            "id": "enforce-claims-http-0000-0000-000000000001",
+            "name": "Extract Enforce Claims",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+        },
+        # 31e. Parse Enforce Claims.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_ENFORCE_CLAIMS_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [5780, 700],
+            "id": "enforce-claims-parse-0000-0000-000000000001",
+            "name": "Parse Enforce Claims",
+            "onError": "continueRegularOutput",
+        },
+        # 31f. Validate Enforce Reply — price claims must match the facts.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": VALIDATE_ENFORCE_REPLY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [6040, 700],
+            "id": "enforce-validate-0000-0000-000000000001",
+            "name": "Validate Enforce Reply",
+            "onError": "continueRegularOutput",
+        },
+        # 31e2. Repair Needed? — only when there are violations and the facts
+        #        are trustworthy enough to repair against.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "repair-needed-cond-0000",
+                            "leftValue": "={{ !$json.ok && $json.repairable === true }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [6170, 1040],
+            "id": "repair-needed-0000-0000-0000-000000000001",
+            "name": "Repair Needed?",
+        },
+        # 31e3. Build Repair — facts + violations + original reply.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": BUILD_REPAIR_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [6420, 1120],
+            "id": "repair-build-0000-0000-0000-000000000001",
+            "name": "Build Repair",
+        },
+        # 31e4. Repair Reply — one AI rewrite against the facts.
+        {
+            "parameters": {
+                "method": "POST",
+                "url": "https://openrouter.ai/api/v1/chat/completions",
+                "authentication": "predefinedCredentialType",
+                "nodeCredentialType": "openRouterApi",
+                "sendBody": True,
+                "specifyBody": "json",
+                "jsonBody": "={{ JSON.stringify($json.body) }}",
+                "options": {"timeout": 15000},
+            },
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [6680, 1120],
+            "id": "repair-http-0000-0000-0000-000000000001",
+            "name": "Repair Reply",
+            "credentials": OPENROUTER,
+            "onError": "continueRegularOutput",
+        },
+        # 31e5. Parse Repair — {reply, claims}.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": PARSE_REPAIR_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [6940, 1120],
+            "id": "repair-parse-0000-0000-0000-000000000001",
+            "name": "Parse Repair",
+        },
+        # 31e6. Validate Repaired Reply — same rules, repaired text.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": VALIDATE_REPAIRED_REPLY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [7200, 1120],
+            "id": "repair-validate-0000-0000-0000-000000000001",
+            "name": "Validate Repaired Reply",
+            "onError": "continueRegularOutput",
+        },
+        # 31e7. Resolve Final Reply — repaired if it ran, original otherwise.
+        {
+            "parameters": {
+                "mode": "runOnceForAllItems",
+                "jsCode": RESOLVE_FINAL_REPLY_JS,
+            },
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [7460, 1040],
+            "id": "resolve-final-0000-0000-0000-000000000001",
+            "name": "Resolve Final Reply",
+        },
+        # 31f1. Apply Grounded Turn — state from structured inputs only.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT apply_grounded_turn_once($1::uuid, $2::uuid, $3::uuid, $4::text, $5::uuid, $6::text, $7::jsonb, $8::jsonb, $9::jsonb, $10::jsonb, $11::text, $12::text, $13::jsonb, $14::text, $15::numeric) AS result;",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, $('Start Turn').first().json.lead_id, $('Start Turn').first().json.project_id, ($('Debounce Resolve').first().json.chat_id || ''), $('Build Enforce Claims').first().json.turn_id, $('Parse Enforce Preflight').first().json.intent, JSON.stringify($('Parse Enforce Preflight').first().json.flags || {}), JSON.stringify($('Parse Enforce Preflight').first().json.entities || {}), JSON.stringify($('Load Enforce Facts').first().json.facts || {}), JSON.stringify($('Resolve Final Reply').first().json.effective_claims || []), ($('Resolve Final Reply').first().json.final_reply || ''), ($('Resolve Final Reply').first().json.resolution || 'accepted'), JSON.stringify($('Resolve Final Reply').first().json.offered_slots || []), ($('Debounce Resolve').first().json.combined_text || ''), $('Parse Enforce Preflight').first().json.confidence] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [6170, 900],
+            "id": "apply-grounded-turn-0000-0000-000000000001",
+            "name": "Apply Grounded Turn",
+            "credentials": POSTGRES,
+            "alwaysOutputData": True,
+            "onError": "continueRegularOutput",
+        },
+        # 31f1a. Duplicate? — a repeated turn must not send a second reply.
+        {
+            "parameters": {
+                "conditions": {
+                    "options": {
+                        "caseSensitive": True,
+                        "leftValue": "",
+                        "typeValidation": "strict",
+                        "version": 3,
+                    },
+                    "conditions": [
+                        {
+                            "id": "duplicate-turn-cond-0000",
+                            "leftValue": "={{ ($json.result || {}).duplicate === true }}",
+                            "rightValue": True,
+                            "operator": {"type": "boolean", "operation": "equals"},
+                        }
+                    ],
+                    "combinator": "and",
+                },
+                "options": {},
+            },
+            "type": "n8n-nodes-base.if",
+            "typeVersion": 2.2,
+            "position": [6170, 960],
+            "id": "duplicate-turn-0000-0000-000000000001",
+            "name": "Duplicate?",
+        },
+        # 31f1b. Sync Grounded Memory — store the exact text the lead receives.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "UPDATE agent_memory.chat_memory SET message = jsonb_set(message, '{content}', to_jsonb($2::text), true) WHERE id = (SELECT id FROM agent_memory.chat_memory WHERE session_id = $1::text AND message->>'type' = 'ai' ORDER BY id DESC LIMIT 1)",
+                "options": {
+                    "queryReplacement": "={{ [$('Start Turn').first().json.lead_id, ($('Resolve Final Reply').first().json.final_reply || '')] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [6420, 900],
+            "id": "sync-grounded-memory-0000-0000-000000000001",
+            "name": "Sync Grounded Memory",
+            "credentials": POSTGRES,
+            "alwaysOutputData": True,
+            "onError": "continueRegularOutput",
+        },
+        # 31f3. Store Enforce Slots — remember what was offered so the next
+        #       turn can map "pode ser a segunda opção" to a real slot.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": "SELECT patch_chat_state($1::uuid, $2::text, $3::jsonb);",
+                "options": {
+                    "queryReplacement": "={{ [$('Resolve Artist').first().json.id, ($('Debounce Resolve').first().json.chat_id || ''), JSON.stringify({ offered_slots: ($('Resolve Final Reply').first().json.offered_slots || []) })] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [6300, 780],
+            "id": "store-enforce-slots-0000-0000-000000000001",
+            "name": "Store Enforce Slots",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
+        # 31g. Log Enforce Turn — audit before the reply is sent.
+        {
+            "parameters": {
+                "operation": "executeQuery",
+                "query": LOG_SHADOW_TURN_QUERY,
+                "options": {
+                    "queryReplacement": "={{ [$('Build Enforce Claims').first().json.turn_id, $('Resolve Artist').first().json.id, $('Start Turn').first().json.lead_id, $('Start Turn').first().json.project_id, ($('Debounce Resolve').first().json.chat_id || ''), 'enforce', null, null, JSON.stringify($('Load Enforce Facts').first().json.facts || {}), ($('Resolve Final Reply').first().json.final_reply || ''), JSON.stringify($('Resolve Final Reply').first().json.effective_claims || []), JSON.stringify($('Resolve Final Reply').first().json.violations || []), $('Resolve Final Reply').first().json.resolution, 'anthropic/claude-haiku-5.5', null, ($('Resolve Final Reply').first().json.repaired === true), JSON.stringify($('Resolve Final Reply').first().json.original_violations || [])] }}"
+                },
+            },
+            "type": "n8n-nodes-base.postgres",
+            "typeVersion": 2.6,
+            "position": [6300, 700],
+            "id": "enforce-log-0000-0000-000000000001",
+            "name": "Log Enforce Turn",
+            "credentials": POSTGRES,
+            "onError": "continueRegularOutput",
+        },
         # 36. Send Notification to Group — Telegram ops group with inline
         #     buttons. The Telegram workflow's callback branch handles the
         #     confirm/cancel clicks (handoff → fechado/perdido, deposit → confirmado).
@@ -3899,9 +5332,18 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
                 [{"node": "Missing Session Log", "type": "main", "index": 0}],
             ]
         },
+        "Missing Session Log": {
+            "main": [[{"node": "Log Unknown Session", "type": "main", "index": 0}]]
+        },
         "Group Chat?": {
             "main": [
                 [],
+                [{"node": "Artist Paused?", "type": "main", "index": 0}],
+            ]
+        },
+        "Artist Paused?": {
+            "main": [
+                [{"node": "Log Paused Inbound", "type": "main", "index": 0}],
                 [{"node": "Blocked Number?", "type": "main", "index": 0}],
             ]
         },
@@ -4010,6 +5452,27 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Load Pricing", "type": "main", "index": 0}]]
         },
         "Load Pricing": {
+            "main": [[{"node": "Grounding Facts?", "type": "main", "index": 0}]]
+        },
+        "Grounding Facts?": {
+            "main": [
+                [{"node": "Build Enforce Preflight", "type": "main", "index": 0}],
+                [{"node": "Build System Prompt", "type": "main", "index": 0}],
+            ]
+        },
+        "Build Enforce Preflight": {
+            "main": [[{"node": "Enforce Preflight", "type": "main", "index": 0}]]
+        },
+        "Enforce Preflight": {
+            "main": [[{"node": "Parse Enforce Preflight", "type": "main", "index": 0}]]
+        },
+        "Parse Enforce Preflight": {
+            "main": [[{"node": "Book Enforce Slot", "type": "main", "index": 0}]]
+        },
+        "Book Enforce Slot": {
+            "main": [[{"node": "Load Enforce Facts", "type": "main", "index": 0}]]
+        },
+        "Load Enforce Facts": {
             "main": [[{"node": "Build System Prompt", "type": "main", "index": 0}]]
         },
         "Build System Prompt": {
@@ -4072,20 +5535,44 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         "Postgres Chat Memory": {
             "ai_memory": [[{"node": "AI Agent", "type": "ai_memory", "index": 0}]]
         },
-        "Write Quote": {
-            "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
-        },
-        "Request Deposit": {
-            "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
-        },
-        "Check Availability": {
-            "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
-        },
-        "Book Slot": {
-            "ai_tool": [[{"node": "AI Agent", "type": "ai_tool", "index": 0}]]
-        },
         "AI Agent": {
-            "main": [[{"node": "Load Booking", "type": "main", "index": 0}]]
+            "main": [[{"node": "Enforce Agent Path?", "type": "main", "index": 0}]]
+        },
+        "Enforce Agent Path?": {
+            "main": [
+                [{"node": "Build Enforce Claims", "type": "main", "index": 0}],
+                [{"node": "Load Booking", "type": "main", "index": 0}],
+            ]
+        },
+        "Grounding Gate?": {
+            "main": [
+                [{"node": "Build Shadow Preflight", "type": "main", "index": 0}],
+                [],
+            ]
+        },
+        "Build Shadow Preflight": {
+            "main": [[{"node": "Shadow Preflight", "type": "main", "index": 0}]]
+        },
+        "Shadow Preflight": {
+            "main": [[{"node": "Parse Shadow Preflight", "type": "main", "index": 0}]]
+        },
+        "Parse Shadow Preflight": {
+            "main": [[{"node": "Shadow Facts", "type": "main", "index": 0}]]
+        },
+        "Shadow Facts": {
+            "main": [[{"node": "Build Shadow Claims", "type": "main", "index": 0}]]
+        },
+        "Build Shadow Claims": {
+            "main": [[{"node": "Shadow Claims", "type": "main", "index": 0}]]
+        },
+        "Shadow Claims": {
+            "main": [[{"node": "Parse Shadow Claims", "type": "main", "index": 0}]]
+        },
+        "Parse Shadow Claims": {
+            "main": [[{"node": "Validate Shadow Reply", "type": "main", "index": 0}]]
+        },
+        "Validate Shadow Reply": {
+            "main": [[{"node": "Log Shadow Turn", "type": "main", "index": 0}]]
         },
         "Load Booking": {
             "main": [[{"node": "Build Classification Prompt", "type": "main", "index": 0}]]
@@ -4141,6 +5628,57 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
         "Patch Chat State": {
             "main": [[{"node": "Build Humanize Delay", "type": "main", "index": 0}]]
         },
+        "Build Enforce Claims": {
+            "main": [[{"node": "Extract Enforce Claims", "type": "main", "index": 0}]]
+        },
+        "Extract Enforce Claims": {
+            "main": [[{"node": "Parse Enforce Claims", "type": "main", "index": 0}]]
+        },
+        "Parse Enforce Claims": {
+            "main": [[{"node": "Validate Enforce Reply", "type": "main", "index": 0}]]
+        },
+        "Validate Enforce Reply": {
+            "main": [[{"node": "Repair Needed?", "type": "main", "index": 0}]]
+        },
+        "Repair Needed?": {
+            "main": [
+                [{"node": "Build Repair", "type": "main", "index": 0}],
+                [{"node": "Resolve Final Reply", "type": "main", "index": 0}],
+            ]
+        },
+        "Build Repair": {
+            "main": [[{"node": "Repair Reply", "type": "main", "index": 0}]]
+        },
+        "Repair Reply": {
+            "main": [[{"node": "Parse Repair", "type": "main", "index": 0}]]
+        },
+        "Parse Repair": {
+            "main": [[{"node": "Validate Repaired Reply", "type": "main", "index": 0}]]
+        },
+        "Validate Repaired Reply": {
+            "main": [[{"node": "Resolve Final Reply", "type": "main", "index": 0}]]
+        },
+        "Resolve Final Reply": {
+            "main": [[{"node": "Apply Grounded Turn", "type": "main", "index": 0}]]
+        },
+        "Apply Grounded Turn": {
+            "main": [[{"node": "Duplicate?", "type": "main", "index": 0}]]
+        },
+        "Duplicate?": {
+            "main": [
+                [],
+                [{"node": "Store Enforce Slots", "type": "main", "index": 0}],
+            ]
+        },
+        "Store Enforce Slots": {
+            "main": [[{"node": "Sync Grounded Memory", "type": "main", "index": 0}]]
+        },
+        "Sync Grounded Memory": {
+            "main": [[{"node": "Log Enforce Turn", "type": "main", "index": 0}]]
+        },
+        "Log Enforce Turn": {
+            "main": [[{"node": "Build Humanize Delay", "type": "main", "index": 0}]]
+        },
         "Build Humanize Delay": {
             "main": [[{"node": "Send Typing", "type": "main", "index": 0}]]
         },
@@ -4160,7 +5698,10 @@ return [{ json: { in_window: inWindow, from_me: false, chat_id: chatId } }];""",
             "main": [[{"node": "Stop Typing", "type": "main", "index": 0}]]
         },
         "Stop Typing": {
-            "main": [[{"node": "Build Handoff Message", "type": "main", "index": 0}]]
+            "main": [[
+                {"node": "Build Handoff Message", "type": "main", "index": 0},
+                {"node": "Grounding Gate?", "type": "main", "index": 0},
+            ]]
         },
         "Build Handoff Message": {
             "main": [[{"node": "Send Notification?", "type": "main", "index": 0}]]

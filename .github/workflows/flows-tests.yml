@@ -4,12 +4,12 @@ on:
   push:
     paths:
       - "packages/flows/**"
-      - "packages/crm/supabase/migrations/**"
+      - "packages/crm/db/migrations/**"
       - ".github/workflows/flows-tests.yml"
   pull_request:
     paths:
       - "packages/flows/**"
-      - "packages/crm/supabase/migrations/**"
+      - "packages/crm/db/migrations/**"
 
 jobs:
   offline-tests:
@@ -54,6 +54,27 @@ jobs:
 
       - name: Per-artist blocked numbers
         run: node packages/flows/definitions/code/test-blocked-number.js
+
+      - name: Availability truth and reschedule guards
+        run: node packages/flows/definitions/code/test-availability-guard.js
+
+      - name: Grounded-reply validator
+        run: node packages/flows/definitions/code/test-validator.js
+
+      - name: Price grounding (enforce)
+        run: node packages/flows/definitions/code/test-price-grounding.js
+
+      - name: Availability grounding (enforce)
+        run: node packages/flows/definitions/code/test-availability-grounding.js
+
+      - name: Conditions and promises (enforce)
+        run: node packages/flows/definitions/code/test-conditions-grounding.js
+
+      - name: Video and portfolio context (enforce)
+        run: node packages/flows/definitions/code/test-context-grounding.js
+
+      - name: Repair-once loop
+        run: node packages/flows/definitions/code/test-repair-loop.js
 
       - name: Conversation suite (units + scenarios)
         run: node packages/flows/tests/conversation/run.js

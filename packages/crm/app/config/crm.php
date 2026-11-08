@@ -224,4 +224,17 @@ return [
 
     'onboard_webhook_token' => env('ONBOARD_WEBHOOK_TOKEN'),
 
+    /*
+    |--------------------------------------------------------------------------
+    | Admin alerts
+    |--------------------------------------------------------------------------
+    |
+    | Where operational problems go: inbound messages the agent deliberately
+    | did not answer (paused artist, unknown session) and any other drop that
+    | must not be silent. Defaults to the transactional sender.
+    |
+    */
+
+    'admin_email' => env('VAIF_ADMIN_EMAIL', env('MAIL_FROM_ADDRESS', 'contato@vaif.com.br')),
+
 ];

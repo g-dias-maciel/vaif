@@ -60,6 +60,9 @@
         'audio_2x' => 'Áudio repetido',
         'no_availability' => 'Sem horário disponível',
         'promotion_second' => 'Segunda tattoo da promoção 2 por 1',
+        'gate_stuck' => 'Preço não liberado',
+        'ambiguous_reference' => 'Referência ambígua',
+        'client_service' => 'Cliente antigo / pós-tatuagem',
     ];
     $handoffSummary = $pendingHandoffs
         ->groupBy(fn ($handoff) => $handoffLabels[$handoff->handoff_reason] ?? 'Atendimento')
@@ -140,6 +143,48 @@
         @endforeach
     </div>
 </details>
+@endif
+
+@if (isset($ingestDrops) && $ingestDrops->isNotEmpty())
+<div id="ingest-drops" class="panel" style="margin-bottom: 20px; border-color: var(--danger);">
+    <h2 class="section-title" style="margin-top:0;">
+        Mensagens não respondidas
+        <span class="tag">{{ $ingestDrops->count() }}</span>
+    </h2>
+    <p class="meta">
+        O agente não respondeu porque o atendimento está pausado ou a sessão não foi reconhecida.
+        Nada foi enviado ao cliente.
+    </p>
+
+    <ul class="slot-list" style="margin-top: 14px;">
+        @foreach ($ingestDrops as $drop)
+            <li>
+                <div class="slot-main">
+                    <strong>{{ $drop->phone_e164 ?: 'Número desconhecido' }}</strong>
+                    <span>
+                        @if ($drop->reason === 'artist_suspended')
+                            Artista pausado
+                        @elseif ($drop->reason === 'session_not_found')
+                            Sessão do WhatsApp não reconhecida
+                        @else
+                            {{ $drop->reason }}
+                        @endif
+                    </span>
+                    <span class="meta">
+                        {{ \Illuminate\Support\Carbon::parse($drop->created_at)->format('d/m H:i') }}
+                        @if ($drop->chat_id)
+                            · {{ $drop->chat_id }}
+                        @endif
+                    </span>
+                </div>
+            </li>
+        @endforeach
+    </ul>
+
+    <p class="meta" style="margin-top: 12px;">
+        Enquanto o artista estiver pausado, reative o atendimento em Configurações para a Beatriz voltar a responder.
+    </p>
+</div>
 @endif
 
 @if (isset($pendingContactGates) && $pendingContactGates->isNotEmpty())

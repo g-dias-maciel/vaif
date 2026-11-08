@@ -69,24 +69,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Apply the v2 schema, functions and roles
+      - name: Apply every v2 migration
         env:
           PGPASSWORD: postgres
           PSQL: psql -h localhost -U postgres -d vaif_v2_test -v ON_ERROR_STOP=1 -q
         run: |
-          $PSQL -f packages/crm/db/migrations/0001_schema_v2.sql
-          $PSQL -f packages/crm/db/migrations/0002_functions_v2.sql
-          $PSQL -f packages/crm/db/migrations/0003_roles_v2.sql
-          $PSQL -f packages/crm/db/migrations/0004_active_booking.sql
-          $PSQL -f packages/crm/db/migrations/0005_deposit_stage.sql
-          $PSQL -f packages/crm/db/migrations/0006_tattoo_completed.sql
-          $PSQL -f packages/crm/db/migrations/0007_artist_notifications.sql
-          $PSQL -f packages/crm/db/migrations/0008_agent_mode.sql
-          $PSQL -f packages/crm/db/migrations/0009_chat_memory_write.sql
-          $PSQL -f packages/crm/db/migrations/0010_handoff_silence.sql
-          $PSQL -f packages/crm/db/migrations/0011_booking_gates.sql
-          $PSQL -f packages/crm/db/migrations/0012_artist_address.sql
-          $PSQL -f packages/crm/db/migrations/0013_blocked_numbers.sql
+          # Apply in filename order so a new migration is covered automatically.
+          for f in $(ls packages/crm/db/migrations/*.sql | sort); do
+            echo "→ $f"
+            $PSQL -f "$f"
+          done
 
       - name: Contract tests
         env:
