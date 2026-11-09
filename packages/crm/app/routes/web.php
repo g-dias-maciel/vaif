@@ -23,6 +23,7 @@ use App\Http\Controllers\Sales\CampaignController;
 use App\Http\Controllers\Sales\ProspectController;
 use App\Http\Controllers\Sales\SalesDashboardController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TeamController;
 use App\Models\Lead;
 use Illuminate\Support\Facades\Route;
 
@@ -115,6 +116,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');
         Route::post('/artists/{artist}/invite', [ArtistController::class, 'resendInvite'])->name('artists.invite');
         Route::post('/artists/{artist}/toggle', [ArtistController::class, 'toggleAgent'])->name('artists.toggle');
+
+        Route::get('/team', [TeamController::class, 'index'])->name('team.index');
+        Route::get('/team/create', [TeamController::class, 'create'])->name('team.create');
+        Route::post('/team', [TeamController::class, 'store'])->name('team.store');
+        Route::get('/team/{user}/edit', [TeamController::class, 'edit'])->name('team.edit');
+        Route::put('/team/{user}', [TeamController::class, 'update'])->name('team.update');
+        Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
 
         Route::get('/copilot', [CopilotController::class, 'index'])->name('copilot.index');
         Route::post('/copilot/generate', [CopilotController::class, 'generate'])->name('copilot.generate');

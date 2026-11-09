@@ -73,6 +73,38 @@ class User extends Authenticatable
     }
 
     /**
+     * Human-readable role label used by the Team screen.
+     */
+    public function roleLabel(): string
+    {
+        return match ($this->role) {
+            self::ROLE_STAFF => 'Administrador',
+            self::ROLE_SALES => 'Vendas',
+            self::ROLE_ARTIST => 'Artista',
+            default => ucfirst((string) $this->role),
+        };
+    }
+
+    /**
+     * Roles managed from the Team screen. Artist logins stay in the Artists
+     * area because they are tied to an artist_id.
+     *
+     * @return array<string, string>
+     */
+    public static function internalRoleOptions(): array
+    {
+        return [
+            self::ROLE_STAFF => 'Administrador',
+            self::ROLE_SALES => 'Vendas',
+        ];
+    }
+
+    public function isInternal(): bool
+    {
+        return in_array($this->role, [self::ROLE_STAFF, self::ROLE_SALES], true);
+    }
+
+    /**
      * Artist prospects owned by this sales user.
      */
     public function prospects(): HasMany
