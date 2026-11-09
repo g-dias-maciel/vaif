@@ -61,11 +61,6 @@ class CalibrationConversation
         try {
             $drafts = AgentDraft::query()
                 ->where('lead_id', $lead->id)
-                ->whereIn('status', [
-                    AgentDraft::STATUS_PENDING,
-                    AgentDraft::STATUS_REPLIED,
-                    AgentDraft::STATUS_COMPARED,
-                ])
                 ->orderBy('created_at')
                 ->get();
         } catch (\Throwable $e) {
@@ -82,6 +77,7 @@ class CalibrationConversation
                 'lead_text' => $draft->lead_text,
                 'order' => 1,
                 'status' => $draft->status,
+                'is_superseded' => $draft->status === AgentDraft::STATUS_SUPERSEDED,
                 'verdict' => is_array($judge) ? ($judge['verdict'] ?? null) : null,
                 'acceptable' => is_array($judge) ? ($judge['acceptable'] ?? null) : null,
                 'rationale' => is_array($judge) ? ($judge['rationale'] ?? null) : null,
@@ -116,7 +112,7 @@ class CalibrationConversation
                     continue;
                 }
 
-                $turns[] = ['clients' => [$event], 'draft' => null, 'right' => []];
+                $turns[] = ['clients' => [$event], 'draft' => null, 'right' => [], 'alternates' => []];
                 $index = count($turns) - 1;
 
                 continue;
@@ -142,6 +138,21 @@ class CalibrationConversation
                     continue;
                 }
 
+                if ($current !== null && $current['draft'] !== null) {
+                    $existing = $current['draft'];
+
+                    // An active draft replaces a superseded attempt; other
+                    // attempts stay available under "Outras tentativas".
+                    if (! $event['is_superseded'] && ($existing['is_superseded'] ?? false)) {
+                        $turns[$index]['alternates'][] = $existing;
+                        $turns[$index]['draft'] = $event;
+                    } else {
+                        $turns[$index]['alternates'][] = $event;
+                    }
+
+                    continue;
+                }
+
                 $turns[] = [
                     'clients' => trim((string) $event['lead_text']) !== '' ? [[
                         'at' => $event['at'],
@@ -153,6 +164,7 @@ class CalibrationConversation
                     ]] : [],
                     'draft' => $event,
                     'right' => [],
+                    'alternates' => [],
                 ];
                 $index = count($turns) - 1;
 
@@ -168,7 +180,7 @@ class CalibrationConversation
                 continue;
             }
 
-            $turns[] = ['clients' => [], 'draft' => null, 'right' => [$event]];
+            $turns[] = ['clients' => [], 'draft' => null, 'right' => [$event], 'alternates' => []];
             $index = count($turns) - 1;
         }
 

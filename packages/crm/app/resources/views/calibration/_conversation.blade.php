@@ -29,6 +29,8 @@
                             <span class="tag {{ ($draft['acceptable'] ?? false) ? 'tag-success' : 'tag-muted' }}">
                                 {{ ($draft['acceptable'] ?? false) ? 'aceitável' : 'revisar' }}
                             </span>
+                        @elseif (($draft['status'] ?? null) === 'superseded')
+                            <span class="tag tag-muted">substituída</span>
                         @endif
                     </div>
 
@@ -47,6 +49,28 @@
                         </div>
                     @endif
                 </div>
+
+                @if (! empty($turn['alternates']))
+                    <details style="margin:-2px 0 10px 0;">
+                        <summary class="meta" style="cursor:pointer;">
+                            Outras tentativas da Beatriz ({{ count($turn['alternates']) }})
+                        </summary>
+
+                        <div style="margin-top:6px;">
+                            @foreach (array_slice($turn['alternates'], 0, 8) as $alternate)
+                                <div style="padding:7px 0; border-top:1px solid var(--border);">
+                                    <div class="meta">
+                                        {{ $alternate['draft']->created_at?->format('d/m H:i') }}
+                                        · {{ $alternate['status'] }}
+                                    </div>
+                                    <div class="chat-text" style="opacity:.8;">
+                                        {{ \Illuminate\Support\Str::limit($alternate['draft']->draft_reply, 240) }}
+                                    </div>
+                                </div>
+                            @endforeach
+                        </div>
+                    </details>
+                @endif
             @elseif (! empty($turn['clients']))
                 <div class="meta" style="margin:8px 0;">Sem sugestão da Beatriz registrada para esta mensagem.</div>
             @endif
