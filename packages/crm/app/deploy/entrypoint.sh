@@ -55,6 +55,11 @@ echo "[entrypoint] caching config and views as www-data"
 su -s /bin/sh www-data -c "php artisan config:cache"
 su -s /bin/sh www-data -c "php artisan view:cache"
 
+# Some bootstrap commands still run as root above (storage:link, migrations) and
+# can recreate package-discovery files in bootstrap/cache as root. Make sure the
+# runtime user owns everything it may need to rewrite.
+chown -R www-data:www-data storage bootstrap/cache
+
 # --- Scheduler ---------------------------------------------------------------
 # Syncs CRM bookings to Google Calendar every minute. Kept in the same
 # container so a restart of the app also restarts the scheduler.
