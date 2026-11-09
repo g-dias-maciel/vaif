@@ -6,6 +6,7 @@ use App\Models\Artist;
 use App\Models\CalendarEntry;
 use App\Models\ChatMessage;
 use App\Models\Project;
+use App\Models\Prospect;
 use App\Models\User;
 use App\Services\ArtistInviteService;
 use App\Services\WahaService;
@@ -68,10 +69,13 @@ class ArtistController extends Controller
     public function edit(Artist $artist)
     {
         $artist->loadMissing('settings');
+        $user = $this->artistUser($artist);
 
         return view('artists.edit', [
             'artist' => $artist,
-            'user' => $this->artistUser($artist),
+            'user' => $user,
+            'suggestedEmail' => $user?->email
+                ?? Prospect::query()->where('artist_id', $artist->id)->value('email'),
         ]);
     }
 
@@ -85,8 +89,13 @@ class ArtistController extends Controller
 
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
+            'create_login' => ['sometimes', 'boolean'],
             'email' => [
-                'required', 'email', 'max:255', 'not_regex:/[\r\n]/',
+                Rule::requiredIf($user !== null || $request->boolean('create_login')),
+                'nullable',
+                'email',
+                'max:255',
+                'not_regex:/[\r\n]/',
                 Rule::unique('users', 'email')->ignore($user?->id),
             ],
             'timezone' => ['nullable', 'string', 'max:64'],
@@ -98,8 +107,9 @@ class ArtistController extends Controller
 
         $whatsapp = preg_replace('/\D+/', '', (string) ($data['whatsapp_number'] ?? ''));
         $instagram = ltrim(trim((string) ($data['instagram_handle'] ?? '')), '@');
+        $email = $data['email'] ?? null;
 
-        DB::transaction(function () use ($artist, $user, $data, $whatsapp, $instagram) {
+        DB::transaction(function () use ($artist, $user, $data, $email, $whatsapp, $instagram, $request) {
             $artist->update([
                 'name' => $data['name'],
                 'timezone' => ($data['timezone'] ?? null) ?: 'America/Sao_Paulo',
@@ -120,12 +130,12 @@ class ArtistController extends Controller
             if ($user) {
                 $user->update([
                     'name' => $data['name'],
-                    'email' => $data['email'],
+                    'email' => $email,
                 ]);
-            } else {
+            } elseif ($request->boolean('create_login')) {
                 $created = User::create([
                     'name' => $data['name'],
-                    'email' => $data['email'],
+                    'email' => $email,
                     'password' => Hash::make(Str::random(64)),
                     'role' => User::ROLE_ARTIST,
                     'artist_id' => $artist->id,

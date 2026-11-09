@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\ArtistInvite;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
 use App\Models\Lead;
@@ -9,6 +10,7 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -99,6 +101,49 @@ class ArtistAdminTest extends TestCase
         $user->refresh();
         $this->assertSame('Artista Novo', $user->name);
         $this->assertSame('novo@vaif.test', $user->email);
+    }
+
+    public function test_editing_an_artist_without_login_does_not_create_one_by_default(): void
+    {
+        Mail::fake();
+
+        $artist = $this->artist();
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->put("/artists/{$artist->id}", [
+            'name' => 'Artista Importado',
+            'email' => 'importado@vaif.test',
+            'timezone' => 'America/Sao_Paulo',
+            'whatsapp_number' => '(11) 98888-7777',
+            'instagram_handle' => '@importado',
+            'status' => 'onboarding',
+        ])->assertRedirect("/artists/{$artist->id}");
+
+        $this->assertSame('Artista Importado', $artist->fresh()->name);
+        $this->assertSame(0, User::where('artist_id', $artist->id)->count());
+        Mail::assertNothingSent();
+    }
+
+    public function test_staff_can_explicitly_create_a_login_for_an_artist_without_one(): void
+    {
+        Mail::fake();
+
+        $artist = $this->artist();
+        $staff = $this->staff();
+
+        $this->actingAs($staff)->put("/artists/{$artist->id}", [
+            'name' => 'Artista Importado',
+            'email' => 'importado@vaif.test',
+            'create_login' => '1',
+            'timezone' => 'America/Sao_Paulo',
+            'status' => 'onboarding',
+        ])->assertRedirect("/artists/{$artist->id}");
+
+        $user = User::where('artist_id', $artist->id)->firstOrFail();
+
+        $this->assertSame('importado@vaif.test', $user->email);
+        $this->assertSame(User::ROLE_ARTIST, $user->role);
+        Mail::assertSent(ArtistInvite::class);
     }
 
     public function test_artists_cannot_edit_or_delete_other_artists(): void

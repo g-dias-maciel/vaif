@@ -21,13 +21,17 @@
         </div>
 
         <div class="form-field">
-            <label for="email">E-mail de acesso (login) *</label>
+            <label for="email">E-mail de acesso (login) {{ $user ? '*' : '' }}</label>
             <input type="email" name="email" id="email"
-                value="{{ old('email', $user?->email) }}" required>
+                value="{{ old('email', $user?->email ?? $suggestedEmail) }}" @if ($user) required @endif>
             @if ($user)
                 <span class="meta">Alterar o e-mail muda o login do artista. A senha atual continua a mesma.</span>
             @else
-                <span class="meta">Este artista ainda não tem login. Salvar criará a conta e enviará o convite de senha.</span>
+                <span class="meta">Este artista ainda não tem login. Marque a opção abaixo para criar a conta e enviar o convite.</span>
+                <label style="display:flex;align-items:center;gap:8px;margin-top:8px;text-transform:none;letter-spacing:0;font-size:.8rem;color:var(--ink);">
+                    <input type="checkbox" name="create_login" value="1" @checked(old('create_login'))>
+                    Criar login e enviar convite
+                </label>
             @endif
         </div>
 
