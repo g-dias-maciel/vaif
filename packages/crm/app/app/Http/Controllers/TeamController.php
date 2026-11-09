@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Prospect;
+use App\Models\TeamEvent;
 use App\Models\User;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -129,8 +130,12 @@ class TeamController extends Controller
             }
         }
 
-        // Keep the sales pipeline from pointing at a deleted user.
+        // Keep the sales pipeline and calendar from pointing at a deleted user.
         Prospect::query()
+            ->where('owner_id', $user->id)
+            ->update(['owner_id' => $request->user()?->id]);
+
+        TeamEvent::query()
             ->where('owner_id', $user->id)
             ->update(['owner_id' => $request->user()?->id]);
 

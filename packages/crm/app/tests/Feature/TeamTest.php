@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Prospect;
+use App\Models\TeamEvent;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
@@ -156,12 +157,21 @@ class TeamTest extends TestCase
             'owner_id' => $sales->id,
         ]);
 
+        $event = TeamEvent::create([
+            'title' => 'Reunião do Vendedor',
+            'type' => TeamEvent::TYPE_SALES,
+            'starts_at' => now()->addDay()->startOfHour(),
+            'ends_at' => now()->addDay()->startOfHour()->addHour(),
+            'owner_id' => $sales->id,
+        ]);
+
         $this->actingAs($this->admin)
             ->delete(route('team.destroy', $sales))
             ->assertRedirect(route('team.index'));
 
         $this->assertNull(User::find($sales->id));
         $this->assertSame($this->admin->id, $prospect->fresh()->owner_id);
+        $this->assertSame($this->admin->id, $event->fresh()->owner_id);
     }
 
     public function test_artist_logins_cannot_be_managed_from_the_team_screen(): void

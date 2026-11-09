@@ -23,6 +23,7 @@ use App\Http\Controllers\Sales\CampaignController;
 use App\Http\Controllers\Sales\ProspectController;
 use App\Http\Controllers\Sales\SalesDashboardController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\TeamCalendarController;
 use App\Http\Controllers\TeamController;
 use App\Models\Lead;
 use Illuminate\Support\Facades\Route;
@@ -123,6 +124,13 @@ Route::middleware('auth')->group(function () {
         Route::get('/team/{user}/edit', [TeamController::class, 'edit'])->name('team.edit');
         Route::put('/team/{user}', [TeamController::class, 'update'])->name('team.update');
         Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
+
+        Route::get('/calendar', [TeamCalendarController::class, 'index'])->name('calendar.index');
+        Route::get('/calendar/create', [TeamCalendarController::class, 'create'])->name('calendar.events.create');
+        Route::post('/calendar', [TeamCalendarController::class, 'store'])->name('calendar.events.store');
+        Route::get('/calendar/{event}/edit', [TeamCalendarController::class, 'edit'])->name('calendar.events.edit');
+        Route::put('/calendar/{event}', [TeamCalendarController::class, 'update'])->name('calendar.events.update');
+        Route::delete('/calendar/{event}', [TeamCalendarController::class, 'destroy'])->name('calendar.events.destroy');
 
         Route::get('/copilot', [CopilotController::class, 'index'])->name('copilot.index');
         Route::post('/copilot/generate', [CopilotController::class, 'generate'])->name('copilot.generate');

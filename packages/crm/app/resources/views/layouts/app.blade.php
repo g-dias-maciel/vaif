@@ -664,6 +664,9 @@
                                 <a href="{{ route('team.index') }}" class="nav-item {{ request()->routeIs('team.*') ? 'is-active' : '' }}">
                                     <x-icon name="user" /> <span>Equipe</span>
                                 </a>
+                                <a href="{{ route('calendar.index') }}" class="nav-item {{ request()->routeIs('calendar.*') ? 'is-active' : '' }}">
+                                    <x-icon name="calendar" /> <span>Calendário</span>
+                                </a>
                                 <a href="{{ route('promotions.index') }}" class="nav-item {{ request()->routeIs('promotions.*') ? 'is-active' : '' }}">
                                     <x-icon name="promo" /> <span>Promoções</span>
                                 </a>
