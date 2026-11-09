@@ -76,6 +76,15 @@ su -s /bin/sh www-data -c 'while true; do
     sleep 2
 done' >> storage/logs/queue.log 2>&1 &
 
+# --- Mock-draft queue --------------------------------------------------------
+# Retrospective calibration simulations are slow (several AI calls per
+# message). A separate worker keeps the live agent queue responsive.
+echo "[entrypoint] starting the mock-draft queue worker"
+su -s /bin/sh www-data -c 'while true; do
+    php artisan queue:work --queue=mock --sleep=1 --tries=1 --timeout=300 --memory=256
+    sleep 2
+done' >> storage/logs/queue-mock.log 2>&1 &
+
 # --- Serve -------------------------------------------------------------------
 echo "[entrypoint] starting php-fpm + nginx"
 php-fpm -D

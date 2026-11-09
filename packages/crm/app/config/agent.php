@@ -17,6 +17,10 @@ return [
 
     'queue' => env('AGENT_QUEUE', 'agent'),
 
+    // Retrospective mock drafts run on a separate worker so they never block
+    // live WhatsApp turns.
+    'mock_queue' => env('AGENT_MOCK_QUEUE', 'mock'),
+
     // Simulate a human pause/typing cadence before sending. Disabled by the
     // simulator and the test suite so a scenario run stays fast.
     'humanize' => (bool) env('AGENT_HUMANIZE', true),

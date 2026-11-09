@@ -25,6 +25,7 @@ class GenerateMockDrafts implements ShouldQueue
         public readonly string $leadId,
         public readonly int $limit = 20,
     ) {
+        $this->onQueue((string) config('agent.mock_queue', 'mock'));
     }
 
     public function handle(MockDraftGenerator $generator): void
