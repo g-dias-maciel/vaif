@@ -237,85 +237,85 @@
                 <span class="meta" style="float:right;">{{ $draft->created_at?->format('d/m H:i') }} · {{ $draft->model }}</span>
             </h3>
 
-            <div class="meta" style="margin-bottom:6px;">Chat: <code>{{ $group['chat_id'] }}</code></div>
+            <div class="meta" style="margin-bottom:8px;">Chat: <code>{{ $group['chat_id'] }}</code></div>
 
-            <div class="meta" style="margin-bottom:6px;">Mensagem do lead</div>
-            <div class="calib-message" style="margin-bottom:10px;">{{ $draft->lead_text }}</div>
+            <div class="meta" style="margin:2px 0 8px; font-weight:600;">
+                Conversa · cliente à esquerda, {{ $artist->displayName() }} à direita, Beatriz abaixo do cliente
+            </div>
 
-            <div class="meta" style="margin-bottom:6px;">Beatriz (não enviado)</div>
-            <div class="calib-message" style="margin-bottom:10px;">{{ $draft->draft_reply }}</div>
+            @include('calibration._conversation', [
+                'turns' => $group['turns'] ?? [],
+                'artistName' => $artist->displayName(),
+            ])
 
-            @if ($draft->artist_reply)
-                <div class="meta" style="margin-bottom:6px;">Artista (resposta real)</div>
-                <div class="calib-message" style="margin-bottom:10px;">{{ $draft->artist_reply }}</div>
-            @endif
+            <details style="margin-top:14px;">
+                <summary class="meta" style="cursor:pointer;">Diagnóstico da última sugestão</summary>
 
-            @if ($judge)
-                <div class="meta" style="margin-bottom:6px;">
-                    Veredito: <strong>{{ $judge['verdict'] ?? '—' }}</strong>
-                    · pergunta coberta: {{ ($judge['covered_lead_question'] ?? false) ? 'sim' : 'não' }}
-                    · handoff perdido: {{ ($judge['missing_handoff'] ?? false) ? 'sim' : 'não' }}
-                    · tom: {{ $judge['tone'] ?? '—' }}/5
-                </div>
-                @if (! empty($judge['rationale']))
-                    <div class="calib-message" style="margin-bottom:8px;">{{ $judge['rationale'] }}</div>
-                @endif
-                @if (! empty($judge['missing']))
-                    <div class="meta">Faltou: {{ implode(' · ', $judge['missing']) }}</div>
-                @endif
-                @if (! empty($judge['factual_conflicts']))
-                    <div class="meta" style="color: var(--danger, #d05a5a);">Conflitos: {{ implode(' · ', $judge['factual_conflicts']) }}</div>
-                @endif
-            @elseif ($draft->status === 'pending')
-                <div class="meta">Aguardando a resposta do artista no WhatsApp.</div>
-            @endif
+                <div style="margin-top:10px;">
+                    <div class="meta" style="margin-bottom:4px;">Última sugestão</div>
+                    <div class="calib-message" style="margin-bottom:8px;">{{ $draft->draft_reply }}</div>
 
-            @if ($det && ! empty($det['violations']))
-                <div class="meta" style="margin-top:6px;">Validador na resposta do artista: {{ implode(', ', $det['violations']) }}</div>
-            @endif
+                    @if ($draft->artist_reply)
+                        <div class="meta" style="margin-bottom:4px;">Resposta do artista</div>
+                        <div class="calib-message" style="margin-bottom:10px;">{{ $draft->artist_reply }}</div>
+                    @endif
 
-            @if (! empty($draft->simulated_actions))
-                <div class="meta" style="margin-top:6px;">
-                    Simulado (não gravado): {{ json_encode($draft->simulated_actions, JSON_UNESCAPED_UNICODE) }}
-                </div>
-            @endif
+                    @if ($judge)
+                        <div class="meta" style="margin-bottom:6px;">
+                            Veredito: <strong>{{ $judge['verdict'] ?? '—' }}</strong>
+                            · pergunta coberta: {{ ($judge['covered_lead_question'] ?? false) ? 'sim' : 'não' }}
+                            · handoff perdido: {{ ($judge['missing_handoff'] ?? false) ? 'sim' : 'não' }}
+                            · tom: {{ $judge['tone'] ?? '—' }}/5
+                        </div>
+                        @if (! empty($judge['rationale']))
+                            <div class="calib-message" style="margin-bottom:8px;">{{ $judge['rationale'] }}</div>
+                        @endif
+                        @if (! empty($judge['missing']))
+                            <div class="meta">Faltou: {{ implode(' · ', $judge['missing']) }}</div>
+                        @endif
+                        @if (! empty($judge['factual_conflicts']))
+                            <div class="meta" style="color: var(--danger, #d05a5a);">Conflitos: {{ implode(' · ', $judge['factual_conflicts']) }}</div>
+                        @endif
+                    @elseif ($draft->status === 'pending')
+                        <div class="meta">Aguardando a resposta do artista no WhatsApp.</div>
+                    @endif
 
-            <div class="meta" style="margin-top:6px;">Prompt {{ $draft->prompt_version ?: '—' }} · {{ $draft->latency_ms }}ms</div>
+                    @if ($det && ! empty($det['violations']))
+                        <div class="meta" style="margin-top:6px;">Validador na resposta do artista: {{ implode(', ', $det['violations']) }}</div>
+                    @endif
 
-            @if ($group['history']->isNotEmpty())
-                <details style="margin-top:12px;">
-                    <summary class="meta" style="cursor:pointer;">Ver sugestões anteriores ({{ $group['history']->count() }})</summary>
+                    @if (! empty($draft->simulated_actions))
+                        <div class="meta" style="margin-top:6px;">
+                            Simulado (não gravado): {{ json_encode($draft->simulated_actions, JSON_UNESCAPED_UNICODE) }}
+                        </div>
+                    @endif
 
-                    <div style="margin-top:8px;">
-                        @foreach ($group['history'] as $old)
-                            @php($oldJudge = $old->comparison['judge'] ?? null)
-                            <div style="border-top:1px solid var(--border); padding:8px 0;">
-                                <div class="meta">
-                                    {{ $old->created_at?->format('d/m H:i') }}
-                                    · {{ $old->intent ?: '—' }}
-                                    · {{ $old->status }}
-                                    @if ($oldJudge)
-                                        · {{ $oldJudge['verdict'] ?? '' }}
+                    <div class="meta" style="margin-top:6px;">Prompt {{ $draft->prompt_version ?: '—' }} · {{ $draft->latency_ms }}ms</div>
+
+                    @if ($group['history']->isNotEmpty())
+                        <div class="meta" style="margin-top:12px; font-weight:600;">Sugestões anteriores</div>
+                        <div style="margin-top:4px;">
+                            @foreach ($group['history'] as $old)
+                                @php($oldJudge = $old->comparison['judge'] ?? null)
+                                <div style="border-top:1px solid var(--border); padding:8px 0;">
+                                    <div class="meta">
+                                        {{ $old->created_at?->format('d/m H:i') }}
+                                        · {{ $old->intent ?: '—' }}
+                                        · {{ $old->status }}
+                                        @if ($oldJudge)
+                                            · {{ $oldJudge['verdict'] ?? '' }}
+                                        @endif
+                                    </div>
+                                    <div class="calib-message" style="opacity:.8;">{{ \Illuminate\Support\Str::limit($old->draft_reply, 180) }}</div>
+                                    @if ($old->artist_reply)
+                                        <div class="meta">Artista: {{ \Illuminate\Support\Str::limit($old->artist_reply, 160) }}</div>
                                     @endif
                                 </div>
-                                <div class="calib-message" style="opacity:.8;">{{ \Illuminate\Support\Str::limit($old->draft_reply, 180) }}</div>
-                                @if ($old->artist_reply)
-                                    <div class="meta">Artista: {{ \Illuminate\Support\Str::limit($old->artist_reply, 160) }}</div>
-                                @endif
-                            </div>
-                        @endforeach
-                    </div>
-                </details>
-            @endif
-
-            @if (! empty($group['timeline']))
-                <details style="margin-top:12px;">
-                    <summary class="meta" style="cursor:pointer;">Ver conversa ({{ count($group['timeline']) }} itens)</summary>
-                    <div style="margin-top:8px;">
-                        @include('leads._timeline', ['timeline' => $group['timeline'], 'scroll' => true])
-                    </div>
-                </details>
-            @endif
+                            @endforeach
+                        </div>
+                    @endif
+                </div>
+            </details>
 
             @if (! empty($group['lead']))
                 <div style="margin-top:10px;">

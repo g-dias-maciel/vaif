@@ -5,8 +5,8 @@ namespace App\Http\Controllers;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
+use App\Services\Agent\CalibrationConversation;
 use App\Services\Agent\CalibrationReport;
-use App\Services\Agent\ConversationTimeline;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -35,7 +35,7 @@ class CalibrationController extends Controller
         ]);
     }
 
-    public function show(Artist $artist, CalibrationReport $report, WahaService $waha, ConversationTimeline $timeline)
+    public function show(Artist $artist, CalibrationReport $report, WahaService $waha, CalibrationConversation $conversation)
     {
         $artist->loadMissing('settings');
 
@@ -54,7 +54,7 @@ class CalibrationController extends Controller
         // 40 flat cards hides which one is the current suggestion.
         $draftGroups = $drafts
             ->groupBy(fn (AgentDraft $draft) => $draft->lead_id ?: $draft->chat_id)
-            ->map(function ($group) use ($timeline) {
+            ->map(function ($group) use ($conversation) {
                 $sorted = $group->sortByDesc('created_at')->values();
                 $latest = $sorted->first();
 
@@ -65,8 +65,8 @@ class CalibrationController extends Controller
                     'lead' => $latest?->lead,
                     'lead_name' => $latest?->lead?->name,
                     'chat_id' => $latest?->chat_id,
-                    'timeline' => $latest?->lead
-                        ? $timeline->forLead($latest->lead, 60)
+                    'turns' => $latest?->lead
+                        ? $conversation->forLead($latest->lead, 80)
                         : [],
                 ];
             })
