@@ -51,7 +51,9 @@ class ConversationTimeline
             $items[] = [
                 'at' => $message->created_at,
                 'kind' => $kind,
-                'sender' => $message->sender_label,
+                'sender' => $kind === 'artist'
+                    ? ($lead->artist?->displayName() ?: 'Artista')
+                    : $message->sender_label,
                 'content' => $content,
                 'order' => $kind === 'lead' ? 0 : 2,
             ];
