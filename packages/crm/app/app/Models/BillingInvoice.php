@@ -97,7 +97,9 @@ class BillingInvoice extends Model
 
     public function scopeOverdue(Builder $query): Builder
     {
-        return $query->where('status', self::STATUS_OVERDUE);
+        return $query->whereIn('status', [self::STATUS_DRAFT, self::STATUS_SENT, self::STATUS_OVERDUE])
+            ->whereDate('due_date', '<', now()->toDateString())
+            ->whereColumn('paid_cents', '<', 'amount_cents');
     }
 
     public function balanceCents(): int

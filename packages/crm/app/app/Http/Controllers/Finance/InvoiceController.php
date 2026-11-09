@@ -21,7 +21,7 @@ class InvoiceController extends Controller
         $query = BillingInvoice::query()
             ->with(['prospect', 'contract'])
             ->when($request->filled('status'), fn ($q) => $q->where('status', $request->input('status')))
-            ->when($request->boolean('overdue'), fn ($q) => $q->where('status', BillingInvoice::STATUS_OVERDUE))
+            ->when($request->boolean('overdue'), fn ($q) => $q->overdue())
             ->when($request->filled('q'), function ($q) use ($request): void {
                 $term = '%'.trim((string) $request->input('q')).'%';
                 $q->where(function ($inner) use ($term): void {
