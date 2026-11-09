@@ -46,5 +46,13 @@ class CalibrationConversationTest extends TestCase
         $this->assertSame('Quanto fica uma tattoo no braço?', $turns[0]['clients'][0]['content']);
         $this->assertNotNull($turns[0]['draft']);
         $this->assertSame('Fica R$ 600, qual o tamanho?', $turns[0]['draft']['draft']->draft_reply);
+
+        $html = view('calibration._conversation', [
+            'turns' => $turns,
+            'artistName' => 'Adriano',
+        ])->render();
+
+        $this->assertStringContainsString('Beatriz teria respondido', $html);
+        $this->assertStringContainsString('Fica R$ 600, qual o tamanho?', $html);
     }
 }
