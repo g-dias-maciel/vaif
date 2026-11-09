@@ -40,6 +40,7 @@ class DraftStore
             return AgentDraft::query()
                 ->where('artist_id', $artistId)
                 ->where('chat_id', $chatId)
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->whereIn('status', [AgentDraft::STATUS_PENDING, AgentDraft::STATUS_REPLIED])
                 ->where('created_at', '>=', now()->subDay())
                 ->orderByDesc('created_at')
@@ -59,7 +60,7 @@ class DraftStore
     {
         $text = trim($text);
 
-        if ($text === '' || $draft->status === AgentDraft::STATUS_COMPARED || $draft->artist_reply !== null) {
+        if ($text === '' || $draft->status === AgentDraft::STATUS_COMPARED || $draft->artist_reply !== null || $draft->isSimulated()) {
             return $draft;
         }
 
@@ -78,7 +79,7 @@ class DraftStore
     {
         $text = trim($text);
 
-        if ($text === '' || $draft->status === AgentDraft::STATUS_COMPARED) {
+        if ($text === '' || $draft->status === AgentDraft::STATUS_COMPARED || $draft->isSimulated()) {
             return $draft;
         }
 

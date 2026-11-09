@@ -6,22 +6,24 @@ use App\Models\AgentDraft;
 use App\Models\Lead;
 
 /**
- * Builds calibration turns for one lead:
+ * Per-customer-message calibration blocks:
  *
- *   client message(s)  ->  Beatriz draft (not sent)  ->  artist reply(ies)
+ *   customer message (left)
+ *      -> Beatriz mock/draft (below)
+ *      -> artist reply(ies) (right)
  *
- * This is the chat-shaped view used on the Calibração page. The generic
- * timeline is still used on the lead page.
+ * A simulated draft is matched by `lead_message_id`; a live draft is matched to
+ * the closest customer message before it, preferring a message whose text is
+ * inside the draft `lead_text`.
  */
 class CalibrationConversation
 {
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function forLead(Lead $lead, int $limit = 60): array
+    public function forLead(Lead $lead, int $limit = 80): array
     {
         $artistName = $lead->artist?->displayName() ?: 'Artista';
-        $events = [];
 
         try {
             $messages = $lead->chatMessages()
@@ -31,6 +33,9 @@ class CalibrationConversation
         } catch (\Throwable $e) {
             $messages = collect();
         }
+
+        $blocks = [];
+        $rights = [];
 
         foreach ($messages as $message) {
             if (! $message->is_displayable) {
@@ -43,19 +48,26 @@ class CalibrationConversation
                 continue;
             }
 
-            $isHuman = $message->message_type === 'human';
-            $isArtist = $message->is_artist;
-
-            $events[] = [
+            $item = [
+                'id' => $message->id,
                 'at' => $message->created_at,
-                'kind' => $isHuman ? 'client' : 'right',
                 'content' => $content,
-                'sender' => $isHuman
+                'sender' => $message->message_type === 'human'
                     ? 'Cliente'
-                    : ($isArtist ? $artistName : 'Beatriz (enviado)'),
-                'is_artist' => $isArtist,
-                'order' => $isHuman ? 0 : 2,
+                    : ($message->is_artist ? $artistName : 'Beatriz (enviado)'),
+                'is_artist' => $message->is_artist,
             ];
+
+            if ($message->message_type === 'human') {
+                $blocks[] = [
+                    'message' => $item,
+                    'draft' => null,
+                    'alternates' => [],
+                    'replies' => [],
+                ];
+            } else {
+                $rights[] = $item;
+            }
         }
 
         try {
@@ -68,126 +80,140 @@ class CalibrationConversation
         }
 
         foreach ($drafts as $draft) {
-            $judge = $draft->comparison['judge'] ?? null;
+            $event = $this->draftEvent($draft);
+            $index = $this->draftBlockIndex($blocks, $draft, $event);
 
-            $events[] = [
-                'at' => $draft->created_at,
-                'kind' => 'draft',
-                'draft' => $draft,
-                'lead_text' => $draft->lead_text,
-                'order' => 1,
-                'status' => $draft->status,
-                'is_superseded' => $draft->status === AgentDraft::STATUS_SUPERSEDED,
-                'verdict' => is_array($judge) ? ($judge['verdict'] ?? null) : null,
-                'acceptable' => is_array($judge) ? ($judge['acceptable'] ?? null) : null,
-                'rationale' => is_array($judge) ? ($judge['rationale'] ?? null) : null,
-            ];
-        }
-
-        usort($events, function (array $a, array $b) {
-            $left = $a['at']?->getTimestamp() ?? 0;
-            $right = $b['at']?->getTimestamp() ?? 0;
-
-            return $left <=> $right ?: (($a['order'] ?? 0) <=> ($b['order'] ?? 0));
-        });
-
-        $turns = [];
-        $index = -1;
-
-        foreach ($events as $event) {
-            if ($event['kind'] === 'client') {
-                $current = $turns[$index] ?? null;
-                $clients = $current['clients'] ?? [];
-                $lastClientAt = $clients !== [] ? end($clients)['at'] : null;
-
-                $sameBurst = $current !== null
-                    && $current['draft'] === null
-                    && $current['right'] === []
-                    && $lastClientAt !== null
-                    && $lastClientAt->diffInSeconds($event['at']) <= 300;
-
-                if ($sameBurst) {
-                    $turns[$index]['clients'][] = $event;
-
-                    continue;
-                }
-
-                $turns[] = ['clients' => [$event], 'draft' => null, 'right' => [], 'alternates' => []];
-                $index = count($turns) - 1;
-
-                continue;
-            }
-
-            if ($event['kind'] === 'draft') {
-                $current = $turns[$index] ?? null;
-
-                if ($current !== null && $current['draft'] === null) {
-                    if ($current['clients'] === [] && trim((string) $event['lead_text']) !== '') {
-                        $turns[$index]['clients'][] = [
-                            'at' => $event['at'],
-                            'kind' => 'client',
-                            'content' => $event['lead_text'],
-                            'sender' => 'Cliente',
-                            'is_artist' => false,
-                            'order' => 0,
-                        ];
-                    }
-
-                    $turns[$index]['draft'] = $event;
-
-                    continue;
-                }
-
-                if ($current !== null && $current['draft'] !== null) {
-                    $existing = $current['draft'];
-
-                    // An active draft replaces a superseded attempt; other
-                    // attempts stay available under "Outras tentativas".
-                    if (! $event['is_superseded'] && ($existing['is_superseded'] ?? false)) {
-                        $turns[$index]['alternates'][] = $existing;
-                        $turns[$index]['draft'] = $event;
-                    } else {
-                        $turns[$index]['alternates'][] = $event;
-                    }
-
-                    continue;
-                }
-
-                $turns[] = [
-                    'clients' => trim((string) $event['lead_text']) !== '' ? [[
-                        'at' => $event['at'],
-                        'kind' => 'client',
-                        'content' => $event['lead_text'],
+            if ($index === null) {
+                $blocks[] = [
+                    'message' => trim((string) $draft->lead_text) !== '' ? [
+                        'id' => null,
+                        'at' => $draft->created_at,
+                        'content' => trim((string) $draft->lead_text),
                         'sender' => 'Cliente',
                         'is_artist' => false,
-                        'order' => 0,
-                    ]] : [],
+                    ] : null,
                     'draft' => $event,
-                    'right' => [],
                     'alternates' => [],
+                    'replies' => [],
                 ];
-                $index = count($turns) - 1;
 
                 continue;
             }
 
-            // Artist/Betriz sent message.
-            $current = $turns[$index] ?? null;
+            $existing = $blocks[$index]['draft'];
 
-            if ($current !== null) {
-                $turns[$index]['right'][] = $event;
+            if ($existing === null) {
+                $blocks[$index]['draft'] = $event;
+            } elseif (($existing['is_superseded'] ?? false) && ! $event['is_superseded']) {
+                $blocks[$index]['alternates'][] = $existing;
+                $blocks[$index]['draft'] = $event;
+            } else {
+                $blocks[$index]['alternates'][] = $event;
+            }
+        }
+
+        foreach ($rights as $right) {
+            $index = $this->lastBlockBefore($blocks, $right['at']);
+
+            if ($index === null) {
+                $blocks[] = [
+                    'message' => null,
+                    'draft' => null,
+                    'alternates' => [],
+                    'replies' => [$right],
+                ];
 
                 continue;
             }
 
-            $turns[] = ['clients' => [], 'draft' => null, 'right' => [$event], 'alternates' => []];
-            $index = count($turns) - 1;
+            $blocks[$index]['replies'][] = $right;
         }
 
-        if (count($turns) > $limit) {
-            $turns = array_slice($turns, -$limit);
+        usort($blocks, function (array $a, array $b) {
+            $left = $a['message']['at']?->getTimestamp() ?? 0;
+            $right = $b['message']['at']?->getTimestamp() ?? 0;
+
+            return $left <=> $right;
+        });
+
+        if (count($blocks) > $limit) {
+            $blocks = array_slice($blocks, -$limit);
         }
 
-        return $turns;
+        return $blocks;
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function draftEvent(AgentDraft $draft): array
+    {
+        $judge = $draft->comparison['judge'] ?? null;
+
+        return [
+            'draft' => $draft,
+            'status' => $draft->status,
+            'is_superseded' => $draft->status === AgentDraft::STATUS_SUPERSEDED,
+            'is_simulated' => $draft->isSimulated(),
+            'verdict' => is_array($judge) ? ($judge['verdict'] ?? null) : null,
+            'acceptable' => is_array($judge) ? ($judge['acceptable'] ?? null) : null,
+            'rationale' => is_array($judge) ? ($judge['rationale'] ?? null) : null,
+        ];
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
+    private function draftBlockIndex(array $blocks, AgentDraft $draft, array $event): ?int
+    {
+        if ($draft->lead_message_id !== null) {
+            foreach ($blocks as $index => $block) {
+                if ((int) ($block['message']['id'] ?? 0) === (int) $draft->lead_message_id) {
+                    return $index;
+                }
+            }
+        }
+
+        $needle = $this->norm((string) $draft->lead_text);
+        $fallback = null;
+
+        foreach ($blocks as $index => $block) {
+            $at = $block['message']['at'] ?? null;
+
+            if ($at === null || $at->gt($draft->created_at)) {
+                continue;
+            }
+
+            $fallback = $index;
+
+            if ($needle !== '' && str_contains($needle, $this->norm((string) ($block['message']['content'] ?? '')))) {
+                $fallback = $index;
+            }
+        }
+
+        return $fallback;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $blocks
+     */
+    private function lastBlockBefore(array $blocks, mixed $at): ?int
+    {
+        $found = null;
+
+        foreach ($blocks as $index => $block) {
+            $blockAt = $block['message']['at'] ?? null;
+
+            if ($blockAt !== null && $at !== null && $blockAt->lte($at)) {
+                $found = $index;
+            }
+        }
+
+        return $found;
+    }
+
+    private function norm(string $value): string
+    {
+        return mb_strtolower(trim(preg_replace('/\s+/', ' ', $value) ?? $value));
     }
 }

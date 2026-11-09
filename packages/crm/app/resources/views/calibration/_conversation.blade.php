@@ -1,24 +1,28 @@
-@php($turns = $turns ?? [])
+@php($blocks = $blocks ?? [])
 @php($artistName = $artistName ?? 'Artista')
 
 <div class="chat-thread" style="max-height:60vh; overflow-y:auto; padding-right:6px;">
-    @forelse ($turns as $turn)
+    @forelse ($blocks as $block)
+        @php($message = $block['message'] ?? null)
+        @php($draft = $block['draft'] ?? null)
+
         <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--border);">
-            @foreach ($turn['clients'] as $client)
+            @if ($message)
                 <div class="chat-bubble inbound">
                     <div class="chat-who">
-                        {{ $client['sender'] ?? 'Cliente' }}
-                        <span class="meta">· {{ $client['at']?->format('d/m H:i') }}</span>
+                        {{ $message['sender'] ?? 'Cliente' }}
+                        <span class="meta">· {{ $message['at']?->format('d/m H:i') }}</span>
                     </div>
-                    <div class="chat-text">{{ $client['content'] ?? '' }}</div>
+                    <div class="chat-text">{{ $message['content'] ?? '' }}</div>
                 </div>
-            @endforeach
+            @endif
 
-            @if ($turn['draft'])
-                @php($draft = $turn['draft'])
+            @if ($draft)
                 <div style="margin:10px 0; padding:11px 13px; border:1px dashed var(--gold, #D4B04C); border-radius:10px; background:rgba(212,176,76,.05);">
                     <div class="meta" style="text-transform:uppercase; letter-spacing:.5px;">
-                        <strong style="color:var(--gold, #D4B04C);">Beatriz teria respondido</strong>
+                        <strong style="color:var(--gold, #D4B04C);">
+                            {{ ($draft['is_simulated'] ?? false) ? 'Beatriz responderia (simulação)' : 'Beatriz teria respondido' }}
+                        </strong>
                         · {{ $draft['draft']->created_at?->format('d/m H:i') }}
 
                         @if (($draft['status'] ?? null) === 'pending')
@@ -31,6 +35,8 @@
                             </span>
                         @elseif (($draft['status'] ?? null) === 'superseded')
                             <span class="tag tag-muted">substituída</span>
+                        @elseif (($draft['status'] ?? null) === 'simulated')
+                            <span class="tag tag-muted">simulação</span>
                         @endif
                     </div>
 
@@ -50,14 +56,14 @@
                     @endif
                 </div>
 
-                @if (! empty($turn['alternates']))
+                @if (! empty($block['alternates']))
                     <details style="margin:-2px 0 10px 0;">
                         <summary class="meta" style="cursor:pointer;">
-                            Outras tentativas da Beatriz ({{ count($turn['alternates']) }})
+                            Outras tentativas da Beatriz ({{ count($block['alternates']) }})
                         </summary>
 
                         <div style="margin-top:6px;">
-                            @foreach (array_slice($turn['alternates'], 0, 8) as $alternate)
+                            @foreach (array_slice($block['alternates'], 0, 8) as $alternate)
                                 <div style="padding:7px 0; border-top:1px solid var(--border);">
                                     <div class="meta">
                                         {{ $alternate['draft']->created_at?->format('d/m H:i') }}
@@ -71,17 +77,19 @@
                         </div>
                     </details>
                 @endif
-            @elseif (! empty($turn['clients']))
-                <div class="meta" style="margin:8px 0;">Sem sugestão da Beatriz registrada para esta mensagem.</div>
+            @elseif ($message)
+                <div class="meta" style="margin:8px 0;">
+                    Sem sugestão da Beatriz registrada para esta mensagem.
+                </div>
             @endif
 
-            @foreach ($turn['right'] as $right)
-                <div class="chat-bubble outbound {{ ($right['is_artist'] ?? false) ? 'artist' : '' }}">
+            @foreach (($block['replies'] ?? []) as $reply)
+                <div class="chat-bubble outbound {{ ($reply['is_artist'] ?? false) ? 'artist' : '' }}">
                     <div class="chat-who">
-                        {{ $right['sender'] ?? $artistName }}
-                        <span class="meta">· {{ $right['at']?->format('d/m H:i') }}</span>
+                        {{ $reply['sender'] ?? $artistName }}
+                        <span class="meta">· {{ $reply['at']?->format('d/m H:i') }}</span>
                     </div>
-                    <div class="chat-text">{{ $right['content'] ?? '' }}</div>
+                    <div class="chat-text">{{ $reply['content'] ?? '' }}</div>
                 </div>
             @endforeach
         </div>

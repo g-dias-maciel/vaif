@@ -5,10 +5,13 @@ namespace Tests\Feature;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
+use App\Models\Lead;
+use App\Jobs\GenerateMockDrafts;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Str;
 use Tests\TestCase;
 
@@ -172,6 +175,27 @@ class CalibrationPanelTest extends TestCase
             ->assertSee('Fica R$ 600,00, quer ver os horários?')
             ->assertSee('draft_better')
             ->assertSee('Apontar para o CRM');
+    }
+
+    public function test_staff_can_request_mock_drafts_for_a_lead(): void
+    {
+        Queue::fake();
+        $artist = $this->artist();
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead',
+            'phone_e164' => '+5511900000000',
+        ]);
+
+        $this->actingAs($this->staff())
+            ->post(route('calibration.mock', [$artist, $lead]))
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        Queue::assertPushed(GenerateMockDrafts::class, function (GenerateMockDrafts $job) use ($artist, $lead) {
+            return $job->artistId === $artist->id && $job->leadId === $lead->id;
+        });
     }
 
     public function test_staff_can_point_the_session_at_the_crm(): void

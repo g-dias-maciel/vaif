@@ -21,6 +21,7 @@ class CalibrationReport
         try {
             $all = AgentDraft::query()
                 ->where('artist_id', $artist->id)
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->where('created_at', '>=', now()->subDays(max(1, $days)))
                 ->orderBy('created_at')
                 ->get();

@@ -97,6 +97,7 @@ class CalibrationFacts
         try {
             return AgentDraft::query()
                 ->where('artist_id', $artist->id)
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->where('created_at', '>=', $since)
                 ->orderByDesc('created_at')
                 ->get();
@@ -241,11 +242,13 @@ class CalibrationFacts
             return [
                 'pending' => AgentDraft::query()
                     ->where('artist_id', $artist->id)
+                    ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                     ->where('status', AgentDraft::STATUS_PENDING)
                     ->where('created_at', '<', $now->copy()->subHours($pendingHours))
                     ->count(),
                 'replied' => AgentDraft::query()
                     ->where('artist_id', $artist->id)
+                    ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                     ->where('status', AgentDraft::STATUS_REPLIED)
                     ->whereNull('comparison')
                     ->where('artist_replied_at', '<', $now->copy()->subHours($repliedHours))

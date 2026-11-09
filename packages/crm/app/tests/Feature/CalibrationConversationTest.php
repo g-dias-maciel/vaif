@@ -40,15 +40,15 @@ class CalibrationConversationTest extends TestCase
             'status' => AgentDraft::STATUS_PENDING,
         ]);
 
-        $turns = (new CalibrationConversation())->forLead($lead);
+        $blocks = (new CalibrationConversation())->forLead($lead);
 
-        $this->assertCount(1, $turns);
-        $this->assertSame('Quanto fica uma tattoo no braço?', $turns[0]['clients'][0]['content']);
-        $this->assertNotNull($turns[0]['draft']);
-        $this->assertSame('Fica R$ 600, qual o tamanho?', $turns[0]['draft']['draft']->draft_reply);
+        $this->assertCount(1, $blocks);
+        $this->assertSame('Quanto fica uma tattoo no braço?', $blocks[0]['message']['content']);
+        $this->assertNotNull($blocks[0]['draft']);
+        $this->assertSame('Fica R$ 600, qual o tamanho?', $blocks[0]['draft']['draft']->draft_reply);
 
         $html = view('calibration._conversation', [
-            'turns' => $turns,
+            'blocks' => $blocks,
             'artistName' => 'Adriano',
         ])->render();
 

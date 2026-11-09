@@ -243,8 +243,22 @@
                 Conversa · cliente à esquerda, {{ $artist->displayName() }} à direita, Beatriz abaixo do cliente
             </div>
 
+            @if (! empty($group['lead']) && ($group['missing'] ?? 0) > 0)
+                <form method="post" action="{{ route('calibration.mock', [$artist, $group['lead']]) }}" style="margin-bottom:10px;">
+                    @csrf
+                    <button type="submit" class="btn btn--small"
+                        onclick="return confirm('Gerar respostas simuladas da Beatriz para as mensagens sem sugestão? Nada será enviado ao lead.');">
+                        Gerar {{ min(20, $group['missing']) }} resposta(s) da Beatriz
+                        @if ($group['missing'] > 20)
+                            (de {{ $group['missing'] }})
+                        @endif
+                    </button>
+                    <span class="meta">· simulação, nada é enviado.</span>
+                </form>
+            @endif
+
             @include('calibration._conversation', [
-                'turns' => $group['turns'] ?? [],
+                'blocks' => $group['blocks'] ?? [],
                 'artistName' => $artist->displayName(),
             ])
 

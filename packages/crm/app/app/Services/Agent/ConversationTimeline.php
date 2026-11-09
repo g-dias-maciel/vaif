@@ -62,6 +62,7 @@ class ConversationTimeline
         try {
             $drafts = AgentDraft::query()
                 ->where('lead_id', $lead->id)
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->whereIn('status', [
                     AgentDraft::STATUS_PENDING,
                     AgentDraft::STATUS_REPLIED,

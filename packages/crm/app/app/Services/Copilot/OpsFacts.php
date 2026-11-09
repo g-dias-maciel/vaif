@@ -184,6 +184,7 @@ class OpsFacts
 
         try {
             $pending = AgentDraft::query()
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->where('status', AgentDraft::STATUS_PENDING)
                 ->where('created_at', '<', $now->copy()->subHours($pendingHours))
                 ->orderBy('created_at')
@@ -191,6 +192,7 @@ class OpsFacts
                 ->get();
 
             $replied = AgentDraft::query()
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
                 ->where('status', AgentDraft::STATUS_REPLIED)
                 ->whereNull('comparison')
                 ->where('artist_replied_at', '<', $now->copy()->subHours($repliedHours))

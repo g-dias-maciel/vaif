@@ -140,6 +140,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/calibration/{artist}', [CalibrationController::class, 'show'])->name('calibration.show');
         Route::post('/calibration/{artist}/mode', [CalibrationController::class, 'updateMode'])->name('calibration.mode');
         Route::post('/calibration/{artist}/webhook', [CalibrationController::class, 'updateWebhook'])->name('calibration.webhook');
+        Route::post('/calibration/{artist}/leads/{lead}/mock', [CalibrationController::class, 'mock'])->name('calibration.mock');
 
         Route::get('/promotions', [PromotionAdminController::class, 'index'])->name('promotions.index');
         Route::get('/promotions/create', [PromotionAdminController::class, 'create'])->name('promotions.create');

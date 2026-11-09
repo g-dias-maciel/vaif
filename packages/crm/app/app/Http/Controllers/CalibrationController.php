@@ -5,8 +5,10 @@ namespace App\Http\Controllers;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
+use App\Models\Lead;
 use App\Services\Agent\CalibrationConversation;
 use App\Services\Agent\CalibrationReport;
+use App\Jobs\GenerateMockDrafts;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -57,6 +59,10 @@ class CalibrationController extends Controller
             ->map(function ($group) use ($conversation) {
                 $sorted = $group->sortByDesc('created_at')->values();
                 $latest = $sorted->first();
+                $blocks = $latest?->lead ? $conversation->forLead($latest->lead, 200) : [];
+                $missing = collect($blocks)->filter(
+                    fn ($block) => ! empty($block['message']['id']) && $block['draft'] === null
+                )->count();
 
                 return [
                     'latest' => $latest,
@@ -65,9 +71,8 @@ class CalibrationController extends Controller
                     'lead' => $latest?->lead,
                     'lead_name' => $latest?->lead?->name,
                     'chat_id' => $latest?->chat_id,
-                    'turns' => $latest?->lead
-                        ? $conversation->forLead($latest->lead, 80)
-                        : [],
+                    'blocks' => array_slice($blocks, -80),
+                    'missing' => $missing,
                 ];
             })
             ->sortByDesc(fn ($group) => $group['latest']?->created_at)
@@ -165,6 +170,25 @@ class CalibrationController extends Controller
             $ok
                 ? 'Webhook atualizado no WAHA. A sessão continua autenticada; não precisa ler o QR.'
                 : 'Não foi possível atualizar o webhook. Verifique a conexão com o WAHA e a API key.'
+        );
+    }
+
+    public function mock(Request $request, Artist $artist, Lead $lead)
+    {
+        abort_unless($lead->artist_id === $artist->id, 404);
+
+        if (! $this->schemaReady()) {
+            return back()->with('error', 'A migração de calibração ainda não foi aplicada.');
+        }
+
+        $limit = min(50, max(1, (int) $request->input('limit', 20)));
+
+        GenerateMockDrafts::dispatch($artist->id, $lead->id, $limit)
+            ->onQueue((string) config('agent.queue', 'agent'));
+
+        return back()->with(
+            'status',
+            "Gerando até {$limit} resposta(s) simuladas da Beatriz para esta conversa. Nada será enviado ao lead."
         );
     }
 

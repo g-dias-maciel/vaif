@@ -21,6 +21,10 @@ class AgentDraft extends Model
     public const STATUS_COMPARED = 'compared';
     public const STATUS_EXPIRED = 'expired';
     public const STATUS_SUPERSEDED = 'superseded';
+    public const STATUS_SIMULATED = 'simulated';
+
+    public const SOURCE_LIVE = 'live';
+    public const SOURCE_SIMULATED = 'simulated';
 
     public $incrementing = false;
 
@@ -37,6 +41,8 @@ class AgentDraft extends Model
         'turn_id',
         'lead_text',
         'lead_msg_at',
+        'lead_message_id',
+        'source',
         'intent',
         'intent_confidence',
         'facts',
@@ -66,6 +72,7 @@ class AgentDraft extends Model
         'artist_validation' => 'array',
         'comparison' => 'array',
         'intent_confidence' => 'float',
+        'lead_message_id' => 'integer',
         'response_seconds' => 'integer',
         'lead_msg_at' => 'datetime',
         'artist_replied_at' => 'datetime',
@@ -85,6 +92,11 @@ class AgentDraft extends Model
     public function isOpen(): bool
     {
         return in_array($this->status, [self::STATUS_PENDING, self::STATUS_REPLIED], true);
+    }
+
+    public function isSimulated(): bool
+    {
+        return $this->source === self::SOURCE_SIMULATED;
     }
 
     public function judgeVerdict(): ?string
