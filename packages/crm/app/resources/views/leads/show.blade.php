@@ -44,7 +44,7 @@
     <h2 class="section-title" style="margin-top:0;">Conversa</h2>
 
     <div id="conversation-body" data-url="{{ route('leads.conversation', $lead) }}">
-        @include('leads._conversation', ['chatMessages' => $chatMessages])
+        @include('leads._conversation', ['timeline' => $timeline])
     </div>
 </div>
 

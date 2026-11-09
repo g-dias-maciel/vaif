@@ -7,6 +7,7 @@ use App\Models\ChatMessage;
 use App\Models\Lead;
 use App\Models\Note;
 use App\Models\Project;
+use App\Services\Agent\ConversationTimeline;
 use App\Services\DepositService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -37,8 +38,7 @@ class LeadController extends Controller
         return view('leads.show', [
             'lead' => $lead,
             'pipeline' => config('crm.pipeline_statuses'),
-            'chatMessages' => $this->latestChatMessages($lead),
-            'draftSummary' => $this->latestDrafts($lead),
+            'timeline' => app(ConversationTimeline::class)->forLead($lead),
             'eventLabels' => config('crm.event_labels'),
             'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
             'chatOwner' => $this->chatOwner($lead),
@@ -55,8 +55,7 @@ class LeadController extends Controller
 
         return view('leads._conversation', [
             'lead' => $lead,
-            'chatMessages' => $this->latestChatMessages($lead),
-            'draftSummary' => $this->latestDrafts($lead),
+            'timeline' => app(ConversationTimeline::class)->forLead($lead),
             'chatOwner' => $this->chatOwner($lead),
         ]);
     }

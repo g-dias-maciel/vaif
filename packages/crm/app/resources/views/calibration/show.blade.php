@@ -307,6 +307,21 @@
                     </div>
                 </details>
             @endif
+
+            @if (! empty($group['timeline']))
+                <details style="margin-top:12px;">
+                    <summary class="meta" style="cursor:pointer;">Ver conversa ({{ count($group['timeline']) }} itens)</summary>
+                    <div style="margin-top:8px;">
+                        @include('leads._timeline', ['timeline' => $group['timeline'], 'scroll' => true])
+                    </div>
+                </details>
+            @endif
+
+            @if (! empty($group['lead']))
+                <div style="margin-top:10px;">
+                    <a href="{{ route('leads.show', $group['lead']) }}" class="btn btn--ghost btn--small">Abrir lead</a>
+                </div>
+            @endif
         </div>
     @empty
         <p class="meta">Nenhum rascunho ainda. Quando o artista estiver em draft e a sessão apontar para o CRM, as sugestões aparecem aqui e na página do lead.</p>
