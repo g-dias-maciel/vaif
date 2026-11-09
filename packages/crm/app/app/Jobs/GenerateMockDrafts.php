@@ -18,6 +18,8 @@ class GenerateMockDrafts implements ShouldQueue
 
     public int $tries = 1;
 
+    public int $timeout = 300;
+
     public function __construct(
         public readonly string $artistId,
         public readonly string $leadId,

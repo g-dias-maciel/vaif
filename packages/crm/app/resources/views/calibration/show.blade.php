@@ -248,8 +248,8 @@
                     @csrf
                     <button type="submit" class="btn btn--small"
                         onclick="return confirm('Gerar respostas simuladas da Beatriz para as mensagens sem sugestão? Nada será enviado ao lead.');">
-                        Gerar {{ min(20, $group['missing']) }} resposta(s) da Beatriz
-                        @if ($group['missing'] > 20)
+                        Gerar {{ min(10, $group['missing']) }} resposta(s) da Beatriz
+                        @if ($group['missing'] > 10)
                             (de {{ $group['missing'] }})
                         @endif
                     </button>

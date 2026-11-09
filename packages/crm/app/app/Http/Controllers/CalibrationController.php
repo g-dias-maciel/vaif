@@ -181,7 +181,7 @@ class CalibrationController extends Controller
             return back()->with('error', 'A migração de calibração ainda não foi aplicada.');
         }
 
-        $limit = min(50, max(1, (int) $request->input('limit', 20)));
+        $limit = min(20, max(1, (int) $request->input('limit', 10)));
 
         GenerateMockDrafts::dispatch($artist->id, $lead->id, $limit)
             ->onQueue((string) config('agent.queue', 'agent'));
