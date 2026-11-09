@@ -25,7 +25,12 @@ class ProcessWhatsAppTurn implements ShouldQueue
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
-    public int $tries = 3;
+    // A debounce turn can be released several times while the lead is typing.
+    // `tries` counts releases, so it must be much larger than the number of
+    // actual exceptions; `maxExceptions` still stops a genuinely broken job.
+    public int $tries = 100;
+
+    public int $maxExceptions = 3;
 
     /** @var array<int, int> */
     public array $backoff = [5, 15];
