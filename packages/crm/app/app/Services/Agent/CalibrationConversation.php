@@ -130,8 +130,10 @@ class CalibrationConversation
         }
 
         usort($blocks, function (array $a, array $b) {
-            $left = $a['message']['at']?->getTimestamp() ?? 0;
-            $right = $b['message']['at']?->getTimestamp() ?? 0;
+            $leftAt = $a['message'] ? ($a['message']['at'] ?? null) : null;
+            $rightAt = $b['message'] ? ($b['message']['at'] ?? null) : null;
+            $left = $leftAt?->getTimestamp() ?? 0;
+            $right = $rightAt?->getTimestamp() ?? 0;
 
             return $left <=> $right;
         });
@@ -168,7 +170,7 @@ class CalibrationConversation
     {
         if ($draft->lead_message_id !== null) {
             foreach ($blocks as $index => $block) {
-                if ((int) ($block['message']['id'] ?? 0) === (int) $draft->lead_message_id) {
+                if ($block['message'] && (int) ($block['message']['id'] ?? 0) === (int) $draft->lead_message_id) {
                     return $index;
                 }
             }
@@ -178,7 +180,7 @@ class CalibrationConversation
         $fallback = null;
 
         foreach ($blocks as $index => $block) {
-            $at = $block['message']['at'] ?? null;
+            $at = $block['message'] ? ($block['message']['at'] ?? null) : null;
 
             if ($at === null || $at->gt($draft->created_at)) {
                 continue;
@@ -186,7 +188,7 @@ class CalibrationConversation
 
             $fallback = $index;
 
-            if ($needle !== '' && str_contains($needle, $this->norm((string) ($block['message']['content'] ?? '')))) {
+            if ($needle !== '' && $block['message'] && str_contains($needle, $this->norm((string) ($block['message']['content'] ?? '')))) {
                 $fallback = $index;
             }
         }
@@ -202,7 +204,7 @@ class CalibrationConversation
         $found = null;
 
         foreach ($blocks as $index => $block) {
-            $blockAt = $block['message']['at'] ?? null;
+            $blockAt = $block['message'] ? ($block['message']['at'] ?? null) : null;
 
             if ($blockAt !== null && $at !== null && $blockAt->lte($at)) {
                 $found = $index;
