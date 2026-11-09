@@ -61,6 +61,11 @@ class Kernel extends ConsoleKernel
             ->dailyAt('06:10')
             ->timezone('America/Sao_Paulo')
             ->withoutOverlapping(30);
+
+        $schedule->command('finance:generate-recurring-expenses')
+            ->dailyAt('06:20')
+            ->timezone('America/Sao_Paulo')
+            ->withoutOverlapping(30);
     }
 
     /**

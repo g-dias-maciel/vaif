@@ -3,10 +3,12 @@
 namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
+use App\Models\BillingExpense;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
 use App\Models\Prospect;
 use App\Models\ProspectContract;
+use App\Services\Finance\MonthlyFinanceReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
 
@@ -15,7 +17,7 @@ use Illuminate\Http\Request;
  */
 class DashboardController extends Controller
 {
-    public function index()
+    public function index(MonthlyFinanceReport $report)
     {
         $today = now()->startOfDay();
         $monthStart = $today->copy()->startOfMonth();
@@ -83,6 +85,15 @@ class DashboardController extends Controller
             ->limit(10)
             ->get();
 
+        $upcomingExpenses = BillingExpense::query()
+            ->where('status', BillingExpense::STATUS_PENDING)
+            ->whereBetween('due_date', [$today->toDateString(), $in30->toDateString()])
+            ->orderBy('due_date')
+            ->limit(10)
+            ->get();
+
+        $monthly = $report->summary($today->copy()->startOfMonth());
+
         return view('finance.dashboard', [
             'mrr' => $mrr,
             'contractCount' => $contractCount,
@@ -98,6 +109,8 @@ class DashboardController extends Controller
             'recentPayments' => $recentPayments,
             'withoutContract' => $withoutContract,
             'upcoming' => $upcoming,
+            'upcomingExpenses' => $upcomingExpenses,
+            'monthly' => $monthly,
         ]);
     }
 

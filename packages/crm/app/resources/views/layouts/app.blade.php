@@ -697,8 +697,14 @@
                                 <a href="{{ route('finance.dashboard') }}" class="nav-item {{ request()->routeIs('finance.dashboard') ? 'is-active' : '' }}">
                                     <x-icon name="chart" /> <span>Visão financeira</span>
                                 </a>
+                                <a href="{{ route('finance.months') }}" class="nav-item {{ request()->routeIs('finance.months') ? 'is-active' : '' }}">
+                                    <x-icon name="grid" /> <span>Visão mensal</span>
+                                </a>
                                 <a href="{{ route('finance.invoices.index') }}" class="nav-item {{ request()->routeIs('finance.invoices.*') ? 'is-active' : '' }}">
                                     <x-icon name="promo" /> <span>Cobranças</span>
+                                </a>
+                                <a href="{{ route('finance.expenses.index') }}" class="nav-item {{ request()->routeIs('finance.expenses.*') ? 'is-active' : '' }}">
+                                    <x-icon name="promo" /> <span>Despesas</span>
                                 </a>
                                 <a href="{{ route('finance.clients') }}" class="nav-item {{ request()->routeIs('finance.clients') || request()->routeIs('finance.contracts.*') ? 'is-active' : '' }}">
                                     <x-icon name="users" /> <span>Clientes e contratos</span>

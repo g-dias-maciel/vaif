@@ -13,6 +13,8 @@
         </div>
         <div class="fin-actions">
             <a href="{{ route('finance.invoices.create') }}" class="btn btn--small">Nova cobrança</a>
+            <a href="{{ route('finance.expenses.create') }}" class="btn btn--ghost btn--small">Nova despesa</a>
+            <a href="{{ route('finance.months') }}" class="btn btn--ghost btn--small">Visão mensal</a>
             <a href="{{ route('finance.clients') }}" class="btn btn--ghost btn--small">Clientes e contratos</a>
             <a href="{{ route('finance.payments.index') }}" class="btn btn--ghost btn--small">Pagamentos</a>
         </div>
@@ -51,6 +53,21 @@
             <div class="value">{{ $cardCount }} <span class="fin-note">cartão</span> / {{ $pixCount }} <span class="fin-note">PIX</span></div>
             <div class="hint">Cobrança por cartão não gera invoice.</div>
         </div>
+        <div class="fin-card">
+            <div class="label">Despesas do mês</div>
+            <div class="value fin-tone-pending"><x-money :cents="$monthly['expenses_cents']" /></div>
+            <div class="hint">Pagas: <x-money :cents="$monthly['expenses_paid_cents']" /></div>
+        </div>
+        <div class="fin-card">
+            <div class="label">A pagar no mês</div>
+            <div class="value fin-tone-pending"><x-money :cents="$monthly['payables_cents']" /></div>
+            <div class="hint">Vencido: <x-money :cents="$monthly['overdue_payables_cents']" /></div>
+        </div>
+        <div class="fin-card">
+            <div class="label">Lucro caixa</div>
+            <div class="value {{ $monthly['profit_cash_cents'] >= 0 ? 'fin-tone-ok' : 'fin-tone-danger' }}"><x-money :cents="$monthly['profit_cash_cents']" /></div>
+            <div class="hint">Resultado: <x-money :cents="$monthly['profit_accrual_cents']" /></div>
+        </div>
     </div>
 
     <div class="fin-section">
@@ -82,6 +99,41 @@
                                     <a href="{{ route('finance.contracts.edit', $contract) }}" class="btn btn--ghost btn--small">Contrato</a>
                                 @endif
                             </td>
+                        </tr>
+                    @endforeach
+                </tbody>
+            </table>
+        @endif
+    </div>
+
+    <div class="fin-section">
+        <h2>Contas a pagar nos próximos 30 dias</h2>
+        @if ($upcomingExpenses->isEmpty())
+            <p class="sales-empty">Nenhuma despesa pendente nos próximos 30 dias.</p>
+        @else
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Despesa</th>
+                        <th>Categoria</th>
+                        <th>Vencimento</th>
+                        <th>Valor</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($upcomingExpenses as $expense)
+                        <tr>
+                            <td>
+                                <strong>{{ $expense->description }}</strong>
+                                @if ($expense->vendor)
+                                    <div class="sales-sub">{{ $expense->vendor }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $expense->categoryLabel() }}</td>
+                            <td>{{ $expense->due_date?->format('d/m/Y') }}</td>
+                            <td><x-money :cents="$expense->amount_cents" /></td>
+                            <td><a href="{{ route('finance.expenses.edit', $expense) }}" class="btn btn--ghost btn--small">Abrir</a></td>
                         </tr>
                     @endforeach
                 </tbody>

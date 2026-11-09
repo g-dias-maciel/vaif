@@ -11,7 +11,9 @@ use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Finance\ContractController as FinanceContractController;
 use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
+use App\Http\Controllers\Finance\ExpenseController as FinanceExpenseController;
 use App\Http\Controllers\Finance\InvoiceController as FinanceInvoiceController;
+use App\Http\Controllers\Finance\MonthlyController as FinanceMonthlyController;
 use App\Http\Controllers\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\Finance\SettingController as FinanceSettingController;
 use App\Http\Controllers\LeadController;
@@ -158,6 +160,17 @@ Route::middleware('auth')->group(function () {
     Route::middleware('role:staff')->prefix('finance')->name('finance.')->group(function () {
         Route::get('/', [FinanceDashboardController::class, 'index'])->name('dashboard');
         Route::get('/clients', [FinanceDashboardController::class, 'clients'])->name('clients');
+        Route::get('/months', [FinanceMonthlyController::class, 'index'])->name('months');
+
+        Route::get('/expenses', [FinanceExpenseController::class, 'index'])->name('expenses.index');
+        Route::get('/expenses/create', [FinanceExpenseController::class, 'create'])->name('expenses.create');
+        Route::post('/expenses', [FinanceExpenseController::class, 'store'])->name('expenses.store');
+        Route::post('/expenses/generate-recurring', [FinanceExpenseController::class, 'generateRecurring'])->name('expenses.generate-recurring');
+        Route::get('/expenses/{expense}/edit', [FinanceExpenseController::class, 'edit'])->name('expenses.edit');
+        Route::put('/expenses/{expense}', [FinanceExpenseController::class, 'update'])->name('expenses.update');
+        Route::post('/expenses/{expense}/paid', [FinanceExpenseController::class, 'markPaid'])->name('expenses.paid');
+        Route::post('/expenses/{expense}/cancel', [FinanceExpenseController::class, 'cancel'])->name('expenses.cancel');
+        Route::delete('/expenses/{expense}', [FinanceExpenseController::class, 'destroy'])->name('expenses.destroy');
 
         Route::get('/clients/{prospect}/contract/create', [FinanceContractController::class, 'create'])->name('contracts.create');
         Route::post('/clients/{prospect}/contract', [FinanceContractController::class, 'store'])->name('contracts.store');

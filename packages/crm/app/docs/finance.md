@@ -45,11 +45,73 @@ php artisan finance:mark-overdue
 
 # Preview
 php artisan finance:mark-overdue --dry-run
+
+# Clone monthly recurring expenses up to next month
+php artisan finance:generate-recurring-expenses
+
+# Or up to a specific month
+php artisan finance:generate-recurring-expenses --through=2027-01
 ```
 
-Run both daily (Laravel scheduler or the Coolify cron). `finance:generate-invoices`
-skips card contracts and advances `next_invoice_at` by one month; it caps a
-single run at 24 catch-up invoices per contract.
+The container runs all three daily: invoices at 06:00, overdue checks at 06:10
+and recurring expenses at 06:20. `finance:generate-invoices` skips card
+contracts and advances `next_invoice_at` by one month; it caps a single run at
+24 catch-up invoices per contract.
+
+## Expenses (saídas)
+
+Every cost is a `billing_expenses` row assigned to a **competence month**:
+
+- description, vendor, category;
+- amount;
+- competence month and due date;
+- status `pending` / `paid` / `cancelled`;
+- payment method and optional notes;
+- recurrence `one_off` / `monthly`.
+
+Categories: anúncios, ferramentas, salários/pró-labore, freelancers, impostos,
+estrutura, outros.
+
+A pending expense past its due date is shown as overdue. **Financeiro →
+Despesas** shows the selected month’s total, paid, pending and overdue, and
+lets staff mark an expense as paid or cancel it.
+
+### Recurring expenses
+
+A monthly expense is the template. The CLI clones it into every missing month
+up to the target month (default: next month):
+
+```bash
+php artisan finance:generate-recurring-expenses
+php artisan finance:generate-recurring-expenses --through=2027-01
+php artisan finance:generate-recurring-expenses --dry-run
+```
+
+The same action is available as **Gerar recorrentes** on the Expenses page.
+Clones are idempotent by `(recurrence_key, competence_month)`. If the latest
+expense in a series is cancelled, the series stops; create a new monthly
+expense to restart it.
+
+## Monthly overview
+
+**Financeiro → Visão mensal** shows the selected month and the last 12 months:
+
+| Column | Meaning |
+|---|---|
+| Cobrado | invoices whose `period_start` is in the month (not cancelled) |
+| Recebido | payments whose `paid_at` is in the month (PIX + card) |
+| Despesas | expenses whose `competence_month` is the month |
+| Desp. pagas | expenses whose `paid_at` is in the month |
+| Lucro caixa | Recebido − Despesas pagas |
+| A pagar | pending expenses for the month |
+| Resultado | Cobrado − Despesas do mês |
+| MRR | active contracts at month end |
+
+The dashboard also shows the current month’s expenses, payables, cash profit
+and a “Contas a pagar nos próximos 30 dias” list.
+
+Both commands run daily: invoices at 06:00, overdue checks at 06:10 and
+recurring expenses at 06:20 (America/Sao_Paulo).
 
 ## Statuses
 
