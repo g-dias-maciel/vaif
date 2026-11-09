@@ -202,6 +202,29 @@ class FinanceTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_clients_page_eager_loads_the_latest_active_contract(): void
+    {
+        $this->contract([
+            'start_date' => now()->subYear()->toDateString(),
+            'next_invoice_at' => now()->addMonth()->toDateString(),
+        ]);
+
+        $latest = $this->contract([
+            'start_date' => now()->subDay()->toDateString(),
+            'next_invoice_at' => now()->addMonth()->toDateString(),
+        ]);
+
+        $this->actingAs($this->staff)
+            ->get(route('finance.clients'))
+            ->assertOk()
+            ->assertSee($this->prospect->name);
+
+        $loaded = Prospect::with('activeContract')->findOrFail($this->prospect->id);
+
+        $this->assertNotNull($loaded->activeContract);
+        $this->assertSame($latest->id, $loaded->activeContract->id);
+    }
+
     public function test_staff_can_link_a_contract_without_creating_a_login(): void
     {
         $this->actingAs($this->staff)

@@ -154,9 +154,13 @@ class Prospect extends Model
 
     public function activeContract(): HasOne
     {
+        // Do not use latestOfMany() here: it adds MAX(id), and Postgres has no
+        // MAX(uuid) aggregate. The ordered hasOne picks the first row per
+        // prospect when eager loaded.
         return $this->hasOne(ProspectContract::class, 'prospect_id')
             ->where('status', ProspectContract::STATUS_ACTIVE)
-            ->latestOfMany('start_date');
+            ->orderByDesc('start_date')
+            ->orderByDesc('created_at');
     }
 
     public function invoices(): HasMany
