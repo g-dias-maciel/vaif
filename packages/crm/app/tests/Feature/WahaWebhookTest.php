@@ -228,6 +228,28 @@ class WahaWebhookTest extends TestCase
         $this->assertSame('Oi, aqui é a Eva', $this->store->artistMessages[0]['text']);
     }
 
+    public function test_a_numeric_from_me_flag_is_treated_as_the_artist(): void
+    {
+        Queue::fake();
+        $this->artist('live', 'draft');
+
+        $this->sendWebhook([
+            'event' => 'message.any',
+            'session' => 'agent-artist',
+            'payload' => [
+                'fromMe' => 1,
+                'source' => 'app',
+                'from' => '553599968249@c.us',
+                'to' => '5511900000001@c.us',
+                'body' => 'Oi, aqui é a Eva',
+                '_data' => ['key' => ['remoteJid' => '5511900000001@c.us', 'fromMe' => 1]],
+            ],
+        ])->assertOk()->assertJson(['from_me' => true]);
+
+        $this->assertSame(['agent-artist:5511900000001@c.us'], $this->store->controls);
+        $this->assertSame('Oi, aqui é a Eva', $this->store->artistMessages[0]['text']);
+    }
+
     public function test_a_from_me_message_sent_by_the_api_is_not_an_artist_takeover(): void
     {
         Queue::fake();

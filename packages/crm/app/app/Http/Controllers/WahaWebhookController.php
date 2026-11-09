@@ -33,6 +33,24 @@ class WahaWebhookController extends Controller
         $session = (string) ($body['session'] ?? '');
         $payload = is_array($body['payload'] ?? null) ? $body['payload'] : [];
 
+        if (in_array($event, ['message', 'message.any'], true)) {
+            $key = is_array($payload['_data']['key'] ?? null) ? $payload['_data']['key'] : [];
+
+            Log::info('WAHA message event', [
+                'session' => $session,
+                'event' => $event,
+                'fromMe_raw' => $payload['fromMe'] ?? null,
+                'fromMe_bool' => $this->isFromMe($payload),
+                'source' => $payload['source'] ?? null,
+                'from' => $payload['from'] ?? null,
+                'to' => $payload['to'] ?? null,
+                'remote_jid' => $key['remoteJid'] ?? null,
+                'remote_jid_alt' => $key['remoteJidAlt'] ?? null,
+                'has_body' => trim((string) ($payload['body'] ?? '')) !== '',
+                'wa_id' => $payload['id'] ?? null,
+            ]);
+        }
+
         if ($session === '') {
             return response()->json(['ignored' => 'no_session']);
         }
@@ -77,7 +95,7 @@ class WahaWebhookController extends Controller
             return response()->json(['ignored' => 'blocked']);
         }
 
-        if (($payload['fromMe'] ?? false) === true) {
+        if ($this->isFromMe($payload)) {
             // message.any also echoes what the CRM itself sent through the
             // WAHA API. Those are not artist takeovers.
             if (($payload['source'] ?? '') === 'api') {
@@ -250,12 +268,20 @@ class WahaWebhookController extends Controller
         $jid = (string) ($key['remoteJid'] ?? '');
 
         if ($jid === '') {
-            $jid = (string) (($payload['fromMe'] ?? false) === true
+            $jid = (string) ($this->isFromMe($payload)
                 ? ($payload['to'] ?? $payload['from'] ?? '')
                 : ($payload['from'] ?? ''));
         }
 
         return $session.':'.$jid;
+    }
+
+    /**
+     * WAHA has emitted both boolean true and numeric 1 for `fromMe`.
+     */
+    private function isFromMe(array $payload): bool
+    {
+        return filter_var($payload['fromMe'] ?? false, FILTER_VALIDATE_BOOLEAN);
     }
 
     private function digits(string $jid): string
