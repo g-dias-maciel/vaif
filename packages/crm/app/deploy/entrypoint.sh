@@ -30,9 +30,11 @@ chown -R www-data:www-data storage bootstrap/cache
 
 # --- Caches ------------------------------------------------------------------
 # Rebuilt on every boot so env-var changes made in Coolify take effect on the
-# next deploy/restart. `route:cache` is deliberately omitted: routes/api.php
-# registers a closure, which Laravel refuses to cache.
-php artisan optimize:clear >/dev/null 2>&1 || true
+# next deploy/restart. Run these as www-data: writing them as root leaves
+# root-owned cache/view files that break login sessions and view recompiles.
+# `route:cache` is deliberately omitted: routes/api.php registers a closure,
+# which Laravel refuses to cache.
+su -s /bin/sh www-data -c "php artisan optimize:clear" >/dev/null 2>&1 || true
 
 # Public mirror for uploaded reference media (idempotent; the target may be on a
 # persistent volume).
@@ -49,9 +51,9 @@ if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
     php artisan migrate --force --no-interaction
 fi
 
-echo "[entrypoint] caching config and views"
-php artisan config:cache
-php artisan view:cache
+echo "[entrypoint] caching config and views as www-data"
+su -s /bin/sh www-data -c "php artisan config:cache"
+su -s /bin/sh www-data -c "php artisan view:cache"
 
 # --- Scheduler ---------------------------------------------------------------
 # Syncs CRM bookings to Google Calendar every minute. Kept in the same
