@@ -89,6 +89,29 @@ class ConversationTimeline
                 'acceptable' => is_array($judge) ? ($judge['acceptable'] ?? null) : null,
                 'rationale' => is_array($judge) ? ($judge['rationale'] ?? null) : null,
             ];
+
+            // If the artist reply was paired but not written to chat_memory
+            // (older captures/backfills), still show it in the real chat.
+            if ($draft->artist_reply && ! $draft->isSimulated()) {
+                $repliedAt = $draft->artist_replied_at ?? $draft->created_at;
+                $windowEnd = $repliedAt->copy()->addMinutes(10);
+                $alreadyThere = collect($items)->contains(
+                    fn ($item) => ($item['kind'] ?? null) === 'artist'
+                        && $item['at'] !== null
+                        && $item['at']->gte($draft->created_at)
+                        && $item['at']->lte($windowEnd)
+                );
+
+                if (! $alreadyThere) {
+                    $items[] = [
+                        'at' => $repliedAt,
+                        'kind' => 'artist',
+                        'sender' => $lead->artist?->displayName() ?: 'Artista',
+                        'content' => trim((string) $draft->artist_reply),
+                        'order' => 2,
+                    ];
+                }
+            }
         }
 
         usort($items, function (array $a, array $b) {

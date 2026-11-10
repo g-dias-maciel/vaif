@@ -99,6 +99,18 @@ class CalibrationChat
             }
 
             $turns[$index]['drafts'][] = $draft;
+
+            // Fallback when the artist reply was paired but is not present in
+            // chat_memory (older captures/backfills).
+            if ($draft->artist_reply && ! $draft->isSimulated() && $turns[$index]['artists'] === []) {
+                $turns[$index]['artists'][] = [
+                    'id' => null,
+                    'at' => $draft->artist_replied_at ?? $draft->created_at,
+                    'content' => trim((string) $draft->artist_reply),
+                    'sender' => $artistName,
+                    'is_artist' => true,
+                ];
+            }
         }
 
         foreach ($turns as $index => $turn) {
