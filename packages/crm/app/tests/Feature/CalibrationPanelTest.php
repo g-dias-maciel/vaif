@@ -146,9 +146,16 @@ class CalibrationPanelTest extends TestCase
     {
         $artist = $this->artist();
         $this->fakeWaha();
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead',
+            'phone_e164' => '+5511900000000',
+        ]);
 
         AgentDraft::create([
             'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
             'chat_id' => 'calibration-artist:5511@c.us',
             'turn_id' => (string) Str::uuid(),
             'lead_text' => 'Quanto fica?',
