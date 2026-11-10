@@ -234,15 +234,21 @@ class DatabaseAgentStore implements AgentStore
             return null;
         }
 
+        // Mirror normalize_phone() in PHP: the runtime role does not have
+        // EXECUTE on the SQL helper. Local BR numbers get the 55 prefix.
+        if (in_array(strlen($digits), [10, 11], true)) {
+            $digits = '55'.$digits;
+        }
+
         $row = DB::selectOne(
             "select cs.chat_id
                from chat_sessions cs
                join leads l on l.id = cs.lead_id
               where cs.artist_id = ?::uuid
-                and l.phone_e164 = normalize_phone(?)
+                and l.phone_e164 = ?
               order by cs.updated_at desc
               limit 1",
-            [$artistId, $digits]
+            [$artistId, '+'.$digits]
         );
 
         return $row?->chat_id ? (string) $row->chat_id : null;

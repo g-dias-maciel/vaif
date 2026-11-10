@@ -57,7 +57,7 @@ class CalibrationController extends Controller
         // 40 flat cards hides which one is the current suggestion.
         $draftGroups = $drafts
             ->groupBy(fn (AgentDraft $draft) => $draft->lead_id ?: $draft->chat_id)
-            ->map(function ($group) use ($conversation) {
+            ->map(function ($group) use ($chat, $conversation) {
                 $sorted = $group->sortByDesc('created_at')->values();
                 $latest = $sorted->first();
                 $blocks = $latest?->lead ? $conversation->forLead($latest->lead, 200) : [];
