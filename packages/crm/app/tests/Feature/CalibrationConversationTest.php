@@ -48,11 +48,16 @@ class CalibrationConversationTest extends TestCase
         $this->assertSame('Fica R$ 600, qual o tamanho?', $blocks[0]['draft']['draft']->draft_reply);
 
         $html = view('calibration._conversation', [
-            'blocks' => $blocks,
+            'turns' => [[
+                'clients' => [$blocks[0]['message']],
+                'artists' => [],
+                'draft' => $blocks[0]['draft'],
+                'alternates' => [],
+            ]],
             'artistName' => 'Adriano',
         ])->render();
 
-        $this->assertStringContainsString('Beatriz teria respondido', $html);
+        $this->assertStringContainsString('SDR teria respondido', $html);
         $this->assertStringContainsString('Fica R$ 600, qual o tamanho?', $html);
     }
 }

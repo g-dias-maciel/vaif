@@ -258,7 +258,7 @@
             @endif
 
             @include('calibration._conversation', [
-                'blocks' => $group['blocks'] ?? [],
+                'turns' => $group['turns'] ?? [],
                 'artistName' => $artist->displayName(),
             ])
 

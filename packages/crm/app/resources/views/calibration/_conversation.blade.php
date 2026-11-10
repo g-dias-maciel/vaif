@@ -1,27 +1,35 @@
-@php($blocks = $blocks ?? [])
+@php($turns = $turns ?? [])
 @php($artistName = $artistName ?? 'Artista')
 
 <div class="chat-thread" style="max-height:60vh; overflow-y:auto; padding-right:6px;">
-    @forelse ($blocks as $block)
-        @php($message = $block['message'] ?? null)
-        @php($draft = $block['draft'] ?? null)
-
+    @forelse ($turns as $turn)
         <div style="margin-bottom:18px; padding-bottom:14px; border-bottom:1px solid var(--border);">
-            @if ($message)
+            @foreach (($turn['clients'] ?? []) as $client)
                 <div class="chat-bubble inbound">
                     <div class="chat-who">
-                        {{ $message['sender'] ?? 'Cliente' }}
-                        <span class="meta">· {{ $message['at']?->format('d/m H:i') }}</span>
+                        {{ $client['sender'] ?? 'Cliente' }}
+                        <span class="meta">· {{ $client['at']?->format('d/m H:i') }}</span>
                     </div>
-                    <div class="chat-text">{{ $message['content'] ?? '' }}</div>
+                    <div class="chat-text">{{ $client['content'] ?? '' }}</div>
                 </div>
-            @endif
+            @endforeach
 
-            @if ($draft)
+            @foreach (($turn['artists'] ?? []) as $artistMessage)
+                <div class="chat-bubble outbound {{ ($artistMessage['is_artist'] ?? false) ? 'artist' : '' }}">
+                    <div class="chat-who">
+                        {{ $artistMessage['sender'] ?? $artistName }}
+                        <span class="meta">· {{ $artistMessage['at']?->format('d/m H:i') }}</span>
+                    </div>
+                    <div class="chat-text">{{ $artistMessage['content'] ?? '' }}</div>
+                </div>
+            @endforeach
+
+            @if ($turn['draft'])
+                @php($draft = $turn['draft'])
                 <div style="margin:10px 0; padding:11px 13px; border:1px dashed var(--gold, #D4B04C); border-radius:10px; background:rgba(212,176,76,.05);">
                     <div class="meta" style="text-transform:uppercase; letter-spacing:.5px;">
                         <strong style="color:var(--gold, #D4B04C);">
-                            {{ ($draft['is_simulated'] ?? false) ? 'Beatriz responderia (simulação)' : 'Beatriz teria respondido' }}
+                            {{ ($draft['is_simulated'] ?? false) ? 'SDR responderia (simulação)' : 'SDR teria respondido' }}
                         </strong>
                         · {{ $draft['draft']->created_at?->format('d/m H:i') }}
 
@@ -56,14 +64,14 @@
                     @endif
                 </div>
 
-                @if (! empty($block['alternates']))
+                @if (! empty($turn['alternates']))
                     <details style="margin:-2px 0 10px 0;">
                         <summary class="meta" style="cursor:pointer;">
-                            Outras tentativas da Beatriz ({{ count($block['alternates']) }})
+                            Outras tentativas do SDR ({{ count($turn['alternates']) }})
                         </summary>
 
                         <div style="margin-top:6px;">
-                            @foreach (array_slice($block['alternates'], 0, 8) as $alternate)
+                            @foreach (array_slice($turn['alternates'], 0, 8) as $alternate)
                                 <div style="padding:7px 0; border-top:1px solid var(--border);">
                                     <div class="meta">
                                         {{ $alternate['draft']->created_at?->format('d/m H:i') }}
@@ -77,21 +85,11 @@
                         </div>
                     </details>
                 @endif
-            @elseif ($message)
+            @elseif (! empty($turn['clients']) || ! empty($turn['artists']))
                 <div class="meta" style="margin:8px 0;">
-                    Sem sugestão da Beatriz registrada para esta mensagem.
+                    Sem sugestão do SDR registrada para este turno.
                 </div>
             @endif
-
-            @foreach (($block['replies'] ?? []) as $reply)
-                <div class="chat-bubble outbound {{ ($reply['is_artist'] ?? false) ? 'artist' : '' }}">
-                    <div class="chat-who">
-                        {{ $reply['sender'] ?? $artistName }}
-                        <span class="meta">· {{ $reply['at']?->format('d/m H:i') }}</span>
-                    </div>
-                    <div class="chat-text">{{ $reply['content'] ?? '' }}</div>
-                </div>
-            @endforeach
         </div>
     @empty
         <p class="meta">Nenhuma mensagem nesta conversa.</p>

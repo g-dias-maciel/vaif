@@ -6,6 +6,7 @@ use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
 use App\Models\Lead;
+use App\Services\Agent\CalibrationChat;
 use App\Services\Agent\CalibrationConversation;
 use App\Services\Agent\CalibrationReport;
 use App\Jobs\GenerateMockDrafts;
@@ -37,7 +38,7 @@ class CalibrationController extends Controller
         ]);
     }
 
-    public function show(Artist $artist, CalibrationReport $report, WahaService $waha, CalibrationConversation $conversation)
+    public function show(Artist $artist, CalibrationReport $report, WahaService $waha, CalibrationChat $chat, CalibrationConversation $conversation)
     {
         $artist->loadMissing('settings');
 
@@ -71,7 +72,7 @@ class CalibrationController extends Controller
                     'lead' => $latest?->lead,
                     'lead_name' => $latest?->lead?->name,
                     'chat_id' => $latest?->chat_id,
-                    'blocks' => array_slice($blocks, -80),
+                    'turns' => $latest?->lead ? $chat->forLead($latest->lead, 80) : [],
                     'missing' => $missing,
                 ];
             })
