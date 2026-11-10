@@ -160,10 +160,14 @@ class TeamCalendarController extends Controller
     {
         $month = $event->starts_at->format('Y-m');
 
-        // Soft delete first; the scheduler removes the Google event and then
-        // hard-deletes the row. If Google is down, the event is retried.
-        $event->forceFill(['google_sync_pending' => true])->save();
-        $event->delete();
+        if ($event->google_event_id && $event->google_calendar_id) {
+            // Soft delete and let the scheduler remove the Google event; the
+            // row is hard-deleted after Google confirms.
+            $event->forceFill(['google_sync_pending' => true])->save();
+            $event->delete();
+        } else {
+            $event->forceDelete();
+        }
 
         return redirect()
             ->route('calendar.index', ['month' => $month])

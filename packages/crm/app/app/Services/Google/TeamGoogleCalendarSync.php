@@ -204,10 +204,9 @@ class TeamGoogleCalendarSync
             $lines[] = $event->notes;
         }
 
-        return [
+        $payload = [
             'summary' => $event->title,
             'description' => implode("\n", $lines),
-            'location' => $event->location,
             'start' => [
                 'dateTime' => $start->format('Y-m-d\TH:i:sP'),
                 'timeZone' => $timezone,
@@ -228,6 +227,12 @@ class TeamGoogleCalendarSync
                 ],
             ],
         ];
+
+        if (filled($event->location)) {
+            $payload['location'] = $event->location;
+        }
+
+        return $payload;
     }
 
     /**
