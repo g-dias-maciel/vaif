@@ -240,7 +240,7 @@
             <div class="meta" style="margin-bottom:8px;">Chat: <code>{{ $group['chat_id'] }}</code></div>
 
             <div class="meta" style="margin:2px 0 8px; font-weight:600;">
-                Conversa · cliente à esquerda, {{ $artist->displayName() }} à direita, Beatriz abaixo do cliente
+                Conversa em ordem de envio · cliente à esquerda, {{ $artist->displayName() }} à direita, SDR abaixo do turno
             </div>
 
             @if (! empty($group['lead']) && ($group['missing'] ?? 0) > 0)
