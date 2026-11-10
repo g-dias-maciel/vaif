@@ -5,11 +5,14 @@ namespace App\Http\Controllers;
 use App\Models\Prospect;
 use App\Models\TeamEvent;
 use App\Models\User;
+use App\Services\Google\GoogleCalendarService;
+use App\Services\Google\TeamGoogleCalendarSync;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 /**
  * Staff-only team management: add/edit/remove internal users and assign the
@@ -58,13 +61,24 @@ class TeamController extends Controller
             ->with('status', 'Usuário criado. Compartilhe a senha por um canal seguro.');
     }
 
-    public function edit(User $user)
+    public function edit(User $user, GoogleCalendarService $google)
     {
         $this->ensureInternal($user);
 
         return view('team.form', [
             'user' => $user,
             'roles' => User::internalRoleOptions(),
+            'googleConfigured' => $google->isConfigured(),
+            'googleServiceEmail' => $google->serviceAccountEmail(),
+            'googleCalendars' => session('google_calendars', []),
+            'googleSyncErrors' => TeamEvent::query()
+                ->where('owner_id', $user->id)
+                ->whereNotNull('google_sync_error')
+                ->count(),
+            'googlePending' => TeamEvent::query()
+                ->where('owner_id', $user->id)
+                ->where('google_sync_pending', true)
+                ->count(),
         ]);
     }
 
@@ -137,13 +151,126 @@ class TeamController extends Controller
 
         TeamEvent::query()
             ->where('owner_id', $user->id)
-            ->update(['owner_id' => $request->user()?->id]);
+            ->update([
+                'owner_id' => $request->user()?->id,
+                'google_sync_pending' => true,
+            ]);
 
         $user->delete();
 
         return redirect()
             ->route('team.index')
-            ->with('status', 'Usuário removido. Os prospects dele foram transferidos para você.');
+            ->with('status', 'Usuário removido. Os prospects e compromissos dele foram transferidos para você.');
+    }
+
+    public function connectGoogle(
+        Request $request,
+        User $user,
+        GoogleCalendarService $google,
+    ): RedirectResponse {
+        $this->ensureInternal($user);
+
+        if (! $google->isConfigured()) {
+            return back()->with('error', 'Google Agenda não configurada no servidor (GOOGLE_SERVICE_ACCOUNT_JSON).');
+        }
+
+        $data = $request->validate([
+            'calendar_id' => ['required', 'string', 'max:255'],
+        ]);
+
+        $calendarId = trim($data['calendar_id']);
+
+        try {
+            $calendar = $google->getCalendar($calendarId);
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível acessar essa agenda: '.$e->getMessage());
+        }
+
+        if (! $google->canWrite($calendarId)) {
+            return back()->with('error', 'Essa agenda foi compartilhada apenas para leitura. Compartilhe com “Fazer alterações nos eventos”.');
+        }
+
+        $user->forceFill([
+            'google_calendar_id' => $calendar['id'],
+            'google_calendar_summary' => $calendar['summary'],
+            'google_calendar_timezone' => $calendar['timezone'],
+            'google_connected_at' => now(),
+        ])->save();
+
+        TeamEvent::query()
+            ->where('owner_id', $user->id)
+            ->update(['google_sync_pending' => true]);
+
+        return back()->with('status', 'Google Agenda conectada. Os compromissos serão sincronizados em até 1 minuto.');
+    }
+
+    public function detectGoogleCalendars(
+        User $user,
+        GoogleCalendarService $google,
+    ): RedirectResponse {
+        $this->ensureInternal($user);
+
+        if (! $google->isConfigured()) {
+            return back()->with('error', 'Google Agenda não configurada no servidor (GOOGLE_SERVICE_ACCOUNT_JSON).');
+        }
+
+        try {
+            $calendars = $google->listCalendars();
+        } catch (Throwable $e) {
+            return back()->with('error', 'Não foi possível listar as agendas: '.$e->getMessage());
+        }
+
+        if ($calendars === []) {
+            return back()->with('error', 'Nenhuma agenda compartilhada com a conta de serviço. Compartilhe a agenda com '.$google->serviceAccountEmail().'.');
+        }
+
+        return back()->with('google_calendars', $calendars);
+    }
+
+    public function disconnectGoogle(User $user): RedirectResponse
+    {
+        $this->ensureInternal($user);
+
+        $user->forceFill([
+            'google_calendar_id' => null,
+            'google_calendar_summary' => null,
+            'google_calendar_timezone' => null,
+            'google_connected_at' => null,
+        ])->save();
+
+        TeamEvent::query()
+            ->where('owner_id', $user->id)
+            ->update(['google_sync_pending' => true]);
+
+        return back()->with('status', 'Google Agenda desconectada. Os eventos serão removidos da agenda antiga em até 1 minuto.');
+    }
+
+    public function syncGoogle(
+        User $user,
+        TeamGoogleCalendarSync $sync,
+    ): RedirectResponse {
+        $this->ensureInternal($user);
+
+        if (! $user->hasGoogleCalendar()) {
+            return back()->with('error', 'Conecte uma Google Agenda antes de sincronizar.');
+        }
+
+        TeamEvent::query()
+            ->where('owner_id', $user->id)
+            ->update(['google_sync_pending' => true]);
+
+        $counts = $sync->syncUser($user);
+
+        return back()->with(
+            $counts['failed'] > 0 ? 'error' : 'status',
+            sprintf(
+                'Sincronização: %d criado(s), %d atualizado(s), %d removido(s), %d falha(s).',
+                $counts['created'],
+                $counts['updated'],
+                $counts['deleted'],
+                $counts['failed'],
+            ),
+        );
     }
 
     /**

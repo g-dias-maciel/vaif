@@ -52,6 +52,7 @@
                     <th>Usuário</th>
                     <th>E-mail</th>
                     <th>Papel</th>
+                    <th>Google</th>
                     <th>Criado em</th>
                     <th></th>
                 </tr>
@@ -72,6 +73,14 @@
                         <td>{{ $user->email }}</td>
                         <td>
                             <span class="band {{ $user->isStaff() ? 'band--full' : 'band--entry' }}">{{ $user->roleLabel() }}</span>
+                        </td>
+                        <td>
+                            @if ($user->hasGoogleCalendar())
+                                <span class="band band--retainer">Conectada</span>
+                                <div class="sales-sub">{{ $user->google_calendar_summary ?: $user->google_calendar_id }}</div>
+                            @else
+                                <span class="band">Não conectada</span>
+                            @endif
                         </td>
                         <td>{{ $user->created_at?->format('d/m/Y') ?? '—' }}</td>
                         <td>

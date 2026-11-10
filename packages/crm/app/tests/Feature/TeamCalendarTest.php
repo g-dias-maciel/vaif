@@ -69,6 +69,7 @@ class TeamCalendarTest extends TestCase
         $this->assertSame('Planejamento estratégico', $event->title);
         $this->assertSame(TeamEvent::TYPE_STRATEGY, $event->type);
         $this->assertSame($this->admin->id, $event->owner_id);
+        $this->assertTrue($event->google_sync_pending);
 
         $this->actingAs($this->admin)
             ->get(route('calendar.index', ['month' => $start->format('Y-m')]))

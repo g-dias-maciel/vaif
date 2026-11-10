@@ -126,11 +126,13 @@ class TeamCalendarController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $event = TeamEvent::create($this->validated($request));
+        $event = TeamEvent::create(array_merge($this->validated($request), [
+            'google_sync_pending' => true,
+        ]));
 
         return redirect()
             ->route('calendar.index', ['month' => $event->starts_at->format('Y-m')])
-            ->with('status', 'Compromisso criado.');
+            ->with('status', 'Compromisso criado. A Google Agenda do responsável será sincronizada em até 1 minuto.');
     }
 
     public function edit(TeamEvent $event)
@@ -145,16 +147,22 @@ class TeamCalendarController extends Controller
 
     public function update(Request $request, TeamEvent $event): RedirectResponse
     {
-        $event->update($this->validated($request));
+        $event->update(array_merge($this->validated($request), [
+            'google_sync_pending' => true,
+        ]));
 
         return redirect()
             ->route('calendar.index', ['month' => $event->fresh()->starts_at->format('Y-m')])
-            ->with('status', 'Compromisso atualizado.');
+            ->with('status', 'Compromisso atualizado. A Google Agenda será sincronizada em até 1 minuto.');
     }
 
     public function destroy(TeamEvent $event): RedirectResponse
     {
         $month = $event->starts_at->format('Y-m');
+
+        // Soft delete first; the scheduler removes the Google event and then
+        // hard-deletes the row. If Google is down, the event is retried.
+        $event->forceFill(['google_sync_pending' => true])->save();
         $event->delete();
 
         return redirect()

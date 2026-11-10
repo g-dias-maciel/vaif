@@ -124,6 +124,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/team/{user}/edit', [TeamController::class, 'edit'])->name('team.edit');
         Route::put('/team/{user}', [TeamController::class, 'update'])->name('team.update');
         Route::delete('/team/{user}', [TeamController::class, 'destroy'])->name('team.destroy');
+        Route::post('/team/{user}/google-calendar', [TeamController::class, 'connectGoogle'])->name('team.google.connect');
+        Route::post('/team/{user}/google-calendar/detect', [TeamController::class, 'detectGoogleCalendars'])->name('team.google.detect');
+        Route::post('/team/{user}/google-calendar/sync', [TeamController::class, 'syncGoogle'])->name('team.google.sync');
+        Route::delete('/team/{user}/google-calendar', [TeamController::class, 'disconnectGoogle'])->name('team.google.disconnect');
 
         Route::get('/calendar', [TeamCalendarController::class, 'index'])->name('calendar.index');
         Route::get('/calendar/create', [TeamCalendarController::class, 'create'])->name('calendar.events.create');

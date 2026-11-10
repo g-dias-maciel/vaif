@@ -30,6 +30,10 @@ class User extends Authenticatable
         'password',
         'role',
         'artist_id',
+        'google_calendar_id',
+        'google_calendar_summary',
+        'google_calendar_timezone',
+        'google_connected_at',
     ];
 
     /**
@@ -50,6 +54,7 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
         'password' => 'hashed',
+        'google_connected_at' => 'datetime',
     ];
 
     public function artist(): BelongsTo
@@ -102,6 +107,17 @@ class User extends Authenticatable
     public function isInternal(): bool
     {
         return in_array($this->role, [self::ROLE_STAFF, self::ROLE_SALES], true);
+    }
+
+    public function hasGoogleCalendar(): bool
+    {
+        return filled($this->google_calendar_id);
+    }
+
+    public function calendarTimezone(): string
+    {
+        return $this->google_calendar_timezone
+            ?: config('app.timezone', 'America/Sao_Paulo');
     }
 
     /**

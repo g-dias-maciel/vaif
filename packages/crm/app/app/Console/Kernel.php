@@ -18,6 +18,12 @@ class Kernel extends ConsoleKernel
             ->everyMinute()
             ->withoutOverlapping(10);
 
+        // Mirror internal team meetings into the responsible user's Google
+        // Calendar. Same reconcile-loop idea as the Artist bookings above.
+        $schedule->command('calendar:sync-team-events')
+            ->everyMinute()
+            ->withoutOverlapping(10);
+
         // Read the Artist's own Google events as blocks so the agent never
         // offers a slot already filled outside the CRM.
         $schedule->command('calendar:import-google-blocks')

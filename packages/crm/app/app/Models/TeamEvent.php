@@ -2,11 +2,12 @@
 
 namespace App\Models;
 
+use Carbon\Carbon;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Carbon\Carbon;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Internal meeting on the admin calendar. Sales calls from prospects are
@@ -15,6 +16,7 @@ use Carbon\Carbon;
 class TeamEvent extends Model
 {
     use HasUuids;
+    use SoftDeletes;
 
     public const TYPE_SALES = 'sales';
 
@@ -39,11 +41,18 @@ class TeamEvent extends Model
         'notes',
         'owner_id',
         'prospect_id',
+        'google_event_id',
+        'google_calendar_id',
+        'google_sync_pending',
+        'google_synced_at',
+        'google_sync_error',
     ];
 
     protected $casts = [
         'starts_at' => 'datetime',
         'ends_at' => 'datetime',
+        'google_sync_pending' => 'boolean',
+        'google_synced_at' => 'datetime',
     ];
 
     public function owner(): BelongsTo

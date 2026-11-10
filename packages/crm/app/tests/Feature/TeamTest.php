@@ -49,6 +49,16 @@ class TeamTest extends TestCase
         $this->actingAs($sales)->post(route('team.store'), [])->assertForbidden();
     }
 
+    public function test_staff_can_open_the_user_edit_page_with_google_calendar_card(): void
+    {
+        $sales = $this->user('Vendas', 'vendas@vaif.test', User::ROLE_SALES);
+
+        $this->actingAs($this->admin)
+            ->get(route('team.edit', $sales))
+            ->assertOk()
+            ->assertSee('Google Agenda');
+    }
+
     public function test_staff_can_create_a_sales_user(): void
     {
         $this->actingAs($this->admin)
