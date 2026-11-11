@@ -192,7 +192,9 @@ class ReplyValidator
                         $hasSpamQuestion = true;
                     }
 
-                    if ($coverCase && in_array($field, ['type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
+                    // For a cover-up, the local/size of the CURRENT tattoo are
+                    // useful for the artist; the new tattoo is never qualified.
+                    if ($coverCase && in_array($field, ['type', 'style', 'first_tattoo', 'meaning'], true)) {
                         $violations[] = ['claim' => $claim, 'rule' => 'coverup_discovery', 'expected' => 'photo', 'actual' => $field];
                         $hasCoverupQuestion = true;
                     }

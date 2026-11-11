@@ -201,12 +201,12 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringNotContainsString('nome', $result['final_reply']);
     }
 
-    public function test_cover_up_does_not_run_normal_discovery(): void
+    public function test_cover_up_does_not_ask_style_again(): void
     {
         $result = (new ReplyValidator())->validate(
             $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
-            [['type' => 'question', 'field' => 'placement']],
-            'Onde no corpo fica a tatuagem que você quer cobrir?',
+            [['type' => 'question', 'field' => 'style']],
+            'Qual estilo você quer para essa cobertura?',
             ['flags' => []],
         );
 
@@ -214,6 +214,20 @@ class ReplyValidatorTest extends TestCase
         $this->assertContains('coverup_discovery', array_column($result['violations'], 'rule'));
         $this->assertSame('canonical_cover_up', $result['resolution']);
         $this->assertStringContainsString('foto', $result['final_reply']);
+    }
+
+    public function test_cover_up_may_ask_the_current_tattoo_location_and_size(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'project' => ['tattoo_type' => 'cover_up', 'placement' => null, 'body_zone' => null],
+            ]),
+            [['type' => 'question', 'field' => 'placement']],
+            'Onde fica a tatuagem atual que você quer cobrir?',
+            ['flags' => []],
+        );
+
+        $this->assertTrue($result['ok']);
     }
 
     public function test_a_mentioned_promotion_must_be_confirmed(): void
@@ -274,8 +288,8 @@ class ReplyValidatorTest extends TestCase
     {
         $result = (new ReplyValidator())->validate(
             $this->facts(),
-            [['type' => 'question', 'field' => 'placement']],
-            'Onde no corpo fica a tatuagem que você quer cobrir?',
+            [['type' => 'question', 'field' => 'style']],
+            'Qual estilo você quer para essa cobertura?',
             ['flags' => ['mentions_coverup' => true]],
         );
 

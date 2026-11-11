@@ -79,7 +79,7 @@ class PromptBuilder
 
         $parts = [
             'pipeline='.($turn['stage_key'] ?? '?'),
-            'nome='.($turn['name'] ?? 'desconhecido'),
+            'nome='.($this->cleanName($turn['name'] ?? null) ?? 'desconhecido'),
             'nome_confiavel='.($this->looksLikeName($turn['name'] ?? null) ? 'sim' : 'nao'),
             'deposit='.($turn['deposit_status'] ?? 'nao_solicitado'),
             'tipo='.$type,
@@ -178,7 +178,7 @@ class PromptBuilder
         }
 
         if (in_array($type, ['cover_up', 'rework'], true)) {
-            $lines[] = '- Cobertura/reforma: NÃO faça descoberta de local, tamanho, estilo nem primeira tatuagem. Peça a foto da tatuagem atual, depois a referência do desenho novo e faça handoff.';
+            $lines[] = '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Peça a foto da tatuagem atual; se já veio, pergunte o local e o tamanho aproximado da tatuagem ATUAL. Depois peça a referência do desenho novo e faça handoff.';
         } else {
             $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];
             $next = null;
@@ -263,13 +263,13 @@ class PromptBuilder
      */
     private function looksLikeName(mixed $name): bool
     {
-        $name = trim((string) $name);
+        $name = $this->cleanName($name);
 
-        if ($name === '' || mb_strlen($name) > 60) {
+        if ($name === null || mb_strlen($name) > 60) {
             return false;
         }
 
-        if (preg_match('/[\d\p{So}\p{Sk}\x{1F000}-\x{1FAFF}]/u', $name) === 1) {
+        if (preg_match('/\d/', $name) === 1) {
             return false;
         }
 
@@ -280,6 +280,15 @@ class PromptBuilder
         $words = preg_split('/\s+/u', $name) ?: [];
 
         return count($words) >= 1 && count($words) <= 3;
+    }
+
+    private function cleanName(mixed $name): ?string
+    {
+        $name = trim((string) $name);
+        $name = preg_replace('/[\p{So}\p{Sk}\x{1F000}-\x{1FAFF}]+/u', ' ', $name) ?? $name;
+        $name = trim(preg_replace('/\s+/u', ' ', $name) ?? $name);
+
+        return $name === '' ? null : $name;
     }
 
     /**

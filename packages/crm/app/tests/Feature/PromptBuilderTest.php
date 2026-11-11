@@ -106,6 +106,15 @@ class PromptBuilderTest extends TestCase
         $this->assertStringNotContainsString('Onde no corpo você quer fazer?', $prompt);
     }
 
+    public function test_a_profile_name_with_an_emoji_is_cleaned_and_trusted(): void
+    {
+        $context = (new PromptBuilder())->context($this->artist(), ['name' => 'Eliza 💕']);
+
+        $this->assertStringContainsString('nome=Eliza', $context);
+        $this->assertStringNotContainsString('💕', $context);
+        $this->assertStringContainsString('nome_confiavel=sim', $context);
+    }
+
     public function test_a_booking_confirmed_in_chat_is_not_denied(): void
     {
         $facts = $this->facts();
