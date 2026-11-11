@@ -29,6 +29,14 @@ Warnings: 10 media-only replies outside the comparison · 3 artist prices outsid
 6. **Hold/price/hours guardrails** — the validator scans for `deixei salvo`, `reservei`, `mantenho o valor`, etc., and for times outside the studio's working windows. Unknown violations now defer to the artist (`canonical_defer`) instead of sending the original text.
 7. **Price book** — still a data decision. The artist quoted R$ 250 (quadril 13 cm), R$ 350 and R$ 1.500–1.800 (braço) without a matching row. The table has no `quadril`/`perna` rows and `guarantee_price=false`.
 
+## P1 fixes landed
+
+1. **Short replies** — the prompt now caps a reply at two short sentences and one question, and forbids the process essay outside phase 4.
+2. **Cover-up/reform** — re-asking type is blocked; the canonical reply asks for the current-tattoo photo, and the prompt forbids local/size/style discovery.
+3. **Promotions** — the preflight flags `mentions_promotion`; without an active promotion the reply must say it will confirm, and the validator replaces one that ignores the offer. The facts block also says the promotion is missing.
+4. **Spam/personal** — the prompt closes the thread without qualification; the validator blocks `spam_qualification` and returns a one-line close.
+5. **Artist media** — a staff-only field on each media-only draft lets the team describe what the artist sent. The description enters the judge comparison, the media is no longer counted as uncomparable, and the lead timeline shows the note under the artist bubble.
+
 ## Biggest misses that remain
 
 1. **Discovery still stops early.** Local/tamanho/primeira tatuagem are the most frequent gaps. The briefing now asks for the next missing field, but the model still needs the lead's answer to advance.
