@@ -173,6 +173,63 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('significado', $result['final_reply']);
     }
 
+    public function test_spam_does_not_ask_a_qualification_question(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['turn' => ['intent' => 'spam']]),
+            [['type' => 'question', 'field' => 'name']],
+            'Aqui é da Biofisic? Qual o seu nome?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('spam_qualification', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_spam', $result['resolution']);
+        $this->assertStringNotContainsString('nome', $result['final_reply']);
+    }
+
+    public function test_cover_up_does_not_run_normal_discovery(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'placement']],
+            'Onde no corpo fica a tatuagem que você quer cobrir?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_discovery', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+        $this->assertStringContainsString('foto', $result['final_reply']);
+    }
+
+    public function test_a_mentioned_promotion_must_be_confirmed(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['pricing' => ['promotion' => null]]),
+            [['type' => 'question', 'field' => 'style']],
+            'Legal! Qual estilo você quer?',
+            ['flags' => ['mentions_promotion' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('promotion_not_confirmed', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_promotion', $result['resolution']);
+        $this->assertStringContainsString('confirmar', $result['final_reply']);
+    }
+
+    public function test_confirming_the_promotion_is_accepted(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['pricing' => ['promotion' => null]]),
+            [],
+            'Vou confirmar essa oferta com o artista e já te respondo.',
+            ['flags' => ['mentions_promotion' => true]],
+        );
+
+        $this->assertTrue($result['ok']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

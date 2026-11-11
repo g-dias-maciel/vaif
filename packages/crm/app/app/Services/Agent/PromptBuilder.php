@@ -274,6 +274,10 @@ class PromptBuilder
 
         $lines = ['## FATOS DESTE TURNO (fonte: CRM)'];
 
+        if ($intent === 'spam') {
+            $lines[] = '- Intenção: spam, número errado ou assunto que não é tatuagem. Encerre em uma frase e NÃO faça pergunta de qualificação.';
+        }
+
         if (($pricing['status'] ?? null) === 'ready') {
             $base = $pricing['base_cents'] ?? null;
             $promo = $pricing['promotion']['price_cents'] ?? null;
@@ -290,6 +294,10 @@ class PromptBuilder
             $lines[] = $line;
         } else {
             $lines[] = '- Preço: não disponível para este local/tamanho. NÃO informe valor; pergunte o que falta ou faça handoff.';
+        }
+
+        if (empty($pricing['promotion']['price_cents'])) {
+            $lines[] = '- Promoção: nenhuma ativa nos FATOS. Se o lead citar uma oferta ou preço de anúncio, diga que vai confirmar com o artista; NÃO confirme desconto nem condição.';
         }
 
         if (! empty($pricing['deposit_cents'])) {

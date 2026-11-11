@@ -56,6 +56,10 @@ class ReplyValidator
         $hasBookingViolation = false;
         $hasKnownFieldQuestion = false;
         $hasTimeViolation = false;
+        $hasSpamQuestion = false;
+        $hasCoverupQuestion = false;
+        $hasPromotionViolation = false;
+        $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
 
         foreach ($claims as $claim) {
             if (! is_array($claim) || ! isset($claim['type'])) {
@@ -177,6 +181,16 @@ class ReplyValidator
                         $violations[] = ['claim' => $claim, 'rule' => 'question_known_field', 'expected' => $field, 'actual' => true];
                         $hasKnownFieldQuestion = true;
                     }
+
+                    if ($intent === 'spam' && in_array($field, ['name', 'type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning', 'photo'], true)) {
+                        $violations[] = ['claim' => $claim, 'rule' => 'spam_qualification', 'expected' => 'close', 'actual' => $field];
+                        $hasSpamQuestion = true;
+                    }
+
+                    if ($isCover && in_array($field, ['type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
+                        $violations[] = ['claim' => $claim, 'rule' => 'coverup_discovery', 'expected' => 'photo', 'actual' => $field];
+                        $hasCoverupQuestion = true;
+                    }
                     break;
 
                 case 'location':
@@ -219,6 +233,13 @@ class ReplyValidator
         if (! $hasBooking && $this->hasTimeOutsideHours($reply, $studio)) {
             $violations[] = ['claim' => ['type' => 'time'], 'rule' => 'time_outside_hours', 'expected' => $studio['working_hours'] ?? [], 'actual' => $reply];
             $hasTimeViolation = true;
+        }
+
+        if (! empty($flags['mentions_promotion'])
+            && empty($pricing['promotion']['price_cents'])
+            && ! $this->mentionsConfirmation($reply)) {
+            $violations[] = ['claim' => ['type' => 'promotion'], 'rule' => 'promotion_not_confirmed'];
+            $hasPromotionViolation = true;
         }
 
         $resolution = 'accepted';
@@ -306,6 +327,21 @@ class ReplyValidator
                 if (in_array($resolution, ['canonical_no_slots', 'canonical_missing'], true)) {
                     $offeredSlots = [];
                 }
+            } elseif ($hasSpamQuestion) {
+                $finalReply = 'Acho que essa mensagem veio para o número errado. Por aqui o estúdio trabalha só com tatuagem. Se precisar, é só chamar!';
+                $resolution = 'canonical_spam';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasCoverupQuestion) {
+                $finalReply = 'Pode me enviar uma foto da tatuagem atual que você quer cobrir ou reformar? Assim o Adriano já consegue avaliar.';
+                $resolution = 'canonical_cover_up';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasPromotionViolation) {
+                $finalReply = 'Vou confirmar essa oferta com o artista e já te respondo.';
+                $resolution = 'canonical_promotion';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             } elseif ($hasKnownFieldQuestion) {
                 // Re-asking a field the lead already answered is never sent.
                 // Replace it with the next question that is actually missing.
@@ -353,6 +389,23 @@ class ReplyValidator
             // bad rewrite falls back to the canonical safe reply.
             'repairable' => $violations !== [],
         ];
+    }
+
+    /**
+     * The reply acknowledges that a promotion/offer needs checking instead of
+     * confirming or ignoring it.
+     */
+    private function mentionsConfirmation(string $reply): bool
+    {
+        $normalized = $this->norm($reply);
+
+        foreach (['confirm', 'verificar', 'checar', 'nao tenho', 'nao consigo', 'nao esta ativa', 'nao encontrei'] as $phrase) {
+            if (str_contains($normalized, $phrase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

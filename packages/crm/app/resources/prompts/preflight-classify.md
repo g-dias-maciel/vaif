@@ -28,6 +28,7 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
     "doubts_cleared": false,
     "is_reschedule": false,
     "is_aftercare": false,
+    "mentions_promotion": false,
     "needs_human": false
   },
   "confidence": 0.93
@@ -73,6 +74,7 @@ Extraia o que o lead disse nesta mensagem. O bloco `HISTÓRICO RECENTE` existe p
 - `doubts_cleared`: diz explicitamente que não tem mais dúvidas, ou pede o valor para seguir.
 - `is_reschedule`: quer mexer em um agendamento existente.
 - `is_aftercare`: é cliente antigo falando de cuidados/retorno.
+- `mentions_promotion`: cita uma oferta, promoção, preço de anúncio, "aquela promoção", "o valor do Instagram" ou similar.
 - `needs_human`: o caso exige o artista agora (cover-up, reforma, reclamação, pedido explícito, segurança, cliente antigo).
 
 ## `confidence`
