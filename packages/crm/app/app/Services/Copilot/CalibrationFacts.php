@@ -5,6 +5,7 @@ namespace App\Services\Copilot;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Services\Agent\CalibrationReport;
+use App\Services\Agent\MessageText;
 use Illuminate\Support\Carbon;
 
 /**
@@ -39,9 +40,12 @@ class CalibrationFacts
         foreach ($artists as $artist) {
             $drafts = $this->drafts($artist, $since);
             $comparedAll = $drafts->filter(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_COMPARED);
-            $compared = $comparedAll->filter(
-                fn (AgentDraft $d) => ($d->comparison['comparable'] ?? true) !== false
-            );
+            $compared = $comparedAll->filter(function (AgentDraft $d) {
+                $flag = $d->comparison['comparable']
+                    ?? ! MessageText::isMediaOnly($d->artist_reply);
+
+                return $flag !== false;
+            });
             $unacceptable = $compared->filter(fn (AgentDraft $d) => $d->wasAccepted() === false);
 
             $gates = $this->calibration->forArtist($artist, $gatesDays);

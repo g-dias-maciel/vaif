@@ -38,9 +38,13 @@ class CalibrationReport
 
         // A media-only artist reply cannot be compared as text. Keep it out of
         // the acceptance/factual/handoff denominators instead of scoring a tie.
-        $compared = $comparedAll->filter(
-            fn (AgentDraft $d) => ($d->comparison['comparable'] ?? true) !== false
-        );
+        // Old comparisons predate the `comparable` flag, so inspect the reply.
+        $compared = $comparedAll->filter(function (AgentDraft $d) {
+            $flag = $d->comparison['comparable']
+                ?? ! MessageText::isMediaOnly($d->artist_reply);
+
+            return $flag !== false;
+        });
 
         $acceptable = $compared->filter(fn (AgentDraft $d) => $d->wasAccepted() === true)->count();
         $covered = $compared->filter(

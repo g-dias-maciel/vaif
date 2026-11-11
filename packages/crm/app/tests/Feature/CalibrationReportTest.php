@@ -116,6 +116,34 @@ class CalibrationReportTest extends TestCase
         $this->assertTrue($report['passed']);
     }
 
+    public function test_a_legacy_comparison_with_a_media_reply_is_excluded(): void
+    {
+        $artist = $this->artist();
+        $this->draft($artist);
+        $this->draft($artist);
+        $this->draft($artist, [
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'comparison' => [
+                'deterministic' => ['ok' => true, 'violations' => []],
+                'judge' => [
+                    'acceptable' => true,
+                    'covered_lead_question' => true,
+                    'missing' => [],
+                    'missing_handoff' => false,
+                    'tone' => 4,
+                    'verdict' => 'tie',
+                    'rationale' => 'old comparison without the comparable flag',
+                ],
+            ],
+        ]);
+
+        $report = (new CalibrationReport())->forArtist($artist, 30);
+
+        $this->assertSame(2, $report['totals']['compared']);
+        $this->assertSame(1, $report['totals']['media_only']);
+        $this->assertSame(1.0, $report['rates']['acceptable']);
+    }
+
     public function test_an_unsafe_draft_blocks_calibration(): void
     {
         $artist = $this->artist();
