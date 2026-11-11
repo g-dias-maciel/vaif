@@ -257,11 +257,11 @@ class ImportNotionFinance extends Command
             'prospect_id' => $prospect->id,
             'amount_cents' => $amountCents,
             'method' => $method,
-            'paid_at' => $issueDate->toDateString(),
+            'paid_at' => $this->dateInMonth($issueDate, $month)->toDateString(),
             'reference' => $row['Pagamento'] ?? null,
             'external_ref' => $paymentRef,
             'source' => BillingPayment::SOURCE_NOTION,
-            'notes' => 'Importado do Notion Financeiro.',
+            'notes' => $this->importedPaymentNotes($issueDate, $month),
         ]);
 
         $this->stats['payments_created']++;
@@ -301,6 +301,7 @@ class ImportNotionFinance extends Command
         }
 
         $paidAt = $dataDate ?? $month->copy()->endOfMonth();
+        $paidInMonth = $this->dateInMonth($paidAt, $month);
         $description = trim((string) ($row['Name'] ?? '')) ?: 'Despesa importada do Notion';
 
         $payerNames = [];
@@ -340,6 +341,10 @@ class ImportNotionFinance extends Command
             $notes[] = 'Designer: '.implode(', ', $designerNames).'.';
         }
 
+        if ($paidInMonth->toDateString() !== $paidAt->toDateString()) {
+            $notes[] = 'Data original no Notion: '.$paidAt->format('d/m/Y').'.';
+        }
+
         BillingExpense::create([
             'description' => $description,
             'vendor' => null,
@@ -347,7 +352,7 @@ class ImportNotionFinance extends Command
             'amount_cents' => $amountCents,
             'competence_month' => $month->copy()->startOfMonth()->toDateString(),
             'due_date' => $paidAt->toDateString(),
-            'paid_at' => $paidAt->toDateString(),
+            'paid_at' => $paidInMonth->toDateString(),
             'status' => BillingExpense::STATUS_PAID,
             'payment_method' => BillingExpense::METHOD_OTHER,
             'recurrence' => BillingExpense::RECURRENCE_ONE_OFF,
@@ -663,6 +668,29 @@ class ImportNotionFinance extends Command
         }
 
         return (int) round(((float) $value) * 100);
+    }
+
+    /**
+     * Notion's monthly overview groups paid entries by Mes, not by the exact
+     * payment date. Keep the exact date when it is in the same month; otherwise
+     * move it to the competence month end so monthly totals match Notion.
+     */
+    private function dateInMonth(Carbon $date, Carbon $month): Carbon
+    {
+        return $date->format('Y-m') === $month->format('Y-m')
+            ? $date->copy()
+            : $month->copy()->endOfMonth();
+    }
+
+    private function importedPaymentNotes(Carbon $originalDate, Carbon $month): string
+    {
+        $notes = 'Importado do Notion Financeiro.';
+
+        if ($originalDate->format('Y-m') !== $month->format('Y-m')) {
+            $notes .= ' Data original no Notion: '.$originalDate->format('d/m/Y').'.';
+        }
+
+        return $notes;
     }
 
     private function phoneKey(mixed $value): string

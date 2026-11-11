@@ -143,6 +143,11 @@ Idempotency:
 Re-running the command updates nothing that already exists; it can repair a
 partially missing payment.
 
+Notion's monthly `Mes` relation is the source of truth for the month. When an
+Entrada/Saída `Data` falls outside that competence month, the imported payment/
+paid date is aligned to the competence month end and the original date is kept
+in the notes. This keeps the CRM monthly totals matching the Notion Overview.
+
 ## Statuses
 
 | Invoice status | Meaning |
