@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CompareDraft;
+use App\Jobs\PairArtistReply;
 use App\Jobs\ProcessWhatsAppTurn;
 use App\Models\AgentDraft;
 use App\Models\Artist;
@@ -195,13 +196,27 @@ class WahaWebhookController extends Controller
         );
 
         // Pair the artist's answer with the newest copilot draft for this chat.
-        $draft = $drafts->latestOpenForChat($artist->id, $chatId);
+        $draft = $drafts->latestOpenForChat($artist->id, $chatId)
+            ?? $drafts->latestUnansweredForChat($artist->id, $chatId);
 
-        if ($draft === null || $drafts->hasNewerLeadMessage($draft)) {
+        if ($draft === null) {
             return;
         }
 
-        $drafts->attachArtistReply($draft, $text);
+        // A newer lead burst may be waiting for its own draft. Retry instead of
+        // dropping the reply, otherwise the draft stays `pending` forever.
+        if ($drafts->hasNewerLeadMessage($draft)) {
+            PairArtistReply::dispatch(
+                $artist->id,
+                $chatId,
+                $text,
+                $at,
+            )->onQueue((string) config('agent.queue', 'agent'));
+
+            return;
+        }
+
+        $drafts->attachArtistReplyAt($draft, $text, $at !== null ? new \DateTimeImmutable($at) : null);
 
         if ($draft->status === AgentDraft::STATUS_REPLIED) {
             CompareDraft::dispatch((string) $draft->id)

@@ -53,6 +53,26 @@ class DraftStore
     }
 
     /**
+     * Newest unanswered draft for a chat, regardless of age. An artist who
+     * answers the next morning must still be paired with yesterday's draft.
+     */
+    public function latestUnansweredForChat(string $artistId, string $chatId): ?AgentDraft
+    {
+        try {
+            return AgentDraft::query()
+                ->where('artist_id', $artistId)
+                ->where('chat_id', $chatId)
+                ->where('source', '!=', AgentDraft::SOURCE_SIMULATED)
+                ->whereIn('status', [AgentDraft::STATUS_PENDING, AgentDraft::STATUS_REPLIED])
+                ->whereNull('artist_reply')
+                ->orderByDesc('created_at')
+                ->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
      * Attach one artist WhatsApp message to the draft. Multiple bubbles in the
      * same minute are concatenated so the comparison sees the full answer.
      */
