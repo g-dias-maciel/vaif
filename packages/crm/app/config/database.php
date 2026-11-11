@@ -75,6 +75,10 @@ return [
             'prefix' => '',
             'prefix_indexes' => true,
             'search_path' => 'public',
+            // Laravel writes Eloquent timestamps without an offset. Postgres
+            // must interpret them in the same timezone the model used, or
+            // every `created_at` lands three hours off in Sao Paulo.
+            'timezone' => env('DB_TIMEZONE', env('APP_TIMEZONE', 'UTC')),
             'sslmode' => env('DB_SSLMODE', 'prefer'),
         ],
 
