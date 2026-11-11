@@ -36,6 +36,7 @@ Warnings: 10 media-only replies outside the comparison · 3 artist prices outsid
 3. **Promotions** — the preflight flags `mentions_promotion`; without an active promotion the reply must say it will confirm, and the validator replaces one that ignores the offer. The facts block also says the promotion is missing.
 4. **Spam/personal** — the prompt closes the thread without qualification; the validator blocks `spam_qualification` and returns a one-line close.
 5. **Artist media** — a staff-only field on each media-only draft lets the team describe what the artist sent. The description enters the judge comparison, the media is no longer counted as uncomparable, and the lead timeline shows the note under the artist bubble.
+6. **Context assumptions** — the preflight now returns `assumptions` with value, confidence and reason. When the next missing field has a confident assumption (e.g. “na mão” → nova, 86%), the briefing gives a closed confirmation (“Essa tatuagem seria uma tatuagem nova, certo?”) instead of the open question. Low-confidence assumptions keep the open question. Assumptions are never written to the project until the lead confirms.
 
 ## Biggest misses that remain
 
