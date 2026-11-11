@@ -106,6 +106,17 @@ class PromptBuilderTest extends TestCase
         $this->assertStringNotContainsString('Onde no corpo você quer fazer?', $prompt);
     }
 
+    public function test_a_booking_confirmed_in_chat_is_not_denied(): void
+    {
+        $facts = $this->facts();
+        $facts['turn']['flags'] = ['booking_in_chat' => true];
+
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $facts);
+
+        $this->assertStringContainsString('já combinou um horário no chat', $prompt);
+        $this->assertStringContainsString('NÃO diga que não há horário', $prompt);
+    }
+
     public function test_a_low_confidence_assumption_keeps_the_open_question(): void
     {
         $prompt = (new PromptBuilder())->system($this->artist(), [], $this->facts([

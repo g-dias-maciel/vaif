@@ -2,6 +2,8 @@
 
 namespace App\Services\Agent;
 
+use Illuminate\Support\Str;
+
 class PreflightClassifier
 {
     public function __construct(
@@ -44,10 +46,16 @@ class PreflightClassifier
         [$entities, $assumptions] = $this->guardEntities($entities, $assumptions, $evidenceText);
 
         $flags = is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [];
-        if (! isset($flags['mentions_coverup'])) {
-            $flags['mentions_coverup'] = (new EntityEvidence($evidenceText))
-                ->supports('tattoo_type', 'cobertura');
-        }
+
+        // The model tends to read "não quero cobrir" as a cover-up. The
+        // deterministic check is negation-aware, so it wins.
+        $flags['mentions_coverup'] = (new EntityEvidence($evidenceText))
+            ->supports('tattoo_type', 'cobertura');
+
+        // The artist often closes a slot in the chat before (or instead of)
+        // creating the CRM booking. The agent must not deny a time the lead
+        // has already been told.
+        $flags['booking_in_chat'] = $this->bookingInChat($history);
 
         return [
             'intent' => is_string($parsed['intent'] ?? null) ? $parsed['intent'] : 'other',
@@ -90,6 +98,46 @@ class PreflightClassifier
         }
 
         return $text;
+    }
+
+    /**
+     * The artist confirmed a slot in the conversation. Only artist messages
+     * count; the copilot's own drafts never enter memory.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function bookingInChat(array $history): bool
+    {
+        $text = '';
+
+        foreach ($history as $message) {
+            if (($message['role'] ?? '') !== 'assistant') {
+                continue;
+            }
+            $text .= "\n".(string) ($message['content'] ?? '');
+        }
+
+        if (trim($text) === '') {
+            return false;
+        }
+
+        $text = Str::ascii(mb_strtolower($text));
+
+        foreach ([
+            '/fica agendado/',
+            '/esta agendado/',
+            '/agendamos/',
+            '/fechado para/',
+            '/confirmado para/',
+            '/horario reservado/',
+            '/reservei/',
+        ] as $pattern) {
+            if (preg_match($pattern, $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

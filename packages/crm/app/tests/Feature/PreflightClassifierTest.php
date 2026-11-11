@@ -158,24 +158,44 @@ class PreflightClassifierTest extends TestCase
             'intent' => 'other',
             'entities' => [],
             'assumptions' => [],
-            'flags' => [],
+            'flags' => ['mentions_coverup' => false],
             'confidence' => 0.8,
         ])->classify('contexto', 'Quero cobrir essa tatuagem antiga do braço.');
 
         $this->assertTrue($result['flags']['mentions_coverup']);
     }
 
-    public function test_it_ignores_a_negated_cover_up_hint(): void
+    public function test_it_overrides_a_false_positive_cover_up_hint(): void
     {
         $result = $this->classifier([
             'intent' => 'qualify',
             'entities' => [],
             'assumptions' => [],
-            'flags' => [],
+            'flags' => ['mentions_coverup' => true],
             'confidence' => 0.8,
         ])->classify('contexto', 'Eu não quero cobrir a do braço, quero fazer na perna.');
 
         $this->assertFalse($result['flags']['mentions_coverup']);
+    }
+
+    public function test_it_flags_a_booking_confirmed_in_the_chat(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'close',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify(
+            'contexto',
+            'Passa o Pix pfvr',
+            [
+                ['role' => 'user', 'content' => 'Pode ser kkkkk'],
+                ['role' => 'assistant', 'content' => 'Fica agendado para sexta às 10h.'],
+            ],
+        );
+
+        $this->assertTrue($result['flags']['booking_in_chat']);
     }
 
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void

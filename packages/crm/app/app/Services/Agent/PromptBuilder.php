@@ -488,6 +488,11 @@ class PromptBuilder
             $lines[] = '- Agendamento atual: '.$booking['start_at'].'.';
         }
 
+        $turnFlags = is_array($facts['turn']['flags'] ?? null) ? $facts['turn']['flags'] : [];
+        if (! empty($turnFlags['booking_in_chat']) && empty($booking['active']) && empty($booking['created_this_turn'])) {
+            $lines[] = '- O artista já combinou um horário no chat, mas não há reserva no CRM. NÃO diga que não há horário nem negue a reserva; diga que vai confirmar com o artista e faça handoff.';
+        }
+
         $lines = array_merge($lines, $this->briefingBlock($facts));
 
         $lines[] = 'REGRA: não invente preço, desconto, parcela, condição ou prazo. Se o dado não estiver nos FATOS, não afirme.';
