@@ -166,6 +166,58 @@ Se a imagem mostrar uma tatuagem no corpo, identifique o local e o tamanho aprox
     }
 
     /**
+     * Describe media the artist sent, for calibration and the lead timeline.
+     * Images become a short visual description; audio becomes a transcript.
+     */
+    public function describeArtistMedia(string $url, string $mime = ''): ?string
+    {
+        $file = $this->download($url);
+
+        if ($file === null) {
+            return null;
+        }
+
+        $mime = $file['mime'] !== '' ? $file['mime'] : $mime;
+
+        if (str_starts_with($mime, 'audio/')) {
+            $transcript = $this->transcribe($url);
+
+            return $transcript !== null && $transcript !== ''
+                ? 'Áudio do artista: '.$transcript
+                : null;
+        }
+
+        if (! str_starts_with($mime, 'image/')) {
+            return null;
+        }
+
+        $system = 'Você descreve o que o TATUADOR enviou no WhatsApp, para a equipe de calibração do atendimento.
+Responda em português brasileiro, em 1 ou 2 frases curtas, sem markdown, sem aspas.
+
+Diga o que é: foto de tatuagem, tabela de preços, desenho/referência, print de conversa, comprovante, foto do estúdio etc.
+Se houver texto legível (preços, condições, horários, parcelas), transcreva os valores exatos.
+Não invente. Se não der para identificar, responda "imagem sem detalhe legível".';
+
+        try {
+            $content = $this->ai->complete([
+                ['role' => 'system', 'content' => $system],
+                ['role' => 'user', 'content' => [
+                    ['type' => 'text', 'text' => 'Descreva esta mídia enviada pelo tatuador.'],
+                    ['type' => 'image_url', 'image_url' => ['url' => 'data:'.$mime.';base64,'.base64_encode($file['body'])]],
+                ]],
+            ], (string) config('agent.models.vision'), ['max_tokens' => 300]);
+        } catch (\Throwable $e) {
+            Log::warning('Artist media description failed', ['error' => $e->getMessage()]);
+
+            return null;
+        }
+
+        $content = trim($content, " \t\n\r\0\x0B\"'“”");
+
+        return $content !== '' ? 'Imagem enviada pelo artista: '.$content : null;
+    }
+
+    /**
      * Append the image to the project and keep the stored URL.
      *
      * @return array{url: string, body: string, mime: string}|null

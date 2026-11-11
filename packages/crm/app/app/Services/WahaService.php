@@ -72,7 +72,7 @@ class WahaService
      *
      * @return array<int, array<string, mixed>>|null
      */
-    public function chatMessages(Artist $artist, string $chatJid, int $limit = 200): ?array
+    public function chatMessages(Artist $artist, string $chatJid, int $limit = 200, bool $downloadMedia = false): ?array
     {
         if (! $artist->wa_session_slug || $chatJid === '') {
             return null;
@@ -81,7 +81,7 @@ class WahaService
         try {
             $resp = $this->client()->get(
                 '/api/'.$artist->wa_session_slug.'/chats/'.rawurlencode($chatJid).'/messages',
-                ['limit' => $limit, 'downloadMedia' => 'false'],
+                ['limit' => $limit, 'downloadMedia' => $downloadMedia ? 'true' : 'false'],
             );
         } catch (ConnectionException) {
             return null;

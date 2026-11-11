@@ -181,7 +181,7 @@ class WahaWebhookController extends Controller
             Log::warning('Agent takeover failed', ['chat_id' => $chatId, 'error' => $e->getMessage()]);
         }
 
-        $text = trim((string) ($payload['body'] ?? '')) ?: '[MÍDIA ENVIADA]';
+        $text = trim((string) ($payload['body'] ?? '')) ?: $this->outgoingMediaMarker($payload);
         $waMessageId = trim((string) ($payload['id'] ?? ''));
         $at = isset($payload['timestamp'])
             ? \Carbon\CarbonImmutable::createFromTimestamp((int) $payload['timestamp'])->toIso8601String()
@@ -371,6 +371,32 @@ class WahaWebhookController extends Controller
      * something arrived. Image URLs travel through the buffer so a photo sent
      * earlier in the same burst is not lost.
      */
+    /**
+     * Media the artist sent. Knowing the kind helps the calibration UI and the
+     * bulk media describer.
+     */
+    private function outgoingMediaMarker(array $payload): string
+    {
+        $type = (string) ($payload['type'] ?? '');
+        $media = is_array($payload['media'] ?? null) ? $payload['media'] : [];
+        $message = is_array($payload['_data']['message'] ?? null) ? $payload['_data']['message'] : [];
+        $mime = (string) ($media['mimetype'] ?? $payload['mimetype'] ?? '');
+
+        $sticker = $type === 'sticker' || ($payload['isSticker'] ?? false) === true
+            || ($media['isSticker'] ?? false) === true || isset($message['stickerMessage']);
+        $audio = in_array($type, ['ptt', 'audio'], true) || isset($message['audioMessage']) || isset($message['pttMessage']);
+        $video = $type === 'video' || isset($message['videoMessage']);
+        $image = ! $sticker && ($type === 'image' || isset($message['imageMessage']) || str_starts_with($mime, 'image/'));
+
+        return match (true) {
+            $sticker => '[STICKER ENVIADO]',
+            $audio => '[ÁUDIO ENVIADO]',
+            $video => '[VÍDEO ENVIADO]',
+            $image => '[FOTO ENVIADA]',
+            default => '[MÍDIA ENVIADA]',
+        };
+    }
+
     private function messageText(array $payload): string
     {
         $raw = (string) ($payload['body'] ?? '');

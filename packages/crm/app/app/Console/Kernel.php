@@ -41,6 +41,12 @@ class Kernel extends ConsoleKernel
             ->everyFiveMinutes()
             ->withoutOverlapping(10);
 
+        // Retrospective media descriptions for calibration. Runs on the mock
+        // queue and never touches a live turn.
+        $schedule->command('agent:describe-media --all --days=2 --limit=100')
+            ->hourly()
+            ->withoutOverlapping(30);
+
         // Staff Copilot: deterministic ops facts + narrative.
         if (config('copilot.enabled', true)) {
             $copilotTz = (string) config('copilot.timezone', 'America/Sao_Paulo');
