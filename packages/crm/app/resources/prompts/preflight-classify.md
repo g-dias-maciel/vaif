@@ -52,7 +52,7 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
 
 ## `entities`
 
-Extraia **apenas** o que o lead disse nesta mensagem ou no contexto imediato. Nunca invente.
+Extraia o que o lead disse nesta mensagem. O bloco `HISTÓRICO RECENTE` existe para resolver respostas curtas e retomar o que já foi dito: se o lead já confirmou um campo antes (por exemplo, já disse que é cobertura, ou já informou o local), preencha esse campo mesmo que a mensagem atual seja só "sim", "isso" ou uma pergunta. Nunca invente um campo que o lead não disse em nenhuma das mensagens.
 
 - `placement`: chave canônica (`braco`, `braco_externo`, `braco_interno`, `antebraco`, `costas`, `peito`, `perna`, `coxa`, `panturrilha`, `tornozelo`, `pescoco`, `costela`, `barriga`, `ombro`, `pulso`, `mao`, `pe`, `dedo`) ou `null`.
 - `style`: estilo citado (`realismo`, `blackwork`, `fine_line`, `old_school`, `neo_tradicional`, `tradicional`, `oriental`, `tribal`, `geometrico`, `pontilhismo`, `aquarela`, `floral`, `japones`, `minimalista`) ou `null`.

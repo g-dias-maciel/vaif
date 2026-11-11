@@ -133,4 +133,80 @@ class ReplyValidatorTest extends TestCase
         $this->assertSame('promise_not_allowed', $result['violations'][0]['rule']);
         $this->assertStringContainsString('sem o sinal', $result['final_reply']);
     }
+
+    public function test_explaining_that_a_slot_cannot_be_held_is_not_a_promise(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [],
+            'Não consigo segurar o horário sem o sinal. O horário só fica reservado depois do pagamento.',
+        );
+
+        $this->assertTrue($result['ok']);
+    }
+
+    public function test_a_conversational_hold_phrase_is_blocked_without_a_claim(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [],
+            'Show, já deixei salvo o seu horário.',
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('promise_not_allowed', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_condition', $result['resolution']);
+        $this->assertStringNotContainsString('deixei salvo', $result['final_reply']);
+    }
+
+    public function test_re_asking_a_known_field_is_replaced_with_the_next_missing_question(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [['type' => 'question', 'field' => 'type']],
+            'A tatuagem que você quer é nova, cobertura ou reforma?',
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('question_known_field', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_missing', $result['resolution']);
+        $this->assertStringContainsString('significado', $result['final_reply']);
+    }
+
+    public function test_a_time_outside_the_studio_hours_is_blocked(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'studio' => [
+                    'city' => 'Poços de Caldas',
+                    'timezone' => 'America/Sao_Paulo',
+                    'working_hours' => [
+                        'seg' => ['09:00-12:00', '14:00-18:00'],
+                        'sab' => ['09:00-13:00'],
+                    ],
+                ],
+            ]),
+            [],
+            'Pode vir às 18h20 que eu te espero.',
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('time_outside_hours', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_time', $result['resolution']);
+        $this->assertStringContainsString('fora do funcionamento', $result['final_reply']);
+    }
+
+    public function test_an_unknown_violation_defers_instead_of_keeping_unsafe_text(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [['type' => 'location', 'city' => 'Belo Horizonte']],
+            'Estamos em Belo Horizonte.',
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('canonical_defer', $result['resolution']);
+        $this->assertStringContainsString('confirmar', $result['final_reply']);
+        $this->assertTrue($result['repairable']);
+    }
 }

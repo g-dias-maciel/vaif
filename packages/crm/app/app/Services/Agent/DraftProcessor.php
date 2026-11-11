@@ -68,8 +68,12 @@ class DraftProcessor
             }
         }
 
+        // History before this turn: the classifier needs it to resolve short
+        // answers and to know which discovery fields are already established.
+        $history = $this->store->history((string) $start['lead_id'], 8, $msgAt);
+
         $context = $this->prompts->context($artist, $start);
-        $preflight = $this->preflight->classify($context, $effectiveText);
+        $preflight = $this->preflight->classify($context, $effectiveText, $history);
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
@@ -86,7 +90,6 @@ class DraftProcessor
         // Build the draft as of the lead message time. If the artist already
         // answered while the draft was generating, that future message must
         // not influence the draft (nor bias the comparison).
-        $history = $this->store->history((string) $start['lead_id'], 8, $msgAt);
         $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);
 
         $draft = $this->drafts->create([

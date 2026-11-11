@@ -54,6 +54,7 @@ class AgentServiceProvider extends ServiceProvider
             $app->make(AiClient::class),
             $app->make(ClaimExtractor::class),
             $app->make(ReplyValidator::class),
+            $app->make(AgentStore::class),
         ));
 
         $this->app->bind(ReplyComposer::class, fn ($app) => new ReplyComposer(

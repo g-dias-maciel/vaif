@@ -11,15 +11,27 @@ class PreflightClassifier
     }
 
     /**
+     * @param  array<int, array{role: string, content: string}>  $history
      * @return array{intent: string, entities: array, flags: array, confidence: float}
      */
-    public function classify(string $context, string $leadText): array
+    public function classify(string $context, string $leadText, array $history = []): array
     {
         $system = (string) file_get_contents(resource_path('prompts/preflight-classify.md'));
 
+        $lines = [];
+        foreach ($history as $message) {
+            $content = trim((string) ($message['content'] ?? ''));
+            if ($content === '') {
+                continue;
+            }
+            $lines[] = (($message['role'] ?? 'user') === 'assistant' ? 'Estúdio' : 'Lead').': '.$content;
+        }
+
         $content = $this->ai->chat([
             ['role' => 'system', 'content' => $system],
-            ['role' => 'user', 'content' => "CONTEXTO:\n".$context."\n\nMENSAGEM DO LEAD:\n".$leadText],
+            ['role' => 'user', 'content' => "CONTEXTO:\n".$context
+                ."\n\nHISTÓRICO RECENTE (mais antigo primeiro):\n".($lines === [] ? '_(sem histórico)_' : implode("\n", $lines))
+                ."\n\nMENSAGEM DO LEAD:\n".$leadText],
         ], $this->model);
 
         $parsed = Json::parse($content);

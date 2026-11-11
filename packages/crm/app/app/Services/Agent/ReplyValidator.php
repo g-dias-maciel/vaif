@@ -54,6 +54,8 @@ class ReplyValidator
         $hasPrematureSlot = false;
         $hasAvailabilityViolation = false;
         $hasBookingViolation = false;
+        $hasKnownFieldQuestion = false;
+        $hasTimeViolation = false;
 
         foreach ($claims as $claim) {
             if (! is_array($claim) || ! isset($claim['type'])) {
@@ -173,6 +175,7 @@ class ReplyValidator
                     ];
                     if (! in_array($field, ['name', 'photo', 'doubts', 'other'], true) && ($known[$field] ?? false)) {
                         $violations[] = ['claim' => $claim, 'rule' => 'question_known_field', 'expected' => $field, 'actual' => true];
+                        $hasKnownFieldQuestion = true;
                     }
                     break;
 
@@ -188,6 +191,34 @@ class ReplyValidator
         if (count(array_filter($claims, fn ($c) => ($c['type'] ?? null) === 'slot_offer')) > 2) {
             $violations[] = ['claim' => ['type' => 'slot_offer'], 'rule' => 'too_many_slots', 'expected' => 2];
             $hasAvailabilityViolation = true;
+        }
+
+        // The claim extractor misses conversational promises ("já deixei
+        // salvo", "pode deixar que eu seguro"). These are exactly the phrases
+        // the artist uses, so scan the final text as a second safety net.
+        $hasBooking = ! empty($booking['active']) || ! empty($booking['created_this_turn']);
+        $normalizedReply = $this->norm($reply);
+
+        if (! $hasBooking && empty($conditions['allow_hold_slot']) && $this->promisesHold($normalizedReply)) {
+            $violations[] = ['claim' => ['type' => 'promise', 'key' => 'hold_slot'], 'rule' => 'promise_not_allowed', 'expected' => 'hold_slot', 'actual' => true];
+            $hasConditionViolation = true;
+        }
+
+        if (empty($conditions['guarantee_price'])) {
+            foreach (['mantenho o valor', 'mantenho esse valor', 'mantenho o preco', 'congelei o valor', 'garanto o valor', 'valor garantido'] as $phrase) {
+                if (str_contains($normalizedReply, $phrase)
+                    && ! str_contains($normalizedReply, 'nao '.$phrase)
+                    && ! str_contains($normalizedReply, 'nunca '.$phrase)) {
+                    $violations[] = ['claim' => ['type' => 'promise', 'key' => 'guarantee_price'], 'rule' => 'promise_not_allowed', 'expected' => 'guarantee_price', 'actual' => $phrase];
+                    $hasConditionViolation = true;
+                    break;
+                }
+            }
+        }
+
+        if (! $hasBooking && $this->hasTimeOutsideHours($reply, $studio)) {
+            $violations[] = ['claim' => ['type' => 'time'], 'rule' => 'time_outside_hours', 'expected' => $studio['working_hours'] ?? [], 'actual' => $reply];
+            $hasTimeViolation = true;
         }
 
         $resolution = 'accepted';
@@ -275,8 +306,26 @@ class ReplyValidator
                 if (in_array($resolution, ['canonical_no_slots', 'canonical_missing'], true)) {
                     $offeredSlots = [];
                 }
+            } elseif ($hasKnownFieldQuestion) {
+                // Re-asking a field the lead already answered is never sent.
+                // Replace it with the next question that is actually missing.
+                $finalReply = $this->nextDiscoveryQuestion($project)
+                    ?? 'Me conta mais sobre a tatuagem que você quer fazer?';
+                $resolution = 'canonical_missing';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasTimeViolation) {
+                $finalReply = 'Esse horário está fora do funcionamento do estúdio. Me conta o dia e o período que funciona para você, que eu vejo a agenda com o artista.';
+                $resolution = 'canonical_time';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             } else {
-                $resolution = 'kept_legacy';
+                // No deterministic repair exists for this rule. Never let the
+                // original text through in auto mode: defer to the artist.
+                $finalReply = 'Vou confirmar isso com o artista e já te respondo.';
+                $resolution = 'canonical_defer';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             }
         }
 
@@ -287,7 +336,8 @@ class ReplyValidator
         $offeredSlots = $this->dedupeSlots($offeredSlots);
         $priceClaims = array_filter($effectiveClaims, fn ($c) => ($c['type'] ?? null) === 'price');
         $needsQuote = $resolution === 'canonical_price'
-            || ($priceClaims !== [] && empty($pricing['open_quote']) && $resolution !== 'kept_legacy');
+            || ($priceClaims !== [] && empty($pricing['open_quote'])
+                && ! in_array($resolution, ['kept_legacy', 'canonical_defer'], true));
 
         return [
             'ok' => $violations === [],
@@ -298,8 +348,130 @@ class ReplyValidator
             'offered_slots' => $offeredSlots,
             'effective_claims' => array_values($effectiveClaims),
             'original_reply' => $reply,
-            'repairable' => $violations !== [] && $resolution !== 'kept_legacy',
+            // Give the composer one chance to turn a deterministic repair into
+            // a natural message. The repaired text is validated again, so a
+            // bad rewrite falls back to the canonical safe reply.
+            'repairable' => $violations !== [],
         ];
+    }
+
+    /**
+     * Affirmative hold language, ignoring the negative form the agent uses
+     * when it explains that a slot cannot be held without a deposit.
+     */
+    private function promisesHold(string $normalized): bool
+    {
+        foreach ([
+            'deixei salvo',
+            'deixo salvo',
+            'deixar salvo',
+            'reservei',
+            'segurei o horario',
+            'seguro o horario',
+            'vou segurar o horario',
+            'garanti o horario',
+        ] as $phrase) {
+            if (str_contains($normalized, $phrase)) {
+                return true;
+            }
+        }
+
+        foreach (['esta reservado', 'ta reservado', 'horario reservado'] as $phrase) {
+            if (str_contains($normalized, $phrase)
+                && ! str_contains($normalized, 'nao '.$phrase)
+                && ! str_contains($normalized, 'nunca '.$phrase)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * The next discovery field, in the order the methodology requires.
+     */
+    private function nextDiscoveryQuestion(array $project): ?string
+    {
+        if (empty($project['tattoo_type'])) {
+            return 'A tatuagem que você quer é nova, uma cobertura ou uma reforma?';
+        }
+
+        if (in_array($project['tattoo_type'], ['cover_up', 'rework'], true)) {
+            return 'Pode me enviar uma foto da tatuagem atual que você quer cobrir ou reformar?';
+        }
+
+        if (empty($project['placement'])) {
+            return 'Onde no corpo você quer fazer?';
+        }
+
+        if (empty($project['body_zone'])) {
+            return 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?';
+        }
+
+        if (empty($project['style'])) {
+            return 'Qual estilo você tem em mente?';
+        }
+
+        if (! array_key_exists('first_tattoo', $project) || $project['first_tattoo'] === null) {
+            return 'É a sua primeira tatuagem?';
+        }
+
+        if (empty($project['meaning'])) {
+            return 'Tem algum significado ou referência para essa tattoo?';
+        }
+
+        return null;
+    }
+
+    /**
+     * A time that appears in the reply but fits no working window. Catches
+     * "pode vir 18h20" when the studio closes at 18h.
+     */
+    private function hasTimeOutsideHours(string $reply, array $studio): bool
+    {
+        $hours = is_array($studio['working_hours'] ?? null) ? $studio['working_hours'] : [];
+        if ($hours === []) {
+            return false;
+        }
+
+        preg_match_all('/\b([01]?\d|2[0-3])[:h]([0-5]\d)?\b/u', $reply, $matches, PREG_SET_ORDER);
+        if ($matches === []) {
+            return false;
+        }
+
+        $windows = [];
+        foreach ($hours as $ranges) {
+            if (! is_array($ranges)) {
+                continue;
+            }
+            foreach ($ranges as $range) {
+                if (preg_match('/^(\d{1,2}):(\d{2})-(\d{1,2}):(\d{2})$/', (string) $range, $m) === 1) {
+                    $windows[] = [(int) $m[1] * 60 + (int) $m[2], (int) $m[3] * 60 + (int) $m[4]];
+                }
+            }
+        }
+
+        if ($windows === []) {
+            return false;
+        }
+
+        foreach ($matches as $match) {
+            $minutes = (int) $match[1] * 60 + (int) ($match[2] ?? 0);
+            $inside = false;
+
+            foreach ($windows as [$start, $end]) {
+                if ($minutes >= $start && $minutes <= $end) {
+                    $inside = true;
+                    break;
+                }
+            }
+
+            if (! $inside) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

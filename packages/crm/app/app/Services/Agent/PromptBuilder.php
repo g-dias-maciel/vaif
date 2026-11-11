@@ -135,6 +135,94 @@ class PromptBuilder
     }
 
     /**
+     * What the conversation already established, and the single next question
+     * the agent is allowed to ask. Prevents re-asking known fields.
+     *
+     * @return array<int, string>
+     */
+    private function briefingBlock(array $facts): array
+    {
+        $project = is_array($facts['project'] ?? null) ? $facts['project'] : [];
+        $studio = is_array($facts['studio'] ?? null) ? $facts['studio'] : [];
+        $type = (string) ($project['tattoo_type'] ?? '');
+        $typeLabel = ['new' => 'nova', 'cover_up' => 'cobertura', 'rework' => 'reforma'][$type] ?? null;
+
+        $lines = ['', '## BRIEFING DO LEAD (o que já sabemos)'];
+        $known = [];
+
+        if ($typeLabel !== null) {
+            $known[] = 'tipo='.$typeLabel;
+        }
+        if (! empty($project['placement'])) {
+            $known[] = 'local='.$project['placement'];
+        }
+        if (! empty($project['body_zone'])) {
+            $known[] = 'tamanho='.$project['body_zone'];
+        }
+        if (! empty($project['style'])) {
+            $known[] = 'estilo='.$project['style'];
+        }
+        if (array_key_exists('first_tattoo', $project) && $project['first_tattoo'] !== null) {
+            $known[] = 'primeira tatuagem='.($project['first_tattoo'] ? 'sim' : 'não');
+        }
+        if (! empty($project['meaning'])) {
+            $known[] = 'significado='.$project['meaning'];
+        }
+
+        $lines[] = '- '.($known === [] ? 'nada ainda; comece pelo nome e pelo tipo.' : implode(' · ', $known));
+
+        if (in_array($type, ['cover_up', 'rework'], true)) {
+            $lines[] = '- Cobertura/reforma: NÃO faça descoberta de local, tamanho, estilo nem primeira tatuagem. Peça a foto da tatuagem atual, depois a referência do desenho novo e faça handoff.';
+        } else {
+            $next = null;
+
+            if ($typeLabel === null) {
+                $next = ['tipo', 'A tatuagem que você quer é nova, uma cobertura ou uma reforma?'];
+            } elseif (empty($project['placement'])) {
+                $next = ['local do corpo', 'Onde no corpo você quer fazer?'];
+            } elseif (empty($project['body_zone'])) {
+                $next = ['tamanho', 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?'];
+            } elseif (empty($project['style'])) {
+                $next = ['estilo', 'Qual estilo você tem em mente?'];
+            } elseif (! array_key_exists('first_tattoo', $project) || $project['first_tattoo'] === null) {
+                $next = ['primeira tatuagem', 'É a sua primeira tatuagem?'];
+            } elseif (empty($project['meaning'])) {
+                $next = ['significado', 'Tem algum significado ou referência para essa tattoo?'];
+            }
+
+            if ($next === null) {
+                $lines[] = '- Qualificação completa. O próximo passo é o orçamento (se o gate estiver aberto) ou o fechamento.';
+            } else {
+                $lines[] = '- Ainda falta: '.$next[0].'. Próxima pergunta permitida (UMA só): "'.$next[1].'"';
+            }
+
+            $lines[] = '- NUNCA pergunte de novo um campo que já aparece preenchido acima, mesmo que o lead tenha mudado de assunto.';
+        }
+
+        $hours = is_array($studio['working_hours'] ?? null) ? $studio['working_hours'] : [];
+        if ($hours !== []) {
+            $order = ['seg', 'ter', 'qua', 'qui', 'sex', 'sab', 'dom'];
+            $labels = ['seg' => 'seg', 'ter' => 'ter', 'qua' => 'qua', 'qui' => 'qui', 'sex' => 'sex', 'sab' => 'sáb', 'dom' => 'dom'];
+            $parts = [];
+
+            foreach ($order as $key) {
+                if (empty($hours[$key]) || ! is_array($hours[$key])) {
+                    continue;
+                }
+                $parts[] = $labels[$key].' '.implode(' / ', $hours[$key]);
+            }
+
+            if ($parts !== []) {
+                $lines[] = '- Funcionamento: '.implode(' · ', $parts).'. NUNCA confirme um horário fora dessas janelas; se o lead pedir, ofereça uma opção real da agenda.';
+            }
+        }
+
+        $lines[] = '- Responda PRIMEIRO ao que o lead acabou de dizer ou perguntar. Só depois faça a próxima pergunta permitida.';
+
+        return $lines;
+    }
+
+    /**
      * The automatic vision analysis of the reference image. It is supporting
      * context, never a source of price.
      */
@@ -230,6 +318,10 @@ class PromptBuilder
         $lines[] = '- Segurar horário: '.(! empty($conditions['allow_hold_slot']) ? 'permitido' : 'NÃO permitido sem sinal');
         $lines[] = '- Garantir preço: '.(! empty($conditions['guarantee_price']) ? 'permitido conforme o orçamento' : 'NÃO permitido');
 
+        if (empty($conditions['allow_hold_slot'])) {
+            $lines[] = '- Proibido escrever "deixei salvo", "deixo salvo", "reservei", "está reservado", "fechado" ou "garantido" quando não há reserva criada nos FATOS. Diga que o horário só fica reservado depois do sinal.';
+        }
+
         if (! empty($portfolio['url'])) {
             $lines[] = '- Portfólio: '.$portfolio['url'].' (envie este link quando pedirem fotos; não invente outro).';
         } else {
@@ -259,6 +351,8 @@ class PromptBuilder
         if (! empty($booking['active']) && ! empty($booking['start_at'])) {
             $lines[] = '- Agendamento atual: '.$booking['start_at'].'.';
         }
+
+        $lines = array_merge($lines, $this->briefingBlock($facts));
 
         $lines[] = 'REGRA: não invente preço, desconto, parcela, condição ou prazo. Se o dado não estiver nos FATOS, não afirme.';
 

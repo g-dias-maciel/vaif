@@ -63,8 +63,10 @@ class TurnProcessor
             }
         }
 
+        $history = $this->store->history((string) $start['lead_id']);
+
         $context = $this->prompts->context($artist, $start);
-        $preflight = $this->preflight->classify($context, $effectiveText);
+        $preflight = $this->preflight->classify($context, $effectiveText, $history);
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
@@ -77,8 +79,6 @@ class TurnProcessor
             $intent,
             $entities
         );
-
-        $history = $this->store->history((string) $start['lead_id']);
 
         $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);
         $validation = $composed['validation'];
