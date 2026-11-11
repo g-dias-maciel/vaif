@@ -87,6 +87,10 @@ class DraftProcessor
 
         [$facts, $simulated] = $this->simulate($facts, $start, $intent, $entities);
 
+        // What the AI inferred from the context. Used only to phrase a
+        // confirmation question; it is never written to the project.
+        $facts['assumptions'] = $preflight['assumptions'] ?? [];
+
         // Build the draft as of the lead message time. If the artist already
         // answered while the draft was generating, that future message must
         // not influence the draft (nor bias the comparison).

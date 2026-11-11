@@ -31,9 +31,10 @@ class PromptBuilderTest extends TestCase
         return $artist;
     }
 
-    private function facts(array $project = []): array
+    private function facts(array $project = [], array $assumptions = []): array
     {
         return [
+            'assumptions' => $assumptions,
             'pricing' => ['status' => 'no_price_row'],
             'availability' => ['status' => 'no_slots'],
             'project' => array_merge([
@@ -77,5 +78,43 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('local=braco', $prompt);
         $this->assertStringContainsString('Ainda falta: tamanho', $prompt);
         $this->assertStringNotContainsString('Onde no corpo você quer fazer?', $prompt);
+    }
+
+    public function test_a_confident_assumption_becomes_a_confirmation_question(): void
+    {
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $this->facts([
+            'tattoo_type' => null,
+        ], [
+            'tattoo_type' => ['value' => 'nova', 'confidence' => 0.86, 'reason' => 'pediu na mão'],
+        ]));
+
+        $this->assertStringContainsString('Essa tatuagem seria uma tatuagem nova, certo?', $prompt);
+        $this->assertStringContainsString('CONFIRMAÇÃO', $prompt);
+        $this->assertStringNotContainsString('A tatuagem que você quer é nova, uma cobertura ou uma reforma?', $prompt);
+    }
+
+    public function test_a_placement_assumption_becomes_a_confirmation_question(): void
+    {
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $this->facts([
+            'tattoo_type' => 'new',
+            'placement' => null,
+        ], [
+            'placement' => ['value' => 'mao', 'confidence' => 0.95, 'reason' => 'disse na mão'],
+        ]));
+
+        $this->assertStringContainsString('Você quer fazer na mão, certo?', $prompt);
+        $this->assertStringNotContainsString('Onde no corpo você quer fazer?', $prompt);
+    }
+
+    public function test_a_low_confidence_assumption_keeps_the_open_question(): void
+    {
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $this->facts([
+            'tattoo_type' => null,
+        ], [
+            'tattoo_type' => ['value' => 'nova', 'confidence' => 0.4, 'reason' => 'palpite'],
+        ]));
+
+        $this->assertStringContainsString('A tatuagem que você quer é nova, uma cobertura ou uma reforma?', $prompt);
+        $this->assertStringNotContainsString('CONFIRMAÇÃO de uma suposição', $prompt);
     }
 }

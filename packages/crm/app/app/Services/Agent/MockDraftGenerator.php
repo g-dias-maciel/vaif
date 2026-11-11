@@ -67,8 +67,14 @@ class MockDraftGenerator
 
             try {
                 $startedAt = microtime(true);
+                $history = $this->store->history(
+                    (string) $start['lead_id'],
+                    8,
+                    $message->created_at?->toIso8601String(),
+                );
+
                 $context = $this->prompts->context($artist, $start);
-                $preflight = $this->preflight->classify($context, $text);
+                $preflight = $this->preflight->classify($context, $text, $history);
                 $facts = $this->store->facts(
                     $artist->id,
                     (string) $start['project_id'],
@@ -76,11 +82,7 @@ class MockDraftGenerator
                     $preflight['intent'],
                     $preflight['entities'],
                 );
-                $history = $this->store->history(
-                    (string) $start['lead_id'],
-                    8,
-                    $message->created_at?->toIso8601String(),
-                );
+                $facts['assumptions'] = $preflight['assumptions'] ?? [];
 
                 $composed = $this->composer->compose($artist, $start, $facts, $text, $history, $preflight);
                 $turnId = TurnId::make($chatId, 'sim:'.$message->id);

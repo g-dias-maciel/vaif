@@ -159,6 +159,19 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringNotContainsString('deixei salvo', $result['final_reply']);
     }
 
+    public function test_a_confirmation_question_for_a_missing_field_is_accepted(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => null]]),
+            [['type' => 'question', 'field' => 'type']],
+            'Essa tatuagem seria uma tatuagem nova, certo?',
+            ['flags' => []],
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertSame('accepted', $result['resolution']);
+    }
+
     public function test_re_asking_a_known_field_is_replaced_with_the_next_missing_question(): void
     {
         $result = (new ReplyValidator())->validate(

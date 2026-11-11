@@ -21,6 +21,14 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
     "requested_window": "tarde",
     "selected_slot_start": null
   },
+  "assumptions": {
+    "tattoo_type": {"value": "nova", "confidence": 0.86, "reason": "pediu na mão; não mencionou tatuagem existente"},
+    "placement": {"value": "mao", "confidence": 0.95, "reason": "disse 'na mão'"},
+    "body_zone": null,
+    "style": null,
+    "first_tattoo": null,
+    "meaning": null
+  },
   "flags": {
     "asks_for_price": false,
     "asks_location": false,
@@ -65,6 +73,17 @@ Extraia o que o lead disse nesta mensagem. O bloco `HISTÓRICO RECENTE` existe p
 - `requested_day`: data absoluta em `YYYY-MM-DD` quando o lead citar um dia (“sábado”, “dia 21”, “amanhã”), usando `data_hoje` como base; senão `null`.
 - `requested_window`: `manha` | `tarde` | `noite` | `HH:MM` quando o lead citar um período/horário; senão `null`.
 - `selected_slot_start`: ISO 8601 com fuso quando o lead escolher uma das `opcoes_oferecidas`; senão `null`.
+
+## `assumptions` — o que o contexto sugere, sem o lead ter dito
+
+A assistente usa isto para **confirmar** em vez de perguntar aberto. Exemplo: se o lead diz “quero fazer na mão”, faz sentido assumir que é uma tatuagem nova e perguntar “Essa tatuagem seria uma tatuagem nova, certo?”.
+
+- Só preencha um campo aqui quando ele **não** estiver em `entities` e o contexto (mensagem, histórico ou análise da foto) der uma pista real. Se não houver pista, deixe `null`.
+- `value` usa os mesmos valores de `entities` (`tattoo_type`, `placement`, `body_zone`, `style`, `first_tattoo`, `meaning`).
+- `confidence` de 0 a 1. Use ≥ 0.7 só quando a inferência for forte (“na mão” quase sempre é tattoo nova; cobertura/reforma explícita é 0.95). Use 0.4–0.6 para palpites plausíveis.
+- `reason` em poucas palavras, citando a pista (“pediu na mão”, “foto mostra desenho pequeno”, “falou em cobrir”).
+- Nunca assuma preço, horário, disponibilidade, sinal ou pagamento. Nunca assuma um campo que o lead negou.
+- Uma suposição **não é fato**: a assistente vai confirmar com o lead antes de usar.
 
 ## `flags`
 

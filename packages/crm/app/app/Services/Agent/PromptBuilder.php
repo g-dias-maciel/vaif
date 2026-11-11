@@ -174,26 +174,55 @@ class PromptBuilder
         if (in_array($type, ['cover_up', 'rework'], true)) {
             $lines[] = '- Cobertura/reforma: NÃO faça descoberta de local, tamanho, estilo nem primeira tatuagem. Peça a foto da tatuagem atual, depois a referência do desenho novo e faça handoff.';
         } else {
+            $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];
             $next = null;
+            $key = null;
 
             if ($typeLabel === null) {
+                $key = 'tattoo_type';
                 $next = ['tipo', 'A tatuagem que você quer é nova, uma cobertura ou uma reforma?'];
             } elseif (empty($project['placement'])) {
+                $key = 'placement';
                 $next = ['local do corpo', 'Onde no corpo você quer fazer?'];
             } elseif (empty($project['body_zone'])) {
+                $key = 'body_zone';
                 $next = ['tamanho', 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?'];
             } elseif (empty($project['style'])) {
+                $key = 'style';
                 $next = ['estilo', 'Qual estilo você tem em mente?'];
             } elseif (! array_key_exists('first_tattoo', $project) || $project['first_tattoo'] === null) {
+                $key = 'first_tattoo';
                 $next = ['primeira tatuagem', 'É a sua primeira tatuagem?'];
             } elseif (empty($project['meaning'])) {
+                $key = 'meaning';
                 $next = ['significado', 'Tem algum significado ou referência para essa tattoo?'];
+            }
+
+            if ($assumptions !== []) {
+                $bits = [];
+                foreach ($assumptions as $field => $entry) {
+                    $bits[] = $field.'='.$this->assumptionLabel($field, $entry['value'] ?? null)
+                        .' ('.(int) round((float) ($entry['confidence'] ?? 0) * 100).'%)';
+                }
+                $lines[] = '- Suposições do contexto (confirme, NÃO trate como fato): '.implode(' · ', $bits).'.';
             }
 
             if ($next === null) {
                 $lines[] = '- Qualificação completa. O próximo passo é o orçamento (se o gate estiver aberto) ou o fechamento.';
             } else {
-                $lines[] = '- Ainda falta: '.$next[0].'. Próxima pergunta permitida (UMA só): "'.$next[1].'"';
+                $minConfidence = (float) config('agent.assumptions.min_confidence', 0.65);
+                $assumption = $key !== null ? ($assumptions[$key] ?? null) : null;
+                $confirmed = is_array($assumption)
+                    && (float) ($assumption['confidence'] ?? 0) >= $minConfidence
+                    && isset($assumption['value'])
+                        ? $this->confirmationQuestion($key, $assumption['value'])
+                        : null;
+
+                $lines[] = '- Ainda falta: '.$next[0].'. Próxima pergunta permitida (UMA só): "'.($confirmed ?? $next[1]).'"';
+
+                if ($confirmed !== null) {
+                    $lines[] = '- Essa pergunta é uma CONFIRMAÇÃO de uma suposição do contexto. Use a forma fechada ("certo?"/"é isso?"), não a pergunta aberta.';
+                }
             }
 
             $lines[] = '- NUNCA pergunte de novo um campo que já aparece preenchido acima, mesmo que o lead tenha mudado de assunto.';
@@ -220,6 +249,74 @@ class PromptBuilder
         $lines[] = '- Responda PRIMEIRO ao que o lead acabou de dizer ou perguntar. Só depois faça a próxima pergunta permitida.';
 
         return $lines;
+    }
+
+    /**
+     * A closed question that confirms what the AI inferred from the context.
+     * The lead can answer "sim" and the field is captured from the history.
+     */
+    private function confirmationQuestion(string $field, mixed $value): ?string
+    {
+        $label = $this->assumptionLabel($field, $value);
+
+        return match ($field) {
+            'tattoo_type' => $label === 'nova'
+                ? 'Essa tatuagem seria uma tatuagem nova, certo?'
+                : 'Essa tatuagem seria '.($label === 'cobertura' ? 'uma cobertura' : 'uma reforma').', certo?',
+            'placement' => 'Você quer fazer '.$label.', certo?',
+            'body_zone' => 'Pelo que você mandou, parece '
+                .($label === 'média' ? 'uma área média' : ($label === 'local inteiro' ? 'o local inteiro' : 'uma tattoo '.$label))
+                .'. É isso?',
+            'style' => 'Pelo que você mandou, o estilo é '.$label.', certo?',
+            'first_tattoo' => $value === true || $value === 'true'
+                ? 'Essa seria a sua primeira tatuagem, certo?'
+                : 'Você já tem outras tatuagens, certo?',
+            'meaning' => 'Entendi que a ideia tem o significado "'.$label.'", certo?',
+            default => null,
+        };
+    }
+
+    private function assumptionLabel(string $field, mixed $value): string
+    {
+        return match ($field) {
+            'tattoo_type' => (string) $value,
+            'placement' => $this->placementPhrase($value),
+            'body_zone' => [
+                'pequeno' => 'pequena',
+                'medio' => 'média',
+                'grande' => 'grande',
+                'fechamento' => 'local inteiro',
+            ][(string) $value] ?? (string) $value,
+            'first_tattoo' => ($value === true || $value === 'true') ? 'sim' : 'não',
+            'style' => str_replace('_', ' ', (string) $value),
+            'meaning' => (string) $value,
+            default => (string) $value,
+        };
+    }
+
+    private function placementPhrase(mixed $value): string
+    {
+        return match ((string) $value) {
+            'mao' => 'na mão',
+            'pe' => 'no pé',
+            'dedo' => 'no dedo',
+            'pulso' => 'no pulso',
+            'braco' => 'no braço',
+            'braco_externo' => 'na parte externa do braço',
+            'braco_interno' => 'na parte interna do braço',
+            'antebraco' => 'no antebraço',
+            'costas' => 'nas costas',
+            'peito' => 'no peito',
+            'perna' => 'na perna',
+            'coxa' => 'na coxa',
+            'panturrilha' => 'na panturrilha',
+            'tornozelo' => 'no tornozelo',
+            'pescoco' => 'no pescoço',
+            'costela' => 'na costela',
+            'barriga' => 'na barriga',
+            'ombro' => 'no ombro',
+            default => 'no local',
+        };
     }
 
     /**

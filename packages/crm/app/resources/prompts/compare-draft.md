@@ -30,6 +30,15 @@ Regras:
 - `verdict`: `draft_better`, `artist_better` ou `tie`.
 - `rationale`: no máximo 2 frases.
 
+## SUPOSIÇÕES DO CONTEXTO
+
+`FATOS.assumptions` são inferências do sistema (ex.: o lead pediu na mão, então provavelmente é uma tattoo nova), não fatos confirmados.
+
+- Uma pergunta fechada de confirmação ("Essa tatuagem seria nova, certo?") é a conduta correta quando existe uma suposição.
+- Se o rascunho **tratar a suposição como fato** antes da confirmação (afirmar o local/tipo/tamanho como se o lead tivesse dito), registre em `factual_conflicts`.
+- Não penalize o rascunho por não fazer a pergunta aberta quando a suposição é razoável.
+- Se o lead confirmar depois, o valor entra nos FATOS e deixa de ser suposição.
+
 ## MÍDIA DO ARTISTA
 
 Quando o bloco vier como `DESCRIÇÃO DA MÍDIA ENVIADA PELO ARTISTA`, a equipe descreveu a imagem/vídeo que o artista mandou. Trate essa descrição como a resposta real dele, com uma ressalva: se a descrição não afirmar preço, horário ou condição, não invente esses dados.

@@ -80,6 +80,8 @@ class TurnProcessor
             $entities
         );
 
+        $facts['assumptions'] = $preflight['assumptions'] ?? [];
+
         $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);
         $validation = $composed['validation'];
         $originalViolations = $composed['original_violations'];

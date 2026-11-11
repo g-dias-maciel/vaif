@@ -45,6 +45,12 @@ return [
         'judge' => env('AGENT_JUDGE_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
     ],
 
+    // Context assumptions are only used to ask a confirmation question. A
+    // guess below this confidence keeps the open discovery question.
+    'assumptions' => [
+        'min_confidence' => (float) env('AGENT_ASSUMPTION_MIN_CONFIDENCE', 0.65),
+    ],
+
     'calibration' => [
         'min_compared' => (int) env('AGENT_CALIBRATION_MIN_COMPARED', 40),
         'min_acceptable_rate' => (float) env('AGENT_CALIBRATION_MIN_ACCEPTABLE', 0.9),

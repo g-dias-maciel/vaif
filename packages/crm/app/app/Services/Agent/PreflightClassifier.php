@@ -40,8 +40,63 @@ class PreflightClassifier
         return [
             'intent' => is_string($parsed['intent'] ?? null) ? $parsed['intent'] : 'other',
             'entities' => is_array($parsed['entities'] ?? null) ? $parsed['entities'] : [],
+            'assumptions' => $this->assumptions($parsed['assumptions'] ?? null),
             'flags' => is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [],
             'confidence' => max(0.0, min(1.0, $confidence)),
         ];
+    }
+
+    /**
+     * @return array<string, array{value: mixed, confidence: float, reason: string}>
+     */
+    private function assumptions(mixed $raw): array
+    {
+        if (! is_array($raw)) {
+            return [];
+        }
+
+        $allowed = ['tattoo_type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'];
+        $out = [];
+
+        foreach ($allowed as $field) {
+            $entry = $raw[$field] ?? null;
+
+            if (! is_array($entry)) {
+                continue;
+            }
+
+            $value = $entry['value'] ?? null;
+
+            if ($value === null || $value === '') {
+                continue;
+            }
+
+            $confidence = max(0.0, min(1.0, (float) ($entry['confidence'] ?? 0)));
+
+            if ($confidence < 0.3) {
+                continue;
+            }
+
+            if ($field === 'first_tattoo') {
+                if (! in_array($value, [true, false, 'true', 'false', 1, 0, '1', '0'], true)) {
+                    continue;
+                }
+                $value = filter_var($value, FILTER_VALIDATE_BOOLEAN);
+            } else {
+                $value = trim((string) $value);
+
+                if ($value === '') {
+                    continue;
+                }
+            }
+
+            $out[$field] = [
+                'value' => $value,
+                'confidence' => $confidence,
+                'reason' => trim((string) ($entry['reason'] ?? '')),
+            ];
+        }
+
+        return $out;
     }
 }
