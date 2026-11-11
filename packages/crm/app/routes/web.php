@@ -187,6 +187,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/expenses', [FinanceExpenseController::class, 'index'])->name('expenses.index');
         Route::get('/expenses/create', [FinanceExpenseController::class, 'create'])->name('expenses.create');
         Route::post('/expenses', [FinanceExpenseController::class, 'store'])->name('expenses.store');
+        Route::get('/expenses/copy', [FinanceExpenseController::class, 'copyForm'])->name('expenses.copy');
+        Route::post('/expenses/copy', [FinanceExpenseController::class, 'copy'])->name('expenses.copy.store');
         Route::post('/expenses/generate-recurring', [FinanceExpenseController::class, 'generateRecurring'])->name('expenses.generate-recurring');
         Route::get('/expenses/{expense}/edit', [FinanceExpenseController::class, 'edit'])->name('expenses.edit');
         Route::put('/expenses/{expense}', [FinanceExpenseController::class, 'update'])->name('expenses.update');

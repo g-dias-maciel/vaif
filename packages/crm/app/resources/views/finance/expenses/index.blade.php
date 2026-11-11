@@ -13,6 +13,7 @@
         </div>
         <div class="fin-actions">
             <a href="{{ route('finance.expenses.create') }}" class="btn btn--small">Nova despesa</a>
+            <a href="{{ route('finance.expenses.copy', ['source' => $month->copy()->subMonthNoOverflow()->format('Y-m'), 'target' => $month->format('Y-m')]) }}" class="btn btn--ghost btn--small">Copiar despesas</a>
             <a href="{{ route('finance.months') }}" class="btn btn--ghost btn--small">Visão mensal</a>
             <form method="post" action="{{ route('finance.expenses.generate-recurring') }}" onsubmit="return confirm('Gerar as despesas recorrentes até o próximo mês?');">
                 @csrf

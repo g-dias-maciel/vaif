@@ -128,7 +128,10 @@
     </div>
 
     <div class="fin-section">
-        <h2>Saídas do mês</h2>
+        <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
+            <h2 style="margin:0; font-size:1rem;">Saídas do mês</h2>
+            <a href="{{ route('finance.expenses.copy', ['source' => $month->copy()->subMonthNoOverflow()->format('Y-m'), 'target' => $month->format('Y-m')]) }}" class="btn btn--ghost btn--small">Copiar despesas</a>
+        </div>
 
         @if ($expenses->isEmpty())
             <p class="sales-empty">Nenhuma despesa no mês selecionado.</p>

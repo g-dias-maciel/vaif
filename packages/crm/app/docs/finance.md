@@ -148,6 +148,22 @@ Entrada/Saída `Data` falls outside that competence month, the imported payment/
 paid date is aligned to the competence month end and the original date is kept
 in the notes. This keeps the CRM monthly totals matching the Notion Overview.
 
+## Copying expenses between months
+
+**Financeiro → Despesas → Copiar despesas** copies all non-cancelled expenses
+from one competence month to another. The copies:
+
+- enter as **A pagar** (`pending`), with `paid_at` cleared;
+- keep description, vendor, category, amount and payment method;
+- keep the due day from the source, clamped to the target month length;
+- are idempotent: `copied_from_id + competence_month` prevents copying the
+  same source row twice;
+- can be marked **Manter como despesa mensal**, which sets `recurrence =
+  monthly` and seeds the recurring-expense generator for future months.
+
+The page shows a preview and total before copying. The same action is available
+from the monthly view’s **Saídas do mês** section.
+
 ## Statuses
 
 | Invoice status | Meaning |

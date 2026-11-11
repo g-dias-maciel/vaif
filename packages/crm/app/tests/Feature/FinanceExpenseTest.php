@@ -209,6 +209,99 @@ class FinanceExpenseTest extends TestCase
         $this->assertSame(2, BillingExpense::where('recurrence_key', 'recurring-rent')->count());
     }
 
+    public function test_staff_can_copy_expenses_to_another_month(): void
+    {
+        $source = now()->startOfMonth();
+        $target = $source->copy()->addMonthNoOverflow();
+
+        $criativos = BillingExpense::create([
+            'description' => 'Criativos',
+            'category' => BillingExpense::CATEGORY_ADS,
+            'amount_cents' => 10_000,
+            'competence_month' => $source->toDateString(),
+            'due_date' => $source->copy()->day(5)->toDateString(),
+            'paid_at' => $source->copy()->day(5)->toDateString(),
+            'status' => BillingExpense::STATUS_PAID,
+            'payment_method' => BillingExpense::METHOD_PIX,
+            'recurrence' => BillingExpense::RECURRENCE_ONE_OFF,
+        ]);
+
+        BillingExpense::create([
+            'description' => 'Canva',
+            'category' => BillingExpense::CATEGORY_SOFTWARE,
+            'amount_cents' => 5_000,
+            'competence_month' => $source->toDateString(),
+            'due_date' => $source->copy()->day(10)->toDateString(),
+            'status' => BillingExpense::STATUS_PENDING,
+            'recurrence' => BillingExpense::RECURRENCE_ONE_OFF,
+        ]);
+
+        BillingExpense::create([
+            'description' => 'Cancelada',
+            'category' => BillingExpense::CATEGORY_OTHER,
+            'amount_cents' => 99_900,
+            'competence_month' => $source->toDateString(),
+            'due_date' => $source->copy()->day(15)->toDateString(),
+            'status' => BillingExpense::STATUS_CANCELLED,
+            'recurrence' => BillingExpense::RECURRENCE_ONE_OFF,
+        ]);
+
+        $this->actingAs($this->staff)
+            ->get(route('finance.expenses.copy', [
+                'source' => $source->format('Y-m'),
+                'target' => $target->format('Y-m'),
+            ]))
+            ->assertOk()
+            ->assertSee('Copiar')
+            ->assertSee('Criativos')
+            ->assertDontSee('Cancelada');
+
+        $this->actingAs($this->staff)
+            ->post(route('finance.expenses.copy.store'), [
+                'source' => $source->format('Y-m'),
+                'target' => $target->format('Y-m'),
+                'mark_monthly' => '1',
+            ])
+            ->assertRedirect(route('finance.expenses.index', ['month' => $target->format('Y-m')]));
+
+        $copied = BillingExpense::whereDate('competence_month', $target->toDateString())->get();
+
+        $this->assertCount(2, $copied);
+        $this->assertSame(0, $copied->where('description', 'Cancelada')->count());
+
+        $rent = $copied->firstWhere('description', 'Criativos');
+        $this->assertNotNull($rent);
+        $this->assertSame($criativos->id, $rent->copied_from_id);
+        $this->assertSame(BillingExpense::STATUS_PENDING, $rent->status);
+        $this->assertNull($rent->paid_at);
+        $this->assertSame(BillingExpense::RECURRENCE_MONTHLY, $rent->recurrence);
+        $this->assertNotNull($rent->recurrence_key);
+        $this->assertSame($target->copy()->day(5)->toDateString(), $rent->due_date->toDateString());
+        $this->assertStringContainsString('Copiado de', $rent->notes);
+
+        $this->actingAs($this->staff)
+            ->post(route('finance.expenses.copy.store'), [
+                'source' => $source->format('Y-m'),
+                'target' => $target->format('Y-m'),
+                'mark_monthly' => '1',
+            ])
+            ->assertRedirect(route('finance.expenses.index', ['month' => $target->format('Y-m')]));
+
+        $this->assertSame(2, BillingExpense::whereDate('competence_month', $target->toDateString())->count());
+    }
+
+    public function test_copy_rejects_the_same_month(): void
+    {
+        $month = now()->format('Y-m');
+
+        $this->actingAs($this->staff)
+            ->post(route('finance.expenses.copy.store'), [
+                'source' => $month,
+                'target' => $month,
+            ])
+            ->assertSessionHasErrors('target');
+    }
+
     public function test_expenses_and_monthly_view_are_staff_only(): void
     {
         $this->actingAs($this->staff)->get(route('finance.expenses.index'))->assertOk();

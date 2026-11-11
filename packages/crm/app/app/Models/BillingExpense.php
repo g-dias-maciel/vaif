@@ -74,6 +74,7 @@ class BillingExpense extends Model
         'notes',
         'created_by',
         'notion_page_id',
+        'copied_from_id',
     ];
 
     protected $casts = [

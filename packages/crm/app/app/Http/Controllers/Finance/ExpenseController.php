@@ -8,6 +8,7 @@ use App\Services\Finance\RecurringExpenseGenerator;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Throwable;
@@ -76,6 +77,165 @@ class ExpenseController extends Controller
             'categories' => BillingExpense::categoryOptions(),
             'methods' => BillingExpense::methodOptions(),
         ]);
+    }
+
+    public function copyForm(Request $request)
+    {
+        $source = $this->parseMonth(
+            $request->input('source'),
+            now()->subMonthNoOverflow(),
+        );
+        $target = $this->parseMonth(
+            $request->input('target'),
+            now(),
+        );
+
+        $sourceExpenses = BillingExpense::query()
+            ->whereBetween('competence_month', [
+                $source->copy()->startOfMonth()->toDateString(),
+                $source->copy()->endOfMonth()->toDateString(),
+            ])
+            ->where('status', '!=', BillingExpense::STATUS_CANCELLED)
+            ->orderBy('due_date')
+            ->orderBy('description')
+            ->get();
+
+        $alreadyCopied = $sourceExpenses->isEmpty()
+            ? 0
+            : BillingExpense::query()
+                ->whereIn('copied_from_id', $sourceExpenses->pluck('id'))
+                ->whereBetween('competence_month', [
+                    $target->copy()->startOfMonth()->toDateString(),
+                    $target->copy()->endOfMonth()->toDateString(),
+                ])
+                ->count();
+
+        return view('finance.expenses.copy', [
+            'source' => $source,
+            'target' => $target,
+            'sourceExpenses' => $sourceExpenses,
+            'sourceTotal' => (int) $sourceExpenses->sum('amount_cents'),
+            'alreadyCopied' => $alreadyCopied,
+            'sourceHasMonthly' => $sourceExpenses->contains(
+                fn (BillingExpense $expense): bool => $expense->recurrence === BillingExpense::RECURRENCE_MONTHLY,
+            ),
+        ]);
+    }
+
+    public function copy(Request $request): RedirectResponse
+    {
+        $data = $request->validate([
+            'source' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
+            'target' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/', 'different:source'],
+            'mark_monthly' => ['sometimes', 'boolean'],
+        ]);
+
+        $source = $this->parseMonth($data['source'], now()->subMonthNoOverflow());
+        $target = $this->parseMonth($data['target'], now());
+        $markMonthly = $request->boolean('mark_monthly');
+
+        $sourceExpenses = BillingExpense::query()
+            ->whereBetween('competence_month', [
+                $source->copy()->startOfMonth()->toDateString(),
+                $source->copy()->endOfMonth()->toDateString(),
+            ])
+            ->where('status', '!=', BillingExpense::STATUS_CANCELLED)
+            ->orderBy('due_date')
+            ->orderBy('description')
+            ->get();
+
+        if ($sourceExpenses->isEmpty()) {
+            return back()->with('error', 'Nenhuma despesa encontrada em '.$source->format('m/Y').'.');
+        }
+
+        $copied = 0;
+        $skipped = 0;
+
+        DB::beginTransaction();
+
+        try {
+            foreach ($sourceExpenses as $expense) {
+                $alreadyExists = BillingExpense::query()
+                    ->where('copied_from_id', $expense->id)
+                    ->whereBetween('competence_month', [
+                        $target->copy()->startOfMonth()->toDateString(),
+                        $target->copy()->endOfMonth()->toDateString(),
+                    ])
+                    ->exists();
+
+                if ($alreadyExists) {
+                    $skipped++;
+
+                    continue;
+                }
+
+                $recurrenceKey = null;
+
+                if ($markMonthly) {
+                    $recurrenceKey = $expense->recurrence_key ?: (string) Str::uuid();
+
+                    $keyExists = BillingExpense::query()
+                        ->where('recurrence_key', $recurrenceKey)
+                        ->whereBetween('competence_month', [
+                            $target->copy()->startOfMonth()->toDateString(),
+                            $target->copy()->endOfMonth()->toDateString(),
+                        ])
+                        ->exists();
+
+                    if ($keyExists) {
+                        $skipped++;
+
+                        continue;
+                    }
+                }
+
+                $day = min(
+                    $expense->due_date?->day ?? $target->daysInMonth,
+                    $target->daysInMonth,
+                );
+
+                $notes = trim((string) $expense->notes);
+                $notes = trim($notes.' Copiado de '.$expense->competence_month->format('m/Y').'.');
+
+                BillingExpense::create([
+                    'description' => $expense->description,
+                    'vendor' => $expense->vendor,
+                    'category' => $expense->category,
+                    'amount_cents' => $expense->amount_cents,
+                    'competence_month' => $target->copy()->startOfMonth()->toDateString(),
+                    'due_date' => $target->copy()->startOfMonth()->day($day)->toDateString(),
+                    'paid_at' => null,
+                    'status' => BillingExpense::STATUS_PENDING,
+                    'payment_method' => $expense->payment_method,
+                    'recurrence' => $markMonthly
+                        ? BillingExpense::RECURRENCE_MONTHLY
+                        : BillingExpense::RECURRENCE_ONE_OFF,
+                    'recurrence_key' => $recurrenceKey,
+                    'notes' => $notes !== '' ? $notes : null,
+                    'created_by' => $request->user()?->id,
+                    'copied_from_id' => $expense->id,
+                ]);
+
+                $copied++;
+            }
+
+            DB::commit();
+        } catch (Throwable $e) {
+            DB::rollBack();
+            report($e);
+
+            return back()->with('error', 'Não foi possível copiar as despesas: '.$e->getMessage());
+        }
+
+        return redirect()
+            ->route('finance.expenses.index', ['month' => $target->format('Y-m')])
+            ->with('status', sprintf(
+                '%d despesa(s) copiadas de %s para %s.%s',
+                $copied,
+                $source->format('m/Y'),
+                $target->format('m/Y'),
+                $skipped > 0 ? ' '.$skipped.' já existiam.' : '',
+            ));
     }
 
     public function store(Request $request): RedirectResponse
@@ -214,6 +374,15 @@ class ExpenseController extends Controller
             return Carbon::createFromFormat('Y-m', $value)->startOfMonth();
         } catch (Throwable) {
             return now()->startOfMonth();
+        }
+    }
+
+    private function parseMonth(mixed $value, Carbon $fallback): Carbon
+    {
+        try {
+            return Carbon::createFromFormat('Y-m', (string) $value)->startOfMonth();
+        } catch (Throwable) {
+            return $fallback->copy()->startOfMonth();
         }
     }
 }
