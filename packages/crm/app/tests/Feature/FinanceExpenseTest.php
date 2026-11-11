@@ -163,7 +163,14 @@ class FinanceExpenseTest extends TestCase
             ->get(route('finance.months', ['month' => now()->format('Y-m')]))
             ->assertOk()
             ->assertSee('Visão mensal')
-            ->assertSee('Lucro caixa');
+            ->assertSee('Lucro caixa')
+            ->assertSee('Entradas do mês')
+            ->assertSee('Recebimentos do mês')
+            ->assertSee('Saídas do mês')
+            ->assertSee('VAIF-2026-7001')
+            ->assertSee('Salário')
+            ->assertSee('Ferramenta')
+            ->assertDontSee('Ver mês');
     }
 
     public function test_recurring_expenses_are_cloned_once_per_month(): void

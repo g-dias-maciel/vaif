@@ -19,7 +19,7 @@
 
     <form method="get" data-auto-filter action="{{ route('finance.months') }}" class="sales-toolbar">
         <input type="month" name="month" value="{{ $month->format('Y-m') }}" required>
-        <button type="submit" class="btn btn--small">Ver mês</button>
+        <span class="meta">Atualiza ao selecionar o mês.</span>
     </form>
 
     <div class="fin-grid" style="margin-bottom:20px;">
@@ -76,6 +76,147 @@
             <div class="value"><x-money :cents="$summary['received_pix_cents']" /></div>
         </div>
     </div>
+
+    <div class="fin-section">
+        <h2>Entradas do mês — cobranças</h2>
+
+        @if ($invoices->isEmpty())
+            <p class="sales-empty">Nenhuma cobrança no mês selecionado.</p>
+        @else
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Emissão</th>
+                        <th>Cliente</th>
+                        <th>Cobrança</th>
+                        <th>Forma</th>
+                        <th>Status</th>
+                        <th>Valor</th>
+                        <th>Pago</th>
+                        <th>Saldo</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($invoices as $invoice)
+                        <tr>
+                            <td>{{ $invoice->issue_date?->format('d/m/Y') ?? '—' }}</td>
+                            <td>{{ $invoice->prospect?->name ?? '—' }}</td>
+                            <td>
+                                <a href="{{ route('finance.invoices.show', $invoice) }}"><strong>{{ $invoice->number }}</strong></a>
+                                @if ($invoice->notes)
+                                    <div class="sales-sub">{{ \Illuminate\Support\Str::limit($invoice->notes, 80) }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $invoice->paymentMethodLabel() }}</td>
+                            <td><span class="fin-badge fin-badge--{{ $invoice->statusTone() }}">{{ $invoice->statusLabel() }}</span></td>
+                            <td><x-money :cents="$invoice->amount_cents" /></td>
+                            <td><x-money :cents="$invoice->paid_cents" /></td>
+                            <td><x-money :cents="$invoice->balanceCents()" /></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5"><strong>Total</strong></td>
+                        <td><strong><x-money :cents="$invoices->sum('amount_cents')" /></strong></td>
+                        <td><strong><x-money :cents="$invoices->sum('paid_cents')" /></strong></td>
+                        <td><strong><x-money :cents="$invoices->sum(fn ($invoice) => $invoice->balanceCents())" /></strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        @endif
+    </div>
+
+    <div class="fin-section">
+        <h2>Recebimentos do mês</h2>
+
+        @if ($payments->isEmpty())
+            <p class="sales-empty">Nenhum pagamento recebido no mês selecionado.</p>
+        @else
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Data</th>
+                        <th>Cliente</th>
+                        <th>Cobrança</th>
+                        <th>Método</th>
+                        <th>Origem</th>
+                        <th>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($payments as $payment)
+                        <tr>
+                            <td>{{ $payment->paid_at?->format('d/m/Y') }}</td>
+                            <td>{{ $payment->prospect?->name ?? '—' }}</td>
+                            <td>
+                                @if ($payment->invoice)
+                                    <a href="{{ route('finance.invoices.show', $payment->invoice) }}">{{ $payment->invoice->number }}</a>
+                                @else
+                                    <span class="sales-sub">Sem cobrança</span>
+                                @endif
+                            </td>
+                            <td>{{ $payment->methodLabel() }}</td>
+                            <td>{{ $payment->sourceLabel() }}</td>
+                            <td><x-money :cents="$payment->amount_cents" /></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5"><strong>Total recebido</strong></td>
+                        <td><strong><x-money :cents="$payments->sum('amount_cents')" /></strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        @endif
+    </div>
+
+    <div class="fin-section">
+        <h2>Saídas do mês</h2>
+
+        @if ($expenses->isEmpty())
+            <p class="sales-empty">Nenhuma despesa no mês selecionado.</p>
+        @else
+            <table class="sales-table">
+                <thead>
+                    <tr>
+                        <th>Vencimento</th>
+                        <th>Descrição</th>
+                        <th>Categoria</th>
+                        <th>Status</th>
+                        <th>Pago em</th>
+                        <th>Valor</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach ($expenses as $expense)
+                        <tr>
+                            <td>{{ $expense->due_date?->format('d/m/Y') ?? '—' }}</td>
+                            <td>
+                                <a href="{{ route('finance.expenses.edit', $expense) }}"><strong>{{ $expense->description }}</strong></a>
+                                @if ($expense->notes)
+                                    <div class="sales-sub">{{ \Illuminate\Support\Str::limit($expense->notes, 90) }}</div>
+                                @endif
+                            </td>
+                            <td>{{ $expense->categoryLabel() }}</td>
+                            <td><span class="fin-badge fin-badge--{{ $expense->statusTone() }}">{{ $expense->statusLabel() }}</span></td>
+                            <td>{{ $expense->paid_at?->format('d/m/Y') ?? '—' }}</td>
+                            <td><x-money :cents="$expense->amount_cents" /></td>
+                        </tr>
+                    @endforeach
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5"><strong>Total</strong></td>
+                        <td><strong><x-money :cents="$expenses->sum('amount_cents')" /></strong></td>
+                    </tr>
+                </tfoot>
+            </table>
+        @endif
+    </div>
+
+    <h2 style="margin:24px 0 10px; font-size:1rem;">Últimos 12 meses</h2>
 
     <table class="sales-table">
         <thead>
