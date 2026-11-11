@@ -495,12 +495,21 @@ class PromptBuilder
             }
         }
 
+        $depositStatus = (string) ($booking['deposit_status'] ?? '');
+        $depositConfirmed = $depositStatus === 'confirmado';
+
         if (! empty($booking['created_this_turn']) && ! empty($booking['start_at'])) {
-            $lines[] = '- O horário '.$booking['start_at'].' foi reservado agora. Confirme para o lead.';
+            $lines[] = $depositConfirmed
+                ? '- O horário '.$booking['start_at'].' foi reservado e o sinal está confirmado. Confirme o agendamento.'
+                : '- O horário '.$booking['start_at'].' foi PRÉ-RESERVADO agora. NÃO diga que está confirmado: peça o sinal/PIX e diga que só confirma depois do pagamento.';
         }
 
         if (! empty($booking['active']) && ! empty($booking['start_at'])) {
             $lines[] = '- Agendamento atual: '.$booking['start_at'].'.';
+
+            if (! $depositConfirmed) {
+                $lines[] = '- O horário está pré-reservado aguardando sinal. Peça o PIX agora; a confirmação só acontece depois do pagamento.';
+            }
         }
 
         $turnFlags = is_array($facts['turn']['flags'] ?? null) ? $facts['turn']['flags'] : [];

@@ -60,6 +60,7 @@ class ReplyValidator
         $hasCoverupQuestion = false;
         $hasPromotionViolation = false;
         $hasAftercareViolation = false;
+        $hasBookingBeforeDeposit = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -157,6 +158,15 @@ class ReplyValidator
                     if (empty($booking['created_this_turn'])) {
                         $violations[] = ['claim' => $claim, 'rule' => 'booking_not_created'];
                         $hasBookingViolation = true;
+                    }
+
+                    // Choosing a slot pre-reserves it. The appointment is only
+                    // confirmed after the deposit lands. Without any booking,
+                    // the generic booking_not_created path handles it.
+                    if ((! empty($booking['active']) || ! empty($booking['created_this_turn']))
+                        && ($booking['deposit_status'] ?? '') !== 'confirmado') {
+                        $violations[] = ['claim' => $claim, 'rule' => 'booking_confirmed_before_deposit'];
+                        $hasBookingBeforeDeposit = true;
                     }
                     break;
 
@@ -315,6 +325,11 @@ class ReplyValidator
             } elseif ($hasPrematureSlot) {
                 $finalReply = 'Antes de horários, me conta mais sobre a tatuagem que você quer fazer?';
                 $resolution = 'canonical_premature_slots';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasBookingBeforeDeposit) {
+                $finalReply = 'Seu horário ficou pré-reservado, mas ele só é confirmado depois do sinal. Te passo o PIX agora?';
+                $resolution = 'canonical_booking_pending_deposit';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasAvailabilityViolation || $hasBookingViolation) {

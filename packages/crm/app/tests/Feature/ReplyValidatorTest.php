@@ -312,6 +312,46 @@ class ReplyValidatorTest extends TestCase
         $this->assertSame('canonical_cover_up', $result['resolution']);
     }
 
+    public function test_confirming_a_booking_before_the_deposit_is_blocked(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'booking' => [
+                    'active' => true,
+                    'start_at' => '2026-11-14T13:00:00+00:00',
+                    'created_this_turn' => true,
+                    'deposit_status' => 'aguardando_confirmacao',
+                ],
+            ]),
+            [['type' => 'booking_confirmed']],
+            'Fechado! Seu horário está confirmado para sábado às 10h.',
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('booking_confirmed_before_deposit', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_booking_pending_deposit', $result['resolution']);
+        $this->assertStringContainsString('pré-reservado', $result['final_reply']);
+        $this->assertStringContainsString('PIX', $result['final_reply']);
+    }
+
+    public function test_confirming_a_booking_after_the_deposit_is_accepted(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'booking' => [
+                    'active' => true,
+                    'start_at' => '2026-11-14T13:00:00+00:00',
+                    'created_this_turn' => true,
+                    'deposit_status' => 'confirmado',
+                ],
+            ]),
+            [['type' => 'booking_confirmed']],
+            'Sinal recebido! Seu horário está confirmado para sábado às 10h.',
+        );
+
+        $this->assertTrue($result['ok']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

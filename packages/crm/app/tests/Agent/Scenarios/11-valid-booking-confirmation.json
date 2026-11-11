@@ -1,6 +1,6 @@
 {
   "name": "valid-booking-confirmation",
-  "description": "The backend created the booking this turn; confirming it is grounded and passes untouched.",
+  "description": "The backend pre-reserved the slot this turn; the reply asks for the deposit and does not confirm before it lands.",
   "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
   "phone": "5511900000011",
   "chat_id": "eval:5511900000011@c.us",
@@ -26,7 +26,7 @@
       ]
     },
     "conditions": {"pix_available": true, "reschedule_hours": 48, "cancellation_hours": 48, "payment_methods": ["pix"], "allow_hold_slot": false, "guarantee_price": false, "deposit_value": 30},
-    "booking": {"active": true, "start_at": "2026-11-10T17:00:00+00:00", "created_this_turn": true},
+    "booking": {"active": true, "start_at": "2026-11-10T17:00:00+00:00", "created_this_turn": true, "deposit_status": "aguardando_confirmacao"},
     "project": {"tattoo_type": "new", "placement": "braço", "body_zone": "área média", "style": "fine line", "first_tattoo": true, "meaning": null},
     "client": {"returning": false},
     "portfolio": {"url": "https://instagram.com/estudio.eva"},
@@ -34,14 +34,14 @@
   },
   "script": {
     "preflight": {"intent": "close", "entities": {"selected_slot_start": "2026-11-10T17:00:00+00:00"}, "flags": {}, "confidence": 0.95},
-    "agent": "Fechado! Te espero terça às 14h. O sinal de R$ 180,00 é no PIX.",
-    "claims": {"claims": [{"type": "booking_confirmed"}, {"type": "deposit", "cents": 18000}]}
+    "agent": "Fechado! Seu horário ficou pré-reservado para terça às 14h. O sinal de R$ 180,00 é no PIX; assim que o Adriano confirmar o recebimento, a gente confirma seu horário.",
+    "claims": {"claims": [{"type": "deposit", "cents": 18000}]}
   },
   "expect": {
     "ok": true,
     "resolution": "accepted",
     "repaired": false,
     "sent": true,
-    "reply_contains": ["terça", "180,00"]
+    "reply_contains": ["terça", "180,00", "pré-reservado"]
   }
 }

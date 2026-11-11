@@ -122,6 +122,24 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('nome_confiavel=nao', $context);
     }
 
+    public function test_a_pre_reserved_slot_asks_for_the_pix_before_confirmation(): void
+    {
+        $facts = $this->facts();
+        $facts['booking'] = [
+            'active' => true,
+            'start_at' => '2026-11-14T13:00:00+00:00',
+            'created_this_turn' => true,
+            'deposit_status' => 'aguardando_confirmacao',
+        ];
+
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $facts);
+
+        $this->assertStringContainsString('PRÉ-RESERVADO', $prompt);
+        $this->assertStringContainsString('peça o sinal/PIX', $prompt);
+        $this->assertStringContainsString('só confirma depois do pagamento', $prompt);
+        $this->assertStringNotContainsString('foi reservado agora. Confirme', $prompt);
+    }
+
     public function test_a_booking_confirmed_in_chat_is_not_denied(): void
     {
         $facts = $this->facts();
