@@ -128,51 +128,6 @@
     </div>
 
     <div class="fin-section">
-        <h2>Recebimentos do mês</h2>
-
-        @if ($payments->isEmpty())
-            <p class="sales-empty">Nenhum pagamento recebido no mês selecionado.</p>
-        @else
-            <table class="sales-table">
-                <thead>
-                    <tr>
-                        <th>Data</th>
-                        <th>Cliente</th>
-                        <th>Cobrança</th>
-                        <th>Método</th>
-                        <th>Origem</th>
-                        <th>Valor</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @foreach ($payments as $payment)
-                        <tr>
-                            <td>{{ $payment->paid_at?->format('d/m/Y') }}</td>
-                            <td>{{ $payment->prospect?->name ?? '—' }}</td>
-                            <td>
-                                @if ($payment->invoice)
-                                    <a href="{{ route('finance.invoices.show', $payment->invoice) }}">{{ $payment->invoice->number }}</a>
-                                @else
-                                    <span class="sales-sub">Sem cobrança</span>
-                                @endif
-                            </td>
-                            <td>{{ $payment->methodLabel() }}</td>
-                            <td>{{ $payment->sourceLabel() }}</td>
-                            <td><x-money :cents="$payment->amount_cents" /></td>
-                        </tr>
-                    @endforeach
-                </tbody>
-                <tfoot>
-                    <tr>
-                        <td colspan="5"><strong>Total recebido</strong></td>
-                        <td><strong><x-money :cents="$payments->sum('amount_cents')" /></strong></td>
-                    </tr>
-                </tfoot>
-            </table>
-        @endif
-    </div>
-
-    <div class="fin-section">
         <h2>Saídas do mês</h2>
 
         @if ($expenses->isEmpty())

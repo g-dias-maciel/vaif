@@ -903,6 +903,20 @@
                     form.submit();
                 }
             });
+
+            // Native date/month inputs often open the picker only from the
+            // calendar icon. Open it when the field itself is clicked too.
+            document.addEventListener('click', function (event) {
+                var input = event.target.closest('input[type="month"], input[type="date"]');
+
+                if (!input || typeof input.showPicker !== 'function') return;
+
+                try {
+                    input.showPicker();
+                } catch (e) {
+                    // The picker is already open or the browser blocked it.
+                }
+            });
         })();
     </script>
 

@@ -5,7 +5,6 @@ namespace App\Http\Controllers\Finance;
 use App\Http\Controllers\Controller;
 use App\Models\BillingExpense;
 use App\Models\BillingInvoice;
-use App\Models\BillingPayment;
 use App\Services\Finance\MonthlyFinanceReport;
 use Carbon\Carbon;
 use Illuminate\Http\Request;
@@ -34,13 +33,6 @@ class MonthlyController extends Controller
             ->orderBy('number')
             ->get();
 
-        $payments = BillingPayment::query()
-            ->with(['prospect', 'invoice'])
-            ->whereBetween('paid_at', [$start->toDateString(), $end->toDateString()])
-            ->orderBy('paid_at')
-            ->orderBy('created_at')
-            ->get();
-
         $expenses = BillingExpense::query()
             ->whereBetween('competence_month', [$start->toDateString(), $end->toDateString()])
             ->where('status', '!=', BillingExpense::STATUS_CANCELLED)
@@ -53,7 +45,6 @@ class MonthlyController extends Controller
             'summary' => $report->summary($month),
             'months' => $report->months(12),
             'invoices' => $invoices,
-            'payments' => $payments,
             'expenses' => $expenses,
         ]);
     }
