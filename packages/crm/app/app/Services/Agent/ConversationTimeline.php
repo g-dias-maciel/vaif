@@ -103,13 +103,47 @@ class ConversationTimeline
                 );
 
                 if (! $alreadyThere) {
+                    $content = trim((string) $draft->artist_reply);
+                    $note = trim((string) $draft->artist_media_note);
+
+                    if ($note !== '' && MessageText::isMediaOnly($content)) {
+                        $content .= "\n".$note;
+                    }
+
                     $items[] = [
                         'at' => $repliedAt,
                         'kind' => 'artist',
                         'sender' => $lead->artist?->displayName() ?: 'Artista',
-                        'content' => trim((string) $draft->artist_reply),
+                        'content' => $content,
                         'order' => 2,
+                        'media_note' => $note !== '' && MessageText::isMediaOnly((string) $draft->artist_reply),
                     ];
+                }
+            }
+        }
+
+        // Media that lives in chat_memory is only a placeholder. Attach the
+        // staff description to the artist bubble so the lead page is readable.
+        $notes = $drafts->filter(
+            fn (AgentDraft $draft) => trim((string) $draft->artist_media_note) !== ''
+                && $draft->artist_replied_at !== null
+        );
+
+        if ($notes->isNotEmpty()) {
+            foreach ($items as $index => $item) {
+                if (($item['kind'] ?? null) !== 'artist'
+                    || ! MessageText::hasMediaMarker((string) ($item['content'] ?? ''))
+                    || $item['at'] === null) {
+                    continue;
+                }
+
+                $match = $notes->first(
+                    fn (AgentDraft $draft) => abs($draft->artist_replied_at->getTimestamp() - $item['at']->getTimestamp()) <= 600
+                );
+
+                if ($match !== null) {
+                    $items[$index]['content'] = trim((string) $item['content'])."\n".trim((string) $match->artist_media_note);
+                    $items[$index]['media_note'] = true;
                 }
             }
         }

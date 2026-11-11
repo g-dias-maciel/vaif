@@ -51,6 +51,43 @@ class ConversationTimelineTest extends TestCase
         $this->assertSame('Fica R$ 600, qual o tamanho?', $timeline[1]['content']);
     }
 
+    public function test_it_shows_the_staff_description_of_artist_media(): void
+    {
+        $artist = Artist::create([
+            'name' => 'Timeline Artist',
+            'status' => 'live',
+            'timezone' => 'America/Sao_Paulo',
+            'wa_session_slug' => 'timeline-artist',
+        ]);
+
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead',
+            'phone_e164' => '+5511900000000',
+        ]);
+
+        $draft = AgentDraft::create([
+            'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
+            'chat_id' => 'timeline-artist:5511900000000@c.us',
+            'turn_id' => (string) Str::uuid(),
+            'lead_text' => 'Quanto fica?',
+            'draft_reply' => 'Fica R$ 600.',
+            'status' => AgentDraft::STATUS_COMPARED,
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'artist_media_note' => 'Mandou a tabela de preços, R$ 600 no braço.',
+            'artist_replied_at' => now()->subMinute(),
+        ]);
+        $draft->forceFill(['created_at' => now()->subMinutes(5)])->save();
+
+        $timeline = (new ConversationTimeline())->forLead($lead);
+        $artistItem = collect($timeline)->firstWhere('kind', 'artist');
+
+        $this->assertNotNull($artistItem);
+        $this->assertStringContainsString('tabela de preços', $artistItem['content']);
+    }
+
     public function test_it_merges_visible_drafts_into_the_lead_timeline(): void
     {
         $artist = Artist::create([

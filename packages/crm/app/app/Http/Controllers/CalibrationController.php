@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Jobs\CompareDraft;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
@@ -191,6 +192,28 @@ class CalibrationController extends Controller
             'status',
             "Gerando até {$limit} resposta(s) simuladas da Beatriz para esta conversa. Nada será enviado ao lead."
         );
+    }
+
+    /**
+     * Staff describes the image/video the artist sent, so the pair can be
+     * compared instead of being counted as an uncomparable media turn.
+     */
+    public function mediaNote(Request $request, Artist $artist, AgentDraft $draft)
+    {
+        abort_unless($draft->artist_id === $artist->id, 404);
+
+        $data = $request->validate([
+            'note' => ['required', 'string', 'max:500'],
+        ]);
+
+        $draft->forceFill([
+            'artist_media_note' => trim($data['note']),
+        ])->save();
+
+        CompareDraft::dispatch((string) $draft->id, true)
+            ->onQueue((string) config('agent.queue', 'agent'));
+
+        return back()->with('status', 'Mídia descrita. A comparação está sendo refeita.');
     }
 
     private function schemaReady(): bool

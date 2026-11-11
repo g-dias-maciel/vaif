@@ -30,6 +30,10 @@ Regras:
 - `verdict`: `draft_better`, `artist_better` ou `tie`.
 - `rationale`: no máximo 2 frases.
 
+## MÍDIA DO ARTISTA
+
+Quando o bloco vier como `DESCRIÇÃO DA MÍDIA ENVIADA PELO ARTISTA`, a equipe descreveu a imagem/vídeo que o artista mandou. Trate essa descrição como a resposta real dele, com uma ressalva: se a descrição não afirmar preço, horário ou condição, não invente esses dados.
+
 ## HISTÓRICO DA CONVERSA
 
 O bloco `HISTÓRICO DA CONVERSA` traz o que já foi dito antes deste turno. Use-o para interpretar o turno:

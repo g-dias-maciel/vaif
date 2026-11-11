@@ -76,6 +76,38 @@ class DraftComparatorTest extends TestCase
         $this->assertTrue($draft->wasAccepted());
     }
 
+    public function test_a_staff_media_note_makes_the_pair_comparable(): void
+    {
+        $draft = $this->draft([
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'artist_media_note' => 'Mandou a tabela de preços, R$ 600 no braço.',
+        ]);
+
+        $ai = new ScriptedAiClient([
+            'claims' => ['claims' => [['type' => 'price', 'cents' => 60000]]],
+            'judge' => [
+                'acceptable' => true,
+                'covered_lead_question' => true,
+                'missing' => [],
+                'factual_conflicts' => [],
+                'missing_handoff' => false,
+                'tone' => 4,
+                'verdict' => 'tie',
+                'rationale' => 'Mídia descrita pela equipe.',
+            ],
+        ]);
+
+        $comparison = (new DraftComparator(
+            $ai,
+            new ClaimExtractor($ai, 'scripted'),
+            new ReplyValidator(),
+        ))->compare($draft);
+
+        $this->assertTrue($comparison['comparable']);
+        $this->assertSame('artist_media_note', $comparison['reason']);
+        $this->assertSame('tie', $comparison['judge']['verdict']);
+    }
+
     public function test_a_media_only_artist_reply_is_marked_not_comparable(): void
     {
         $draft = $this->draft(['artist_reply' => '[MÍDIA ENVIADA]']);

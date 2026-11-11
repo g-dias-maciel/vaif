@@ -41,8 +41,10 @@ class CalibrationFacts
             $drafts = $this->drafts($artist, $since);
             $comparedAll = $drafts->filter(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_COMPARED);
             $compared = $comparedAll->filter(function (AgentDraft $d) {
-                $flag = $d->comparison['comparable']
-                    ?? ! MessageText::isMediaOnly($d->artist_reply);
+                $text = trim((string) $d->artist_media_note) !== ''
+                    ? (string) $d->artist_media_note
+                    : (string) $d->artist_reply;
+                $flag = $d->comparison['comparable'] ?? ! MessageText::isMediaOnly($text);
 
                 return $flag !== false;
             });

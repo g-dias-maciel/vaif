@@ -144,6 +144,32 @@ class CalibrationReportTest extends TestCase
         $this->assertSame(1.0, $report['rates']['acceptable']);
     }
 
+    public function test_a_staff_media_note_counts_as_a_comparable_pair(): void
+    {
+        $artist = $this->artist();
+        $this->draft($artist);
+        $this->draft($artist, [
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'artist_media_note' => 'Mandou a tabela de preços.',
+            'comparison' => [
+                'deterministic' => ['ok' => true, 'violations' => []],
+                'judge' => [
+                    'acceptable' => true,
+                    'covered_lead_question' => true,
+                    'missing' => [],
+                    'missing_handoff' => false,
+                    'tone' => 4,
+                    'verdict' => 'tie',
+                ],
+            ],
+        ]);
+
+        $report = (new CalibrationReport())->forArtist($artist, 30);
+
+        $this->assertSame(2, $report['totals']['compared']);
+        $this->assertSame(0, $report['totals']['media_only']);
+    }
+
     public function test_an_unsafe_draft_blocks_calibration(): void
     {
         $artist = $this->artist();

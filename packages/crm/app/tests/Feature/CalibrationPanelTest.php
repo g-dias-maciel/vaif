@@ -205,6 +205,48 @@ class CalibrationPanelTest extends TestCase
         });
     }
 
+    public function test_staff_can_describe_artist_media(): void
+    {
+        Queue::fake();
+        $artist = $this->artist();
+        $this->fakeWaha();
+
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead',
+            'phone_e164' => '+5511900000000',
+        ]);
+
+        $draft = AgentDraft::create([
+            'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
+            'chat_id' => 'calibration-artist:5511900000000@c.us',
+            'turn_id' => (string) Str::uuid(),
+            'lead_text' => 'Quanto fica no quadril?',
+            'draft_reply' => 'Fica R$ 600.',
+            'status' => AgentDraft::STATUS_COMPARED,
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'artist_replied_at' => now()->subMinute(),
+        ]);
+
+        $this->actingAs($this->staff())
+            ->post(route('calibration.media-note', [$artist, $draft]), [
+                'note' => 'Mandou a tabela de preços, R$ 250 no quadril.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertSame(
+            'Mandou a tabela de preços, R$ 250 no quadril.',
+            $draft->fresh()->artist_media_note,
+        );
+
+        Queue::assertPushed(\App\Jobs\CompareDraft::class, function ($job) use ($draft) {
+            return $job->draftId === $draft->id && $job->force === true;
+        });
+    }
+
     public function test_staff_can_point_the_session_at_the_crm(): void
     {
         $artist = $this->artist();

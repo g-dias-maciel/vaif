@@ -24,25 +24,32 @@ class CompareDraft implements ShouldQueue
 
     public int $tries = 2;
 
-    public function __construct(public readonly string $draftId)
-    {
+    public function __construct(
+        public readonly string $draftId,
+        public readonly bool $force = false,
+    ) {
     }
 
     public function handle(DraftComparator $comparator): void
     {
         $draft = AgentDraft::find($this->draftId);
 
-        if ($draft === null || $draft->comparison !== null || trim((string) $draft->artist_reply) === '') {
+        if ($draft === null || trim((string) $draft->artist_reply) === '') {
             return;
         }
 
-        if ($draft->status !== AgentDraft::STATUS_REPLIED) {
+        if (! $this->force && $draft->comparison !== null) {
+            return;
+        }
+
+        if (! $this->force && $draft->status !== AgentDraft::STATUS_REPLIED) {
             return;
         }
 
         // Wait until the artist has been quiet for a moment, so a second
-        // bubble is part of the same answer.
-        if ($draft->artist_replied_at !== null && $draft->artist_replied_at->gt(now()->subSeconds(45))) {
+        // bubble is part of the same answer. A forced recompare (staff media
+        // note) does not need to wait.
+        if (! $this->force && $draft->artist_replied_at !== null && $draft->artist_replied_at->gt(now()->subSeconds(45))) {
             if ($this->job !== null) {
                 $this->release(20);
             }

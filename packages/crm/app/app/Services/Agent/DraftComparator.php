@@ -29,14 +29,22 @@ class DraftComparator
     {
         $facts = is_array($draft->facts) ? $draft->facts : [];
         $artistReply = trim((string) $draft->artist_reply);
+        $mediaNote = trim((string) $draft->artist_media_note);
+
+        // Staff can describe an image/video the artist sent. The description is
+        // the comparable answer; the original placeholder is kept for audit.
+        $comparableText = $mediaNote !== '' && MessageText::isMediaOnly($artistReply)
+            ? $mediaNote
+            : $artistReply;
+        $fromMediaNote = $comparableText !== $artistReply;
 
         $artistClaims = [];
         $artistValidation = [];
 
-        if ($artistReply !== '') {
+        if ($comparableText !== '') {
             try {
-                $artistClaims = $this->claims->extract($artistReply, $facts);
-                $artistValidation = $this->validator->validate($facts, $artistClaims, $artistReply);
+                $artistClaims = $this->claims->extract($comparableText, $facts);
+                $artistValidation = $this->validator->validate($facts, $artistClaims, $comparableText);
             } catch (\Throwable $e) {
                 Log::warning('Artist reply validation failed', [
                     'draft_id' => $draft->id,
@@ -54,13 +62,16 @@ class DraftComparator
         // The artist answers many turns with an image or a short emoji. There
         // is nothing to compare, so keep the draft out of the acceptance and
         // factual denominators instead of scoring a `tie` by default.
-        $comparable = ! MessageText::isMediaOnly($artistReply);
+        $comparable = ! MessageText::isMediaOnly($comparableText);
 
-        $judge = $comparable ? $this->judge($draft, $deterministic) : null;
+        $judge = $comparable ? $this->judge($draft, $deterministic, $comparableText, $fromMediaNote) : null;
 
         $comparison = [
             'comparable' => $comparable,
-            'reason' => $comparable ? null : 'artist_reply_media_only',
+            'reason' => $comparable
+                ? ($fromMediaNote ? 'artist_media_note' : null)
+                : 'artist_reply_media_only',
+            'artist_media_note' => $mediaNote !== '' ? $mediaNote : null,
             'deterministic' => $deterministic,
             'judge' => $judge,
             'compared_at' => now()->toIso8601String(),
@@ -81,9 +92,13 @@ class DraftComparator
      * @param  array<string, mixed>  $deterministic
      * @return array<string, mixed>|null
      */
-    private function judge(AgentDraft $draft, array $deterministic): ?array
+    private function judge(AgentDraft $draft, array $deterministic, string $artistReply, bool $fromMediaNote): ?array
     {
         $system = (string) file_get_contents(resource_path('prompts/compare-draft.md'));
+
+        $replyLabel = $fromMediaNote
+            ? 'DESCRIÇÃO DA MÍDIA ENVIADA PELO ARTISTA (preenchida pela equipe)'
+            : 'RESPOSTA REAL DO ARTISTA';
 
         try {
             $content = $this->ai->chat([
@@ -92,7 +107,7 @@ class DraftComparator
                     .'\n\nHISTÓRICO DA CONVERSA (mais antigo primeiro):\n'.$this->history($draft)
                     .'\n\nMENSAGEM DO LEAD:\n'.$draft->lead_text
                     .'\n\nRASCUNHO DA BEATRIZ (não enviado):\n'.$draft->draft_reply
-                    .'\n\nRESPOSTA REAL DO ARTISTA:\n'.(string) $draft->artist_reply
+                    .'\n\n'.$replyLabel.':\n'.$artistReply
                     .'\n\nVIOLAÇÕES DETERMINÍSTICAS DA RESPOSTA DO ARTISTA:\n'.Json::string($deterministic)],
             ], (string) config('agent.models.judge'));
         } catch (\Throwable $e) {

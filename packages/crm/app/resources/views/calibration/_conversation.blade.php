@@ -1,5 +1,6 @@
 @php($turns = $turns ?? [])
 @php($artistName = $artistName ?? 'Artista')
+@php($artist = $artist ?? null)
 
 <div class="chat-thread" style="max-height:60vh; overflow-y:auto; padding-right:6px;">
     @forelse ($turns as $turn)
@@ -23,6 +24,12 @@
                     <div class="chat-text">{{ $artistMessage['content'] ?? '' }}</div>
                 </div>
             @endforeach
+
+            @if (! empty($turn['media_note']))
+                <div class="meta" style="margin:-2px 0 8px 0;">
+                    Mídia enviada pelo artista (nota da equipe): {{ $turn['media_note'] }}
+                </div>
+            @endif
 
             @if ($turn['draft'])
                 @php($draft = $turn['draft'])
@@ -49,6 +56,31 @@
                     </div>
 
                     <div class="chat-text" style="margin-top:6px;">{{ $draft['draft']->draft_reply }}</div>
+
+                    @if (($draft['media_only'] ?? false) && ! ($draft['is_simulated'] ?? false))
+                        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+                            <div class="meta">
+                                O artista respondeu só com mídia. Descreva o que ele enviou para este par entrar na comparação.
+                            </div>
+
+                            @if (($draft['media_note'] ?? '') !== '')
+                                <div class="meta" style="margin-top:4px;">Nota atual: {{ $draft['media_note'] }}</div>
+                            @endif
+
+                            @if ($artist)
+                                <form method="POST" action="{{ route('calibration.media-note', [$artist, $draft['draft']]) }}" style="display:flex; gap:8px; margin-top:6px;">
+                                    @csrf
+                                    <input type="text" name="note" maxlength="500" required
+                                           value="{{ $draft['media_note'] ?? '' }}"
+                                           placeholder="Ex.: mandou a tabela de preços, R$ 250 no quadril"
+                                           style="flex:1;">
+                                    <button type="submit" class="btn btn--ghost">Salvar</button>
+                                </form>
+                            @endif
+                        </div>
+                    @elseif (! empty($draft['media_note']))
+                        <div class="meta" style="margin-top:6px;">Mídia do artista: {{ $draft['media_note'] }}</div>
+                    @endif
 
                     @if (! empty($draft['rationale']))
                         <div class="meta" style="margin-top:6px;">

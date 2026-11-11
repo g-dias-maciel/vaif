@@ -40,8 +40,10 @@ class CalibrationReport
         // the acceptance/factual/handoff denominators instead of scoring a tie.
         // Old comparisons predate the `comparable` flag, so inspect the reply.
         $compared = $comparedAll->filter(function (AgentDraft $d) {
-            $flag = $d->comparison['comparable']
-                ?? ! MessageText::isMediaOnly($d->artist_reply);
+            $text = trim((string) $d->artist_media_note) !== ''
+                ? (string) $d->artist_media_note
+                : (string) $d->artist_reply;
+            $flag = $d->comparison['comparable'] ?? ! MessageText::isMediaOnly($text);
 
             return $flag !== false;
         });

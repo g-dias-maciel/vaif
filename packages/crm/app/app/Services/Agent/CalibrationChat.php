@@ -184,6 +184,7 @@ class CalibrationChat
 
         $main = array_shift($drafts);
         $turn['draft'] = $this->event($main);
+        $turn['media_note'] = trim((string) $main->artist_media_note);
         $turn['alternates'] = array_map(fn (AgentDraft $draft) => $this->event($draft), $drafts);
 
         return $turn;
@@ -219,6 +220,8 @@ class CalibrationChat
             'status' => $draft->status,
             'is_simulated' => $draft->isSimulated(),
             'is_superseded' => $draft->status === AgentDraft::STATUS_SUPERSEDED,
+            'media_only' => MessageText::isMediaOnly((string) $draft->artist_reply),
+            'media_note' => trim((string) $draft->artist_media_note),
             'verdict' => is_array($judge) ? ($judge['verdict'] ?? null) : null,
             'acceptable' => is_array($judge) ? ($judge['acceptable'] ?? null) : null,
             'rationale' => is_array($judge) ? ($judge['rationale'] ?? null) : null,

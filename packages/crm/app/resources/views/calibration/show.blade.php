@@ -261,6 +261,7 @@
             @include('calibration._conversation', [
                 'turns' => $group['turns'] ?? [],
                 'artistName' => $artist->displayName(),
+                'artist' => $artist,
             ])
 
             <details style="margin-top:14px;">

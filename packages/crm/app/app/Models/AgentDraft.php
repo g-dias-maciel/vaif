@@ -55,6 +55,7 @@ class AgentDraft extends Model
         'latency_ms',
         'status',
         'artist_reply',
+        'artist_media_note',
         'artist_replied_at',
         'response_seconds',
         'artist_claims',
