@@ -37,13 +37,116 @@ class PreflightClassifier
         $parsed = Json::parse($content);
         $confidence = isset($parsed['confidence']) ? (float) $parsed['confidence'] : 0.0;
 
+        $assumptions = $this->assumptions($parsed['assumptions'] ?? null);
+        $entities = is_array($parsed['entities'] ?? null) ? $parsed['entities'] : [];
+        $evidenceText = $this->leadEvidenceText($leadText, $history);
+
+        [$entities, $assumptions] = $this->guardEntities($entities, $assumptions, $evidenceText);
+
+        $flags = is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [];
+        if (! isset($flags['mentions_coverup'])) {
+            $flags['mentions_coverup'] = (new EntityEvidence($evidenceText))
+                ->supports('tattoo_type', 'cobertura');
+        }
+
         return [
             'intent' => is_string($parsed['intent'] ?? null) ? $parsed['intent'] : 'other',
-            'entities' => is_array($parsed['entities'] ?? null) ? $parsed['entities'] : [],
-            'assumptions' => $this->assumptions($parsed['assumptions'] ?? null),
-            'flags' => is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [],
+            'entities' => $entities,
+            'assumptions' => $assumptions,
+            'flags' => $flags,
             'confidence' => max(0.0, min(1.0, $confidence)),
         ];
+    }
+
+    /**
+     * The lead's own words, plus the confirmation question they just said
+     * "sim" to. Assistant questions are otherwise excluded.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function leadEvidenceText(string $leadText, array $history): string
+    {
+        $text = $leadText;
+
+        foreach ($history as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= "\n".(string) ($message['content'] ?? '');
+        }
+
+        $lastAssistant = null;
+        foreach (array_reverse($history) as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                $lastAssistant = (string) ($message['content'] ?? '');
+                break;
+            }
+        }
+
+        if ($lastAssistant !== null
+            && preg_match('/^\s*(sim|isso|certo|correto|exato|pode ser|beleza|ok|blz|ta|tá|e isso|é isso)\b/iu', trim($leadText)) === 1
+            && preg_match('/(certo|correto|seria|é isso|e isso)\s*\?/iu', $lastAssistant) === 1) {
+            $text .= "\n".$lastAssistant;
+        }
+
+        return $text;
+    }
+
+    /**
+     * Anything the lead did not actually say is demoted to an assumption and
+     * must be confirmed before the project uses it. Assistant questions are
+     * excluded from the evidence on purpose: "é nova, cobertura ou reforma?"
+     * must not make "nova" look explicit.
+     *
+     * @param  array<string, mixed>  $entities
+     * @param  array<string, array{value: mixed, confidence: float, reason: string}>  $assumptions
+     * @param  array<int, array{role: string, content: string}>  $history
+     * @return array{0: array<string, mixed>, 1: array<string, array{value: mixed, confidence: float, reason: string}>}
+     */
+    private function guardEntities(array $entities, array $assumptions, string $evidenceText): array
+    {
+        $evidence = new EntityEvidence($evidenceText);
+        $keep = [];
+
+        foreach ($entities as $field => $value) {
+            if ($value === null || $value === '' || $value === []) {
+                $keep[$field] = $value;
+
+                continue;
+            }
+
+            // Context-only fields are resolved by the system, not by words.
+            if (in_array($field, ['requested_day', 'requested_window', 'selected_slot_start', 'meaning'], true)) {
+                $keep[$field] = $value;
+
+                continue;
+            }
+
+            if ($field === 'name') {
+                if ($evidence->supports('name', (string) $value)) {
+                    $keep[$field] = $value;
+                }
+
+                continue;
+            }
+
+            if ($evidence->supports($field, $value)) {
+                $keep[$field] = $value;
+                unset($assumptions[$field]);
+
+                continue;
+            }
+
+            if (! isset($assumptions[$field])) {
+                $assumptions[$field] = [
+                    'value' => $value,
+                    'confidence' => 0.7,
+                    'reason' => 'inferido pelo contexto',
+                ];
+            }
+        }
+
+        return [$keep, $assumptions];
     }
 
     /**

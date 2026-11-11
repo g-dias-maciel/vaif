@@ -81,6 +81,7 @@ class TurnProcessor
         );
 
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
+        $facts['turn']['flags'] = $preflight['flags'] ?? [];
 
         $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);
         $validation = $composed['validation'];

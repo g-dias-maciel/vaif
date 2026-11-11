@@ -36,6 +36,148 @@ class PreflightClassifierTest extends TestCase
         $this->assertTrue($result['flags']['mentions_promotion']);
     }
 
+    public function test_an_inferred_entity_is_demoted_to_an_assumption(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['placement' => 'panturrilha', 'tattoo_type' => 'nova', 'first_tattoo' => false],
+            'assumptions' => [
+                'tattoo_type' => ['value' => 'nova', 'confidence' => 0.9, 'reason' => 'não quer cobrir as do braço'],
+            ],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify(
+            'contexto',
+            'Quero fazer na panturrilha, porque no braço eu já tenho outra e não quero cobrir.',
+        );
+
+        $this->assertSame('panturrilha', $result['entities']['placement']);
+        $this->assertArrayNotHasKey('tattoo_type', $result['entities']);
+        $this->assertSame('nova', $result['assumptions']['tattoo_type']['value']);
+        $this->assertSame(0.9, $result['assumptions']['tattoo_type']['confidence']);
+        $this->assertFalse($result['entities']['first_tattoo']);
+    }
+
+    public function test_an_explicitly_stated_entity_is_kept(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['placement' => 'perna', 'tattoo_type' => 'nova'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify('contexto', 'Quero fazer uma tatuagem nova na perna.');
+
+        $this->assertSame('perna', $result['entities']['placement']);
+        $this->assertSame('nova', $result['entities']['tattoo_type']);
+        $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
+    }
+
+    public function test_a_wrong_placement_is_demoted_to_an_assumption(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'ask_price',
+            'entities' => ['placement' => 'coxa', 'body_zone' => 'medio'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Pode me passar o orçamento para fazer na parte da frente da perna, uns 13 cm?');
+
+        $this->assertArrayNotHasKey('placement', $result['entities']);
+        $this->assertSame('coxa', $result['assumptions']['placement']['value']);
+        $this->assertSame(0.7, $result['assumptions']['placement']['confidence']);
+        $this->assertSame('medio', $result['assumptions']['body_zone']['value']);
+    }
+
+    public function test_negated_cover_up_is_not_explicit(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['tattoo_type' => 'cobertura'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Eu não quero cobrir a do braço, quero fazer na perna.');
+
+        $this->assertArrayNotHasKey('tattoo_type', $result['entities']);
+        $this->assertSame('cobertura', $result['assumptions']['tattoo_type']['value']);
+    }
+
+    public function test_the_assistant_question_is_not_evidence_for_the_lead(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['tattoo_type' => 'nova'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify(
+            'contexto',
+            'Quero fazer na perna.',
+            [['role' => 'assistant', 'content' => 'Essa tattoo é nova, uma cobertura ou uma reforma?']],
+        );
+
+        $this->assertArrayNotHasKey('tattoo_type', $result['entities']);
+        $this->assertSame('nova', $result['assumptions']['tattoo_type']['value']);
+    }
+
+    public function test_a_short_confirmation_accepts_the_previous_confirmation_question(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['tattoo_type' => 'nova'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify(
+            'contexto',
+            'Sim, isso',
+            [['role' => 'assistant', 'content' => 'Essa tatuagem seria uma tatuagem nova, certo?']],
+        );
+
+        $this->assertSame('nova', $result['entities']['tattoo_type']);
+        $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
+    }
+
+    public function test_a_name_not_written_by_the_lead_is_dropped(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['name' => 'Mariana'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify('contexto', 'Quero fazer na perna.');
+
+        $this->assertArrayNotHasKey('name', $result['entities']);
+    }
+
+    public function test_it_detects_a_cover_up_hint_deterministically(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'other',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Quero cobrir essa tatuagem antiga do braço.');
+
+        $this->assertTrue($result['flags']['mentions_coverup']);
+    }
+
+    public function test_it_ignores_a_negated_cover_up_hint(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Eu não quero cobrir a do braço, quero fazer na perna.');
+
+        $this->assertFalse($result['flags']['mentions_coverup']);
+    }
+
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void
     {
         $result = $this->classifier([

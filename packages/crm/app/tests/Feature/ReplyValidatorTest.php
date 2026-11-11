@@ -243,6 +243,61 @@ class ReplyValidatorTest extends TestCase
         $this->assertTrue($result['ok']);
     }
 
+    public function test_aftercare_without_a_handoff_is_replaced(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['turn' => ['intent' => 'aftercare']]),
+            [],
+            'Procure um médico e mantenha a pele hidratada.',
+            ['flags' => ['is_aftercare' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('aftercare_without_handoff', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_aftercare', $result['resolution']);
+        $this->assertStringContainsString('Adriano', $result['final_reply']);
+    }
+
+    public function test_aftercare_with_a_handoff_is_accepted(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['turn' => ['intent' => 'aftercare']]),
+            [['type' => 'handoff']],
+            'Sinto muito. Vou passar seu caso para o Adriano agora.',
+            ['flags' => ['is_aftercare' => true]],
+        );
+
+        $this->assertTrue($result['ok']);
+    }
+
+    public function test_a_cover_up_hint_without_the_project_type_still_blocks_discovery(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [['type' => 'question', 'field' => 'placement']],
+            'Onde no corpo fica a tatuagem que você quer cobrir?',
+            ['flags' => ['mentions_coverup' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_discovery', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+    }
+
+    public function test_a_cover_up_hint_blocks_a_price(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [['type' => 'price', 'cents' => 60000]],
+            'Fica R$ 600,00.',
+            ['flags' => ['mentions_coverup' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_never_quotes', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

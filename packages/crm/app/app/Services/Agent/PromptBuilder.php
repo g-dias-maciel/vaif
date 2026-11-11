@@ -80,6 +80,7 @@ class PromptBuilder
         $parts = [
             'pipeline='.($turn['stage_key'] ?? '?'),
             'nome='.($turn['name'] ?? 'desconhecido'),
+            'nome_confiavel='.($this->looksLikeName($turn['name'] ?? null) ? 'sim' : 'nao'),
             'deposit='.($turn['deposit_status'] ?? 'nao_solicitado'),
             'tipo='.$type,
             'lead_id='.($turn['lead_id'] ?? ''),
@@ -171,6 +172,11 @@ class PromptBuilder
 
         $lines[] = '- '.($known === [] ? 'nada ainda; comece pelo nome e pelo tipo.' : implode(' · ', $known));
 
+        $flags = is_array($facts['turn']['flags'] ?? null) ? $facts['turn']['flags'] : [];
+        if (! empty($flags['mentions_coverup']) && ! in_array($type, ['cover_up', 'rework'], true)) {
+            $lines[] = '- O lead falou em cobrir/reformar. Trate como cobertura: NÃO dê preço nem horário, peça a foto da tatuagem atual e faça handoff.';
+        }
+
         if (in_array($type, ['cover_up', 'rework'], true)) {
             $lines[] = '- Cobertura/reforma: NÃO faça descoberta de local, tamanho, estilo nem primeira tatuagem. Peça a foto da tatuagem atual, depois a referência do desenho novo e faça handoff.';
         } else {
@@ -249,6 +255,31 @@ class PromptBuilder
         $lines[] = '- Responda PRIMEIRO ao que o lead acabou de dizer ou perguntar. Só depois faça a próxima pergunta permitida.';
 
         return $lines;
+    }
+
+    /**
+     * A WhatsApp profile name is only trusted when it looks like a person:
+     * no digits, no emoji, at most three words.
+     */
+    private function looksLikeName(mixed $name): bool
+    {
+        $name = trim((string) $name);
+
+        if ($name === '' || mb_strlen($name) > 60) {
+            return false;
+        }
+
+        if (preg_match('/[\d\p{So}\p{Sk}\x{1F000}-\x{1FAFF}]/u', $name) === 1) {
+            return false;
+        }
+
+        if (preg_match('/[^\p{L}\s\.\'\-]/u', $name) === 1) {
+            return false;
+        }
+
+        $words = preg_split('/\s+/u', $name) ?: [];
+
+        return count($words) >= 1 && count($words) <= 3;
     }
 
     /**

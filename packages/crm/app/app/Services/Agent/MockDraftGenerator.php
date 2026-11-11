@@ -83,6 +83,7 @@ class MockDraftGenerator
                     $preflight['entities'],
                 );
                 $facts['assumptions'] = $preflight['assumptions'] ?? [];
+                $facts['turn']['flags'] = $preflight['flags'] ?? [];
 
                 $composed = $this->composer->compose($artist, $start, $facts, $text, $history, $preflight);
                 $turnId = TurnId::make($chatId, 'sim:'.$message->id);

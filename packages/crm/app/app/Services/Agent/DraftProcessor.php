@@ -90,6 +90,7 @@ class DraftProcessor
         // What the AI inferred from the context. Used only to phrase a
         // confirmation question; it is never written to the project.
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
+        $facts['turn']['flags'] = $preflight['flags'] ?? [];
 
         // Build the draft as of the lead message time. If the artist already
         // answered while the draft was generating, that future message must

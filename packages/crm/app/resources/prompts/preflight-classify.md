@@ -37,6 +37,7 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
     "is_reschedule": false,
     "is_aftercare": false,
     "mentions_promotion": false,
+    "mentions_coverup": false,
     "needs_human": false
   },
   "confidence": 0.93
@@ -61,7 +62,17 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
 
 ## `entities`
 
-Extraia o que o lead disse nesta mensagem. O bloco `HISTÓRICO RECENTE` existe para resolver respostas curtas e retomar o que já foi dito: se o lead já confirmou um campo antes (por exemplo, já disse que é cobertura, ou já informou o local), preencha esse campo mesmo que a mensagem atual seja só "sim", "isso" ou uma pergunta. Nunca invente um campo que o lead não disse em nenhuma das mensagens.
+Extraia o que o lead **disse com palavras dele** nesta mensagem. O bloco `HISTÓRICO RECENTE` existe para resolver respostas curtas: se o lead responder "sim", "isso" ou "certo" a uma pergunta de confirmação anterior, use o valor que estava na pergunta.
+
+Regra de ouro: **o que o lead não disse vai em `assumptions`, não em `entities`.**
+
+- "quero fazer na mão" → `placement=mao` porque ele disse "na mão"; `tattoo_type` fica `null` e vai para `assumptions` como `nova`, porque ele não disse "nova".
+- "quero cobrir uma tatuagem antiga no braço" → `tattoo_type=cobertura` e `placement=braco` porque ele disse "cobrir" e "braço".
+- "frente da perna" → `placement=perna` (ou `null`); **não** converta para `coxa` em `entities`. Se quiser inferir coxa, use `assumptions`.
+- "já tenho outras" → `first_tattoo=false` porque ele disse que tem outras.
+- A pergunta da assistente NUNCA conta como fala do lead. "É nova, cobertura ou reforma?" não autoriza `tattoo_type=nova`.
+
+Nunca invente um campo que o lead não disse em nenhuma das mensagens.
 
 - `placement`: chave canônica (`braco`, `braco_externo`, `braco_interno`, `antebraco`, `costas`, `peito`, `perna`, `coxa`, `panturrilha`, `tornozelo`, `pescoco`, `costela`, `barriga`, `ombro`, `pulso`, `mao`, `pe`, `dedo`) ou `null`.
 - `style`: estilo citado (`realismo`, `blackwork`, `fine_line`, `old_school`, `neo_tradicional`, `tradicional`, `oriental`, `tribal`, `geometrico`, `pontilhismo`, `aquarela`, `floral`, `japones`, `minimalista`) ou `null`.
@@ -94,6 +105,7 @@ A assistente usa isto para **confirmar** em vez de perguntar aberto. Exemplo: se
 - `is_reschedule`: quer mexer em um agendamento existente.
 - `is_aftercare`: é cliente antigo falando de cuidados/retorno.
 - `mentions_promotion`: cita uma oferta, promoção, preço de anúncio, "aquela promoção", "o valor do Instagram" ou similar.
+- `mentions_coverup`: o lead fala em cobrir uma tatuagem existente, cobertura, reforma, retocar ou cover-up (não vale "cobrir o braço" no sentido de fechar o braço).
 - `needs_human`: o caso exige o artista agora (cover-up, reforma, reclamação, pedido explícito, segurança, cliente antigo).
 
 ## `confidence`

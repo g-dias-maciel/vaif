@@ -59,7 +59,12 @@ class ReplyValidator
         $hasSpamQuestion = false;
         $hasCoverupQuestion = false;
         $hasPromotionViolation = false;
+        $hasAftercareViolation = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
+        $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
+        $coverHint = ! empty($flags['mentions_coverup']);
+        $coverCase = $isCover || $coverHint;
+        $hasHandoff = false;
 
         foreach ($claims as $claim) {
             if (! is_array($claim) || ! isset($claim['type'])) {
@@ -69,7 +74,7 @@ class ReplyValidator
             switch ($claim['type']) {
                 case 'price':
                     $cents = (int) ($claim['cents'] ?? 0);
-                    if ($isCover) {
+                    if ($coverCase) {
                         $violations[] = ['claim' => $claim, 'rule' => 'coverup_never_quotes'];
                         $hasPriceViolation = true;
                     } elseif (($pricing['status'] ?? null) !== 'ready') {
@@ -187,10 +192,14 @@ class ReplyValidator
                         $hasSpamQuestion = true;
                     }
 
-                    if ($isCover && in_array($field, ['type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
+                    if ($coverCase && in_array($field, ['type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
                         $violations[] = ['claim' => $claim, 'rule' => 'coverup_discovery', 'expected' => 'photo', 'actual' => $field];
                         $hasCoverupQuestion = true;
                     }
+                    break;
+
+                case 'handoff':
+                    $hasHandoff = true;
                     break;
 
                 case 'location':
@@ -242,6 +251,11 @@ class ReplyValidator
             $hasPromotionViolation = true;
         }
 
+        if ($isAftercare && ! $hasHandoff) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'aftercare_without_handoff'];
+            $hasAftercareViolation = true;
+        }
+
         $resolution = 'accepted';
         $finalReply = $reply;
 
@@ -249,7 +263,7 @@ class ReplyValidator
             $canonicalCents = (int) ($pricing['offered_cents'] ?? $pricing['base_cents'] ?? $pricing['promotion']['price_cents'] ?? 0);
 
             if ($hasPriceViolation) {
-                if ($isCover) {
+                if ($coverCase) {
                     // A cover-up is priced only after the artist sees the tattoo.
                     // Never let a hallucinated number reach the lead.
                     $finalReply = 'Para cobertura, preciso avaliar a tattoo antes de te passar o valor. Pode me enviar uma foto de como está hoje?';
@@ -340,6 +354,11 @@ class ReplyValidator
             } elseif ($hasPromotionViolation) {
                 $finalReply = 'Vou confirmar essa oferta com o artista e já te respondo.';
                 $resolution = 'canonical_promotion';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasAftercareViolation) {
+                $finalReply = 'Sinto muito que esteja assim. Como não sou médica, o ideal é procurar um médico ou uma UBS. Vou passar seu caso para o Adriano agora.';
+                $resolution = 'canonical_aftercare';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasKnownFieldQuestion) {
