@@ -18,6 +18,7 @@ class DraftComparator
         private readonly AiClient $ai,
         private readonly ClaimExtractor $claims,
         private readonly ReplyValidator $validator,
+        private readonly ?AgentStore $store = null,
     ) {
     }
 
@@ -50,9 +51,16 @@ class DraftComparator
             'claims' => $artistClaims,
         ];
 
-        $judge = $this->judge($draft, $deterministic);
+        // The artist answers many turns with an image or a short emoji. There
+        // is nothing to compare, so keep the draft out of the acceptance and
+        // factual denominators instead of scoring a `tie` by default.
+        $comparable = ! MessageText::isMediaOnly($artistReply);
+
+        $judge = $comparable ? $this->judge($draft, $deterministic) : null;
 
         $comparison = [
+            'comparable' => $comparable,
+            'reason' => $comparable ? null : 'artist_reply_media_only',
             'deterministic' => $deterministic,
             'judge' => $judge,
             'compared_at' => now()->toIso8601String(),
@@ -81,6 +89,7 @@ class DraftComparator
             $content = $this->ai->chat([
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => 'FATOS:\n'.Json::string($draft->facts)
+                    .'\n\nHISTÓRICO DA CONVERSA (mais antigo primeiro):\n'.$this->history($draft)
                     .'\n\nMENSAGEM DO LEAD:\n'.$draft->lead_text
                     .'\n\nRASCUNHO DA BEATRIZ (não enviado):\n'.$draft->draft_reply
                     .'\n\nRESPOSTA REAL DO ARTISTA:\n'.(string) $draft->artist_reply
@@ -110,6 +119,42 @@ class DraftComparator
             'verdict' => in_array($verdict, ['draft_better', 'artist_better', 'tie'], true) ? $verdict : 'unknown',
             'rationale' => trim((string) ($parsed['rationale'] ?? '')),
         ];
+    }
+
+    /**
+     * The conversation before this turn. The judge must know what the lead has
+     * already answered, otherwise it flags legitimate memory as invention.
+     */
+    private function history(AgentDraft $draft): string
+    {
+        if ($this->store === null || $draft->lead_id === null || $draft->lead_msg_at === null) {
+            return '_(sem histórico)_';
+        }
+
+        try {
+            $messages = $this->store->history(
+                (string) $draft->lead_id,
+                16,
+                $draft->lead_msg_at->toIso8601String(),
+            );
+        } catch (\Throwable $e) {
+            return '_(sem histórico)_';
+        }
+
+        $current = trim((string) $draft->lead_text);
+        $lines = [];
+
+        foreach ($messages as $message) {
+            $content = trim((string) ($message['content'] ?? ''));
+            if ($content === '' || $content === $current) {
+                continue;
+            }
+
+            $role = ($message['role'] ?? 'user') === 'assistant' ? 'Estúdio' : 'Lead';
+            $lines[] = $role.': '.$content;
+        }
+
+        return $lines === [] ? '_(sem histórico)_' : implode("\n", $lines);
     }
 
     /**

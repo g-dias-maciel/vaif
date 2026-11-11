@@ -199,7 +199,7 @@
     @if (! empty($report['warnings']))
         <div style="margin-top:12px;">
             @foreach ($report['warnings'] as $warning)
-                <div class="meta">Cobertura: {{ $warning }}</div>
+                <div class="meta">Aviso: {{ $warning }}</div>
             @endforeach
         </div>
     @endif
@@ -207,6 +207,7 @@
     <div class="meta" style="margin-top:12px;">
         Drafts: {{ $report['totals']['drafts'] }}
         · respondidos: {{ $report['totals']['answered'] }}
+        · só mídia (fora da comparação): {{ $report['totals']['media_only'] ?? 0 }}
         · pendentes: {{ $report['totals']['pending'] }}
         · expirados: {{ $report['totals']['expired'] }}
         · substituídos: {{ $report['totals']['superseded'] }}

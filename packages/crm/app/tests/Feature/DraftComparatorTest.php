@@ -75,4 +75,29 @@ class DraftComparatorTest extends TestCase
         $this->assertSame('draft_better', $draft->judgeVerdict());
         $this->assertTrue($draft->wasAccepted());
     }
+
+    public function test_a_media_only_artist_reply_is_marked_not_comparable(): void
+    {
+        $draft = $this->draft(['artist_reply' => '[MÍDIA ENVIADA]']);
+
+        $ai = new ScriptedAiClient([
+            'claims' => ['claims' => []],
+            'judge' => ['acceptable' => true, 'verdict' => 'tie'],
+        ]);
+
+        $comparison = (new DraftComparator(
+            $ai,
+            new ClaimExtractor($ai, 'scripted'),
+            new ReplyValidator(),
+        ))->compare($draft);
+
+        $this->assertFalse($comparison['comparable']);
+        $this->assertSame('artist_reply_media_only', $comparison['reason']);
+        $this->assertNull($comparison['judge']);
+
+        $draft->refresh();
+        $this->assertSame(AgentDraft::STATUS_COMPARED, $draft->status);
+        $this->assertNull($draft->judgeVerdict());
+        $this->assertNull($draft->wasAccepted());
+    }
 }

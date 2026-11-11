@@ -32,8 +32,14 @@ class CalibrationReport
 
         $eligible = $all->reject(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_SUPERSEDED);
         $answered = $eligible->filter(fn (AgentDraft $d) => $d->artist_reply !== null);
-        $compared = $eligible->filter(
+        $comparedAll = $eligible->filter(
             fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_COMPARED && is_array($d->comparison)
+        );
+
+        // A media-only artist reply cannot be compared as text. Keep it out of
+        // the acceptance/factual/handoff denominators instead of scoring a tie.
+        $compared = $comparedAll->filter(
+            fn (AgentDraft $d) => ($d->comparison['comparable'] ?? true) !== false
         );
 
         $acceptable = $compared->filter(fn (AgentDraft $d) => $d->wasAccepted() === true)->count();
@@ -87,6 +93,24 @@ class CalibrationReport
         ];
 
         $warnings = [];
+        $mediaOnly = $comparedAll->count() - $comparedCount;
+        if ($mediaOnly > 0) {
+            $warnings[] = "{$mediaOnly} respostas do artista eram só mídia e ficaram fora da comparação";
+        }
+
+        $priceOverrides = $compared->filter(function (AgentDraft $draft) {
+            foreach ((array) ($draft->artist_validation['violations'] ?? []) as $violation) {
+                if (is_array($violation) && ($violation['rule'] ?? null) === 'price_without_row') {
+                    return true;
+                }
+            }
+
+            return false;
+        })->count();
+
+        if ($priceOverrides > 0) {
+            $warnings[] = "{$priceOverrides} respostas do artista citaram preço fora da tabela; reconcilie a tabela antes do auto";
+        }
         foreach ($coreIntents as $intent => $target) {
             $target = (int) $target ?: $minPerIntent;
             $count = (int) ($intents[$intent] ?? 0);
@@ -105,6 +129,7 @@ class CalibrationReport
                 'eligible' => $eligibleCount,
                 'answered' => $answeredCount,
                 'compared' => $comparedCount,
+                'media_only' => $comparedAll->count() - $comparedCount,
                 'pending' => $all->where('status', AgentDraft::STATUS_PENDING)->count(),
                 'replied' => $all->where('status', AgentDraft::STATUS_REPLIED)->count(),
                 'expired' => $all->where('status', AgentDraft::STATUS_EXPIRED)->count(),
@@ -143,6 +168,7 @@ class CalibrationReport
                 'eligible' => 0,
                 'answered' => 0,
                 'compared' => 0,
+                'media_only' => 0,
                 'pending' => 0,
                 'replied' => 0,
                 'expired' => 0,

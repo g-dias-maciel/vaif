@@ -38,7 +38,10 @@ class CalibrationFacts
 
         foreach ($artists as $artist) {
             $drafts = $this->drafts($artist, $since);
-            $compared = $drafts->filter(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_COMPARED);
+            $comparedAll = $drafts->filter(fn (AgentDraft $d) => $d->status === AgentDraft::STATUS_COMPARED);
+            $compared = $comparedAll->filter(
+                fn (AgentDraft $d) => ($d->comparison['comparable'] ?? true) !== false
+            );
             $unacceptable = $compared->filter(fn (AgentDraft $d) => $d->wasAccepted() === false);
 
             $gates = $this->calibration->forArtist($artist, $gatesDays);
@@ -57,6 +60,7 @@ class CalibrationFacts
                 'drafts' => [
                     'total' => $drafts->count(),
                     'compared' => $compared->count(),
+                    'media_only' => $comparedAll->count() - $compared->count(),
                     'pending' => $drafts->where('status', AgentDraft::STATUS_PENDING)->count(),
                     'replied' => $drafts->where('status', AgentDraft::STATUS_REPLIED)->count(),
                     'unacceptable' => $unacceptable->count(),

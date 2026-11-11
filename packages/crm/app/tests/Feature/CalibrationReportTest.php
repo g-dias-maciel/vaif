@@ -93,6 +93,29 @@ class CalibrationReportTest extends TestCase
         $this->assertSame(90, $report['totals']['median_response_seconds']);
     }
 
+    public function test_a_media_only_artist_reply_is_kept_out_of_the_denominator(): void
+    {
+        $artist = $this->artist();
+        $this->draft($artist);
+        $this->draft($artist);
+        $this->draft($artist, [
+            'artist_reply' => '[MÍDIA ENVIADA]',
+            'comparison' => [
+                'comparable' => false,
+                'reason' => 'artist_reply_media_only',
+                'deterministic' => ['ok' => true, 'violations' => []],
+                'judge' => null,
+            ],
+        ]);
+
+        $report = (new CalibrationReport())->forArtist($artist, 30);
+
+        $this->assertSame(2, $report['totals']['compared']);
+        $this->assertSame(1, $report['totals']['media_only']);
+        $this->assertSame(1.0, $report['rates']['acceptable']);
+        $this->assertTrue($report['passed']);
+    }
+
     public function test_an_unsafe_draft_blocks_calibration(): void
     {
         $artist = $this->artist();
