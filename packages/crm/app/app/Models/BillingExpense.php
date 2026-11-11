@@ -73,6 +73,7 @@ class BillingExpense extends Model
         'recurrence_key',
         'notes',
         'created_by',
+        'notion_page_id',
     ];
 
     protected $casts = [

@@ -135,7 +135,7 @@
                     <label>
                         Método
                         <select name="method">
-                            @foreach (['pix' => 'PIX', 'boleto' => 'Boleto', 'transfer' => 'Transferência', 'cash' => 'Dinheiro', 'other' => 'Outro'] as $value => $label)
+                            @foreach (['pix' => 'PIX', 'credit_card' => 'Cartão', 'boleto' => 'Boleto', 'transfer' => 'Transferência', 'cash' => 'Dinheiro', 'other' => 'Outro'] as $value => $label)
                                 <option value="{{ $value }}" @selected($invoice->payment_method === $value)>{{ $label }}</option>
                             @endforeach
                         </select>

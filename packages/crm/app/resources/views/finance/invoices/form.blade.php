@@ -69,7 +69,7 @@
         <label>
             Forma de pagamento
             <select name="payment_method">
-                @foreach (['pix' => 'PIX', 'boleto' => 'Boleto', 'transfer' => 'Transferência', 'cash' => 'Dinheiro', 'other' => 'Outro'] as $value => $label)
+                @foreach (['pix' => 'PIX', 'credit_card' => 'Cartão', 'boleto' => 'Boleto', 'transfer' => 'Transferência', 'cash' => 'Dinheiro', 'other' => 'Outro'] as $value => $label)
                     <option value="{{ $value }}" @selected(old('payment_method', 'pix') === $value)>{{ $label }}</option>
                 @endforeach
             </select>

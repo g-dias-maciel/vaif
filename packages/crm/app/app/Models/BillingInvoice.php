@@ -28,6 +28,8 @@ class BillingInvoice extends Model
 
     public const METHOD_PIX = 'pix';
 
+    public const METHOD_CREDIT_CARD = 'credit_card';
+
     public const METHOD_BOLETO = 'boleto';
 
     public const METHOD_TRANSFER = 'transfer';
@@ -153,6 +155,7 @@ class BillingInvoice extends Model
     {
         return match ($this->payment_method) {
             self::METHOD_PIX => 'PIX',
+            self::METHOD_CREDIT_CARD => 'Cartão',
             self::METHOD_BOLETO => 'Boleto',
             self::METHOD_TRANSFER => 'Transferência',
             self::METHOD_CASH => 'Dinheiro',

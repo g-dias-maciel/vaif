@@ -1,0 +1,159 @@
+{
+  "Overview": [
+    {
+      "_page_id": "month-2026-11",
+      "Mes": "Novembro",
+      "Ano Fiscal": "2026"
+    }
+  ],
+  "Clients": {
+    "client-paid": {
+      "Name": "Cliente Pago",
+      "Telefone": "(11) 90000-0001",
+      "Email": "pago@example.com",
+      "Instagram": "https://instagram.com/clientepago"
+    },
+    "client-unpaid": {
+      "Name": "Cliente Não Pago",
+      "Telefone": "(11) 90000-0002",
+      "Email": "nao-pago@example.com",
+      "Instagram": "https://instagram.com/clientenaopago"
+    },
+    "client-no-contact": {
+      "Name": "Cliente Sem Contato",
+      "Telefone": null,
+      "Email": null,
+      "Instagram": "https://instagram.com/semcontato"
+    },
+    "client-instagram": {
+      "Name": "Cliente Instagram",
+      "Telefone": null,
+      "Email": null,
+      "Instagram": "https://instagram.com/instagrammatch"
+    }
+  },
+  "People": {
+    "person-daniel": "Daniel",
+    "person-gabriel": "Gabriel"
+  },
+  "Entradas": [
+    {
+      "_page_id": "entrada-paid",
+      "Valor Final": 1000,
+      "Pago": true,
+      "Forma de Pagamento": "Pix",
+      "Data": "2026-11-10",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Cliente": [
+        "client-paid"
+      ],
+      "Nr": 1,
+      "Pagamento": "Cliente Pago",
+      "services_json": "{\"service\": \"Marketing Completo\", \"price\":\"2000\"}",
+      "Periodo Referente": "Novembro",
+      "Status": "Invoice Criado"
+    },
+    {
+      "_page_id": "entrada-unpaid",
+      "Valor Final": 500,
+      "Pago": false,
+      "Forma de Pagamento": "Cartao",
+      "Data": "2026-11-20",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Cliente": [
+        "client-unpaid"
+      ],
+      "Nr": 2,
+      "Pagamento": "Cliente Não Pago",
+      "services_json": "{\"service\": \"Mentoria\", \"price\":\"500\"}",
+      "Periodo Referente": "Novembro"
+    },
+    {
+      "_page_id": "entrada-instagram",
+      "Valor Final": 300,
+      "Pago": true,
+      "Forma de Pagamento": null,
+      "Data": "2026-11-22",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Cliente": [
+        "client-instagram"
+      ],
+      "Nr": 3,
+      "Pagamento": "Cliente Instagram",
+      "Periodo Referente": "Novembro"
+    },
+    {
+      "_page_id": "entrada-zero",
+      "Valor Final": 0,
+      "Pago": true,
+      "Data": "2026-11-25",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Cliente": [
+        "client-paid"
+      ],
+      "Pagamento": "Zero"
+    },
+    {
+      "_page_id": "entrada-placeholder",
+      "Valor Final": 200,
+      "Pago": false,
+      "Forma de Pagamento": null,
+      "Data": "2026-11-18",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Cliente": [
+        "client-no-contact"
+      ],
+      "Nr": 4,
+      "Pagamento": "Cliente Sem Contato",
+      "Periodo Referente": "Novembro"
+    }
+  ],
+  "Saidas": [
+    {
+      "_page_id": "saida-canva",
+      "Name": "Canva",
+      "Valor": 50,
+      "Data": "2026-11-05",
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Pago por": [
+        "person-daniel"
+      ],
+      "Designer": [
+        "person-gabriel"
+      ]
+    },
+    {
+      "_page_id": "saida-facebook",
+      "Name": "Facebook Ads",
+      "Valor": 200,
+      "Data": null,
+      "Mes": [
+        "month-2026-11"
+      ],
+      "Pago por": [
+        "person-daniel"
+      ]
+    },
+    {
+      "_page_id": "saida-zero",
+      "Name": "Zero",
+      "Valor": 0,
+      "Data": null,
+      "Mes": [
+        "month-2026-11"
+      ]
+    }
+  ]
+}

@@ -94,6 +94,7 @@ class InvoiceController extends Controller
             'status' => ['required', Rule::in([BillingInvoice::STATUS_DRAFT, BillingInvoice::STATUS_SENT])],
             'payment_method' => ['required', Rule::in([
                 BillingInvoice::METHOD_PIX,
+                BillingInvoice::METHOD_CREDIT_CARD,
                 BillingInvoice::METHOD_BOLETO,
                 BillingInvoice::METHOD_TRANSFER,
                 BillingInvoice::METHOD_CASH,

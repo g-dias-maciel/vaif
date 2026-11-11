@@ -113,6 +113,36 @@ and a “Contas a pagar nos próximos 30 dias” list.
 Both commands run daily: invoices at 06:00, overdue checks at 06:10 and
 recurring expenses at 06:20 (America/Sao_Paulo).
 
+## Importing the Notion history
+
+The normalized Notion Financeiro export can be imported with:
+
+```bash
+php artisan finance:import-notion /path/to/notion-finance.json --dry-run
+php artisan finance:import-notion /path/to/notion-finance.json --report=/tmp/report.json
+```
+
+Mapping:
+
+- **Entradas** → one invoice per row. Paid rows also get a linked payment.
+  Card entries are imported as historical invoices too, so billed totals match
+  Notion. Zero/missing values are skipped.
+- **Saídas** → paid expenses with the competence month from the Notion `Mes`
+  relation. Categories are inferred from `Name`; the `Pago por` name goes in
+  the notes and maps to a CRM user when possible.
+- **Clients** → matched by Notion page id, phone, e-mail, exact name, then
+  Instagram. Unmatched clients become archived historical prospects with a
+  placeholder phone and `sem_telefone_notion` flag.
+
+Idempotency:
+
+- invoices: `external_ref = notion:entrada:<page_id>`
+- payments: `external_ref = notion:entrada:<page_id>:payment`
+- expenses: `notion_page_id`
+
+Re-running the command updates nothing that already exists; it can repair a
+partially missing payment.
+
 ## Statuses
 
 | Invoice status | Meaning |

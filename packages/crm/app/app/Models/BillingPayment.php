@@ -33,6 +33,8 @@ class BillingPayment extends Model
 
     public const SOURCE_N8N = 'n8n';
 
+    public const SOURCE_NOTION = 'notion';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -106,6 +108,7 @@ class BillingPayment extends Model
         return match ($this->source) {
             self::SOURCE_MERCADO_PAGO => 'Mercado Pago',
             self::SOURCE_N8N => 'n8n',
+            self::SOURCE_NOTION => 'Notion',
             default => 'Manual',
         };
     }

@@ -76,6 +76,7 @@
                         <option value="manual">Manual</option>
                         <option value="mercado_pago">Mercado Pago</option>
                         <option value="n8n">n8n</option>
+                        <option value="notion">Notion</option>
                     </select>
                 </label>
 

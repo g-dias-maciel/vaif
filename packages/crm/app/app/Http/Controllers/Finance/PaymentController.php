@@ -80,6 +80,7 @@ class PaymentController extends Controller
                 BillingPayment::SOURCE_MANUAL,
                 BillingPayment::SOURCE_MERCADO_PAGO,
                 BillingPayment::SOURCE_N8N,
+                BillingPayment::SOURCE_NOTION,
             ])],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
