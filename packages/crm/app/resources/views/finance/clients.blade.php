@@ -23,7 +23,7 @@
         </div>
     @endif
 
-    <form method="get" action="{{ route('finance.clients') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('finance.clients') }}" class="sales-toolbar">
         <input type="search" name="q" value="{{ request('q') }}" placeholder="Buscar por nome, Instagram ou telefone">
         <select name="mode">
             <option value="">Todos os modos</option>

@@ -49,7 +49,7 @@
         </div>
     </div>
 
-    <form method="get" action="{{ route('calendar.index') }}" class="cal-toolbar">
+    <form method="get" data-auto-filter action="{{ route('calendar.index') }}" class="cal-toolbar">
         <input type="month" name="month" value="{{ $month->format('Y-m') }}">
         <select name="type">
             <option value="">Todos os tipos</option>

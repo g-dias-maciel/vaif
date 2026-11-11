@@ -9,7 +9,7 @@
 </div>
 
 <div class="panel" style="margin-bottom:20px;">
-    <form method="get" action="{{ route('promotions.index') }}" class="pricing-add">
+    <form method="get" data-auto-filter action="{{ route('promotions.index') }}" class="pricing-add">
         <select name="artist_id">
             <option value="">Todos os artistas</option>
             @foreach ($artists as $artist)

@@ -883,6 +883,29 @@
         </script>
     @endif
 
+    <script>
+        (function () {
+            // Filter forms marked with data-auto-filter submit as soon as a
+            // select, date/month input or checkbox changes. Text search keeps
+            // its normal Enter/submit behavior.
+            document.addEventListener('change', function (event) {
+                var form = event.target.closest('form[data-auto-filter]');
+
+                if (!form) return;
+
+                if (!event.target.matches('select, input[type="date"], input[type="month"], input[type="checkbox"], input[type="radio"]')) {
+                    return;
+                }
+
+                if (typeof form.requestSubmit === 'function') {
+                    form.requestSubmit();
+                } else {
+                    form.submit();
+                }
+            });
+        })();
+    </script>
+
     @stack('scripts')
 </body>
 </html>

@@ -17,7 +17,7 @@
         </div>
     </div>
 
-    <form method="get" action="{{ route('finance.months') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('finance.months') }}" class="sales-toolbar">
         <input type="month" name="month" value="{{ $month->format('Y-m') }}" required>
         <button type="submit" class="btn btn--small">Ver mês</button>
     </form>

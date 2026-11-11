@@ -21,7 +21,7 @@
         </div>
     </div>
 
-    <form method="get" action="{{ route('finance.expenses.index') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('finance.expenses.index') }}" class="sales-toolbar">
         <input type="month" name="month" value="{{ $month->format('Y-m') }}" required>
         <select name="status">
             <option value="">Todos os status</option>

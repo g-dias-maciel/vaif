@@ -18,7 +18,7 @@
         </div>
     </div>
 
-    <form method="get" action="{{ route('sales.pipeline') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('sales.pipeline') }}" class="sales-toolbar">
         <input type="search" name="q" value="{{ request('q') }}" placeholder="Buscar por nome, Instagram ou WhatsApp">
 
         <select name="status">

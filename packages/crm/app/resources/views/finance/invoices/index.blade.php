@@ -28,7 +28,7 @@
         </div>
     </div>
 
-    <form method="get" action="{{ route('finance.invoices.index') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('finance.invoices.index') }}" class="sales-toolbar">
         <input type="search" name="q" value="{{ request('q') }}" placeholder="Número ou cliente">
         <select name="status">
             <option value="">Todos os status</option>

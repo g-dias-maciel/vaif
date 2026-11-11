@@ -104,7 +104,7 @@
 
         <div>
             <h2 style="font-size:1rem; margin:0 0 10px;">Filtros</h2>
-            <form method="get" action="{{ route('finance.payments.index') }}" class="sales-toolbar" style="flex-direction:column; align-items:stretch;">
+            <form method="get" data-auto-filter action="{{ route('finance.payments.index') }}" class="sales-toolbar" style="flex-direction:column; align-items:stretch;">
                 <input type="search" name="q" value="{{ request('q') }}" placeholder="Cliente, referência ou ID externo">
                 <select name="method">
                     <option value="">Todos os métodos</option>

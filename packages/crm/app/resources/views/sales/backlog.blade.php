@@ -21,7 +21,7 @@
         Quem tem <strong>call agendada</strong> já conversou com a VAIF no passado. Esses são os primeiros da fila.
     </div>
 
-    <form method="get" action="{{ route('sales.backlog') }}" class="sales-toolbar">
+    <form method="get" data-auto-filter action="{{ route('sales.backlog') }}" class="sales-toolbar">
         <input type="search" name="q" value="{{ request('q') }}" placeholder="Buscar por nome ou Instagram">
 
         <select name="band">
