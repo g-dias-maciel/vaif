@@ -277,6 +277,12 @@ class PromptBuilder
             return false;
         }
 
+        $lower = \Illuminate\Support\Str::ascii(mb_strtolower($name));
+
+        if (preg_match('/\b(studio|estudio|tattoo|tatuagem|ink|piercing|arte)\b/', $lower) === 1) {
+            return false;
+        }
+
         $words = preg_split('/\s+/u', $name) ?: [];
 
         return count($words) >= 1 && count($words) <= 3;

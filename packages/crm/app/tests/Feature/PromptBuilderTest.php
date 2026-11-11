@@ -115,6 +115,13 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('nome_confiavel=sim', $context);
     }
 
+    public function test_a_business_profile_name_is_not_trusted(): void
+    {
+        $context = (new PromptBuilder())->context($this->artist(), ['name' => 'Studio Madri Tattoo']);
+
+        $this->assertStringContainsString('nome_confiavel=nao', $context);
+    }
+
     public function test_a_booking_confirmed_in_chat_is_not_denied(): void
     {
         $facts = $this->facts();
