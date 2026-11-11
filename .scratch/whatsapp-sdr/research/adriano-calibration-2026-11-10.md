@@ -45,6 +45,26 @@ Warnings: 10 media-only replies outside the comparison · 3 artist prices outsid
 3. **Answer first.** Some drafts still qualify instead of answering the lead's last question. Prompt rule added; monitor with `covered_question`.
 4. **Artist media.** Adriano answers half the turns with images. Until media is transcribed or staff-tagged, the comparable sample stays small.
 
+## Review of 2026-11-11 (last 24h)
+
+Traffic: 189 live drafts, 126 judged pairs, **77 media-only** and 49 text-comparable. Verdicts: 31 `draft_better`, 11 `artist_better`, 7 `tie`. Zero unsafe drafts, 6 missed handoffs, zero pairable pending, no queue errors.
+
+Breaking points found and fixed:
+
+1. **Assumptions bypassed** — the classifier wrote inferred values into `entities` (e.g. “na mão” → `tattoo_type=nova`), so the project treated them as facts and never asked a confirmation. `EntityEvidence` now demotes unsupported entities to assumptions using only the lead's words (negation-aware, assistant questions excluded).
+2. **False cover-up flag** — “não quero cobrir” was read as a cover-up. The deterministic, negation-aware check now overrides the model.
+3. **Manual booking contradiction** — the artist said “Fica agendado para sexta às 10h” in chat, but the CRM had no booking, so the SDR denied the reservation. `booking_in_chat` now forces “vou confirmar com o artista”, never a denial.
+4. **Aftercare without handoff** — infection/post-tattoo cases advised a doctor but did not hand off. `aftercare_without_handoff` canonical now adds the handoff.
+5. **Cover-up handoff missed** — added a deterministic `mentions_coverup` hint and allowed asking the current tattoo's local/size (not the new tattoo).
+6. **Name re-asked** — added `nome_confiavel`, emoji cleaning and a business-name blocklist.
+
+Still open:
+
+- **77 media-only pairs**: tagging is the biggest lever for the calibration sample. One-by-one is too slow; needs a bulk view or automatic media summary.
+- **Manual bookings**: the CRM must reconcile “fica agendado” messages into a booking (or a pending-booking queue).
+- **Price book**: three artist quotes still have no row.
+- **Policy vs artist**: Adriano sends PIX before a CRM booking; the SDR follows the stricter gate and is scored `artist_better` for it. Decide which behaviour is the target.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
