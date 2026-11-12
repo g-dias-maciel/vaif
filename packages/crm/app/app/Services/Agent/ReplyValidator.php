@@ -70,6 +70,7 @@ class ReplyValidator
         $hasRemovalUnanswered = false;
         $hasDeferredHandoff = false;
         $hasBusyNoNextStep = false;
+        $hasVideoMissing = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -335,6 +336,14 @@ class ReplyValidator
             }
         }
 
+        if ($coverCase
+            && ! empty($flags['lead_photos'])
+            && ! str_contains($this->norm($reply), 'video')
+            && ! str_contains($this->norm($reply), 'vídeo')) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'photo'], 'rule' => 'coverup_video_missing'];
+            $hasVideoMissing = true;
+        }
+
         if ($coverCase && preg_match('/depois (disso )?(eu )?(te )?passo|vou passar depois|assim que [a-z ]{0,25}passo/u', $this->norm($reply)) === 1) {
             $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'deferred_handoff'];
             $hasDeferredHandoff = true;
@@ -472,7 +481,7 @@ class ReplyValidator
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
-                $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                $artistName = (string) ($studio['artist_name'] ?? 'artista');
                 $busy = ! empty($flags['lead_busy']);
                 $ask = [];
 
@@ -486,7 +495,7 @@ class ReplyValidator
 
                 $askText = $ask !== [] ? 'Me conta '.implode(' e ', $ask).' que você quer para a nova' : '';
 
-                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura é mais complexa e costuma sair mais cara. ';
+                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura é mais complexa e costuma sair mais cara. Vou passar para o '.$artistName.' avaliar o espaço. ';
 
                 if ($busy) {
                     $finalReply .= $askText !== ''
@@ -509,7 +518,7 @@ class ReplyValidator
                 $resolution = 'canonical_busy';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasDeferredHandoff || $hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
+            } elseif ($hasDeferredHandoff || $hasPhotoReasked || $hasVideoMissing || $hasCoverupQuestion || $hasCoverupNoHandoff) {
                 $finalReply = $this->coverupReply($facts, $studio, $flags);
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];

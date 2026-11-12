@@ -379,7 +379,7 @@ class ReplyValidatorTest extends TestCase
         $this->assertFalse($result['ok']);
         $this->assertContains('coverup_reasked_after_refusal', array_column($result['violations'], 'rule'));
         $this->assertSame('canonical_coverup_refused', $result['resolution']);
-        $this->assertStringContainsString('Vou passar para ele', $result['final_reply']);
+        $this->assertStringContainsString('Vou passar para', $result['final_reply']);
     }
 
     public function test_asking_a_known_size_is_blocked_even_without_a_claim(): void
