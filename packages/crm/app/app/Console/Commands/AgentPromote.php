@@ -18,7 +18,7 @@ class AgentPromote extends Command
 {
     protected $signature = 'agent:promote
         {artist : Artist UUID or WAHA session slug}
-        {--to=auto : off, draft or auto}
+        {--to=auto : off, observe, draft or auto}
         {--days=30 : Calibration window used by the gate}
         {--force : Promote to auto even when the hard gates fail}';
 
@@ -34,8 +34,15 @@ class AgentPromote extends Command
 
         $target = (string) $this->option('to');
 
-        if (! in_array($target, ['off', 'draft', 'auto'], true)) {
-            $this->error('--to must be off, draft or auto.');
+        if (! in_array($target, ['off', 'observe', 'draft', 'auto'], true)) {
+            $this->error('--to must be off, observe, draft or auto.');
+
+            return self::FAILURE;
+        }
+
+        if ($target === 'observe'
+            && (! Schema::hasTable('observed_turns') || ! Schema::hasTable('lead_summaries'))) {
+            $this->error('Observe schema is missing. Apply packages/crm/db/migrations/0042_observe_mode.sql.');
 
             return self::FAILURE;
         }

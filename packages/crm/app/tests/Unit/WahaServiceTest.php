@@ -40,6 +40,22 @@ class WahaServiceTest extends TestCase
         $this->assertNull(WahaService::make()->status($this->artist()));
     }
 
+    public function test_chats_accepts_a_bare_list_and_a_wrapped_payload()
+    {
+        config(['transport.waha_url' => 'https://waha.test']);
+
+        Http::fake([
+            'waha.test/api/default/chats*' => Http::sequence()
+                ->push([['id' => '5511@s.whatsapp.net']], 200)
+                ->push(['chats' => [['id' => '5522@s.whatsapp.net']]], 200),
+        ]);
+
+        $service = WahaService::make();
+
+        $this->assertSame('5511@s.whatsapp.net', $service->chats($this->artist())[0]['id']);
+        $this->assertSame('5522@s.whatsapp.net', $service->chats($this->artist())[0]['id']);
+    }
+
     public function test_qr_returns_base64_payload()
     {
         Http::fake([

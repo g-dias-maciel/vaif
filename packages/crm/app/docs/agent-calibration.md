@@ -12,6 +12,7 @@ artist's real reply and scores it against the sales methodology. This is the
 | Mode | Behaviour |
 |---|---|
 | `off` | No drafting, no replies. |
+| `observe` | Reads both sides, records the conversation and writes discovery fields + summary. Never sends. See [observe-mode.md](observe-mode.md). |
 | `draft` | Full grounded pipeline runs, the draft is stored, nothing is sent and no booking/quote/deposit is written. |
 | `auto` | Validated reply is applied and sent (the production enforce path). |
 

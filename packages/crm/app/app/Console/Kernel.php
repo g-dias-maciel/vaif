@@ -47,6 +47,15 @@ class Kernel extends ConsoleKernel
             ->hourly()
             ->withoutOverlapping(30);
 
+        // Observe mode: audit quiet conversations against the methodology.
+        // The job re-checks the transcript hash, so a re-run is harmless.
+        if (config('agent.audit.enabled', true)) {
+            $schedule->command('agent:audit-conversations')
+                ->dailyAt((string) config('agent.audit.daily_time', '03:30'))
+                ->timezone((string) config('app.timezone', 'America/Sao_Paulo'))
+                ->withoutOverlapping(60);
+        }
+
         // Staff Copilot: deterministic ops facts + narrative.
         if (config('copilot.enabled', true)) {
             $copilotTz = (string) config('copilot.timezone', 'America/Sao_Paulo');

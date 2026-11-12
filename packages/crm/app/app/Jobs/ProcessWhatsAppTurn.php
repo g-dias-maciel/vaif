@@ -5,6 +5,7 @@ namespace App\Jobs;
 use App\Models\Artist;
 use App\Services\Agent\AgentStore;
 use App\Services\Agent\DraftProcessor;
+use App\Services\Agent\ObservedTurnProcessor;
 use App\Services\Agent\TurnProcessor;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
@@ -41,10 +42,9 @@ class ProcessWhatsAppTurn implements ShouldQueue
         public readonly string $phone,
         public readonly ?string $name,
         public readonly string $msgAt,
-    ) {
-    }
+    ) {}
 
-    public function handle(AgentStore $store, TurnProcessor $processor, ?DraftProcessor $draftProcessor = null): void
+    public function handle(AgentStore $store, TurnProcessor $processor, ?DraftProcessor $draftProcessor = null, ?ObservedTurnProcessor $observedProcessor = null): void
     {
         $artist = Artist::with('settings')->find($this->artistId);
 
@@ -129,7 +129,13 @@ class ProcessWhatsAppTurn implements ShouldQueue
         }
 
         try {
-            if ($mode === 'draft') {
+            if ($mode === 'observe') {
+                if ($observedProcessor === null) {
+                    throw new \RuntimeException('ObservedTurnProcessor is not bound.');
+                }
+
+                $result = $observedProcessor->observeInbound($artist, $this->chatId, $this->phone, $text, $this->name, $this->msgAt);
+            } elseif ($mode === 'draft') {
                 if ($draftProcessor === null) {
                     throw new \RuntimeException('DraftProcessor is not bound.');
                 }

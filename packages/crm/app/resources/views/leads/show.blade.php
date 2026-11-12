@@ -40,6 +40,18 @@
     </div>
 </div>
 
+@if (! empty($pendingWrites) && $pendingWrites->isNotEmpty())
+    <div class="panel" style="margin-bottom: 20px;">
+        <h2 class="section-title" style="margin-top:0;">Para confirmar</h2>
+        <p class="meta" style="margin-bottom: 12px;">
+            A conversa sugeriu estas mudanças no dinheiro ou na agenda. Confirme só o que aconteceu de verdade.
+        </p>
+        @foreach ($pendingWrites as $write)
+            @include('partials.observed-write', ['write' => $write])
+        @endforeach
+    </div>
+@endif
+
 <div class="panel" style="margin-bottom: 20px;">
     <h2 class="section-title" style="margin-top:0;">Conversa</h2>
 
@@ -47,6 +59,67 @@
         @include('leads._conversation', ['timeline' => $timeline])
     </div>
 </div>
+
+@if (! empty($summary))
+    <div class="panel" style="margin-bottom: 20px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <h2 class="section-title" style="margin:0;">Resumo da conversa</h2>
+            <span class="meta">{{ $summary->generated_at?->diffForHumans() }}</span>
+        </div>
+        <p style="white-space: pre-line; margin: 10px 0 0;">{{ $summary->body }}</p>
+        <p class="meta" style="margin-top: 10px;">Gerado automaticamente a partir da conversa. Confira os detalhes antes de usar.</p>
+    </div>
+@endif
+
+@if (auth()->user()?->isStaff())
+    <div class="panel" style="margin-bottom: 20px;">
+        <div style="display:flex; align-items:baseline; justify-content:space-between; gap:12px; flex-wrap:wrap;">
+            <h2 class="section-title" style="margin:0;">Auditoria da metodologia</h2>
+            <form method="post" action="{{ route('leads.audit', $lead) }}" class="inline">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small">Auditar agora</button>
+            </form>
+        </div>
+
+        @if ($audit)
+            <p class="meta" style="margin-top:10px;">
+                Nota <strong>{{ number_format((float) $audit->score, 1, ',', '.') }} / 100</strong>
+                · {{ $audit->generated_at?->diffForHumans() }}
+                · {{ $audit->message_count }} mensagens
+            </p>
+
+            @if ($audit->summary)
+                <p style="margin: 10px 0 0;">{{ $audit->summary }}</p>
+            @endif
+
+            <div style="display:grid; gap:10px; margin-top: 14px;">
+                @foreach ($audit->orderedSteps() as $step)
+                    @php
+                        $status = $step['status'] ?? 'na';
+                    @endphp
+                    <div style="display:flex; gap:12px; align-items:flex-start;">
+                        <span style="min-width:44px; font-size:.65rem; letter-spacing:.5px; text-transform:uppercase; color: {{ $status === 'pass' ? '#4ade80' : ($status === 'fail' ? '#d05a5a' : 'var(--muted)') }};">
+                            {{ $status }}
+                        </span>
+                        <div>
+                            <strong>{{ $step['label'] }}</strong>
+                            @if (! empty($step['evidence']))
+                                <div class="meta">“{{ $step['evidence'] }}”</div>
+                            @endif
+                            @if (! empty($step['note']))
+                                <div class="meta">{{ $step['note'] }}</div>
+                            @endif
+                        </div>
+                    </div>
+                @endforeach
+            </div>
+        @else
+            <p class="meta" style="margin-top:10px;">
+                Nenhuma auditoria ainda. A rotina noturna audita conversas paradas há 24h; use o botão para rodar agora.
+            </p>
+        @endif
+    </div>
+@endif
 
 @forelse ($lead->projects->sortByDesc('created_at') as $project)
     @php

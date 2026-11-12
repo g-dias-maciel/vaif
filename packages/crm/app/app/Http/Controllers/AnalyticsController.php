@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Project;
+use App\Services\Metrics\ConversationFunnel;
 use App\Support\Periods;
 use Illuminate\Http\Request;
 
@@ -11,7 +12,7 @@ class AnalyticsController extends Controller
     // A won project is one that was booked (agendado) or closed (fechado).
     private const WON_STATUSES = ['agendado', 'fechado'];
 
-    public function index(Request $request)
+    public function index(Request $request, ConversationFunnel $funnel)
     {
         $artist = $this->activeArtist();
 
@@ -71,6 +72,7 @@ class AnalyticsController extends Controller
             'monthWon' => $monthly['won'],
             'monthRate' => $monthly['rate'],
             'monthRevenue' => $monthly['revenue'],
+            'funnel' => $funnel->forArtist($artist, $from, now()),
         ]);
     }
 

@@ -29,11 +29,11 @@ class DatabaseAgentStore implements AgentStore
         return $this->decode($row->facts ?? null);
     }
 
-    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120): ?array
+    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120, string $createdBy = 'agent'): ?array
     {
         $rows = DB::select(
-            'select * from book_slot(?::uuid, ?::uuid, ?::timestamptz, ?)',
-            [$artistId, $projectId, $startAt, $durationMin]
+            'select * from book_slot(?::uuid, ?::uuid, ?::timestamptz, ?, ?)',
+            [$artistId, $projectId, $startAt, $durationMin, $createdBy]
         );
 
         return $rows === [] ? null : $this->normalize($rows[0]);

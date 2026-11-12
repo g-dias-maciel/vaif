@@ -2,7 +2,6 @@
 
 namespace App\Services\Agent\Eval;
 
-use App\Models\Artist;
 use App\Services\Agent\AgentStore;
 
 /**
@@ -41,13 +40,17 @@ class FixtureAgentStore implements AgentStore
     /** @var array<int, array{chat_id: string, text: string}> */
     public array $artistMessages = [];
 
+    /** @var array<int, array{project_id: string, start_at: string, duration_min: int}> */
+    public array $booked = [];
+
+    /** @var array<int, array{booking_id: string, start_at: string}> */
+    public array $rescheduled = [];
+
     public ?array $state = null;
 
     public string $owner = 'agent';
 
-    public function __construct(private readonly array $scenario)
-    {
-    }
+    public function __construct(private readonly array $scenario) {}
 
     public function startTurn(string $artistId, string $chatId, string $phone, ?string $name, string $source = 'whatsapp'): array
     {
@@ -77,8 +80,15 @@ class FixtureAgentStore implements AgentStore
         return $facts;
     }
 
-    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120): ?array
+    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120, string $createdBy = 'agent'): ?array
     {
+        $this->booked[] = [
+            'project_id' => $projectId,
+            'start_at' => $startAt,
+            'duration_min' => $durationMin,
+            'created_by' => $createdBy,
+        ];
+
         return [
             'id' => '00000000-0000-4000-8000-0000000000b1',
             'start_at' => $startAt,
@@ -89,6 +99,11 @@ class FixtureAgentStore implements AgentStore
 
     public function reschedule(string $artistId, string $bookingId, string $startAt): ?array
     {
+        $this->rescheduled[] = [
+            'booking_id' => $bookingId,
+            'start_at' => $startAt,
+        ];
+
         return [
             'id' => $bookingId,
             'start_at' => $startAt,

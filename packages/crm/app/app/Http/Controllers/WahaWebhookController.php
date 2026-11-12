@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Jobs\CompareDraft;
+use App\Jobs\ObserveArtistMessage;
 use App\Jobs\PairArtistReply;
 use App\Jobs\ProcessWhatsAppTurn;
 use App\Jobs\TranscribeArtistAudio;
@@ -208,6 +209,25 @@ class WahaWebhookController extends Controller
                 $audio['url'],
                 $audio['mime'],
             )->onQueue((string) config('agent.mock_queue', 'mock'));
+        }
+
+        // Observe mode: record the artist's side and refresh the CRM. The
+        // observer never sends and has no transport dependency.
+        if (($artist->settings?->reply_mode ?? 'draft') === 'observe') {
+            $observePhone = $recipientPhone !== ''
+                ? $recipientPhone
+                : $this->digits(explode(':', $chatId, 2)[1] ?? '');
+
+            ObserveArtistMessage::dispatch(
+                $artist->id,
+                $chatId,
+                $observePhone,
+                $text,
+                $waMessageId !== '' ? $waMessageId : null,
+                $at,
+            )
+                ->delay(now()->addMilliseconds((int) config('agent.observe.artist_debounce_ms', 8000)))
+                ->onQueue((string) config('agent.queue', 'agent'));
         }
 
         // Pair the artist's answer with the newest copilot draft for this chat.

@@ -4,8 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Models\AgentDraft;
 use App\Models\ChatMessage;
+use App\Models\ConversationAudit;
 use App\Models\Lead;
+use App\Models\LeadSummary;
 use App\Models\Note;
+use App\Models\ObservedWrite;
 use App\Models\Project;
 use App\Services\Agent\ConversationTimeline;
 use App\Services\DepositService;
@@ -42,7 +45,57 @@ class LeadController extends Controller
             'eventLabels' => config('crm.event_labels'),
             'fullSelling' => (bool) ($artist?->settings?->full_selling ?? true),
             'chatOwner' => $this->chatOwner($lead),
+            'summary' => $this->summaryFor($lead),
+            'pendingWrites' => $this->pendingWritesFor($lead),
+            'audit' => auth()->user()?->isStaff() ? $this->auditFor($lead) : null,
         ]);
+    }
+
+    /**
+     * Latest staff-only methodology audit for this Lead.
+     */
+    private function auditFor(Lead $lead): ?ConversationAudit
+    {
+        try {
+            return ConversationAudit::query()
+                ->where('lead_id', $lead->id)
+                ->orderByDesc('generated_at')
+                ->first();
+        } catch (\Throwable $e) {
+            return null;
+        }
+    }
+
+    /**
+     * Observe mode's review queue for this Lead.
+     *
+     * @return \Illuminate\Support\Collection<int, ObservedWrite>
+     */
+    private function pendingWritesFor(Lead $lead)
+    {
+        try {
+            return ObservedWrite::query()
+                ->where('lead_id', $lead->id)
+                ->where('status', ObservedWrite::STATUS_PENDING)
+                ->orderByDesc('created_at')
+                ->limit(20)
+                ->get();
+        } catch (\Throwable $e) {
+            return collect();
+        }
+    }
+
+    /**
+     * Observe mode's rolling conversation summary, when one has been generated.
+     */
+    private function summaryFor(Lead $lead): ?LeadSummary
+    {
+        try {
+            return LeadSummary::find($lead->id);
+        } catch (\Throwable $e) {
+            // Before the observe migration (or on SQLite dev), there is none.
+            return null;
+        }
     }
 
     /**

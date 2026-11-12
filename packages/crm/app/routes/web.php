@@ -7,6 +7,7 @@ use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ConversationAuditController;
 use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Finance\ContractController as FinanceContractController;
@@ -17,12 +18,14 @@ use App\Http\Controllers\Finance\MonthlyController as FinanceMonthlyController;
 use App\Http\Controllers\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\Finance\SettingController as FinanceSettingController;
 use App\Http\Controllers\LeadController;
+use App\Http\Controllers\ObservedWriteController;
 use App\Http\Controllers\PromotionAdminController;
 use App\Http\Controllers\Sales\BacklogController;
 use App\Http\Controllers\Sales\CampaignController;
 use App\Http\Controllers\Sales\ProspectController;
 use App\Http\Controllers\Sales\SalesDashboardController;
 use App\Http\Controllers\SettingsController;
+use App\Http\Controllers\StaffMetricsController;
 use App\Http\Controllers\TeamCalendarController;
 use App\Http\Controllers\TeamController;
 use App\Models\Lead;
@@ -93,6 +96,10 @@ Route::middleware('auth')->group(function () {
         Route::post('/projects/{project}/confirm-deposit', [LeadController::class, 'confirmDeposit'])->name('projects.confirm-deposit');
         Route::post('/projects/{project}/complete', [LeadController::class, 'completeProject'])->name('projects.complete');
 
+        // Observe mode's review queue: booking, quote, deposit and reschedule
+        // suggestions that need one explicit human decision.
+        Route::post('/observed-writes/{write}/decision', [ObservedWriteController::class, 'decide'])->name('observed-writes.decide');
+
         // Tattoos used to be a separate entity; a Lead is now the project.
         // Keep old links working with a permanent redirect.
         Route::get('/tattoos/{lead}', fn (Lead $lead) => redirect()
@@ -140,6 +147,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/copilot/generate', [CopilotController::class, 'generate'])->name('copilot.generate');
         Route::get('/copilot/{report}', [CopilotController::class, 'show'])->name('copilot.show');
 
+        Route::get('/metrics', [StaffMetricsController::class, 'index'])->name('metrics.index');
+        Route::post('/leads/{lead}/audit', [ConversationAuditController::class, 'store'])->name('leads.audit');
         Route::get('/calibration', [CalibrationController::class, 'index'])->name('calibration.index');
         Route::get('/calibration/{artist}', [CalibrationController::class, 'show'])->name('calibration.show');
         Route::post('/calibration/{artist}/mode', [CalibrationController::class, 'updateMode'])->name('calibration.mode');

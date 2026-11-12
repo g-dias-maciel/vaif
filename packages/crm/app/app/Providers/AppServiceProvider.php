@@ -3,6 +3,8 @@
 namespace App\Providers;
 
 use App\Models\Artist;
+use App\Services\Metrics\DatabaseTranscriptMetrics;
+use App\Services\Metrics\TranscriptMetrics;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 
@@ -13,7 +15,7 @@ class AppServiceProvider extends ServiceProvider
      */
     public function register(): void
     {
-        //
+        $this->app->singleton(TranscriptMetrics::class, DatabaseTranscriptMetrics::class);
     }
 
     /**

@@ -43,6 +43,27 @@ return [
         'audio' => env('AGENT_AUDIO_MODEL', 'google/gemini-2.5-flash'),
         'vision' => env('AGENT_VISION_MODEL', 'google/gemini-2.5-flash'),
         'judge' => env('AGENT_JUDGE_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
+        'summary' => env('AGENT_SUMMARY_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
+        'artist_signals' => env('AGENT_ARTIST_SIGNALS_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
+        'audit' => env('AGENT_AUDIT_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
+    ],
+
+    // Post-hoc methodology audits of quiet observe-mode conversations.
+    'audit' => [
+        'enabled' => (bool) env('AGENT_AUDIT_ENABLED', true),
+        'quiet_hours' => (int) env('AGENT_AUDIT_QUIET_HOURS', 24),
+        'min_messages' => (int) env('AGENT_AUDIT_MIN_MESSAGES', 6),
+        'max_messages' => (int) env('AGENT_AUDIT_MAX_MESSAGES', 80),
+        'daily_time' => (string) env('AGENT_AUDIT_TIME', '03:30'),
+    ],
+
+    // Observe mode: record and interpret, never reply.
+    'observe' => [
+        // Wait for the artist's burst to settle before interpreting it.
+        'artist_debounce_ms' => (int) env('AGENT_OBSERVE_ARTIST_DEBOUNCE_MS', 8000),
+        // Refresh the Lead summary only after the chat has been quiet.
+        'summary_delay_seconds' => (int) env('AGENT_OBSERVE_SUMMARY_DELAY', 90),
+        'summary_messages' => (int) env('AGENT_OBSERVE_SUMMARY_MESSAGES', 40),
     ],
 
     // Context assumptions are only used to ask a confirmation question. A

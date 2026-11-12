@@ -11,6 +11,7 @@
     .calib-mode { display: inline-block; padding: 3px 9px; border-radius: 999px; font-size: .68rem; letter-spacing: .4px; text-transform: uppercase; border: 1px solid var(--border); }
     .calib-mode--auto { color: #fff; background: var(--gold); border-color: var(--gold); }
     .calib-mode--draft { color: var(--gold); border-color: var(--gold); }
+    .calib-mode--observe { color: var(--gold); border-color: var(--gold); border-style: dashed; }
     .calib-mode--off { color: var(--muted); }
     .calib-pass { color: var(--gold); font-weight: 600; }
     .calib-fail { color: var(--danger, #d05a5a); font-weight: 600; }
@@ -26,6 +27,24 @@
         Fase de aprendizado por artista: a Beatriz lê as mensagens, prepara a resposta e compara com a resposta real do artista.
         Em <strong>draft</strong> nada é enviado ao lead. A promoção para <strong>auto</strong> só passa quando os gates fecham.
     </p>
+
+    @if (! empty($pendingWrites) && $pendingWrites->isNotEmpty())
+        <div class="panel" style="margin-bottom:20px;">
+            <h2 class="section-title" style="margin-top:0;">Fila de revisão ({{ $pendingWrites->count() }})</h2>
+            <p class="meta" style="margin-bottom:10px;">
+                Sugestões do modo <strong>observe</strong> que mexem em dinheiro ou agenda. Aprovar aplica a mesma escrita que a Beatriz faria.
+            </p>
+            @foreach ($pendingWrites as $write)
+                <div class="meta" style="margin-top:12px;">
+                    {{ $write->artist?->displayName() ?? 'Artista' }}
+                    @if ($write->lead)
+                        · {{ $write->lead->displayName() }}
+                    @endif
+                </div>
+                @include('partials.observed-write', ['write' => $write])
+            @endforeach
+        </div>
+    @endif
 
     @if (! ($schemaReady ?? true))
         <div class="flash error" style="margin-bottom:14px;">

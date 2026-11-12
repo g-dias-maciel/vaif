@@ -43,6 +43,63 @@
 </div>
 
 <div class="panel" style="margin-top: 24px;">
+    <h2 class="section-title" style="margin-top:0;">Funil de conversa</h2>
+    <p class="meta" style="margin-bottom: 14px;">
+        Novos leads do período e o que aconteceu com eles. Fechamento = leads que agendaram ÷ novos leads.
+    </p>
+
+    @php($pct = fn (float $v): string => number_format($v * 100, 1, ',', '.').'%')
+
+    <div class="stat-grid">
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['leads'] }}</div>
+            <div class="stat-label">Novos leads</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['responded'] }}</div>
+            <div class="stat-label">Respondidos ({{ $pct($funnel['rates']['response']) }})</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['first_response_minutes'] !== null ? $funnel['first_response_minutes'].' min' : '—' }}</div>
+            <div class="stat-label">1ª resposta (mediana)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['qualified'] }}</div>
+            <div class="stat-label">Qualificados</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['quoted'] }}</div>
+            <div class="stat-label">Orçamentos</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['booked'] }}</div>
+            <div class="stat-label">Agendamentos</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['closed'] }}</div>
+            <div class="stat-label">Fechados</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['lost'] }}</div>
+            <div class="stat-label">Perdidos</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-value">{{ $funnel['ghosted'] }}</div>
+            <div class="stat-label">Sem resposta</div>
+        </div>
+    </div>
+
+    <div class="meta" style="display:flex; gap:18px; flex-wrap:wrap; margin-top: 16px;">
+        <span><strong>Taxa de fechamento:</strong> {{ $pct($funnel['rates']['closing']) }}</span>
+        <span><strong>Orçamento → agendamento:</strong> {{ $pct($funnel['rates']['quote_to_booking']) }}</span>
+        <span><strong>Agendamento → fechado:</strong> {{ $pct($funnel['rates']['booking_to_closed']) }}</span>
+        <span><strong>Sem resposta:</strong> {{ $pct($funnel['rates']['ghosted']) }}</span>
+        <span><strong>Agendamentos criados:</strong> {{ $funnel['bookings_created'] }}</span>
+        <span><strong>Próximos:</strong> {{ $funnel['upcoming_bookings'] }}</span>
+    </div>
+</div>
+
+<div class="panel" style="margin-top: 24px;">
     <h2 class="section-title" style="margin-top:0;">Conversões mês a mês</h2>
     <div style="position: relative; height: 300px;">
         <canvas id="monthConversionsChart"></canvas>

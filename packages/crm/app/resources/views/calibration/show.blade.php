@@ -68,7 +68,8 @@
 <div class="panel" style="margin-bottom:20px;">
     <h2 class="section-title" style="margin-top:0;">Modo do agente</h2>
     <p class="meta" style="max-width:820px;">
-        <strong>off</strong> não rascunha nem responde. <strong>draft</strong> rascunha, mostra no lead e compara com o artista — nada é enviado, e funciona mesmo com o artista suspenso.
+        <strong>off</strong> não rascunha nem responde. <strong>observe</strong> não responde nada: só grava a conversa e preenche o CRM (ficha, orçamento e resumo) com o que foi dito.
+        <strong>draft</strong> rascunha, mostra no lead e compara com o artista — nada é enviado, e funciona mesmo com o artista suspenso.
         <strong>auto</strong> envia a resposta validada ao lead. Promover para auto exige os gates abaixo.
     </p>
 
@@ -85,6 +86,7 @@
             <label for="reply-mode">Modo</label>
             <select name="reply_mode" id="reply-mode">
                 <option value="off" @selected($report['reply_mode'] === 'off')>off — desligado</option>
+                <option value="observe" @selected($report['reply_mode'] === 'observe')>observe — só grava e preenche o CRM (não envia)</option>
                 <option value="draft" @selected($report['reply_mode'] === 'draft')>draft — rascunho e compara (não envia)</option>
                 <option value="auto" @selected($report['reply_mode'] === 'auto')>auto — envia ao lead</option>
             </select>

@@ -2,8 +2,8 @@
 
 namespace App\Services\Agent\Eval;
 
-use App\Services\Agent\AiClient;
 use App\Services\Agent\AgentException;
+use App\Services\Agent\AiClient;
 
 /**
  * Deterministic AiClient used by `agent:simulate` and the PHPUnit scenarios.
@@ -16,9 +16,7 @@ class ScriptedAiClient implements AiClient
     /** @var array<int, string> */
     public array $calls = [];
 
-    public function __construct(private readonly array $script)
-    {
-    }
+    public function __construct(private readonly array $script) {}
 
     public function chat(array $messages, string $model): string
     {
@@ -44,6 +42,9 @@ class ScriptedAiClient implements AiClient
             str_contains($system, 'Claims — o que a resposta') => 'claims',
             str_contains($system, 'Reparar a resposta') => 'repair',
             str_contains($system, 'Calibração — comparar') => 'judge',
+            str_contains($system, 'Resumo da conversa') => 'summary',
+            str_contains($system, 'sinais da mensagem do artista') => 'artist_signals',
+            str_contains($system, 'Auditoria — a conversa') => 'audit',
             default => 'agent',
         };
     }

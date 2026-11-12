@@ -4,6 +4,7 @@ namespace App\Services\Copilot;
 
 use App\Models\AgentDraft;
 use App\Models\Artist;
+use App\Models\ConversationAudit;
 use App\Services\Agent\CalibrationReport;
 use App\Services\Agent\MessageText;
 use Illuminate\Support\Carbon;
@@ -13,9 +14,7 @@ use Illuminate\Support\Carbon;
  */
 class CalibrationFacts
 {
-    public function __construct(private readonly CalibrationReport $calibration)
-    {
-    }
+    public function __construct(private readonly CalibrationReport $calibration) {}
 
     /**
      * @return array<string, mixed>
@@ -79,6 +78,7 @@ class CalibrationFacts
                 'samples' => $unacceptable->take(3)->map(fn (AgentDraft $d) => $this->sample($d))->values()->all(),
                 'prompt_versions' => $drafts->groupBy('prompt_version')->map->count()->all(),
                 'stuck' => $this->stuck($artist, $now),
+                'audit' => $this->audit($artist, $since),
             ];
 
             $totals['drafts'] += $row['drafts']['total'];
@@ -238,6 +238,64 @@ class CalibrationFacts
                 : (string) $violation,
             $violations,
         )));
+    }
+
+    /**
+     * Methodology audits of observe-mode conversations in the window.
+     *
+     * @return array<string, mixed>
+     */
+    private function audit(Artist $artist, Carbon $since): array
+    {
+        try {
+            $audits = ConversationAudit::query()
+                ->where('artist_id', $artist->id)
+                ->where('status', ConversationAudit::STATUS_READY)
+                ->where('generated_at', '>=', $since)
+                ->orderByDesc('generated_at')
+                ->get();
+        } catch (\Throwable $e) {
+            return [
+                'count' => 0,
+                'avg_score' => null,
+                'top_missed' => [],
+                'latest' => null,
+            ];
+        }
+
+        $missed = [];
+
+        foreach ($audits as $audit) {
+            foreach ($audit->failedSteps() as $step) {
+                $key = (string) ($step['key'] ?? '');
+                if ($key !== '') {
+                    $missed[$key] = ($missed[$key] ?? 0) + 1;
+                }
+            }
+        }
+
+        arsort($missed);
+
+        $latest = $audits->first();
+
+        return [
+            'count' => $audits->count(),
+            'avg_score' => $audits->count() > 0 ? round((float) $audits->avg('score'), 1) : null,
+            'top_missed' => collect($missed)
+                ->take(5)
+                ->map(fn (int $total, string $key) => [
+                    'step' => $key,
+                    'label' => ConversationAudit::STEP_LABELS[$key] ?? $key,
+                    'total' => $total,
+                ])
+                ->values()
+                ->all(),
+            'latest' => $latest !== null ? [
+                'score' => $latest->score,
+                'summary' => $latest->summary,
+                'generated_at' => $latest->generated_at?->toIso8601String(),
+            ] : null,
+        ];
     }
 
     /**

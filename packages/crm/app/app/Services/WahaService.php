@@ -22,8 +22,7 @@ class WahaService
     public function __construct(
         private readonly string $baseUrl,
         private readonly ?string $apiKey,
-    ) {
-    }
+    ) {}
 
     public static function make(): self
     {
@@ -40,7 +39,7 @@ class WahaService
 
     /**
      * @return array{state: string, connected: bool, me: ?string}|null
-     *         null when WAHA is unreachable / not configured.
+     *                                                                 null when WAHA is unreachable / not configured.
      */
     public function status(Artist $artist): ?array
     {
@@ -63,6 +62,45 @@ class WahaService
             'connected' => $state === 'WORKING' || ! empty($me),
             'me' => $this->normalizeMe($me),
         ];
+    }
+
+    /**
+     * Stored chats for the session. Used by the onboarding backfill to
+     * enumerate conversations before fetching each message history.
+     *
+     * @return array<int, array<string, mixed>>|null
+     */
+    public function chats(Artist $artist, int $limit = 200): ?array
+    {
+        if (! $artist->wa_session_slug) {
+            return null;
+        }
+
+        try {
+            $resp = $this->client()->get(
+                '/api/'.$artist->wa_session_slug.'/chats',
+                ['limit' => $limit],
+            );
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $resp->successful()) {
+            return null;
+        }
+
+        $data = $resp->json();
+
+        if (! is_array($data)) {
+            return null;
+        }
+
+        // WAHA has returned both a bare list and `{ "chats": [...] }`.
+        if (isset($data['chats']) && is_array($data['chats'])) {
+            return array_values(array_filter($data['chats'], 'is_array'));
+        }
+
+        return array_values(array_filter($data, 'is_array'));
     }
 
     /**

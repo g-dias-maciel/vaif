@@ -14,7 +14,7 @@ interface AgentStore
 
     public function facts(string $artistId, string $projectId, string $phone, ?string $intent, array $entities = []): array;
 
-    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120): ?array;
+    public function bookSlot(string $artistId, string $projectId, string $startAt, int $durationMin = 120, string $createdBy = 'agent'): ?array;
 
     public function reschedule(string $artistId, string $bookingId, string $startAt): ?array;
 
