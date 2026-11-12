@@ -141,7 +141,9 @@ class ConversationTimeline
                     fn (AgentDraft $draft) => abs($draft->artist_replied_at->getTimestamp() - $item['at']->getTimestamp()) <= 600
                 );
 
-                if ($match !== null) {
+                if ($match !== null
+                    && ! str_contains((string) ($item['content'] ?? ''), 'Áudio do artista:')
+                    && ! str_contains((string) ($item['content'] ?? ''), trim((string) $match->artist_media_note))) {
                     $items[$index]['content'] = trim((string) $item['content'])."\n".trim((string) $match->artist_media_note);
                     $items[$index]['media_note'] = true;
                 }
