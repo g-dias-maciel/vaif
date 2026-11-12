@@ -66,10 +66,12 @@ class ReplyValidator
         $hasCoverupRefusalIgnored = false;
         $hasPhotoReasked = false;
         $hasBusyQuestion = false;
+        $hasNeedsHumanNoHandoff = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
         $coverCase = $isCover || $coverHint;
+        $coverIntent = $intent === 'coverup' || $coverCase;
         $hasHandoff = false;
 
         foreach ($claims as $claim) {
@@ -280,6 +282,18 @@ class ReplyValidator
             $hasCoverupNoHandoff = true;
         }
 
+        // A cover-up/removal question without a project type still needs the
+        // artist: answer the general question and hand off.
+        if (! $coverCase
+            && $coverIntent
+            && ! empty($flags['needs_human'])
+            && ! $hasHandoff
+            && ! $hasPriceViolation
+            && ! $hasConditionViolation) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'needs_human_without_handoff'];
+            $hasNeedsHumanNoHandoff = true;
+        }
+
         // The lead already said cover-up is not an option. Offering it again
         // is a repeated question, even if the project type is still empty.
         if (! empty($flags['coverup_refused'])
@@ -311,10 +325,15 @@ class ReplyValidator
 
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
+        $normReply = $this->norm($reply);
+        $asksPhoto = preg_match('/(manda|mandar|envia|enviar|pode mandar|quando conseguir)[^.]{0,45}(foto|fotos)/u', $normReply) === 1;
+        $photoNegated = preg_match('/(nao precisa|nao e necessario|ja recebi|dispensa)[^.]{0,35}(foto|fotos)/u', $normReply) === 1;
+
         if ($coverCase
             && ! empty($flags['lead_photos'])
-            && str_contains($reply, '?')
-            && preg_match('/(foto|fotos)[^?]{0,45}(tatuagem atual|tattoo atual|como esta|do local|do braco|do antebraco)|(tatuagem atual|tattoo atual)[^?]{0,45}(foto|fotos)/u', $this->norm($reply)) === 1) {
+            && $asksPhoto
+            && ! $photoNegated
+            && preg_match('/(foto|fotos)[^?]{0,45}(tatuagem atual|tattoo atual|como esta|do local|do braco|do antebraco)|(tatuagem atual|tattoo atual)[^?]{0,45}(foto|fotos)/u', $normReply) === 1) {
             $violations[] = ['claim' => ['type' => 'question', 'field' => 'photo'], 'rule' => 'photo_reasked'];
             $hasPhotoReasked = true;
         }
@@ -423,7 +442,7 @@ class ReplyValidator
                 $effectiveClaims = [];
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
-                $finalReply = 'Entendi, cobrir essa atual não vai dar certo mesmo. Então a ideia é uma tatuagem nova ao lado dela. Me conta o tamanho e o estilo que você imagina; vou passar para '.$artistName.' avaliar o espaço e te explicar a cobertura.';
+                $finalReply = 'Entendi, cobrir essa atual não vai dar certo mesmo. Então a ideia é uma tatuagem nova. Me conta o tamanho e o estilo que você imagina; vou passar para '.$artistName.' avaliar o local e te explicar a cobertura. Se quiser, ele pode te mostrar a opção de cobertura ao vivo no estúdio.';
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -439,6 +458,12 @@ class ReplyValidator
             } elseif ($hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
                 $finalReply = $this->coverupReply($facts, $studio, $flags);
                 $resolution = 'canonical_cover_up';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasNeedsHumanNoHandoff) {
+                $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                $finalReply = 'Cobrir é possível, sim. A remoção a laser costuma exigir várias sessões (cerca de uma por mês), pode deixar a pele sensível e cores como vermelho são mais difíceis de remover; o ideal é procurar clínicas especializadas. Vou passar seu caso para '.$artistName.' avaliar a cobertura e te passar o valor.';
+                $resolution = 'canonical_cover_handoff';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasPromotionViolation) {

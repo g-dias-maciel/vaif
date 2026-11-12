@@ -230,6 +230,7 @@ class PromptBuilder
                         .' ('.(int) round((float) ($entry['confidence'] ?? 0) * 100).'%)';
                 }
                 $lines[] = '- Suposições do contexto (confirme, NÃO trate como fato): '.implode(' · ', $bits).'.';
+                $lines[] = '- As suposições acima NÃO foram confirmadas. NUNCA escreva "então é nova", "fica no braço" ou "é uma tatuagem nova" como fato. Se for usar, pergunte confirmando ("Seria nova, certo?") e só trate como fato depois do "sim".';
             }
 
             if ($next === null) {
