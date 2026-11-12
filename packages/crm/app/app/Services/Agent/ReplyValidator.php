@@ -68,6 +68,8 @@ class ReplyValidator
         $hasBusyQuestion = false;
         $hasNeedsHumanNoHandoff = false;
         $hasRemovalUnanswered = false;
+        $hasDeferredHandoff = false;
+        $hasBusyNoNextStep = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -333,6 +335,18 @@ class ReplyValidator
             }
         }
 
+        if ($coverCase && preg_match('/depois (disso )?(eu )?(te )?passo|vou passar depois|assim que [a-z ]{0,25}passo/u', $this->norm($reply)) === 1) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'deferred_handoff'];
+            $hasDeferredHandoff = true;
+        }
+
+        if (! empty($flags['lead_busy'])
+            && ! $hasBusyQuestion
+            && preg_match('/agenda|agendar|horario|estudio|arte/u', $this->norm($reply)) !== 1) {
+            $violations[] = ['claim' => ['type' => 'question'], 'rule' => 'busy_without_next_step'];
+            $hasBusyNoNextStep = true;
+        }
+
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
@@ -366,7 +380,13 @@ class ReplyValidator
                 if ($coverCase) {
                     // A cover-up is priced only after the artist sees the tattoo.
                     // Never let a hallucinated number reach the lead.
-                    $finalReply = 'Para cobertura, preciso avaliar a tattoo antes de te passar o valor. Pode me enviar uma foto de como está hoje?';
+                    $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                    $finalReply = $this->coverupReply($facts, $studio, $flags);
+
+                    if (! empty($flags['mentions_promotion'])) {
+                        $finalReply .= ' Sobre a promoção, vou confirmar com o '.$artistName.' se ela vale para o seu caso.';
+                    }
+
                     $resolution = 'canonical_cover_up';
                     $effectiveClaims = [];
                     $offeredSlots = [];
@@ -454,14 +474,33 @@ class ReplyValidator
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $busy = ! empty($flags['lead_busy']);
-                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas o valor e a viabilidade quem avalia é o '.$artistName.'.'
-                    .($busy
-                        ? ' Quando você estiver livre, me conta o local e o tamanho que você quer para a nova, que a gente vê com ele no estúdio.'
-                        : ' Me conta o local e o tamanho que você quer para a nova, que eu já passo para ele; se quiser, ele te mostra as opções no estúdio.');
+                $ask = [];
+
+                if (empty($project['placement'])) {
+                    $ask[] = 'local';
+                }
+
+                if (empty($project['body_zone']) && empty($facts['assumptions']['body_zone'])) {
+                    $ask[] = 'tamanho';
+                }
+
+                $askText = $ask !== [] ? 'Me conta '.implode(' e ', $ask).' que você quer para a nova' : '';
+
+                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura é mais complexa e costuma sair mais cara. ';
+
+                if ($busy) {
+                    $finalReply .= $askText !== ''
+                        ? 'Quando você estiver livre, '.lcfirst($askText).', que a gente vê com ele no estúdio.'
+                        : 'Quando você estiver livre, me chama que a gente vê com ele no estúdio.';
+                } else {
+                    $finalReply .= $askText !== ''
+                        ? $askText.', que eu já passo para ele; se quiser, ele te mostra as opções no estúdio.'
+                        : 'Vou passar para ele avaliar o espaço; se quiser, ele te mostra as opções no estúdio.';
+                }
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasBusyQuestion) {
+            } elseif ($hasBusyQuestion || $hasBusyNoNextStep) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $portfolio = (string) ($facts['portfolio']['url'] ?? '');
                 $finalReply = 'Tudo bem, sem pressa! Consigo sim.'
@@ -470,7 +509,7 @@ class ReplyValidator
                 $resolution = 'canonical_busy';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
+            } elseif ($hasDeferredHandoff || $hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
                 $finalReply = $this->coverupReply($facts, $studio, $flags);
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];
@@ -625,8 +664,8 @@ class ReplyValidator
         $prefix = $photos ? 'Recebi as fotos. ' : '';
         $ack = $small ? 'Entendi que ela é pequena. ' : '';
 
-        return $prefix.'Cobrir é possível, sim. '.$ack
-            .'Para o '.$artistName.' avaliar, me manda fotos do local inteiro e de perto, com boa luz, e um vídeo curto parando 3 a 4 segundos em cada posição. '
+        return $prefix.'A cobertura é avaliada pelo '.$artistName.'; ele confirma a viabilidade e o valor, porque é mais complexa e tem garantia. '.$ack
+            .'Para ele avaliar, me manda fotos do local inteiro e de perto, com boa luz, e um vídeo curto parando 3 a 4 segundos em cada posição. '
             .'Vou passar para '.$artistName.' avaliar e montar a proposta.';
     }
 
