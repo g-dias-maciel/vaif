@@ -146,6 +146,11 @@ class AgentDescribeMedia extends Command
             ->whereNotNull('artist_replied_at')
             ->whereNull('artist_media_note')
             ->where('artist_replied_at', '>=', now()->subDays($days))
+            ->where(function ($query) {
+                foreach (['[MÍDIA%', '[FOTO%', '[VÍDEO%', '[ÁUDIO%', '[STICKER%', '[DOCUMENTO%'] as $marker) {
+                    $query->orWhere('artist_reply', 'like', $marker);
+                }
+            })
             ->orderBy('artist_replied_at')
             ->limit($limit)
             ->get()
