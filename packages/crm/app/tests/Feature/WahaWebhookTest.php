@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\CompareDraft;
 use App\Jobs\ProcessWhatsAppTurn;
+use App\Jobs\TranscribeArtistAudio;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
@@ -226,6 +227,46 @@ class WahaWebhookTest extends TestCase
         $this->assertSame(['agent-artist:5511900000001@c.us'], $this->store->controls);
         $this->assertSame('agent-artist:5511900000001@c.us', $this->store->artistMessages[0]['chat_id']);
         $this->assertSame('Oi, aqui é a Eva', $this->store->artistMessages[0]['text']);
+    }
+
+    public function test_an_artist_audio_is_queued_for_transcription(): void
+    {
+        Queue::fake();
+        $this->artist('live', 'draft');
+
+        $this->sendWebhook([
+            'event' => 'message.any',
+            'session' => 'agent-artist',
+            'payload' => [
+                'id' => 'true_5511900000001@lid_AUDIO1',
+                'fromMe' => true,
+                'source' => 'app',
+                'from' => '553599968249@c.us',
+                'to' => '5511900000001@c.us',
+                'type' => 'ptt',
+                'hasMedia' => true,
+                'media' => [
+                    'url' => 'https://waha.test/media/artist-audio.ogg',
+                    'mimetype' => 'audio/ogg; codecs=opus',
+                ],
+                '_data' => [
+                    'key' => [
+                        'remoteJid' => '5511900000001@c.us',
+                        'remoteJidAlt' => '5511900000001@s.whatsapp.net',
+                        'fromMe' => true,
+                    ],
+                    'message' => ['pttMessage' => []],
+                ],
+            ],
+        ])->assertOk()->assertJson(['from_me' => true]);
+
+        $this->assertSame('[ÁUDIO ENVIADO]', $this->store->artistMessages[0]['text']);
+
+        Queue::assertPushed(TranscribeArtistAudio::class, function (TranscribeArtistAudio $job) {
+            return $job->waMessageId === 'true_5511900000001@lid_AUDIO1'
+                && $job->mediaUrl === 'https://waha.test/media/artist-audio.ogg'
+                && $job->mime === 'audio/ogg; codecs=opus';
+        });
     }
 
     public function test_a_numeric_from_me_flag_is_treated_as_the_artist(): void

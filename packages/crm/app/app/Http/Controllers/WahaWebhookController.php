@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\CompareDraft;
 use App\Jobs\PairArtistReply;
 use App\Jobs\ProcessWhatsAppTurn;
+use App\Jobs\TranscribeArtistAudio;
 use App\Models\AgentDraft;
 use App\Models\Artist;
 use App\Services\Agent\AgentStore;
@@ -194,6 +195,20 @@ class WahaWebhookController extends Controller
             $waMessageId !== '' ? $waMessageId : null,
             $at,
         );
+
+        // Artist voice notes: transcribe off the live path and append the text
+        // to the conversation row (and therefore to the agent's memory).
+        $audio = $this->artistAudioMedia($payload);
+
+        if ($audio !== null && $waMessageId !== '') {
+            TranscribeArtistAudio::dispatch(
+                $artist->id,
+                $chatId,
+                $waMessageId,
+                $audio['url'],
+                $audio['mime'],
+            )->onQueue((string) config('agent.mock_queue', 'mock'));
+        }
 
         // Pair the artist's answer with the newest copilot draft for this chat.
         $draft = $drafts->latestOpenForChat($artist->id, $chatId)
@@ -395,6 +410,31 @@ class WahaWebhookController extends Controller
             $image => '[FOTO ENVIADA]',
             default => '[MÍDIA ENVIADA]',
         };
+    }
+
+    /**
+     * The downloadable audio of an artist voice note, when the webhook has it.
+     *
+     * @return array{url: string, mime: string}|null
+     */
+    private function artistAudioMedia(array $payload): ?array
+    {
+        $type = (string) ($payload['type'] ?? '');
+        $message = is_array($payload['_data']['message'] ?? null) ? $payload['_data']['message'] : [];
+        $audio = in_array($type, ['ptt', 'audio'], true)
+            || isset($message['audioMessage'])
+            || isset($message['pttMessage']);
+
+        if (! $audio) {
+            return null;
+        }
+
+        $media = is_array($payload['media'] ?? null) ? $payload['media'] : [];
+        $url = trim((string) ($media['url'] ?? ''));
+
+        return $url !== ''
+            ? ['url' => $url, 'mime' => (string) ($media['mimetype'] ?? '')]
+            : null;
     }
 
     private function messageText(array $payload): string
