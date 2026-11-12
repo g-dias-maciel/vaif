@@ -65,6 +65,39 @@ Still open:
 - **Price book**: three artist quotes still have no row.
 - **Policy vs artist**: Adriano sends PIX before a CRM booking; the SDR follows the stricter gate and is scored `artist_better` for it. Decide which behaviour is the target.
 
+## 2026-11-12 — bulk media description changed the scoreboard
+
+`agent:describe-media` now asks WAHA for media URLs (`downloadMedia=true`), transcribes the artist's voice notes, describes images with the vision model, and re-runs the judge. The hourly schedule runs it on the `mock` queue.
+
+First run: **54 media turns described** (voice notes and images), 28 remain media-only because WAHA has no URL/history for them.
+
+The honest numbers after including the artist's audio:
+
+| Metric | Before media | After media |
+|---|---|---|
+| Pares comparados | 12 | **113** |
+| Aceitáveis | 83% | **51%** |
+| draft_better | 7 | **43** |
+| artist_better | 3 | **58** |
+| Handoffs perdidos | 1 | **32** |
+| Preço do artista fora da tabela | 3 | **13** |
+
+The previous 83% was inflated by excluding every media turn. Adriano's voice notes contain the qualification, price, session plan and objection handling that the SDR was being credited for not needing. The real gaps are now visible:
+
+- cover-up and after-care cases still miss the handoff;
+- the SDR repeats known questions (type, size) and ignores the lead's specific question;
+- current-tattoo size/local is often not asked;
+- price/condition handling diverges from the artist (13 artist quotes outside the price book).
+
+## PIX policy update (2026-11-12)
+
+Adriano confirmed the correct order: **slot is pre-reserved, PIX is requested, appointment is confirmed only after payment.** The prompt, facts block, validator and judge now enforce:
+
+- after the lead chooses a slot: "pré-reservado", ask for the sinal/PIX in the same message;
+- never say "confirmado/agendado/fechado" before the deposit lands;
+- `booking_confirmed_before_deposit` canonical reply if the model confirms early;
+- the artist's own reply is validated with the same rule, so a manual "fica agendado" before PIX is flagged.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
