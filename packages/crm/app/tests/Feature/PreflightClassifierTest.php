@@ -221,6 +221,20 @@ class PreflightClassifierTest extends TestCase
         $this->assertTrue($result['flags']['coverup_refused']);
     }
 
+    public function test_a_relative_size_becomes_a_size_assumption(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['placement' => 'panturrilha'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Quero na panturrilha, mas menor um pouco que aquela.');
+
+        $this->assertSame('pequeno', $result['assumptions']['body_zone']['value']);
+        $this->assertSame(0.7, $result['assumptions']['body_zone']['confidence']);
+    }
+
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void
     {
         $result = $this->classifier([

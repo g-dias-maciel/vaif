@@ -63,6 +63,7 @@ class ReplyValidator
         $hasBookingBeforeDeposit = false;
         $hasCoverupNoHandoff = false;
         $hasCoverupRefusal = false;
+        $hasPhotoReasked = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -286,6 +287,16 @@ class ReplyValidator
             $hasCoverupRefusal = true;
         }
 
+        // The lead already sent the current-tattoo photo. Asking for it again
+        // is the most common calibration miss in cover-up conversations.
+        if ($coverCase
+            && ! empty($flags['lead_photos'])
+            && str_contains($reply, '?')
+            && preg_match('/(foto|fotos)[^?]{0,45}(tatuagem atual|tattoo atual|como esta|do local|do braco|do antebraco)|(tatuagem atual|tattoo atual)[^?]{0,45}(foto|fotos)/u', $this->norm($reply)) === 1) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'photo'], 'rule' => 'photo_reasked'];
+            $hasPhotoReasked = true;
+        }
+
         // Deterministic known-field guard. The claim extractor sometimes
         // labels a compound question as `other` and misses the repeat.
         if ($this->asksKnownField($reply, $project)) {
@@ -390,18 +401,18 @@ class ReplyValidator
                 $effectiveClaims = [];
             } elseif ($hasCoverupRefusal) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
-                $finalReply = 'Entendi, então vamos de tatuagem nova. Me conta o tamanho e o estilo que você imagina. Vou passar para '.$artistName.' avaliar o espaço ao lado da existente.';
+                $finalReply = 'Entendi, cobrir essa atual não vai dar certo mesmo. Então a ideia é uma tatuagem nova ao lado dela. Me conta o tamanho e o estilo que você imagina; vou passar para '.$artistName.' avaliar o espaço e te explicar a cobertura.';
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasCoverupQuestion || $hasCoverupNoHandoff) {
+            } elseif ($hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $photos = ! empty($flags['lead_photos'])
                     || ! empty($facts['turn']['agent_state']['photo_confirmed']);
 
                 $finalReply = $photos
-                    ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição.'
-                    : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz. Vou passar para '.$artistName.' avaliar e montar a proposta.';
+                    ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição do local.'
+                    : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz; se puder, um vídeo curto parando 3 a 4 segundos em cada posição também ajuda. Vou passar para '.$artistName.' avaliar e montar a proposta.';
 
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];

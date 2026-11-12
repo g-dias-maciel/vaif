@@ -251,6 +251,10 @@ class PromptBuilder
             }
 
             $lines[] = '- NUNCA pergunte de novo um campo que já aparece preenchido acima, mesmo que o lead tenha mudado de assunto.';
+
+            if (! empty($project['placement'])) {
+                $lines[] = '- Se o lead estiver avançando, ofereça uma visita ao estúdio para o Adriano ver o local ao vivo e montar a arte. Não use isso para pular a próxima pergunta que falta.';
+            }
         }
 
         $hours = is_array($studio['working_hours'] ?? null) ? $studio['working_hours'] : [];

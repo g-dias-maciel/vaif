@@ -44,6 +44,7 @@ class PreflightClassifier
         $evidenceText = $this->leadEvidenceText($leadText, $history);
 
         [$entities, $assumptions] = $this->guardEntities($entities, $assumptions, $evidenceText);
+        $assumptions = $this->sizeAssumption($assumptions, $leadText, $history);
 
         $flags = is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [];
 
@@ -104,6 +105,43 @@ class PreflightClassifier
         }
 
         return $text;
+    }
+
+    /**
+     * A relative size ("menor um pouco", "pequenininha") is a useful
+     * assumption: it becomes a confirmation instead of an open size question.
+     *
+     * @param  array<string, array{value: mixed, confidence: float, reason: string}>  $assumptions
+     * @param  array<int, array{role: string, content: string}>  $history
+     * @return array<string, array{value: mixed, confidence: float, reason: string}>
+     */
+    private function sizeAssumption(array $assumptions, string $leadText, array $history): array
+    {
+        if (isset($assumptions['body_zone'])) {
+            return $assumptions;
+        }
+
+        $text = '';
+
+        foreach (array_slice($history, -4) as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= ' '.(string) ($message['content'] ?? '');
+        }
+
+        $text .= ' '.$leadText;
+        $text = Str::ascii(mb_strtolower($text));
+
+        if (preg_match('/\b(menor um pouco|bem menor|pequenininha|pequena|mini)\b/u', $text) === 1) {
+            $assumptions['body_zone'] = [
+                'value' => 'pequeno',
+                'confidence' => 0.7,
+                'reason' => 'disse que quer menor/pequena',
+            ];
+        }
+
+        return $assumptions;
     }
 
     /**

@@ -395,6 +395,21 @@ class ReplyValidatorTest extends TestCase
         $this->assertContains('question_known_field', array_column($result['violations'], 'rule'));
     }
 
+    public function test_re_asking_the_current_tattoo_photo_is_blocked(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto da tatuagem atual do braço?',
+            ['flags' => ['lead_photos' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('photo_reasked', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+        $this->assertStringNotContainsString('foto da tatuagem atual', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(
