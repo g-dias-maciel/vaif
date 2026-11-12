@@ -70,7 +70,7 @@ class DraftProcessor
 
         // History before this turn: the classifier needs it to resolve short
         // answers and to know which discovery fields are already established.
-        $history = $this->store->history((string) $start['lead_id'], 8, $msgAt);
+        $history = $this->store->history((string) $start['lead_id'], 16, $msgAt);
 
         $context = $this->prompts->context($artist, $start);
         $preflight = $this->preflight->classify($context, $effectiveText, $history);

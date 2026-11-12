@@ -442,7 +442,11 @@ class ReplyValidator
                 $effectiveClaims = [];
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
-                $finalReply = 'Entendi, cobrir essa atual não vai dar certo mesmo. Então a ideia é uma tatuagem nova. Me conta o tamanho e o estilo que você imagina; vou passar para '.$artistName.' avaliar o local e te explicar a cobertura. Se quiser, ele pode te mostrar a opção de cobertura ao vivo no estúdio.';
+                $busy = ! empty($flags['lead_busy']);
+                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas sai mais cara. Então a ideia é uma tatuagem nova.'
+                    .($busy
+                        ? ' Quando você estiver livre, me chama que a gente vê com o '.$artistName.' no estúdio.'
+                        : ' Se quiser, o '.$artistName.' pode te mostrar as opções ao vivo no estúdio.');
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -587,10 +591,15 @@ class ReplyValidator
         $artistName = (string) ($studio['artist_name'] ?? 'o artista');
         $photos = ! empty($flags['lead_photos'])
             || ! empty($facts['turn']['agent_state']['photo_confirmed']);
+        $small = (! empty($facts['project']['body_zone']) && $facts['project']['body_zone'] === 'pequeno')
+            || ! empty($facts['assumptions']['body_zone']);
 
-        return $photos
-            ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição do local.'
-            : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz; se puder, um vídeo curto parando 3 a 4 segundos em cada posição também ajuda. Vou passar para '.$artistName.' avaliar e montar a proposta.';
+        $prefix = $photos ? 'Recebi as fotos. ' : '';
+        $ack = $small ? 'Entendi que ela é pequena. ' : '';
+
+        return $prefix.'Cobrir é possível, sim. '.$ack
+            .'Para o '.$artistName.' avaliar, me manda fotos do local inteiro e de perto, com boa luz, e um vídeo curto parando 3 a 4 segundos em cada posição. '
+            .'Vou passar para '.$artistName.' avaliar e montar a proposta.';
     }
 
     /**

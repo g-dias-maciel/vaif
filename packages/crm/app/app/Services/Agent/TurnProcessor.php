@@ -63,7 +63,7 @@ class TurnProcessor
             }
         }
 
-        $history = $this->store->history((string) $start['lead_id']);
+        $history = $this->store->history((string) $start['lead_id'], 16);
 
         $context = $this->prompts->context($artist, $start);
         $preflight = $this->preflight->classify($context, $effectiveText, $history);

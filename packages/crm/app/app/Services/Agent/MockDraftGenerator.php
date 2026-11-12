@@ -69,7 +69,7 @@ class MockDraftGenerator
                 $startedAt = microtime(true);
                 $history = $this->store->history(
                     (string) $start['lead_id'],
-                    8,
+                    16,
                     $message->created_at?->toIso8601String(),
                 );
 

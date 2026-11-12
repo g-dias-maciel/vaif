@@ -437,7 +437,7 @@ class ReplyValidatorTest extends TestCase
         $this->assertFalse($result['ok']);
         $this->assertContains('coverup_refusal_ignored', array_column($result['violations'], 'rule'));
         $this->assertSame('canonical_coverup_refused', $result['resolution']);
-        $this->assertStringContainsString('não vai dar certo', $result['final_reply']);
+        $this->assertStringContainsString('não dá certo', $result['final_reply']);
     }
 
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
