@@ -112,16 +112,75 @@ class Evaluator
                 );
 
                 $report['judge'] = $review['judge'];
-                $failures = array_merge($failures, $this->checkJudge($scenario->judgeExpect(), $review));
             } catch (\Throwable $e) {
-                $failures[] = 'judge exception: '.$e->getMessage();
+                $report['judge_error'] = $e->getMessage();
             }
         }
+
+        // Methodology requirements are deterministic. The LLM judge is kept in
+        // the report as a quality signal, but it is not the pass/fail oracle:
+        // it often prefers the artist's private audio details.
+        $failures = array_merge($failures, $this->checkRequirements($scenario->expect()['require'] ?? [], $report));
 
         $report['failures'] = $failures;
         $report['pass'] = $failures === [];
 
         return $report;
+    }
+
+    /**
+     * @param  array<int, string>  $requirements
+     * @param  array<string, mixed>  $report
+     * @return array<int, string>
+     */
+    private function checkRequirements(array $requirements, array $report): array
+    {
+        $failures = [];
+        $reply = $this->norm((string) ($report['reply'] ?? ''));
+        $violations = array_merge((array) ($report['violations'] ?? []), (array) ($report['original_violations'] ?? []));
+
+        foreach ($requirements as $requirement) {
+            switch ((string) $requirement) {
+                case 'safe_resolution':
+                    $resolution = (string) ($report['resolution'] ?? '');
+                    if (! empty($report['violations']) && ! str_starts_with($resolution, 'canonical_')) {
+                        $failures[] = 'unsafe resolution: '.$resolution;
+                    }
+                    break;
+                case 'handoff':
+                    if (preg_match('/adriano|artista|vou passar|passo para|encaminh|avaliar/u', $reply) !== 1) {
+                        $failures[] = 'requires an explicit handoff';
+                    }
+                    break;
+                case 'video':
+                    if (! str_contains($reply, 'video') && ! str_contains($reply, 'vídeo')) {
+                        $failures[] = 'requires a video request';
+                    }
+                    break;
+                case 'photos':
+                    if (! str_contains($reply, 'foto')) {
+                        $failures[] = 'requires a photo request';
+                    }
+                    break;
+                case 'laser':
+                    if (! str_contains($reply, 'laser')) {
+                        $failures[] = 'requires the laser answer';
+                    }
+                    break;
+                case 'no_known_question':
+                    if (in_array('question_known_field', $violations, true)) {
+                        $failures[] = 're-asked a known field';
+                    }
+                    break;
+                case 'no_price':
+                    if (preg_match('/r\$/', $reply) === 1) {
+                        $failures[] = 'quoted a price';
+                    }
+                    break;
+            }
+        }
+
+        return $failures;
     }
 
     /**

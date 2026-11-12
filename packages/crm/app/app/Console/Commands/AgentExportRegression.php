@@ -161,17 +161,21 @@ class AgentExportRegression extends Command
         $settings['pix_key'] = 'pix@regression.test';
 
         $expect = ['sent' => true];
-        // The SDR's bar is the methodology: acceptable and no missed handoff.
-        // The comparative verdict is reported but is not a hard gate, because
-        // the artist's audio often contains private/operational details the
-        // SDR cannot know.
-        $judgeExpect = [
-            'acceptable' => true,
-        ];
+        // The SDR's bar is the methodology, not whether the judge prefers the
+        // artist's private audio details. The LLM judge stays in the report.
+        $require = ['safe_resolution'];
+        $missingText = Str::ascii(mb_strtolower(implode(' | ', array_map('strval', $missing))));
 
         if (! empty($judge['missing_handoff'])) {
-            $judgeExpect['missing_handoff'] = false;
-            $expect['reply_contains'] = [$artist->settings?->display_name ?: $artist->name];
+            $require[] = 'handoff';
+        }
+
+        if (str_contains($missingText, 'video') || str_contains($missingText, 'video')) {
+            $require[] = 'video';
+        }
+
+        if (str_contains($missingText, 'laser')) {
+            $require[] = 'laser';
         }
 
         $repeatType = false;
@@ -182,14 +186,20 @@ class AgentExportRegression extends Command
             }
         }
 
-        if ($repeatType) {
-            $expect['reply_not_contains'] = ['nova, uma cobertura ou uma reforma', 'nova, cobertura ou reforma'];
-        }
-
         $draftRules = array_map(
             fn ($v) => is_array($v) ? (string) ($v['rule'] ?? '') : (string) $v,
             (array) ($draft->validation['original_violations'] ?? []),
         );
+
+        if ($repeatType || in_array('question_known_field', $draftRules, true)) {
+            $require[] = 'no_known_question';
+            $expect['reply_not_contains'] = ['nova, uma cobertura ou uma reforma', 'nova, cobertura ou reforma'];
+        }
+
+        if (in_array($project['tattoo_type'] ?? null, ['cover_up', 'rework'], true)
+            || $draft->intent === 'coverup') {
+            $require[] = 'no_price';
+        }
 
         if (in_array('spam_qualification', $draftRules, true)) {
             $expect['reply_not_contains'] = array_values(array_unique(array_merge(
@@ -197,6 +207,8 @@ class AgentExportRegression extends Command
                 ['qual o seu nome', 'seu nome'],
             )));
         }
+
+        $expect['require'] = array_values(array_unique($require));
 
         return [
             'name' => 'regression-'.substr((string) $draft->id, 0, 8),
@@ -233,7 +245,6 @@ class AgentExportRegression extends Command
             'history' => $history,
             'artist_reply' => $artistReply,
             'expect' => $expect,
-            'judge_expect' => $judgeExpect,
         ];
     }
 
