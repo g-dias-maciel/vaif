@@ -98,6 +98,26 @@ Adriano confirmed the correct order: **slot is pre-reserved, PIX is requested, a
 - `booking_confirmed_before_deposit` canonical reply if the model confirms early;
 - the artist's own reply is validated with the same rule, so a manual "fica agendado" before PIX is flagged.
 
+## Real-failure regression suite (2026-11-12)
+
+Before this, the only test chats were 13 synthetic scenarios (`tests/Agent/Scenarios`) and the scripted/real-model evaluators. There was no suite built from Adriano's real failures.
+
+Added:
+
+- `php artisan agent:export-regression adriano-studio-madri --days=7 --limit=10`
+  Writes replayable scenarios from real failed drafts (fairness: `acceptable=false`, `artist_better`, or `missing_handoff`). Files go to `storage/app/agent-regressions` by default because they contain customer text.
+- `php artisan agent:eval --dir=storage/app/agent-regressions`
+  Runs each scenario through the real preflight, prompt, validator and repair, then **judges the new reply against the artist's real answer** (including the audio transcript).
+- `DraftComparator::review()` — non-persisting judge used by the replay.
+
+First baseline (8 latest failures): **0/8 pass**. The failures cluster on:
+
+- cover-up / after-care replies that still do not hand off;
+- asking for the current-tattoo photo again after the lead already sent it;
+- the judge preferring Adriano's natural audio answer even when the SDR follows the methodology.
+
+The replay is faithful for new cases (drafts now store `stage_key`, `agent_state`, `assumptions`, `flags` and `deposit_status`). Old cases use the current `chat_sessions.agent_state` as a best-effort reconstruction, so photo/price-gate state can be incomplete.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
