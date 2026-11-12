@@ -379,7 +379,7 @@ class ReplyValidatorTest extends TestCase
         $this->assertFalse($result['ok']);
         $this->assertContains('coverup_reasked_after_refusal', array_column($result['violations'], 'rule'));
         $this->assertSame('canonical_coverup_refused', $result['resolution']);
-        $this->assertStringContainsString('tatuagem nova', $result['final_reply']);
+        $this->assertStringContainsString('a nova', $result['final_reply']);
     }
 
     public function test_asking_a_known_size_is_blocked_even_without_a_claim(): void
@@ -454,6 +454,21 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('laser', $result['final_reply']);
         $this->assertStringContainsString('várias sessões', $result['final_reply']);
         $this->assertStringContainsString('Vou passar', $result['final_reply']);
+    }
+
+    public function test_a_removal_question_without_the_laser_answer_is_replaced(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'handoff']],
+            'O Adriano avalia e te fala a melhor forma.',
+            ['flags' => ['mentions_removal' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('removal_question_unanswered', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+        $this->assertStringContainsString('laser', $result['final_reply']);
     }
 
     public function test_a_time_outside_the_studio_hours_is_blocked(): void

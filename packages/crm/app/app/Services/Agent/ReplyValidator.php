@@ -67,6 +67,7 @@ class ReplyValidator
         $hasPhotoReasked = false;
         $hasBusyQuestion = false;
         $hasNeedsHumanNoHandoff = false;
+        $hasRemovalUnanswered = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -323,6 +324,15 @@ class ReplyValidator
             }
         }
 
+        if (! empty($flags['mentions_removal']) && ! $hasCoverupRefusal && ! $hasCoverupRefusalIgnored) {
+            $norm = $this->norm($reply);
+
+            if (! str_contains($norm, 'laser') && ! str_contains($norm, 'sessoes')) {
+                $violations[] = ['claim' => ['type' => 'question'], 'rule' => 'removal_question_unanswered'];
+                $hasRemovalUnanswered = true;
+            }
+        }
+
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
@@ -444,10 +454,10 @@ class ReplyValidator
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $busy = ! empty($flags['lead_busy']);
-                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas o valor e a viabilidade quem avalia é o '.$artistName.'. Então a ideia é uma tatuagem nova.'
+                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas o valor e a viabilidade quem avalia é o '.$artistName.'.'
                     .($busy
-                        ? ' Quando você estiver livre, me chama que a gente vê com ele no estúdio.'
-                        : ' Quer marcar um dia no estúdio para ele te mostrar as opções e ver o local?');
+                        ? ' Quando você estiver livre, me conta o local e o tamanho que você quer para a nova, que a gente vê com ele no estúdio.'
+                        : ' Me conta o local e o tamanho que você quer para a nova, que eu já passo para ele; se quiser, ele te mostra as opções no estúdio.');
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -471,9 +481,21 @@ class ReplyValidator
                 $resolution = 'canonical_cover_handoff';
                 $offeredSlots = [];
                 $effectiveClaims = [];
+            } elseif ($hasRemovalUnanswered) {
+                $finalReply = $this->coverupReply($facts, $studio, $flags);
+                $resolution = 'canonical_cover_up';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             } elseif ($hasPromotionViolation) {
-                $finalReply = 'Vou confirmar essa oferta com o artista e já te respondo.';
-                $resolution = 'canonical_promotion';
+                if ($coverCase) {
+                    $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                    $finalReply = $this->coverupReply($facts, $studio, $flags)
+                        .' A cobertura tem valor próprio, porque é mais complexa e tem garantia. Sobre a promoção, vou confirmar com o '.$artistName.' se ela vale para o seu caso.';
+                    $resolution = 'canonical_cover_up';
+                } else {
+                    $finalReply = 'Vou confirmar essa oferta com o artista e já te respondo.';
+                    $resolution = 'canonical_promotion';
+                }
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasAftercareViolation) {
