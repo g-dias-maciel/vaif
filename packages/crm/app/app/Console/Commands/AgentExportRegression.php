@@ -7,6 +7,7 @@ use App\Models\Artist;
 use App\Services\Agent\AgentStore;
 use App\Services\Agent\MessageText;
 use Illuminate\Console\Command;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\File;
 use Illuminate\Support\Str;
 
@@ -135,6 +136,22 @@ class AgentExportRegression extends Command
             // History is best effort; the case still runs without it.
         }
 
+        // Old drafts did not store agent_state. The current chat session is the
+        // best available reconstruction (photo confirmed, price gate, etc.).
+        $state = is_array($facts['turn']['agent_state'] ?? null) ? $facts['turn']['agent_state'] : [];
+        if ($state === []) {
+            try {
+                $row = DB::selectOne(
+                    'select agent_state from chat_sessions where artist_id = ?::uuid and chat_id = ?',
+                    [$artist->id, (string) $draft->chat_id]
+                );
+                $decoded = is_string($row->agent_state ?? null) ? json_decode($row->agent_state, true) : null;
+                $state = is_array($decoded) ? $decoded : [];
+            } catch (\Throwable $e) {
+                $state = [];
+            }
+        }
+
         $settings = $artist->settings?->toArray() ?? [];
         unset(
             $settings['id'], $settings['artist_id'], $settings['created_at'], $settings['updated_at'],
@@ -203,7 +220,7 @@ class AgentExportRegression extends Command
                 'style' => $project['style'] ?? null,
                 'first_tattoo' => $project['first_tattoo'] ?? null,
                 'meaning' => $project['meaning'] ?? null,
-                'agent_state' => $facts['turn']['agent_state'] ?? [],
+                'agent_state' => $state,
                 'deposit_status' => $booking['deposit_status'] ?? null,
                 'table_price_cents' => $facts['pricing']['base_cents'] ?? null,
                 'quoted_price_cents' => $facts['pricing']['offered_cents'] ?? null,

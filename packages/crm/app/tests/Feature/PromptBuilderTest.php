@@ -140,6 +140,16 @@ class PromptBuilderTest extends TestCase
         $this->assertStringNotContainsString('foi reservado agora. Confirme', $prompt);
     }
 
+    public function test_the_photo_state_is_exposed_to_the_prompt(): void
+    {
+        $context = (new PromptBuilder())->context($this->artist(), [
+            'name' => 'Renata',
+            'agent_state' => ['photo_confirmed' => true],
+        ]);
+
+        $this->assertStringContainsString('foto_confirmada=sim', $context);
+    }
+
     public function test_a_booking_confirmed_in_chat_is_not_denied(): void
     {
         $facts = $this->facts();

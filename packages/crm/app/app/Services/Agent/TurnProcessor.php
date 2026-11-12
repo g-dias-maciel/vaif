@@ -82,6 +82,8 @@ class TurnProcessor
 
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
         $facts['turn']['flags'] = $preflight['flags'] ?? [];
+        $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
+        $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
         $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
 
         $composed = $this->composer->compose($artist, $start, $facts, $effectiveText, $history, $preflight);

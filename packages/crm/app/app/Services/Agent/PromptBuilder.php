@@ -91,6 +91,7 @@ class PromptBuilder
             'primeira_tatuagem='.(($turn['first_tattoo'] ?? null) === true ? 'sim' : (($turn['first_tattoo'] ?? null) === false ? 'nao' : '?')),
             'significado='.($turn['meaning'] ?? '?'),
             'processo_explicado='.(! empty($state['processo_explicado']) ? 'sim' : 'nao'),
+            'foto_confirmada='.(! empty($state['photo_confirmed']) ? 'sim' : 'nao'),
             'preco_liberado='.(! empty($state['preco_liberado']) ? 'sim' : 'nao'),
             'duvidas_eliminadas='.(! empty($state['duvidas_eliminadas']) ? 'sim' : 'nao'),
             'aguardando_confirmacao_duvidas='.(! empty($state['aguardando_confirmacao_duvidas']) ? 'sim' : 'nao'),
@@ -178,7 +179,7 @@ class PromptBuilder
         }
 
         if (in_array($type, ['cover_up', 'rework'], true)) {
-            $lines[] = '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Peça a foto da tatuagem atual; se já veio, pergunte o local e o tamanho aproximado da tatuagem ATUAL. Depois peça a referência do desenho novo e faça handoff.';
+            $lines[] = '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Se `foto_confirmada=nao`, peça a foto da tatuagem atual. Se `foto_confirmada=sim`, NÃO peça a foto de novo: pergunte o local e o tamanho aproximado da tatuagem ATUAL. Depois peça a referência do desenho novo e faça handoff.';
         } else {
             $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];
             $next = null;

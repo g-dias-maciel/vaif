@@ -91,6 +91,8 @@ class DraftProcessor
         // confirmation question; it is never written to the project.
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
         $facts['turn']['flags'] = $preflight['flags'] ?? [];
+        $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
+        $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
         $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
 
         // Build the draft as of the lead message time. If the artist already
