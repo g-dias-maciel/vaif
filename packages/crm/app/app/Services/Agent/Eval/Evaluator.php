@@ -4,6 +4,7 @@ namespace App\Services\Agent\Eval;
 
 use App\Services\Agent\AiClient;
 use App\Services\Agent\ClaimExtractor;
+use App\Services\Agent\DraftComparator;
 use App\Services\Agent\PreflightClassifier;
 use App\Services\Agent\PromptBuilder;
 use App\Services\Agent\ReplyComposer;
@@ -94,10 +95,73 @@ class Evaluator
 
         $failures = $this->check($scenario->expect(), $report, $result);
 
+        // A real-conversation regression also judges the new reply against the
+        // artist's actual answer (or the staff media description).
+        if ($scenario->artistReply() !== null) {
+            try {
+                $review = (new DraftComparator(
+                    $this->ai,
+                    new ClaimExtractor($this->ai, $this->model),
+                    new ReplyValidator(),
+                ))->review(
+                    is_array($result['facts'] ?? null) ? $result['facts'] : $scenario->facts(),
+                    $scenario->message(),
+                    (string) $report['reply'],
+                    (string) $scenario->artistReply(),
+                    $scenario->history(),
+                );
+
+                $report['judge'] = $review['judge'];
+                $failures = array_merge($failures, $this->checkJudge($scenario->judgeExpect(), $review));
+            } catch (\Throwable $e) {
+                $failures[] = 'judge exception: '.$e->getMessage();
+            }
+        }
+
         $report['failures'] = $failures;
         $report['pass'] = $failures === [];
 
         return $report;
+    }
+
+    /**
+     * @param  array<string, mixed>  $expect
+     * @param  array<string, mixed>  $review
+     * @return array<int, string>
+     */
+    private function checkJudge(array $expect, array $review): array
+    {
+        if ($expect === []) {
+            return [];
+        }
+
+        $judge = is_array($review['judge'] ?? null) ? $review['judge'] : null;
+
+        if ($judge === null) {
+            return ['judge did not return a verdict'];
+        }
+
+        $failures = [];
+
+        if (array_key_exists('acceptable', $expect) && (bool) $expect['acceptable'] !== (bool) ($judge['acceptable'] ?? false)) {
+            $failures[] = 'judge acceptable='.($judge['acceptable'] ? 'true' : 'false');
+        }
+
+        if (array_key_exists('missing_handoff', $expect) && (bool) $expect['missing_handoff'] !== (bool) ($judge['missing_handoff'] ?? false)) {
+            $failures[] = 'judge missing_handoff='.(($judge['missing_handoff'] ?? false) ? 'true' : 'false');
+        }
+
+        if (isset($expect['verdict']) && (string) $expect['verdict'] !== (string) ($judge['verdict'] ?? '')) {
+            $failures[] = 'judge verdict '.($judge['verdict'] ?? '?').', expected '.$expect['verdict'];
+        }
+
+        foreach ((array) ($expect['verdict_not'] ?? []) as $verdict) {
+            if ((string) ($judge['verdict'] ?? '') === (string) $verdict) {
+                $failures[] = 'judge verdict must not be '.$verdict;
+            }
+        }
+
+        return $failures;
     }
 
     /**

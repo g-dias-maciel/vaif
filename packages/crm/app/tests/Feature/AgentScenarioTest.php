@@ -30,6 +30,35 @@ class AgentScenarioTest extends TestCase
         }
     }
 
+    public function test_a_real_conversation_scenario_is_judged_against_the_artist_reply(): void
+    {
+        $data = json_decode((string) file_get_contents(base_path('tests/Agent/Scenarios/04-valid-price.json')), true);
+
+        $data['name'] = 'judged-regression';
+        $data['artist_reply'] = 'Fica R$ 600,00, quer ver os horários?';
+        $data['judge_expect'] = [
+            'acceptable' => true,
+            'missing_handoff' => false,
+            'verdict_not' => ['artist_better'],
+        ];
+        $data['script']['judge'] = [
+            'acceptable' => true,
+            'covered_lead_question' => true,
+            'missing' => [],
+            'factual_conflicts' => [],
+            'missing_handoff' => false,
+            'tone' => 4,
+            'verdict' => 'tie',
+            'rationale' => 'Mesmo preço.',
+        ];
+
+        $scenario = new Scenario('judged-regression', $data, 'inline');
+        $report = (new Evaluator(new ScriptedAiClient($scenario->script())))->run($scenario);
+
+        $this->assertTrue($report['pass'], implode(' | ', $report['failures'] ?? []));
+        $this->assertSame('tie', $report['judge']['verdict']);
+    }
+
     public function test_a_valid_price_is_sent_untouched(): void
     {
         $scenario = Scenario::fromFile(base_path('tests/Agent/Scenarios/04-valid-price.json'));

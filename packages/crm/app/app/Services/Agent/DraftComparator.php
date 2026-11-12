@@ -92,7 +92,78 @@ class DraftComparator
      * @param  array<string, mixed>  $deterministic
      * @return array<string, mixed>|null
      */
-    private function judge(AgentDraft $draft, array $deterministic, string $artistReply, bool $fromMediaNote): ?array
+    /**
+     * Judge a hypothetical reply against the artist reply without writing to
+     * the database. Used by the real-conversation regression suite.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     * @return array<string, mixed>
+     */
+    public function review(
+        array $facts,
+        string $leadText,
+        string $draftReply,
+        string $artistReply,
+        array $history = [],
+    ): array {
+        $draft = new AgentDraft([
+            'facts' => $facts,
+            'lead_text' => $leadText,
+            'draft_reply' => $draftReply,
+            'artist_reply' => $artistReply,
+        ]);
+
+        $artistClaims = [];
+        $artistValidation = [];
+
+        if (trim($artistReply) !== '') {
+            try {
+                $artistClaims = $this->claims->extract($artistReply, $facts);
+                $artistValidation = $this->validator->validate($facts, $artistClaims, $artistReply);
+            } catch (\Throwable $e) {
+                Log::warning('Regression artist validation failed', ['error' => $e->getMessage()]);
+            }
+        }
+
+        $deterministic = [
+            'ok' => (bool) ($artistValidation['ok'] ?? false),
+            'violations' => $this->rules($artistValidation['violations'] ?? []),
+            'claims' => $artistClaims,
+        ];
+
+        $comparable = ! MessageText::isMediaOnly($artistReply);
+        $judge = $comparable
+            ? $this->judge($draft, $deterministic, $artistReply, false, $this->formatHistory($history))
+            : null;
+
+        return [
+            'comparable' => $comparable,
+            'deterministic' => $deterministic,
+            'judge' => $judge,
+        ];
+    }
+
+    /**
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function formatHistory(array $history): string
+    {
+        $lines = [];
+
+        foreach ($history as $message) {
+            $content = trim((string) ($message['content'] ?? ''));
+
+            if ($content === '') {
+                continue;
+            }
+
+            $lines[] = (($message['role'] ?? 'user') === 'assistant' ? 'Estúdio' : 'Lead').': '.$content;
+        }
+
+        return $lines === [] ? '_(sem histórico)_' : implode("\n", $lines);
+    }
+
+    private function judge(AgentDraft $draft, array $deterministic, string $artistReply, bool $fromMediaNote, ?string $historyText = null): ?array
     {
         $system = (string) file_get_contents(resource_path('prompts/compare-draft.md'));
 
@@ -104,7 +175,7 @@ class DraftComparator
             $content = $this->ai->chat([
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => 'FATOS:\n'.Json::string($draft->facts)
-                    .'\n\nHISTÓRICO DA CONVERSA (mais antigo primeiro):\n'.$this->history($draft)
+                    .'\n\nHISTÓRICO DA CONVERSA (mais antigo primeiro):\n'.($historyText ?? $this->history($draft))
                     .'\n\nMENSAGEM DO LEAD:\n'.$draft->lead_text
                     .'\n\nRASCUNHO DA BEATRIZ (não enviado):\n'.$draft->draft_reply
                     .'\n\n'.$replyLabel.':\n'.$artistReply

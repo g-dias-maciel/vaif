@@ -108,6 +108,44 @@ class DraftComparatorTest extends TestCase
         $this->assertSame('tie', $comparison['judge']['verdict']);
     }
 
+    public function test_review_judges_without_persisting(): void
+    {
+        $draft = $this->draft();
+
+        $ai = new ScriptedAiClient([
+            'claims' => ['claims' => [['type' => 'price', 'cents' => 60000]]],
+            'judge' => [
+                'acceptable' => true,
+                'covered_lead_question' => true,
+                'missing' => [],
+                'factual_conflicts' => [],
+                'missing_handoff' => false,
+                'tone' => 4,
+                'verdict' => 'tie',
+                'rationale' => 'Equivalente.',
+            ],
+        ]);
+
+        $review = (new DraftComparator(
+            $ai,
+            new ClaimExtractor($ai, 'scripted'),
+            new ReplyValidator(),
+        ))->review(
+            $draft->facts,
+            $draft->lead_text,
+            'Fica R$ 600,00 à vista.',
+            'Fica R$ 600,00, quer ver os horários?',
+            [['role' => 'user', 'content' => 'Quanto fica?']],
+        );
+
+        $this->assertTrue($review['comparable']);
+        $this->assertTrue($review['judge']['acceptable']);
+
+        $draft->refresh();
+        $this->assertSame(AgentDraft::STATUS_REPLIED, $draft->status);
+        $this->assertNull($draft->comparison);
+    }
+
     public function test_a_media_only_artist_reply_is_marked_not_comparable(): void
     {
         $draft = $this->draft(['artist_reply' => '[MÍDIA ENVIADA]']);

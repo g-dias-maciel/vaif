@@ -86,6 +86,31 @@ class Scenario
         return is_array($this->data['script'] ?? null) ? $this->data['script'] : [];
     }
 
+    public function facts(): array
+    {
+        return is_array($this->data['facts'] ?? null) ? $this->data['facts'] : [];
+    }
+
+    /**
+     * @return array<int, array{role: string, content: string}>
+     */
+    public function history(): array
+    {
+        return is_array($this->data['history'] ?? null) ? $this->data['history'] : [];
+    }
+
+    public function artistReply(): ?string
+    {
+        $reply = $this->data['artist_reply'] ?? null;
+
+        return is_string($reply) && trim($reply) !== '' ? $reply : null;
+    }
+
+    public function judgeExpect(): array
+    {
+        return is_array($this->data['judge_expect'] ?? null) ? $this->data['judge_expect'] : [];
+    }
+
     public function expect(): array
     {
         return is_array($this->data['expect'] ?? null) ? $this->data['expect'] : [];
