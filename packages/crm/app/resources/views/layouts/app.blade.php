@@ -26,6 +26,31 @@
             --danger: #f87171;
         }
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        /* ---- Scrollbars: one dark/gold theme for the whole CRM ---- */
+        * {
+            scrollbar-width: thin;
+            scrollbar-color: var(--border) var(--panel-2);
+        }
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        *::-webkit-scrollbar-track {
+            background: var(--panel-2);
+            border-radius: 999px;
+        }
+        *::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 999px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+            background: var(--gold);
+        }
+        *::-webkit-scrollbar-corner {
+            background: var(--panel-2);
+        }
+
         body {
             background: radial-gradient(ellipse at top, #1a1a1a 0%, var(--bg) 70%);
             color: var(--ink);
@@ -326,14 +351,8 @@
             overflow-x: auto;
             overflow-y: hidden;
             padding-bottom: 8px;
-            scrollbar-width: thin;
-            scrollbar-color: var(--border) var(--panel-2);
             scrollbar-gutter: stable;
         }
-        .week-scroll::-webkit-scrollbar { height: 8px; }
-        .week-scroll::-webkit-scrollbar-track { background: var(--panel-2); border-radius: 999px; }
-        .week-scroll::-webkit-scrollbar-thumb { background: var(--border); border-radius: 999px; }
-        .week-scroll::-webkit-scrollbar-thumb:hover { background: var(--gold); }
         /* Fit all seven days on desktop; the mobile rule below keeps a readable
            minimum width so it scrolls instead of squashing. */
         .week-grid { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 10px; }
@@ -669,6 +688,9 @@
                                 </a>
                                 <a href="{{ route('promotions.index') }}" class="nav-item {{ request()->routeIs('promotions.*') ? 'is-active' : '' }}">
                                     <x-icon name="promo" /> <span>Promoções</span>
+                                </a>
+                                <a href="{{ route('metrics.index') }}" class="nav-item {{ request()->routeIs('metrics.*') ? 'is-active' : '' }}">
+                                    <x-icon name="chart" /> <span>Performance</span>
                                 </a>
                                 <a href="{{ route('calibration.index') }}" class="nav-item {{ request()->routeIs('calibration.*') ? 'is-active' : '' }}">
                                     <x-icon name="chart" /> <span>Calibração</span>
