@@ -53,6 +53,7 @@ class EntityEvidence
                 '/cover ?up/',
                 '/cobrir[^.]{0,30}(tatuagem|tattoo)/',
                 '/cobrir (ela|ele|essa|esse|aquela|aquele|minha)/',
+                '/\bcubro\b/',
                 '/tampar/',
             ]),
             'reforma' => $this->any(['/reform/', '/retoc/', '/refaz/']),

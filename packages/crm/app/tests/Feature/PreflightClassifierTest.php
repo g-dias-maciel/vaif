@@ -213,12 +213,14 @@ class PreflightClassifierTest extends TestCase
                 ['role' => 'user', 'content' => 'Tô na correria, tô dirigindo agora.'],
                 ['role' => 'user', 'content' => '[FOTO RECEBIDA]'],
                 ['role' => 'user', 'content' => 'Não quero cobrir a do outro braço.'],
+                ['role' => 'user', 'content' => 'Minha dúvida é se cubro ou removo com laser.'],
             ],
         );
 
         $this->assertTrue($result['flags']['lead_photos']);
         $this->assertTrue($result['flags']['lead_busy']);
         $this->assertTrue($result['flags']['coverup_refused']);
+        $this->assertTrue($result['flags']['mentions_removal']);
     }
 
     public function test_a_relative_size_becomes_a_size_assumption(): void

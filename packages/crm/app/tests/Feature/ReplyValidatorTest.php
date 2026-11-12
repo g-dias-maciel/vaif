@@ -440,6 +440,22 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('não dá certo', $result['final_reply']);
     }
 
+    public function test_a_cover_or_removal_question_answers_both_and_hands_off(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto?',
+            ['flags' => ['mentions_removal' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+        $this->assertStringContainsString('laser', $result['final_reply']);
+        $this->assertStringContainsString('várias sessões', $result['final_reply']);
+        $this->assertStringContainsString('Vou passar', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

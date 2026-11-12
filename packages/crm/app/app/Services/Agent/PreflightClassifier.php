@@ -63,6 +63,7 @@ class PreflightClassifier
         $flags['lead_photos'] = $this->leadPhotos($leadText, $history);
         $flags['lead_busy'] = $this->leadBusy($leadText, $history);
         $flags['coverup_refused'] = $this->coverupRefused($evidenceText);
+        $flags['mentions_removal'] = $this->mentionsRemoval($leadText, $history);
 
         return [
             'intent' => is_string($parsed['intent'] ?? null) ? $parsed['intent'] : 'other',
@@ -183,6 +184,25 @@ class PreflightClassifier
         $text = Str::ascii(mb_strtolower($text));
 
         return preg_match('/\b(dirigindo|correria|ocupad[oa]|sem tempo|depois eu vejo|daqui a pouco|no trabalho)\b/u', $text) === 1;
+    }
+
+    /**
+     * The lead is asking about laser removal as an alternative to covering.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function mentionsRemoval(string $leadText, array $history): bool
+    {
+        $text = $leadText;
+
+        foreach (array_slice($history, -8) as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= ' '.(string) ($message['content'] ?? '');
+        }
+
+        return preg_match('/\b(remover|remocao|laser|lazer)\b/u', Str::ascii(mb_strtolower($text))) === 1;
     }
 
     /**

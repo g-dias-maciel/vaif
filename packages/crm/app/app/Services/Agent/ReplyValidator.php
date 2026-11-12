@@ -326,7 +326,8 @@ class ReplyValidator
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
-        $asksPhoto = preg_match('/(manda|mandar|envia|enviar|pode mandar|quando conseguir)[^.]{0,45}(foto|fotos)/u', $normReply) === 1;
+        $asksPhoto = preg_match('/(foto|fotos)/u', $normReply) === 1
+            && preg_match('/(manda|mandar|envia|enviar|tirar|quando conseguir|quando tiver|pode mandar|me manda)/u', $normReply) === 1;
         $photoNegated = preg_match('/(nao precisa|nao e necessario|ja recebi|dispensa)[^.]{0,35}(foto|fotos)/u', $normReply) === 1;
 
         if ($coverCase
@@ -443,19 +444,19 @@ class ReplyValidator
             } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $busy = ! empty($flags['lead_busy']);
-                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas sai mais cara. Então a ideia é uma tatuagem nova.'
+                $finalReply = 'Entendi, cobrir essa atual não dá certo com esse trabalho mesmo. A cobertura até é possível, mas o valor e a viabilidade quem avalia é o '.$artistName.'. Então a ideia é uma tatuagem nova.'
                     .($busy
-                        ? ' Quando você estiver livre, me chama que a gente vê com o '.$artistName.' no estúdio.'
-                        : ' Se quiser, o '.$artistName.' pode te mostrar as opções ao vivo no estúdio.');
+                        ? ' Quando você estiver livre, me chama que a gente vê com ele no estúdio.'
+                        : ' Quer marcar um dia no estúdio para ele te mostrar as opções e ver o local?');
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasBusyQuestion) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $portfolio = (string) ($facts['portfolio']['url'] ?? '');
-                $finalReply = 'Tudo bem, sem pressa!'
+                $finalReply = 'Tudo bem, sem pressa! Consigo sim.'
                     .($portfolio !== '' ? ' Dá uma olhada no portfólio do '.$artistName.': '.$portfolio.'.' : '')
-                    .' Quando estiver livre, me chama que a gente agenda; no dia o '.$artistName.' monta a arte com você.';
+                    .' O '.$artistName.' também pode te mandar mais modelos quando você estiver livre. Quando puder, me chama que a gente agenda; no dia ele monta a arte com você.';
                 $resolution = 'canonical_busy';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -593,6 +594,11 @@ class ReplyValidator
             || ! empty($facts['turn']['agent_state']['photo_confirmed']);
         $small = (! empty($facts['project']['body_zone']) && $facts['project']['body_zone'] === 'pequeno')
             || ! empty($facts['assumptions']['body_zone']);
+
+        if (! empty($flags['mentions_removal'])) {
+            return 'Cobrir é possível, sim. A remoção a laser costuma exigir várias sessões (cerca de uma por mês), pode deixar a pele sensível e cores como vermelho são mais difíceis de remover; o ideal é procurar clínicas especializadas. '
+                .'Me manda uma foto da tatuagem atual, de perto e com boa luz. Vou passar seu caso para '.$artistName.' avaliar a cobertura e o valor.';
+        }
 
         $prefix = $photos ? 'Recebi as fotos. ' : '';
         $ack = $small ? 'Entendi que ela é pequena. ' : '';
