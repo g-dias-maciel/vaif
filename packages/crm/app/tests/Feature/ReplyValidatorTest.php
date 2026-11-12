@@ -410,6 +410,36 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringNotContainsString('foto da tatuagem atual', $result['final_reply']);
     }
 
+    public function test_a_question_while_the_lead_is_driving_is_replaced(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['style' => null]]),
+            [['type' => 'question', 'field' => 'style']],
+            'Dá uma olhada no portfólio! Qual estilo você curte?',
+            ['flags' => ['lead_busy' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('question_while_busy', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_busy', $result['resolution']);
+        $this->assertStringContainsString('sem pressa', $result['final_reply']);
+    }
+
+    public function test_ignoring_a_cover_up_refusal_is_blocked(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => null, 'placement' => 'braco']]),
+            [['type' => 'handoff']],
+            'Como fica perto da que você já tem, o Adriano precisa ver esse espaço pessoalmente.',
+            ['flags' => ['coverup_refused' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_refusal_ignored', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_coverup_refused', $result['resolution']);
+        $this->assertStringContainsString('não vai dar certo', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

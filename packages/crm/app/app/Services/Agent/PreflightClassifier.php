@@ -123,7 +123,7 @@ class PreflightClassifier
 
         $text = '';
 
-        foreach (array_slice($history, -4) as $message) {
+        foreach (array_slice($history, -10) as $message) {
             if (($message['role'] ?? 'user') === 'assistant') {
                 continue;
             }

@@ -63,7 +63,9 @@ class ReplyValidator
         $hasBookingBeforeDeposit = false;
         $hasCoverupNoHandoff = false;
         $hasCoverupRefusal = false;
+        $hasCoverupRefusalIgnored = false;
         $hasPhotoReasked = false;
+        $hasBusyQuestion = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -287,6 +289,26 @@ class ReplyValidator
             $hasCoverupRefusal = true;
         }
 
+        if (! empty($flags['coverup_refused']) && ! $hasCoverupRefusal) {
+            $norm = $this->norm($reply);
+            $acknowledged = preg_match('/(nao da|nao e possivel|nao rola|nao funciona|descart)/u', $norm) === 1;
+
+            if (! $acknowledged) {
+                $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'coverup_refusal_ignored'];
+                $hasCoverupRefusalIgnored = true;
+            }
+        }
+
+        if (! empty($flags['lead_busy'])) {
+            foreach ($claims as $claim) {
+                if (is_array($claim) && ($claim['type'] ?? null) === 'question') {
+                    $violations[] = ['claim' => $claim, 'rule' => 'question_while_busy'];
+                    $hasBusyQuestion = true;
+                    break;
+                }
+            }
+        }
+
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         if ($coverCase
@@ -399,21 +421,23 @@ class ReplyValidator
                 $resolution = 'canonical_spam';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasCoverupRefusal) {
+            } elseif ($hasCoverupRefusal || $hasCoverupRefusalIgnored) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
                 $finalReply = 'Entendi, cobrir essa atual não vai dar certo mesmo. Então a ideia é uma tatuagem nova ao lado dela. Me conta o tamanho e o estilo que você imagina; vou passar para '.$artistName.' avaliar o espaço e te explicar a cobertura.';
                 $resolution = 'canonical_coverup_refused';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
+            } elseif ($hasBusyQuestion) {
                 $artistName = (string) ($studio['artist_name'] ?? 'o artista');
-                $photos = ! empty($flags['lead_photos'])
-                    || ! empty($facts['turn']['agent_state']['photo_confirmed']);
-
-                $finalReply = $photos
-                    ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição do local.'
-                    : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz; se puder, um vídeo curto parando 3 a 4 segundos em cada posição também ajuda. Vou passar para '.$artistName.' avaliar e montar a proposta.';
-
+                $portfolio = (string) ($facts['portfolio']['url'] ?? '');
+                $finalReply = 'Tudo bem, sem pressa!'
+                    .($portfolio !== '' ? ' Dá uma olhada no portfólio do '.$artistName.': '.$portfolio.'.' : '')
+                    .' Quando estiver livre, me chama que a gente agenda; no dia o '.$artistName.' monta a arte com você.';
+                $resolution = 'canonical_busy';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
+                $finalReply = $this->coverupReply($facts, $studio, $flags);
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -429,10 +453,14 @@ class ReplyValidator
                 $effectiveClaims = [];
             } elseif ($hasKnownFieldQuestion) {
                 // Re-asking a field the lead already answered is never sent.
-                // Replace it with the next question that is actually missing.
-                $finalReply = $this->nextDiscoveryQuestion($project)
-                    ?? 'Me conta mais sobre a tatuagem que você quer fazer?';
-                $resolution = 'canonical_missing';
+                if ($coverCase) {
+                    $finalReply = $this->coverupReply($facts, $studio, $flags);
+                    $resolution = 'canonical_cover_up';
+                } else {
+                    $finalReply = $this->nextDiscoveryQuestion($project)
+                        ?? 'Me conta mais sobre a tatuagem que você quer fazer?';
+                    $resolution = 'canonical_missing';
+                }
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasTimeViolation) {
@@ -523,6 +551,21 @@ class ReplyValidator
         }
 
         return false;
+    }
+
+    /**
+     * The safe cover-up reply: photos if none, video if photos already sent,
+     * plus the handoff. Uses the artist's real name when available.
+     */
+    private function coverupReply(array $facts, array $studio, array $flags): string
+    {
+        $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+        $photos = ! empty($flags['lead_photos'])
+            || ! empty($facts['turn']['agent_state']['photo_confirmed']);
+
+        return $photos
+            ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição do local.'
+            : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz; se puder, um vídeo curto parando 3 a 4 segundos em cada posição também ajuda. Vou passar para '.$artistName.' avaliar e montar a proposta.';
     }
 
     /**
