@@ -118,6 +118,31 @@ First baseline (8 latest failures): **0/8 pass**. The failures cluster on:
 
 The replay is faithful for new cases (drafts now store `stage_key`, `agent_state`, `assumptions`, `flags` and `deposit_status`). Old cases use the current `chat_sessions.agent_state` as a best-effort reconstruction, so photo/price-gate state can be incomplete.
 
+## Regression suite result (2026-11-12)
+
+Pinned suite: 8 real failures (draft IDs `a3339b8c`, `a3339c71`, `a333a045`, `a333a25a`, `a333ae04`, `a333afb3`, `a333b875`, `a333f085`).
+
+**8/8 pass** on the methodology requirements:
+
+- `safe_resolution` — no unsafe text; canonical or accepted only.
+- `handoff` — explicit handoff when the case requires the artist.
+- `video` — video with 3–4s pauses when photos were already sent.
+- `laser` — answers the cover-vs-remove question with general facts.
+- `no_known_question` — no repeated known field.
+- `no_price` — no cover-up price.
+
+The LLM judge is still reported as a quality signal, not a hard gate. It currently gives 5 `artist_better`, 1 `tie`, 1 `draft_better`, and 2 `acceptable=false`; those are mostly cases where the artist's private audio contains operational details (exact photo list, promo rules) or a more natural tone. Gating on that would make the suite chase the artist's private information instead of the SDR methodology.
+
+Fixes that made the suite pass:
+
+- cover-up canonical: photos/video + artist name + explicit handoff;
+- photo re-ask and video-after-photos guards;
+- cover-up refusal: acknowledge the refusal, no re-offer, no known-field repeats, visit to the studio;
+- cover-or-remove: general laser facts + handoff;
+- promo + cover-up: combined answer, price stays with the artist;
+- busy/paused lead: no qualification question, answer the request, propose the next step;
+- assumptions: never asserted as fact, confirmation instead.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
