@@ -61,6 +61,8 @@ class ReplyValidator
         $hasPromotionViolation = false;
         $hasAftercareViolation = false;
         $hasBookingBeforeDeposit = false;
+        $hasCoverupNoHandoff = false;
+        $hasCoverupRefusal = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -268,6 +270,29 @@ class ReplyValidator
             $hasAftercareViolation = true;
         }
 
+        // Cover-up is a handoff case. Asking for the photos is fine; never
+        // leaving the case with the artist is not.
+        if ($coverCase && ! $hasHandoff && ! $hasPriceViolation && ! $hasConditionViolation) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'coverup_without_handoff'];
+            $hasCoverupNoHandoff = true;
+        }
+
+        // The lead already said cover-up is not an option. Offering it again
+        // is a repeated question, even if the project type is still empty.
+        if (! empty($flags['coverup_refused'])
+            && str_contains($reply, '?')
+            && str_contains($this->norm($reply), 'cobrir')) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'coverup_reasked_after_refusal'];
+            $hasCoverupRefusal = true;
+        }
+
+        // Deterministic known-field guard. The claim extractor sometimes
+        // labels a compound question as `other` and misses the repeat.
+        if ($this->asksKnownField($reply, $project)) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'known'], 'rule' => 'question_known_field', 'expected' => 'known', 'actual' => true];
+            $hasKnownFieldQuestion = true;
+        }
+
         $resolution = 'accepted';
         $finalReply = $reply;
 
@@ -363,8 +388,21 @@ class ReplyValidator
                 $resolution = 'canonical_spam';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasCoverupQuestion) {
-                $finalReply = 'Pode me enviar uma foto da tatuagem atual que você quer cobrir ou reformar? Assim o Adriano já consegue avaliar.';
+            } elseif ($hasCoverupRefusal) {
+                $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                $finalReply = 'Entendi, então vamos de tatuagem nova. Me conta o tamanho e o estilo que você imagina. Vou passar para '.$artistName.' avaliar o espaço ao lado da existente.';
+                $resolution = 'canonical_coverup_refused';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasCoverupQuestion || $hasCoverupNoHandoff) {
+                $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                $photos = ! empty($flags['lead_photos'])
+                    || ! empty($facts['turn']['agent_state']['photo_confirmed']);
+
+                $finalReply = $photos
+                    ? 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a tatuagem atual e montar a proposta. Se puder, me manda também um vídeo curto parando 3 a 4 segundos em cada posição.'
+                    : 'Consigo avaliar a cobertura, sim. Me manda fotos da tatuagem atual do local inteiro e de perto, com boa luz. Vou passar para '.$artistName.' avaliar e montar a proposta.';
+
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];
                 $effectiveClaims = [];
@@ -471,6 +509,36 @@ class ReplyValidator
                 && ! str_contains($normalized, 'nunca '.$phrase)) {
                 return true;
             }
+        }
+
+        return false;
+    }
+
+    /**
+     * Deterministic known-field guard for compound questions the claim
+     * extractor may label as `other`.
+     */
+    private function asksKnownField(string $reply, array $project): bool
+    {
+        if (! str_contains($reply, '?')) {
+            return false;
+        }
+
+        $norm = $this->norm($reply);
+
+        if (! empty($project['body_zone'])
+            && preg_match('/(qual o tamanho|que tamanho|tamanho aproximado|pequena, uma area media|uma area media ou o local inteiro)/u', $norm) === 1) {
+            return true;
+        }
+
+        if (! empty($project['placement'])
+            && preg_match('/(onde no corpo|em que parte do corpo|qual o local)/u', $norm) === 1) {
+            return true;
+        }
+
+        if (! empty($project['tattoo_type'])
+            && preg_match('/(nova, uma cobertura ou uma reforma|nova, cobertura ou reforma)/u', $norm) === 1) {
+            return true;
         }
 
         return false;

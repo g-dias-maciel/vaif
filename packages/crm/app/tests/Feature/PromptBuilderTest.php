@@ -150,6 +150,23 @@ class PromptBuilderTest extends TestCase
         $this->assertStringContainsString('foto_confirmada=sim', $context);
     }
 
+    public function test_context_flags_change_the_briefing(): void
+    {
+        $facts = $this->facts(['tattoo_type' => 'cover_up']);
+        $facts['turn']['flags'] = [
+            'lead_photos' => true,
+            'lead_busy' => true,
+            'coverup_refused' => true,
+        ];
+
+        $prompt = (new PromptBuilder())->system($this->artist(), [], $facts);
+
+        $this->assertStringContainsString('já enviou foto', $prompt);
+        $this->assertStringContainsString('está dirigindo/ocupado', $prompt);
+        $this->assertStringContainsString('JÁ descartou cobrir', $prompt);
+        $this->assertStringContainsString('Recebi as fotos', $prompt);
+    }
+
     public function test_a_booking_confirmed_in_chat_is_not_denied(): void
     {
         $facts = $this->facts();

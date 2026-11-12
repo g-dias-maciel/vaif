@@ -87,6 +87,7 @@ class MockDraftGenerator
                 $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
                 $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
                 $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
+                $facts['studio']['artist_name'] = $artist->name;
 
                 $composed = $this->composer->compose($artist, $start, $facts, $text, $history, $preflight);
                 $turnId = TurnId::make($chatId, 'sim:'.$message->id);

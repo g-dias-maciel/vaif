@@ -57,6 +57,12 @@ class PreflightClassifier
         // has already been told.
         $flags['booking_in_chat'] = $this->bookingInChat($history);
 
+        // Context flags used by the briefing. They are deterministic because
+        // they change the question the agent is allowed to ask.
+        $flags['lead_photos'] = $this->leadPhotos($leadText, $history);
+        $flags['lead_busy'] = $this->leadBusy($leadText, $history);
+        $flags['coverup_refused'] = $this->coverupRefused($evidenceText);
+
         return [
             'intent' => is_string($parsed['intent'] ?? null) ? $parsed['intent'] : 'other',
             'entities' => $entities,
@@ -98,6 +104,60 @@ class PreflightClassifier
         }
 
         return $text;
+    }
+
+    /**
+     * The lead already sent a photo/video in this conversation.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function leadPhotos(string $leadText, array $history): bool
+    {
+        $text = $leadText;
+
+        foreach ($history as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= "\n".(string) ($message['content'] ?? '');
+        }
+
+        return preg_match('/\[(FOTO|MÍDIA|VÍDEO|STICKER|ÁUDIO) RECEBID[OA]\]/u', $text) === 1;
+    }
+
+    /**
+     * The lead said they are driving, busy or will come back later.
+     *
+     * @param  array<int, array{role: string, content: string}>  $history
+     */
+    private function leadBusy(string $leadText, array $history): bool
+    {
+        $text = '';
+
+        foreach (array_slice($history, -6) as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= ' '.(string) ($message['content'] ?? '');
+        }
+
+        $text .= ' '.$leadText;
+        $text = Str::ascii(mb_strtolower($text));
+
+        return preg_match('/\b(dirigindo|correria|ocupad[oa]|sem tempo|depois eu vejo|daqui a pouco|no trabalho)\b/u', $text) === 1;
+    }
+
+    /**
+     * The lead explicitly refused a cover-up. Re-offering it is a repeated
+     * question, not a new option.
+     */
+    private function coverupRefused(string $evidenceText): bool
+    {
+        $text = Str::ascii(mb_strtolower($evidenceText));
+
+        return preg_match('/(nao (quero|vou|da pra|da para)|nao da certo|nem) [a-z ]{0,24}cobrir/u', $text) === 1
+            || preg_match('/cobrir [a-z ]{0,24}(nao da|nao funciona|nao rola)/u', $text) === 1
+            || preg_match('/nao quero (cobertura|cover)/u', $text) === 1;
     }
 
     /**

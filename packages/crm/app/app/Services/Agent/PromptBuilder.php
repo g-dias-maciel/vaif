@@ -174,12 +174,30 @@ class PromptBuilder
         $lines[] = '- '.($known === [] ? 'nada ainda; comece pelo nome e pelo tipo.' : implode(' · ', $known));
 
         $flags = is_array($facts['turn']['flags'] ?? null) ? $facts['turn']['flags'] : [];
+
+        if (! empty($flags['coverup_refused'])) {
+            $lines[] = '- O lead JÁ descartou cobrir ("não dá certo", "não quero cobrir"). NÃO pergunte sobre cobertura de novo. Siga com a tatuagem nova e, se ela ficar perto de uma existente, faça handoff para o artista avaliar o espaço.';
+        }
+
+        if (! empty($flags['lead_photos'])) {
+            $lines[] = '- O lead já enviou foto/vídeo no histórico. NÃO peça a mesma foto de novo: reconheça ("Recebi as fotos") e siga com a próxima informação que falta.';
+        }
+
+        if (! empty($flags['lead_busy'])) {
+            $lines[] = '- O lead está dirigindo/ocupado/na correria. Responda ao pedido dele em UMA frase e NÃO faça pergunta de qualificação; deixe a porta aberta para ele voltar.';
+        }
+
         if (! empty($flags['mentions_coverup']) && ! in_array($type, ['cover_up', 'rework'], true)) {
-            $lines[] = '- O lead falou em cobrir/reformar. Trate como cobertura: NÃO dê preço nem horário, peça a foto da tatuagem atual e faça handoff.';
+            $lines[] = '- O lead falou em cobrir/reformar. Trate como cobertura: NÃO dê preço nem horário, peça as fotos da tatuagem atual e faça handoff.';
         }
 
         if (in_array($type, ['cover_up', 'rework'], true)) {
-            $lines[] = '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Se `foto_confirmada=nao`, peça a foto da tatuagem atual. Se `foto_confirmada=sim`, NÃO peça a foto de novo: pergunte o local e o tamanho aproximado da tatuagem ATUAL. Depois peça a referência do desenho novo e faça handoff.';
+            $photos = ! empty($flags['lead_photos'])
+                || ! empty($facts['turn']['agent_state']['photo_confirmed']);
+
+            $lines[] = $photos
+                ? '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. O lead já enviou fotos: reconheça ("Recebi as fotos"), NÃO peça foto de novo e peça um vídeo curto parando 3 a 4 segundos em cada posição do local. Explique que o artista vai avaliar e montar a proposta, e faça o handoff na mesma mensagem.'
+                : '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Peça fotos da tatuagem atual do local inteiro e de perto, com boa luz. Explique que o artista vai avaliar e montar a proposta, e faça o handoff na mesma mensagem.';
         } else {
             $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];
             $next = null;
@@ -417,6 +435,10 @@ class PromptBuilder
         $wantsSlots = in_array($intent, ['ask_availability', 'choose_slot', 'close', 'reschedule'], true);
 
         $lines = ['## FATOS DESTE TURNO (fonte: CRM)'];
+
+        if (! empty($studio['artist_name'])) {
+            $lines[] = '- Artista: '.$studio['artist_name'].'.';
+        }
 
         if ($intent === 'spam') {
             $lines[] = '- Intenção: spam, número errado ou assunto que não é tatuagem. Encerre em uma frase e NÃO faça pergunta de qualificação.';

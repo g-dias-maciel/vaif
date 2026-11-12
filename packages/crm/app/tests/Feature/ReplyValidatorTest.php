@@ -222,8 +222,8 @@ class ReplyValidatorTest extends TestCase
             $this->facts([
                 'project' => ['tattoo_type' => 'cover_up', 'placement' => null, 'body_zone' => null],
             ]),
-            [['type' => 'question', 'field' => 'placement']],
-            'Onde fica a tatuagem atual que você quer cobrir?',
+            [['type' => 'question', 'field' => 'placement'], ['type' => 'handoff']],
+            'Onde fica a tatuagem atual que você quer cobrir? Vou passar para o Adriano avaliar.',
             ['flags' => []],
         );
 
@@ -350,6 +350,49 @@ class ReplyValidatorTest extends TestCase
         );
 
         $this->assertTrue($result['ok']);
+    }
+
+    public function test_a_cover_up_reply_without_handoff_is_replaced(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto da tatuagem atual?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_without_handoff', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_cover_up', $result['resolution']);
+        $this->assertStringContainsString('Vou passar', $result['final_reply']);
+    }
+
+    public function test_re_offering_cover_up_after_the_lead_refused_is_blocked(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => null, 'placement' => 'braco']]),
+            [['type' => 'question', 'field' => 'type']],
+            'Você quer cobrir essa tatuagem ou fazer uma nova do lado dela?',
+            ['flags' => ['coverup_refused' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('coverup_reasked_after_refusal', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_coverup_refused', $result['resolution']);
+        $this->assertStringContainsString('tatuagem nova', $result['final_reply']);
+    }
+
+    public function test_asking_a_known_size_is_blocked_even_without_a_claim(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['body_zone' => 'pequeno']]),
+            [],
+            'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('question_known_field', array_column($result['violations'], 'rule'));
     }
 
     public function test_a_time_outside_the_studio_hours_is_blocked(): void

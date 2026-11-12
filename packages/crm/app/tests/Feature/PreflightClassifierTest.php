@@ -198,6 +198,29 @@ class PreflightClassifierTest extends TestCase
         $this->assertTrue($result['flags']['booking_in_chat']);
     }
 
+    public function test_it_flags_photos_busy_lead_and_cover_up_refusal(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify(
+            'contexto',
+            'Vc consegue me mandar mais modelos?',
+            [
+                ['role' => 'user', 'content' => 'Tô na correria, tô dirigindo agora.'],
+                ['role' => 'user', 'content' => '[FOTO RECEBIDA]'],
+                ['role' => 'user', 'content' => 'Não quero cobrir a do outro braço.'],
+            ],
+        );
+
+        $this->assertTrue($result['flags']['lead_photos']);
+        $this->assertTrue($result['flags']['lead_busy']);
+        $this->assertTrue($result['flags']['coverup_refused']);
+    }
+
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void
     {
         $result = $this->classifier([
