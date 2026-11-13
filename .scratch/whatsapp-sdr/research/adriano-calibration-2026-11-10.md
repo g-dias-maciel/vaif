@@ -143,6 +143,24 @@ Fixes that made the suite pass:
 - busy/paused lead: no qualification question, answer the request, propose the next step;
 - assumptions: never asserted as fact, confirmation instead.
 
+## Duplicate media transcripts (2026-11-13)
+
+The Mhrcardoso conversation showed the same audio transcript more than once. Cause:
+
+- the CRM writes artist voice-note transcripts into `agent_memory` (inline);
+- the calibration describer also saves the same transcript in `artist_media_note`;
+- the timeline attached a draft's note to **every** media bubble within 10 minutes, so the same transcript appeared on several bubbles (and on a later photo).
+
+Fix:
+
+- `agent_drafts.artist_media_ids` stores the exact WhatsApp media ids a note describes;
+- the timeline attaches a note only to the matching bubble, once;
+- `MediaNote` removes duplicate segments within a note and segments already shown in `chat_memory`;
+- the describer only looks at the first two minutes of the artist burst;
+- historical notes got their media ids backfilled (85 rows) and Mhrcardoso was re-described.
+
+Regeneration: `agent:mock-conversation --regenerate` / `agent:mock-all --regenerate` now creates/updates simulated Beatriz drafts for every customer message with the current prompt, including messages that only had a live draft. The calibration page has a `?simulation=1` toggle that shows the simulated suggestions as primary and keeps the live conversation available.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
