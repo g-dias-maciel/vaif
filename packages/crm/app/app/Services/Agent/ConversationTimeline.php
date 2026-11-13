@@ -194,10 +194,20 @@ class ConversationTimeline
                 continue;
             }
 
-            $items[$matchIndex]['content'] = trim((string) $items[$matchIndex]['content'])."\n".implode("\n", $newSegments);
-            $items[$matchIndex]['media_note'] = true;
+            $contentKey = MediaNote::key((string) $items[$matchIndex]['content']);
+            $newSegments = array_values(array_filter(
+                $newSegments,
+                fn (string $segment) => ! str_contains($contentKey, MediaNote::key($segment)),
+            ));
 
-            foreach ($newSegments as $segment) {
+            if ($newSegments !== []) {
+                $items[$matchIndex]['content'] = trim((string) $items[$matchIndex]['content'])."\n".implode("\n", $newSegments);
+                $items[$matchIndex]['media_note'] = true;
+            }
+
+            // The note has been handled; its segments must not be attached to
+            // another bubble, even when the transcript already showed them.
+            foreach ($segments as $segment) {
                 $seenSegments[MediaNote::key($segment)] = true;
             }
         }

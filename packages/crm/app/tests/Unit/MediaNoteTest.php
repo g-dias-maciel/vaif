@@ -26,6 +26,14 @@ class MediaNoteTest extends TestCase
         $this->assertSame('Áudio do artista: mesma fala.', MediaNote::dedupe($note));
     }
 
+    public function test_it_removes_segments_already_shown_in_the_transcript(): void
+    {
+        $note = "Áudio do artista: primeira fala.\nÁudio do artista: segunda fala.";
+        $shown = '[ÁUDIO ENVIADO] Áudio do artista: primeira fala.';
+
+        $this->assertSame('Áudio do artista: segunda fala.', MediaNote::subtract($note, $shown));
+    }
+
     public function test_it_keeps_distinct_image_and_audio_segments(): void
     {
         $note = "Imagem enviada pelo artista: tabela de preços.\n"

@@ -50,6 +50,21 @@ class MediaNote
         return implode("\n", self::segments($note));
     }
 
+    /**
+     * Remove segments that the transcript already shows (the CRM also writes
+     * artist voice-note transcripts into the conversation memory).
+     */
+    public static function subtract(?string $note, string $alreadyShown): string
+    {
+        $haystack = self::key($alreadyShown);
+        $segments = array_values(array_filter(
+            self::segments($note),
+            fn (string $segment) => ! str_contains($haystack, self::key($segment)),
+        ));
+
+        return implode("\n", $segments);
+    }
+
     public static function key(string $segment): string
     {
         return preg_replace('/\s+/', ' ', mb_strtolower(trim($segment))) ?? trim($segment);

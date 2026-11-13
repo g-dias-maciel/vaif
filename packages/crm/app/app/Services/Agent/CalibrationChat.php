@@ -185,6 +185,14 @@ class CalibrationChat
         $main = array_shift($drafts);
         $turn['draft'] = $this->event($main);
         $turn['media_note'] = MediaNote::dedupe((string) $main->artist_media_note);
+
+        if ($turn['media_note'] !== '') {
+            $artistText = implode("\n", array_map(
+                fn ($item) => (string) ($item['content'] ?? ''),
+                $turn['artists'] ?? [],
+            ));
+            $turn['media_note'] = MediaNote::subtract($turn['media_note'], $artistText);
+        }
         $turn['alternates'] = array_map(fn (AgentDraft $draft) => $this->event($draft), $drafts);
 
         return $turn;
