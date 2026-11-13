@@ -26,8 +26,10 @@ class AgentDescribeMedia extends Command
     protected $signature = 'agent:describe-media
         {artist? : Artist UUID or WAHA session slug}
         {--all : Every artist with media-only drafts}
+        {--lead= : Only one Lead UUID}
         {--days=7 : Only drafts replied in this window}
         {--limit=200 : Maximum drafts per artist}
+        {--refresh : Re-describe drafts that already have a note}
         {--sync : Describe in this process instead of the mock queue}
         {--dry-run : Count without downloading or describing}';
 
@@ -38,6 +40,8 @@ class AgentDescribeMedia extends Command
         $days = max(1, (int) $this->option('days'));
         $limit = max(1, (int) $this->option('limit'));
         $dryRun = (bool) $this->option('dry-run');
+        $leadId = (string) $this->option('lead');
+        $refresh = (bool) $this->option('refresh');
 
         $artists = $this->artists($days);
 
@@ -57,7 +61,7 @@ class AgentDescribeMedia extends Command
         ];
 
         foreach ($artists as $artist) {
-            $result = $this->processArtist($artist, $waha, $media, $days, $limit, $dryRun);
+            $result = $this->processArtist($artist, $waha, $media, $days, $limit, $leadId, $refresh, $dryRun);
 
             foreach ($totals as $key => $value) {
                 $totals[$key] = $value + ($result[$key] ?? 0);
@@ -136,6 +140,8 @@ class AgentDescribeMedia extends Command
         AgentMedia $media,
         int $days,
         int $limit,
+        string $leadId,
+        bool $refresh,
         bool $dryRun,
     ): array {
         $drafts = AgentDraft::query()
@@ -144,7 +150,8 @@ class AgentDescribeMedia extends Command
             ->whereIn('status', [AgentDraft::STATUS_REPLIED, AgentDraft::STATUS_COMPARED])
             ->whereNotNull('artist_reply')
             ->whereNotNull('artist_replied_at')
-            ->whereNull('artist_media_note')
+            ->when(! $refresh, fn ($query) => $query->whereNull('artist_media_note'))
+            ->when($leadId !== '', fn ($query) => $query->where('lead_id', $leadId))
             ->where('artist_replied_at', '>=', now()->subDays($days))
             ->where(function ($query) {
                 foreach (['[MÍDIA%', '[FOTO%', '[VÍDEO%', '[ÁUDIO%', '[STICKER%', '[DOCUMENTO%'] as $marker) {
