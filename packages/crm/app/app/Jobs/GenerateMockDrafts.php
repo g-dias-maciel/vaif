@@ -24,6 +24,7 @@ class GenerateMockDrafts implements ShouldQueue
         public readonly string $artistId,
         public readonly string $leadId,
         public readonly int $limit = 20,
+        public readonly bool $regenerate = false,
     ) {
         $this->onQueue((string) config('agent.mock_queue', 'mock'));
     }
@@ -37,12 +38,14 @@ class GenerateMockDrafts implements ShouldQueue
             return;
         }
 
-        $result = $generator->generateForLead($artist, $lead, $this->limit);
+        $result = $generator->generateForLead($artist, $lead, $this->limit, $this->regenerate);
 
         Log::info('Mock drafts generated', [
             'artist_id' => $artist->id,
             'lead_id' => $lead->id,
+            'regenerate' => $this->regenerate,
             'generated' => $result['generated'],
+            'regenerated' => $result['regenerated'] ?? 0,
             'skipped' => $result['skipped'],
             'missing' => $result['missing'],
         ]);

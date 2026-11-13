@@ -198,12 +198,14 @@ class AgentDescribeMedia extends Command
                     continue;
                 }
 
+                $id = trim((string) ($message['id'] ?? ''));
+
                 $item = [
                     'url' => $mediaUrl,
                     'mime' => (string) ($message['media']['mimetype'] ?? ''),
+                    'id' => $id,
                 ];
 
-                $id = trim((string) ($message['id'] ?? ''));
                 if ($id !== '') {
                     $byId[$id] = $item;
                 }
@@ -286,7 +288,7 @@ class AgentDescribeMedia extends Command
         }
 
         foreach ($byTimestamp as $row) {
-            if ($row['timestamp'] >= $at - 120 && $row['timestamp'] <= $at + 600) {
+            if ($row['timestamp'] >= $at - 30 && $row['timestamp'] <= $at + 120) {
                 $items[] = $row['item'];
             }
         }
@@ -314,7 +316,7 @@ class AgentDescribeMedia extends Command
                 [
                     (string) $draft->lead_id,
                     ($draft->created_at ?? $draft->artist_replied_at)->toIso8601String(),
-                    $draft->artist_replied_at->copy()->addMinutes(10)->toIso8601String(),
+                    $draft->artist_replied_at->copy()->addMinutes(2)->toIso8601String(),
                 ]
             );
         } catch (\Throwable $e) {

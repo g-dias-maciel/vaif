@@ -28,15 +28,30 @@ class MockDraftGenerator
     /**
      * @return array{generated: int, skipped: int, missing: int}
      */
-    public function generateForLead(Artist $artist, Lead $lead, int $limit = 20): array
+    public function generateForLead(Artist $artist, Lead $lead, int $limit = 20, bool $regenerate = false): array
     {
         $blocks = $this->conversation->forLead($lead, 200);
         $missing = collect($blocks)
-            ->filter(fn ($block) => ! empty($block['message']['id']) && $block['draft'] === null)
+            ->filter(function ($block) use ($regenerate) {
+                if (empty($block['message']['id'])) {
+                    return false;
+                }
+
+                if ($block['draft'] === null) {
+                    return true;
+                }
+
+                return $regenerate && ($block['draft']['is_simulated'] ?? false);
+            })
             ->values();
 
         $chatId = $this->chatId($artist, $lead);
-        $result = ['generated' => 0, 'skipped' => 0, 'missing' => $missing->count()];
+        $result = [
+            'generated' => 0,
+            'regenerated' => 0,
+            'skipped' => 0,
+            'missing' => $missing->count(),
+        ];
 
         if ($chatId === null) {
             return ['generated' => 0, 'skipped' => $missing->count(), 'missing' => $missing->count()];
@@ -91,6 +106,11 @@ class MockDraftGenerator
 
                 $composed = $this->composer->compose($artist, $start, $facts, $text, $history, $preflight);
                 $turnId = TurnId::make($chatId, 'sim:'.$message->id);
+                $existing = AgentDraft::query()
+                    ->where('artist_id', $artist->id)
+                    ->where('turn_id', $turnId)
+                    ->where('source', AgentDraft::SOURCE_SIMULATED)
+                    ->exists();
 
                 AgentDraft::updateOrCreate(
                     ['artist_id' => $artist->id, 'turn_id' => $turnId],
@@ -119,6 +139,10 @@ class MockDraftGenerator
                 );
 
                 $result['generated']++;
+
+                if ($existing) {
+                    $result['regenerated']++;
+                }
             } catch (\Throwable $e) {
                 Log::warning('Mock draft generation failed', [
                     'artist_id' => $artist->id,

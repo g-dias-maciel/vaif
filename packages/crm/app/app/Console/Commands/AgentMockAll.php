@@ -21,6 +21,7 @@ class AgentMockAll extends Command
         {--lead= : Limit to one Lead UUID}
         {--per-job=5 : Mock drafts per queue job}
         {--max=200 : Maximum missing messages to schedule}
+        {--regenerate : Rebuild existing simulated drafts with the current prompt}
         {--dry-run : Only print what would be queued}';
 
     protected $description = 'Queue retrospective Beatriz drafts for every customer message without one';
@@ -54,6 +55,7 @@ class AgentMockAll extends Command
         }
 
         $leads = $leadQuery->orderBy('name')->get();
+        $regenerate = (bool) $this->option('regenerate');
         $perJob = max(1, (int) $this->option('per-job'));
         $max = max(1, (int) $this->option('max'));
         $remaining = $max;
@@ -67,7 +69,17 @@ class AgentMockAll extends Command
             }
 
             $missing = collect($conversation->forLead($lead, 500))
-                ->filter(fn ($block) => ! empty($block['message']['id']) && $block['draft'] === null)
+                ->filter(function ($block) use ($regenerate) {
+                    if (empty($block['message']['id'])) {
+                        return false;
+                    }
+
+                    if ($block['draft'] === null) {
+                        return true;
+                    }
+
+                    return $regenerate && ($block['draft']['is_simulated'] ?? false);
+                })
                 ->count();
 
             if ($missing === 0) {
@@ -79,7 +91,7 @@ class AgentMockAll extends Command
 
             if (! $this->option('dry-run')) {
                 for ($i = 0; $i < $batches; $i++) {
-                    GenerateMockDrafts::dispatch($artist->id, $lead->id, $perJob);
+                    GenerateMockDrafts::dispatch($artist->id, $lead->id, $perJob, $regenerate);
                     $jobs++;
                 }
             }
@@ -89,7 +101,7 @@ class AgentMockAll extends Command
             $rows[] = [$lead->name ?: '(sem nome)', $missing, $take, $batches];
         }
 
-        $this->table(['lead', 'missing', 'scheduled', 'jobs'], $rows);
+        $this->table(['lead', $regenerate ? 'to regenerate' : 'missing', 'scheduled', 'jobs'], $rows);
 
         $this->info(sprintf(
             '%s: %d missing message(s) scheduled, %d job(s)%s.',

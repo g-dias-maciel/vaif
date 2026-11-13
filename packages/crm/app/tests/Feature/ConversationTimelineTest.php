@@ -88,6 +88,44 @@ class ConversationTimelineTest extends TestCase
         $this->assertStringContainsString('tabela de preços', $artistItem['content']);
     }
 
+    public function test_it_does_not_repeat_the_same_media_note(): void
+    {
+        $artist = Artist::create([
+            'name' => 'Timeline Artist',
+            'status' => 'live',
+            'timezone' => 'America/Sao_Paulo',
+            'wa_session_slug' => 'timeline-artist',
+        ]);
+
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead',
+            'phone_e164' => '+5511900000000',
+        ]);
+
+        foreach ([5, 2] as $minutes) {
+            $draft = AgentDraft::create([
+                'artist_id' => $artist->id,
+                'lead_id' => $lead->id,
+                'chat_id' => 'timeline-artist:5511900000000@c.us',
+                'turn_id' => (string) Str::uuid(),
+                'lead_text' => 'Quanto fica?',
+                'draft_reply' => 'Fica R$ 600.',
+                'status' => AgentDraft::STATUS_COMPARED,
+                'artist_reply' => '[ÁUDIO ENVIADO]',
+                'artist_media_note' => 'Áudio do artista: teste de transcrição.',
+                'artist_replied_at' => now()->subMinutes($minutes),
+            ]);
+            $draft->forceFill(['created_at' => now()->subMinutes($minutes + 2)])->save();
+        }
+
+        $timeline = (new ConversationTimeline())->forLead($lead);
+        $content = implode("\n", array_map(fn ($item) => (string) ($item['content'] ?? ''), $timeline));
+
+        $this->assertSame(1, substr_count($content, 'Áudio do artista: teste de transcrição.'));
+    }
+
     public function test_it_merges_visible_drafts_into_the_lead_timeline(): void
     {
         $artist = Artist::create([

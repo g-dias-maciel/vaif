@@ -97,6 +97,16 @@ class ChatMessage extends Model
     }
 
     /**
+     * The WhatsApp message id, when the transcript stored one.
+     */
+    public function getWaMessageIdAttribute(): ?string
+    {
+        $id = $this->message['additional_kwargs']['wa_message_id'] ?? null;
+
+        return is_string($id) && $id !== '' ? $id : null;
+    }
+
+    /**
      * `human` (lead) or `ai` (Beatriz/SDR).
      */
     public function getMessageTypeAttribute(): string

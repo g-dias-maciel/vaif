@@ -45,6 +45,7 @@ class DescribeArtistMedia implements ShouldQueue
         }
 
         $notes = [];
+        $ids = [];
 
         foreach (array_slice($this->media, 0, 3) as $item) {
             $url = trim((string) ($item['url'] ?? ''));
@@ -57,6 +58,11 @@ class DescribeArtistMedia implements ShouldQueue
 
             if ($note !== null && $note !== '') {
                 $notes[] = $note;
+                $id = trim((string) ($item['id'] ?? ''));
+
+                if ($id !== '') {
+                    $ids[] = $id;
+                }
             }
         }
 
@@ -66,6 +72,7 @@ class DescribeArtistMedia implements ShouldQueue
 
         $draft->forceFill([
             'artist_media_note' => implode("\n", $notes),
+            'artist_media_ids' => $ids !== [] ? array_values(array_unique($ids)) : null,
         ])->save();
 
         Log::info('Artist media described', [

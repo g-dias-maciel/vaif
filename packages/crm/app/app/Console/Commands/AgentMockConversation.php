@@ -13,7 +13,8 @@ class AgentMockConversation extends Command
     protected $signature = 'agent:mock-conversation
         {artist : Artist UUID or WAHA session slug}
         {--lead= : Lead UUID}
-        {--limit=20 : Maximum number of missing messages to simulate}';
+        {--limit=20 : Maximum number of missing messages to simulate}
+        {--regenerate : Rebuild existing simulated drafts with the current prompt}';
 
     protected $description = 'Generate retrospective Beatriz drafts for customer messages without one';
 
@@ -52,13 +53,15 @@ class AgentMockConversation extends Command
             return self::FAILURE;
         }
 
-        $result = $generator->generateForLead($artist, $lead, max(1, (int) $this->option('limit')));
+        $regenerate = (bool) $this->option('regenerate');
+        $result = $generator->generateForLead($artist, $lead, max(1, (int) $this->option('limit')), $regenerate);
 
         $this->table(['metric', 'value'], [
             ['artist', $artist->name],
             ['lead', $lead->name],
-            ['missing before', $result['missing']],
+            [$regenerate ? 'to regenerate' : 'missing before', $result['missing']],
             ['generated', $result['generated']],
+            ['regenerated', $result['regenerated'] ?? 0],
             ['skipped', $result['skipped']],
         ]);
 

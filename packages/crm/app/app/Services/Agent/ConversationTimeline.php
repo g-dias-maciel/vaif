@@ -56,6 +56,7 @@ class ConversationTimeline
                     : $message->sender_label,
                 'content' => $content,
                 'order' => $kind === 'lead' ? 0 : 2,
+                'wa_id' => $message->wa_message_id,
             ];
         }
 
@@ -107,7 +108,13 @@ class ConversationTimeline
                     $note = trim((string) $draft->artist_media_note);
 
                     if ($note !== '' && MessageText::isMediaOnly($content)) {
-                        $content .= "\n".$note;
+                        $alreadyNoted = collect($items)->contains(
+                            fn ($item) => str_contains((string) ($item['content'] ?? ''), $note)
+                        );
+
+                        if (! $alreadyNoted) {
+                            $content .= "\n".$note;
+                        }
                     }
 
                     $items[] = [
@@ -123,31 +130,63 @@ class ConversationTimeline
         }
 
         // Media that lives in chat_memory is only a placeholder. Attach the
-        // staff description to the artist bubble so the lead page is readable.
+        // description once, to the exact bubble it describes. Notes without
+        // ids (older drafts) fall back to the first media bubble in the burst,
+        // never to every bubble in a ten-minute window.
         $notes = $drafts->filter(
             fn (AgentDraft $draft) => trim((string) $draft->artist_media_note) !== ''
                 && $draft->artist_replied_at !== null
         );
 
-        if ($notes->isNotEmpty()) {
+        $seenNotes = [];
+
+        foreach ($notes as $draft) {
+            $note = trim((string) $draft->artist_media_note);
+            $key = preg_replace('/\s+/', ' ', mb_strtolower($note)) ?? $note;
+
+            if (isset($seenNotes[$key])) {
+                continue;
+            }
+
+            $ids = is_array($draft->artist_media_ids) ? $draft->artist_media_ids : [];
+            $at = $draft->artist_replied_at;
+            $matchIndex = null;
+
             foreach ($items as $index => $item) {
                 if (($item['kind'] ?? null) !== 'artist'
-                    || ! MessageText::hasMediaMarker((string) ($item['content'] ?? ''))
-                    || $item['at'] === null) {
+                    || ! empty($item['media_note'])
+                    || ! MessageText::hasMediaMarker((string) ($item['content'] ?? ''))) {
                     continue;
                 }
 
-                $match = $notes->first(
-                    fn (AgentDraft $draft) => abs($draft->artist_replied_at->getTimestamp() - $item['at']->getTimestamp()) <= 600
-                );
+                if ($ids !== []) {
+                    if (in_array((string) ($item['wa_id'] ?? ''), $ids, true)) {
+                        $matchIndex = $index;
+                        break;
+                    }
 
-                if ($match !== null
-                    && ! str_contains((string) ($item['content'] ?? ''), 'Áudio do artista:')
-                    && ! str_contains((string) ($item['content'] ?? ''), trim((string) $match->artist_media_note))) {
-                    $items[$index]['content'] = trim((string) $item['content'])."\n".trim((string) $match->artist_media_note);
-                    $items[$index]['media_note'] = true;
+                    continue;
+                }
+
+                if ($item['at'] === null) {
+                    continue;
+                }
+
+                $diff = $item['at']->getTimestamp() - $at->getTimestamp();
+
+                if ($diff >= -5 && $diff <= 30) {
+                    $matchIndex = $index;
+                    break;
                 }
             }
+
+            if ($matchIndex === null) {
+                continue;
+            }
+
+            $items[$matchIndex]['content'] = trim((string) $items[$matchIndex]['content'])."\n".$note;
+            $items[$matchIndex]['media_note'] = true;
+            $seenNotes[$key] = true;
         }
 
         usort($items, function (array $a, array $b) {
