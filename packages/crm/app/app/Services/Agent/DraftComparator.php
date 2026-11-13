@@ -29,7 +29,7 @@ class DraftComparator
     {
         $facts = is_array($draft->facts) ? $draft->facts : [];
         $artistReply = trim((string) $draft->artist_reply);
-        $mediaNote = trim((string) $draft->artist_media_note);
+        $mediaNote = MediaNote::dedupe((string) $draft->artist_media_note);
 
         // Staff can describe an image/video the artist sent. The description is
         // the comparable answer; the original placeholder is kept for audit.

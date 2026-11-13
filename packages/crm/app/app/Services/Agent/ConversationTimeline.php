@@ -105,7 +105,7 @@ class ConversationTimeline
 
                 if (! $alreadyThere) {
                     $content = trim((string) $draft->artist_reply);
-                    $note = trim((string) $draft->artist_media_note);
+                    $note = MediaNote::dedupe((string) $draft->artist_media_note);
 
                     if ($note !== '' && MessageText::isMediaOnly($content)) {
                         $alreadyNoted = collect($items)->contains(
@@ -138,13 +138,23 @@ class ConversationTimeline
                 && $draft->artist_replied_at !== null
         );
 
-        $seenNotes = [];
+        $seenSegments = [];
 
         foreach ($notes as $draft) {
-            $note = trim((string) $draft->artist_media_note);
-            $key = preg_replace('/\s+/', ' ', mb_strtolower($note)) ?? $note;
+            $segments = MediaNote::segments((string) $draft->artist_media_note);
+            $newSegments = [];
 
-            if (isset($seenNotes[$key])) {
+            foreach ($segments as $segment) {
+                $key = MediaNote::key($segment);
+
+                if (isset($seenSegments[$key])) {
+                    continue;
+                }
+
+                $newSegments[] = $segment;
+            }
+
+            if ($newSegments === []) {
                 continue;
             }
 
@@ -184,9 +194,12 @@ class ConversationTimeline
                 continue;
             }
 
-            $items[$matchIndex]['content'] = trim((string) $items[$matchIndex]['content'])."\n".$note;
+            $items[$matchIndex]['content'] = trim((string) $items[$matchIndex]['content'])."\n".implode("\n", $newSegments);
             $items[$matchIndex]['media_note'] = true;
-            $seenNotes[$key] = true;
+
+            foreach ($newSegments as $segment) {
+                $seenSegments[MediaNote::key($segment)] = true;
+            }
         }
 
         usort($items, function (array $a, array $b) {

@@ -268,17 +268,17 @@ class AgentDescribeMedia extends Command
      */
     private function mediaForDraft(AgentDraft $draft, array $byId, array $byTimestamp): array
     {
-        $ids = $this->artistMessageIds($draft);
+        $ids = array_values(array_unique($this->artistMessageIds($draft)));
         $items = [];
 
         foreach ($ids as $id) {
             if (isset($byId[$id])) {
-                $items[] = $byId[$id];
+                $items[$id] = $byId[$id];
             }
         }
 
         if ($items !== []) {
-            return array_slice($items, 0, 3);
+            return array_slice(array_values($items), 0, 3);
         }
 
         $at = $draft->artist_replied_at?->getTimestamp() ?? 0;
@@ -289,11 +289,12 @@ class AgentDescribeMedia extends Command
 
         foreach ($byTimestamp as $row) {
             if ($row['timestamp'] >= $at - 30 && $row['timestamp'] <= $at + 120) {
-                $items[] = $row['item'];
+                $key = (string) ($row['item']['id'] ?? $row['item']['url'] ?? '');
+                $items[$key] = $row['item'];
             }
         }
 
-        return array_slice($items, 0, 3);
+        return array_slice(array_values($items), 0, 3);
     }
 
     /**

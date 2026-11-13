@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\AgentDraft;
 use App\Services\Agent\AgentMedia;
+use App\Services\Agent\MediaNote;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -65,6 +66,12 @@ class DescribeArtistMedia implements ShouldQueue
                 }
             }
         }
+
+        if ($notes === []) {
+            return;
+        }
+
+        $notes = MediaNote::segments(implode("\n", $notes));
 
         if ($notes === []) {
             return;
