@@ -182,6 +182,11 @@ class CalibrationPanelTest extends TestCase
             ->assertSee('Fica R$ 600,00, quer ver os horários?')
             ->assertSee('draft_better')
             ->assertSee('Apontar para o CRM');
+
+        $this->actingAs($this->staff())
+            ->get(route('calibration.show', ['artist' => $artist, 'simulation' => 1]))
+            ->assertOk()
+            ->assertSee('simulação');
     }
 
     public function test_staff_can_request_mock_drafts_for_a_lead(): void

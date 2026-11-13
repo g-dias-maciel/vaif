@@ -175,7 +175,7 @@ class CalibrationChat
             return $turn;
         }
 
-        usort($drafts, function (AgentDraft $a, AgentDraft $b) {
+        usort($drafts, function (AgentDraft $a, AgentDraft $b) use ($preferSimulated) {
             $aPriority = $this->priority($a, $preferSimulated);
             $bPriority = $this->priority($b, $preferSimulated);
 
