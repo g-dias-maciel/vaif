@@ -21,7 +21,7 @@ class CalibrationConversation
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function forLead(Lead $lead, int $limit = 80): array
+    public function forLead(Lead $lead, int $limit = 80, bool $preferSimulated = false): array
     {
         $artistName = $lead->artist?->displayName() ?: 'Artista';
 
@@ -77,6 +77,10 @@ class CalibrationConversation
                 ->get();
         } catch (\Throwable $e) {
             $drafts = collect();
+        }
+
+        if ($preferSimulated) {
+            $drafts = $drafts->sortBy(fn (AgentDraft $draft) => $draft->isSimulated() ? 0 : 1)->values();
         }
 
         foreach ($drafts as $draft) {

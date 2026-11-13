@@ -3,6 +3,7 @@
 @section('title', 'Calibração — ' . $artist->displayName())
 
 @section('content')
+@php($simulation = $simulation ?? false)
 <style>
     .calib-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
     .calib-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
@@ -38,7 +39,10 @@
     </div>
     <div style="display:flex; gap:8px; flex-wrap:wrap;">
         <a href="{{ route('artists.show', $artist) }}" class="btn btn--ghost">Ver artista</a>
-        <a href="{{ route('calibration.show', $artist) }}" class="btn btn--ghost">Atualizar</a>
+        <a href="{{ route('calibration.show', ['artist' => $artist, 'simulation' => $simulation ? 0 : 1]) }}" class="btn btn--ghost">
+            {{ $simulation ? 'Ver conversa live' : 'Ver simulação (nova config)' }}
+        </a>
+        <a href="{{ route('calibration.show', ['artist' => $artist, 'simulation' => $simulation ? 1 : 0]) }}" class="btn btn--ghost">Atualizar</a>
     </div>
 </div>
 
@@ -244,6 +248,9 @@
 
             <div class="meta" style="margin:2px 0 8px; font-weight:600;">
                 Conversa em ordem de envio · cliente à esquerda, {{ $artist->displayName() }} à direita, SDR abaixo do turno
+                @if ($simulation)
+                    <span class="tag tag-muted">simulação · nova configuração</span>
+                @endif
             </div>
 
             @if (! empty($group['lead']) && ($group['missing'] ?? 0) > 0)

@@ -18,7 +18,7 @@ class CalibrationChat
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function forLead(Lead $lead, int $limit = 80): array
+    public function forLead(Lead $lead, int $limit = 80, bool $preferSimulated = false): array
     {
         $artistName = $lead->artist?->displayName() ?: 'Artista';
 
@@ -114,7 +114,7 @@ class CalibrationChat
         }
 
         foreach ($turns as $index => $turn) {
-            $turns[$index] = $this->pickDraft($turn);
+            $turns[$index] = $this->pickDraft($turn, $preferSimulated);
         }
 
         if (count($turns) > $limit) {
@@ -166,7 +166,7 @@ class CalibrationChat
      * @param  array<string, mixed>  $turn
      * @return array<string, mixed>
      */
-    private function pickDraft(array $turn): array
+    private function pickDraft(array $turn, bool $preferSimulated): array
     {
         $drafts = $turn['drafts'] ?? [];
         unset($turn['drafts']);
@@ -176,8 +176,8 @@ class CalibrationChat
         }
 
         usort($drafts, function (AgentDraft $a, AgentDraft $b) {
-            $aPriority = $this->priority($a);
-            $bPriority = $this->priority($b);
+            $aPriority = $this->priority($a, $preferSimulated);
+            $bPriority = $this->priority($b, $preferSimulated);
 
             return $aPriority <=> $bPriority ?: $b->created_at <=> $a->created_at;
         });
@@ -202,12 +202,16 @@ class CalibrationChat
      * Lower is better: active live, active simulated, superseded live,
      * superseded simulated, other.
      */
-    private function priority(AgentDraft $draft): int
+    private function priority(AgentDraft $draft, bool $preferSimulated): int
     {
         $active = ! in_array($draft->status, [
             AgentDraft::STATUS_SUPERSEDED,
             AgentDraft::STATUS_EXPIRED,
         ], true);
+
+        if ($preferSimulated) {
+            return $draft->isSimulated() ? ($active ? 0 : 2) : ($active ? 1 : 3);
+        }
 
         if ($draft->isSimulated()) {
             return $active ? 1 : 3;

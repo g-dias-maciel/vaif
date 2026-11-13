@@ -61,6 +61,7 @@ class CalibrationController extends Controller
     public function show(Artist $artist, CalibrationReport $report, WahaService $waha, CalibrationChat $chat, CalibrationConversation $conversation)
     {
         $artist->loadMissing('settings');
+        $simulation = request()->boolean('simulation');
 
         try {
             $drafts = AgentDraft::query()
@@ -77,13 +78,19 @@ class CalibrationController extends Controller
         // 40 flat cards hides which one is the current suggestion.
         $draftGroups = $drafts
             ->groupBy(fn (AgentDraft $draft) => $draft->lead_id ?: $draft->chat_id)
-            ->map(function ($group) use ($chat, $conversation) {
+            ->map(function ($group) use ($chat, $conversation, $simulation) {
                 $sorted = $group->sortByDesc('created_at')->values();
                 $latest = $sorted->first();
-                $blocks = $latest?->lead ? $conversation->forLead($latest->lead, 200) : [];
-                $missing = collect($blocks)->filter(
-                    fn ($block) => ! empty($block['message']['id']) && $block['draft'] === null
-                )->count();
+                $blocks = $latest?->lead ? $conversation->forLead($latest->lead, 200, $simulation) : [];
+                $missing = collect($blocks)->filter(function ($block) use ($simulation) {
+                    if (empty($block['message']['id'])) {
+                        return false;
+                    }
+
+                    return $simulation
+                        ? ! ($block['draft']['is_simulated'] ?? false)
+                        : $block['draft'] === null;
+                })->count();
 
                 return [
                     'latest' => $latest,
@@ -92,7 +99,7 @@ class CalibrationController extends Controller
                     'lead' => $latest?->lead,
                     'lead_name' => $latest?->lead?->name,
                     'chat_id' => $latest?->chat_id,
-                    'turns' => $latest?->lead ? $chat->forLead($latest->lead, 80) : [],
+                    'turns' => $latest?->lead ? $chat->forLead($latest->lead, 80, $simulation) : [],
                     'missing' => $missing,
                 ];
             })
@@ -104,6 +111,7 @@ class CalibrationController extends Controller
             'artist' => $artist,
             'report' => $report->forArtist($artist, 30),
             'draftGroups' => $draftGroups,
+            'simulation' => $simulation,
             'draftTotal' => $drafts->count(),
             'webhook' => $waha->webhookInfo($artist),
             'crmWebhookUrl' => (string) config('transport.waha_webhook_url'),

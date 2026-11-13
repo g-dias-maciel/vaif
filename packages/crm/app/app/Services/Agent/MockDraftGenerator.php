@@ -41,7 +41,9 @@ class MockDraftGenerator
                     return true;
                 }
 
-                return $regenerate && ($block['draft']['is_simulated'] ?? false);
+                // Regenerate every customer message, including ones that only
+                // have a live draft from the previous prompt.
+                return $regenerate;
             })
             ->values();
 
