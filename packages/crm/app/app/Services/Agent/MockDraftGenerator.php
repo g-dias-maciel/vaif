@@ -32,18 +32,24 @@ class MockDraftGenerator
     {
         $blocks = $this->conversation->forLead($lead, 200);
         $missing = collect($blocks)
-            ->filter(function ($block) use ($regenerate) {
+            ->filter(function ($block) use ($artist, $regenerate) {
                 if (empty($block['message']['id'])) {
                     return false;
                 }
 
-                if ($block['draft'] === null) {
-                    return true;
+                if (! $regenerate) {
+                    return $block['draft'] === null;
                 }
 
-                // Regenerate every customer message, including ones that only
-                // have a live draft from the previous prompt.
-                return $regenerate;
+                // Every customer message needs a simulated draft built with
+                // the current prompt. Already-current rows are skipped so
+                // batched jobs advance through the conversation.
+                return ! AgentDraft::query()
+                    ->where('artist_id', $artist->id)
+                    ->where('lead_message_id', $block['message']['id'])
+                    ->where('source', AgentDraft::SOURCE_SIMULATED)
+                    ->where('prompt_version', PromptVersion::current())
+                    ->exists();
             })
             ->values();
 
