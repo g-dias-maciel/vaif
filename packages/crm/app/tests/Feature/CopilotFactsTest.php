@@ -144,7 +144,7 @@ class CopilotFactsTest extends TestCase
     {
         $artist = $this->artist();
 
-        AgentDraft::create([
+        $draft = AgentDraft::create([
             'artist_id' => $artist->id,
             'chat_id' => 'copilot-artist:5511@c.us',
             'turn_id' => (string) Str::uuid(),
@@ -175,6 +175,15 @@ class CopilotFactsTest extends TestCase
             ],
         ]);
 
+        \App\Models\AgentDraftReview::create([
+            'artist_id' => $artist->id,
+            'agent_draft_id' => $draft->id,
+            'verdict' => 'needs_fix',
+            'category' => 'handoff',
+            'note' => 'Cobertura precisa de handoff.',
+            'corrected_reply' => 'Vou passar para o Adriano avaliar.',
+        ]);
+
         $facts = (new \App\Services\Copilot\CalibrationFacts(new CalibrationReport()))->collect();
 
         $this->assertSame(1, $facts['totals']['drafts']);
@@ -182,5 +191,8 @@ class CopilotFactsTest extends TestCase
         $this->assertSame('price_before_qualification', $facts['artists'][0]['top_violation_rules'][0]['rule']);
         $this->assertSame('perguntou o tamanho', $facts['artists'][0]['top_missing'][0]['missing']);
         $this->assertCount(1, $facts['artists'][0]['samples']);
+        $this->assertSame(1, $facts['artists'][0]['reviews']['needs_fix']);
+        $this->assertSame('handoff', $facts['artists'][0]['reviews']['top_categories'][0]['category']);
+        $this->assertSame('Vou passar para o Adriano avaliar.', $facts['artists'][0]['reviews']['samples'][0]['corrected_reply']);
     }
 }

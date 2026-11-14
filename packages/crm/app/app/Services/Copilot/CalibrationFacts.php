@@ -3,6 +3,7 @@
 namespace App\Services\Copilot;
 
 use App\Models\AgentDraft;
+use App\Models\AgentDraftReview;
 use App\Models\Artist;
 use App\Models\ConversationAudit;
 use App\Services\Agent\CalibrationReport;
@@ -34,6 +35,7 @@ class CalibrationFacts
             'unacceptable' => 0,
             'stuck_pending' => 0,
             'stuck_replied' => 0,
+            'review_needs_fix' => 0,
         ];
 
         foreach ($artists as $artist) {
@@ -48,6 +50,7 @@ class CalibrationFacts
                 return $flag !== false;
             });
             $unacceptable = $compared->filter(fn (AgentDraft $d) => $d->wasAccepted() === false);
+            $reviews = $this->reviews($artist, $since);
 
             $gates = $this->calibration->forArtist($artist, $gatesDays);
             $row = [
@@ -76,6 +79,7 @@ class CalibrationFacts
                 'top_missing' => $this->topMissing($compared),
                 'intents' => $this->intents($drafts, $compared),
                 'samples' => $unacceptable->take(3)->map(fn (AgentDraft $d) => $this->sample($d))->values()->all(),
+                'reviews' => $reviews,
                 'prompt_versions' => $drafts->groupBy('prompt_version')->map->count()->all(),
                 'stuck' => $this->stuck($artist, $now),
                 'audit' => $this->audit($artist, $since),
@@ -86,6 +90,7 @@ class CalibrationFacts
             $totals['unacceptable'] += $row['drafts']['unacceptable'];
             $totals['stuck_pending'] += $row['stuck']['pending'];
             $totals['stuck_replied'] += $row['stuck']['replied'];
+            $totals['review_needs_fix'] += $reviews['needs_fix'];
 
             $rows[] = $row;
         }
@@ -295,6 +300,54 @@ class CalibrationFacts
                 'summary' => $latest->summary,
                 'generated_at' => $latest->generated_at?->toIso8601String(),
             ] : null,
+        ];
+    }
+
+    /**
+     * Staff reviews of drafts, grouped for the weekly calibration report.
+     *
+     * @return array<string, mixed>
+     */
+    private function reviews(Artist $artist, Carbon $since): array
+    {
+        try {
+            $rows = AgentDraftReview::query()
+                ->with(['lead:id,name', 'draft:id,draft_reply', 'reviewer:id,name'])
+                ->where('artist_id', $artist->id)
+                ->where('updated_at', '>=', $since)
+                ->orderByDesc('updated_at')
+                ->get();
+        } catch (\Throwable $e) {
+            return ['total' => 0, 'needs_fix' => 0, 'top_categories' => [], 'samples' => []];
+        }
+
+        $needsFix = $rows->filter(fn (AgentDraftReview $review) => $review->needsFix());
+        $categories = [];
+
+        foreach ($needsFix as $review) {
+            $category = $review->category ?: 'other';
+            $categories[$category] = ($categories[$category] ?? 0) + 1;
+        }
+
+        arsort($categories);
+
+        return [
+            'total' => $rows->count(),
+            'needs_fix' => $needsFix->count(),
+            'top_categories' => collect($categories)->take(6)
+                ->map(fn ($total, $category) => ['category' => $category, 'total' => $total])
+                ->values()
+                ->all(),
+            'samples' => $needsFix->take(5)->map(fn (AgentDraftReview $review) => [
+                'id' => $review->id,
+                'lead' => $review->lead?->name,
+                'category' => $review->category,
+                'note' => $review->note,
+                'corrected_reply' => $review->corrected_reply,
+                'draft' => mb_substr(trim((string) $review->draft?->draft_reply), 0, 240),
+                'reviewer' => $review->reviewer?->name,
+                'at' => $review->updated_at?->toIso8601String(),
+            ])->values()->all(),
         ];
     }
 
