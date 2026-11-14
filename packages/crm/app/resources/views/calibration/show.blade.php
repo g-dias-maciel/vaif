@@ -251,7 +251,13 @@
             <tbody>
                 @foreach ($reviews as $review)
                     <tr style="border-top:1px solid var(--border); vertical-align:top;">
-                        <td style="padding:6px;">{{ $review->lead?->name ?: '—' }}</td>
+                        <td style="padding:6px;">
+                            @if ($review->lead)
+                                <a href="#lead-{{ $review->lead->id }}">{{ $review->lead->name ?: '—' }}</a>
+                            @else
+                                —
+                            @endif
+                        </td>
                         <td class="meta" style="padding:6px; max-width:260px;">
                             {{ \Illuminate\Support\Str::limit($review->draft?->draft_reply ?? '', 140) }}
                         </td>
@@ -290,7 +296,7 @@
         @php($draft = $group['latest'])
         @php($judge = $draft->comparison['judge'] ?? null)
         @php($det = $draft->comparison['deterministic'] ?? null)
-        <div class="calib-draft">
+        <div class="calib-draft" id="lead-{{ $group['lead']?->id }}">
             <h3>
                 {{ $group['lead_name'] ?: 'Conversa sem nome' }}
                 <span class="calib-chip">{{ $group['count'] }} sugestõe(s)</span>
