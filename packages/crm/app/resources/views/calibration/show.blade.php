@@ -4,6 +4,9 @@
 
 @section('content')
 @php($simulation = $simulation ?? false)
+@php($reviews = $reviews ?? collect())
+@php($reviewCount = $reviewCount ?? 0)
+@php($reviewNeedsFix = $reviewNeedsFix ?? 0)
 <style>
     .calib-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; }
     .calib-card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; }
@@ -50,6 +53,10 @@
     <div class="calib-card">
         <div class="calib-value">{{ $report['totals']['compared'] }}</div>
         <div class="calib-label">Pares comparados</div>
+    </div>
+    <div class="calib-card">
+        <div class="calib-value">{{ $reviewCount }}</div>
+        <div class="calib-label">Revisões ({{ $reviewNeedsFix }} a corrigir)</div>
     </div>
     <div class="calib-card">
         <div class="calib-value">{{ (int) round($report['rates']['acceptable'] * 100) }}%</div>
@@ -222,6 +229,58 @@
         · tom: {{ $report['rates']['tone_avg'] !== null ? $report['rates']['tone_avg'] . '/5' : '—' }}
     </div>
 </div>
+
+@if ($reviews->isNotEmpty())
+    <div class="panel">
+        <h2 class="section-title" style="margin-top:0;">Revisões da equipe</h2>
+        <p class="meta" style="margin-top:-4px;">
+            Casos marcados como “deveria ser diferente”. A resposta sugerida vira alvo de calibração.
+        </p>
+
+        <table style="width:100%; border-collapse:collapse;">
+            <thead>
+                <tr>
+                    <th style="text-align:left; padding:6px;">Lead</th>
+                    <th style="text-align:left; padding:6px;">Sugestão</th>
+                    <th style="text-align:left; padding:6px;">Revisão</th>
+                    <th style="text-align:left; padding:6px;">Observação</th>
+                    <th style="text-align:left; padding:6px;">Resposta sugerida</th>
+                    <th style="text-align:left; padding:6px;">Quem/quando</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach ($reviews as $review)
+                    <tr style="border-top:1px solid var(--border); vertical-align:top;">
+                        <td style="padding:6px;">{{ $review->lead?->name ?: '—' }}</td>
+                        <td class="meta" style="padding:6px; max-width:260px;">
+                            {{ \Illuminate\Support\Str::limit($review->draft?->draft_reply ?? '', 140) }}
+                        </td>
+                        <td style="padding:6px;">
+                            <span class="tag {{ $review->needsFix() ? 'tag-muted' : 'tag-success' }}">
+                                {{ $review->needsFix() ? 'deveria ser diferente' : 'boa resposta' }}
+                            </span>
+                            @if ($review->category)
+                                <div class="meta">
+                                    {{ \App\Models\AgentDraftReview::CATEGORIES[$review->category] ?? $review->category }}
+                                </div>
+                            @endif
+                        </td>
+                        <td class="meta" style="padding:6px; max-width:260px;">
+                            {{ \Illuminate\Support\Str::limit($review->note ?? '', 180) }}
+                        </td>
+                        <td class="meta" style="padding:6px; max-width:320px;">
+                            {{ \Illuminate\Support\Str::limit($review->corrected_reply ?? '', 220) }}
+                        </td>
+                        <td class="meta" style="padding:6px;">
+                            {{ $review->reviewer?->name ?: '—' }}
+                            <br>{{ $review->updated_at?->format('d/m H:i') }}
+                        </td>
+                    </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+@endif
 
 <div class="panel">
     <h2 class="section-title" style="margin-top:0;">Conversas com sugestões</h2>

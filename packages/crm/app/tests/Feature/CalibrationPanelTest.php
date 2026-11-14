@@ -210,6 +210,97 @@ class CalibrationPanelTest extends TestCase
         });
     }
 
+    public function test_staff_can_review_a_draft_and_see_it_on_the_page(): void
+    {
+        $artist = $this->artist();
+        $this->fakeWaha();
+
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead Review',
+            'phone_e164' => '+5511900000000',
+        ]);
+
+        $draft = AgentDraft::create([
+            'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
+            'chat_id' => 'calibration-artist:5511900000000@c.us',
+            'turn_id' => (string) Str::uuid(),
+            'lead_text' => 'Quero cobrir uma tatuagem no braço.',
+            'draft_reply' => 'Qual estilo você quer?',
+            'status' => AgentDraft::STATUS_COMPARED,
+            'artist_reply' => 'Me manda uma foto da tatuagem atual que eu avalio.',
+            'comparison' => [
+                'deterministic' => ['ok' => true, 'violations' => []],
+                'judge' => [
+                    'acceptable' => false,
+                    'covered_lead_question' => false,
+                    'missing_handoff' => true,
+                    'tone' => 3,
+                    'verdict' => 'artist_better',
+                    'rationale' => 'Cobertura exige handoff.',
+                ],
+            ],
+        ]);
+
+        $this->actingAs($this->staff())
+            ->post(route('calibration.review', [$artist, $draft]), [
+                'verdict' => 'needs_fix',
+                'category' => 'handoff',
+                'note' => 'Cobertura precisa de handoff, não de qualificação.',
+                'corrected_reply' => 'Me manda uma foto da tatuagem atual que eu passo para o Adriano avaliar.',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('status');
+
+        $this->assertDatabaseHas('agent_draft_reviews', [
+            'agent_draft_id' => $draft->id,
+            'verdict' => 'needs_fix',
+            'category' => 'handoff',
+        ]);
+
+        $this->actingAs($this->staff())
+            ->get(route('calibration.show', $artist))
+            ->assertOk()
+            ->assertSee('deveria ser diferente')
+            ->assertSee('Cobertura precisa de handoff')
+            ->assertSee('Me manda uma foto da tatuagem atual que eu passo para o Adriano avaliar.');
+    }
+
+    public function test_a_needs_fix_review_requires_a_reason_or_correction(): void
+    {
+        $artist = $this->artist();
+        $lead = Lead::create([
+            'id' => (string) Str::uuid(),
+            'artist_id' => $artist->id,
+            'name' => 'Lead Review',
+            'phone_e164' => '+5511900000001',
+        ]);
+
+        $draft = AgentDraft::create([
+            'artist_id' => $artist->id,
+            'lead_id' => $lead->id,
+            'chat_id' => 'calibration-artist:5511900000001@c.us',
+            'turn_id' => (string) Str::uuid(),
+            'lead_text' => 'Oi',
+            'draft_reply' => 'Oi!',
+            'status' => AgentDraft::STATUS_COMPARED,
+            'artist_reply' => 'Oi',
+        ]);
+
+        $this->actingAs($this->staff())
+            ->post(route('calibration.review', [$artist, $draft]), [
+                'verdict' => 'needs_fix',
+            ])
+            ->assertRedirect()
+            ->assertSessionHas('error');
+
+        $this->assertDatabaseMissing('agent_draft_reviews', [
+            'agent_draft_id' => $draft->id,
+        ]);
+    }
+
     public function test_staff_can_describe_artist_media(): void
     {
         Queue::fake();

@@ -73,6 +73,7 @@ class CalibrationConversation
         try {
             $drafts = AgentDraft::query()
                 ->where('lead_id', $lead->id)
+                ->with('review')
                 ->orderBy('created_at')
                 ->get();
         } catch (\Throwable $e) {

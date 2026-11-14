@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\Auth\PasswordSetupController;
 use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CalibrationController;
+use App\Http\Controllers\CalibrationReviewController;
 use App\Http\Controllers\ClientController;
 use App\Http\Controllers\ConversationAuditController;
 use App\Http\Controllers\CopilotController;
@@ -155,6 +156,8 @@ Route::middleware('auth')->group(function () {
         Route::post('/calibration/{artist}/webhook', [CalibrationController::class, 'updateWebhook'])->name('calibration.webhook');
         Route::post('/calibration/{artist}/leads/{lead}/mock', [CalibrationController::class, 'mock'])->name('calibration.mock');
         Route::post('/calibration/{artist}/drafts/{draft}/media-note', [CalibrationController::class, 'mediaNote'])->name('calibration.media-note');
+        Route::post('/calibration/{artist}/drafts/{draft}/review', [CalibrationReviewController::class, 'store'])->name('calibration.review');
+        Route::delete('/calibration/{artist}/drafts/{draft}/review', [CalibrationReviewController::class, 'destroy'])->name('calibration.review.destroy');
 
         Route::get('/promotions', [PromotionAdminController::class, 'index'])->name('promotions.index');
         Route::get('/promotions/create', [PromotionAdminController::class, 'create'])->name('promotions.create');

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Jobs\CompareDraft;
 use App\Jobs\GenerateMockDrafts;
 use App\Models\AgentDraft;
+use App\Models\AgentDraftReview;
 use App\Models\Artist;
 use App\Models\ArtistSetting;
 use App\Models\Lead;
@@ -107,11 +108,32 @@ class CalibrationController extends Controller
             ->take(20)
             ->values();
 
+        try {
+            $reviews = AgentDraftReview::query()
+                ->with(['lead:id,name', 'reviewer:id,name', 'draft:id,draft_reply,source'])
+                ->where('artist_id', $artist->id)
+                ->orderByDesc('updated_at')
+                ->limit(20)
+                ->get();
+            $reviewCount = AgentDraftReview::query()->where('artist_id', $artist->id)->count();
+            $reviewNeedsFix = AgentDraftReview::query()
+                ->where('artist_id', $artist->id)
+                ->where('verdict', AgentDraftReview::VERDICT_NEEDS_FIX)
+                ->count();
+        } catch (\Throwable $e) {
+            $reviews = collect();
+            $reviewCount = 0;
+            $reviewNeedsFix = 0;
+        }
+
         return view('calibration.show', [
             'artist' => $artist,
             'report' => $report->forArtist($artist, 30),
             'draftGroups' => $draftGroups,
             'simulation' => $simulation,
+            'reviews' => $reviews,
+            'reviewCount' => $reviewCount,
+            'reviewNeedsFix' => $reviewNeedsFix,
             'draftTotal' => $drafts->count(),
             'webhook' => $waha->webhookInfo($artist),
             'crmWebhookUrl' => (string) config('transport.waha_webhook_url'),

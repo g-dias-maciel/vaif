@@ -94,6 +94,78 @@
                             {{ $draft['rationale'] }}
                         </div>
                     @endif
+
+                    @php($review = $draft['draft']->review)
+                    @if ($artist)
+                        <div style="margin-top:8px; padding-top:8px; border-top:1px dashed var(--border);">
+                            @if ($review)
+                                <div class="meta">
+                                    <strong>Revisão da equipe:</strong>
+                                    <span class="tag {{ $review->needsFix() ? 'tag-muted' : 'tag-success' }}">
+                                        {{ $review->needsFix() ? 'deveria ser diferente' : 'boa resposta' }}
+                                    </span>
+                                    @if ($review->category)
+                                        · {{ \App\Models\AgentDraftReview::CATEGORIES[$review->category] ?? $review->category }}
+                                    @endif
+                                    @if ($review->reviewer)
+                                        · {{ $review->reviewer->name }}
+                                    @endif
+                                    @if ($review->updated_at)
+                                        · {{ $review->updated_at->format('d/m H:i') }}
+                                    @endif
+                                </div>
+
+                                @if ($review->note)
+                                    <div class="chat-text" style="margin-top:4px;">{{ $review->note }}</div>
+                                @endif
+
+                                @if ($review->corrected_reply)
+                                    <div style="margin-top:6px; padding:8px 10px; border-left:3px solid var(--gold, #D4B04C); background:rgba(212,176,76,.08);">
+                                        <div class="meta" style="text-transform:uppercase; letter-spacing:.4px;">Resposta correta sugerida</div>
+                                        <div class="chat-text">{{ $review->corrected_reply }}</div>
+                                    </div>
+                                @endif
+                            @endif
+
+                            <details style="margin-top:6px;">
+                                <summary class="meta" style="cursor:pointer;">
+                                    {{ $review ? 'Editar revisão' : 'Revisar resposta' }}
+                                </summary>
+
+                                <form method="POST" action="{{ route('calibration.review', [$artist, $draft['draft']]) }}" style="margin-top:6px; display:grid; gap:6px;">
+                                    @csrf
+                                    <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                                        <select name="verdict" style="min-width:180px;">
+                                            <option value="good" {{ ($review?->verdict ?? '') === 'good' ? 'selected' : '' }}>Boa resposta</option>
+                                            <option value="needs_fix" {{ ($review?->verdict ?? 'needs_fix') === 'needs_fix' ? 'selected' : '' }}>Deveria ser diferente</option>
+                                        </select>
+                                        <select name="category" style="min-width:160px;">
+                                            <option value="">Categoria</option>
+                                            @foreach (\App\Models\AgentDraftReview::CATEGORIES as $value => $label)
+                                                <option value="{{ $value }}" {{ ($review?->category ?? '') === $value ? 'selected' : '' }}>{{ $label }}</option>
+                                            @endforeach
+                                        </select>
+                                    </div>
+                                    <textarea name="note" maxlength="2000" rows="2" placeholder="O que deveria ser diferente? (contexto, regra, tom...)">{{ $review?->note }}</textarea>
+                                    <textarea name="corrected_reply" maxlength="2000" rows="2" placeholder="Resposta correta que a Beatriz deveria ter enviado (opcional)">{{ $review?->corrected_reply }}</textarea>
+                                    <div style="display:flex; gap:8px; align-items:center;">
+                                        <button type="submit" class="btn btn--ghost">Salvar revisão</button>
+                                        @if ($review)
+                                            <span class="meta">A revisão é única por sugestão; salvar substitui a anterior.</span>
+                                        @endif
+                                    </div>
+                                </form>
+
+                                @if ($review)
+                                    <form method="POST" action="{{ route('calibration.review.destroy', [$artist, $draft['draft']]) }}" style="margin-top:4px;">
+                                        @csrf
+                                        @method('DELETE')
+                                        <button type="submit" class="btn btn--ghost" onclick="return confirm('Remover esta revisão?')">Remover revisão</button>
+                                    </form>
+                                @endif
+                            </details>
+                        </div>
+                    @endif
                 </div>
 
                 @if (! empty($turn['alternates']))

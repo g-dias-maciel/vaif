@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 /**
  * A copilot draft: the reply the agent would have sent, kept for calibration.
@@ -90,6 +91,11 @@ class AgentDraft extends Model
     public function lead(): BelongsTo
     {
         return $this->belongsTo(Lead::class, 'lead_id');
+    }
+
+    public function review(): HasOne
+    {
+        return $this->hasOne(AgentDraftReview::class, 'agent_draft_id');
     }
 
     public function isOpen(): bool
