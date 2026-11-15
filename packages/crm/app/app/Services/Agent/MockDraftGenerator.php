@@ -135,6 +135,7 @@ class MockDraftGenerator
                     $preflight['intent'],
                     $preflight['entities'],
                 );
+                $facts = TurnFacts::mergeEntities($facts, $preflight['entities']);
                 $facts['assumptions'] = $preflight['assumptions'] ?? [];
                 $facts['turn']['flags'] = $preflight['flags'] ?? [];
                 $facts['turn']['stage_key'] = $start['stage_key'] ?? null;

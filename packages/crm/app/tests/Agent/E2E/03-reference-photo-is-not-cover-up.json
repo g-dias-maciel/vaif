@@ -1,0 +1,32 @@
+{
+  "name": "reference-photo-is-not-cover-up",
+  "description": "A reference image in a new-tattoo chat is not the lead's current tattoo; it must not set cover_photo_received or trigger the cover-up handoff.",
+  "lead_name": "Rafa",
+  "turns": [
+    {
+      "message": "Quero fazer uma tatuagem nova de leão no braço",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "Essa é a referência do leão que eu quero",
+      "media": {
+        "text": "Essa é a referência do leão que eu quero",
+        "analysis": {
+          "referencia_de_tatuagem": true,
+          "assunto": "desenho de leão",
+          "tipo": "desenho",
+          "papel": "referencia",
+          "papel_confianca": "alta"
+        }
+      },
+      "expect": {
+        "sent": true,
+        "flags": {"cover_photo_received": false},
+        "requires": ["safe_resolution", "no_handoff"]
+      }
+    }
+  ]
+}

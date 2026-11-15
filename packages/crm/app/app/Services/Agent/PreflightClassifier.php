@@ -178,7 +178,7 @@ class PreflightClassifier
             return $assumptions;
         }
 
-        if (preg_match('/\b(mesmo lado|ao lado|do lado|mais uma|outra tattoo|outra tatuagem|nova tattoo|nova tatuagem|fazer um|fazer uma)\b/u', $text) === 1) {
+        if (preg_match('/\b(mesmo lado|ao lado|do lado|mais uma|outra tattoo|outra tatuagem|nova tattoo|nova tatuagem|junto com|perto da)\b/u', $text) === 1) {
             $assumptions['tattoo_type'] = [
                 'value' => 'nova',
                 'confidence' => 0.7,

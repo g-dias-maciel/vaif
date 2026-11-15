@@ -98,6 +98,7 @@ class TurnProcessor
             $intent,
             $entities
         );
+        $facts = TurnFacts::mergeEntities($facts, $entities);
 
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
         $facts['turn']['flags'] = $preflight['flags'] ?? [];

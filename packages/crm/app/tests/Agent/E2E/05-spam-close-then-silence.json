@@ -1,0 +1,24 @@
+{
+  "name": "spam-close-then-silence",
+  "description": "A commercial wrong-number message gets one close; the next message is not answered.",
+  "lead_name": "Contato",
+  "turns": [
+    {
+      "message": "Oi, aqui é da equipe Biofisic, seu treino está atrasado.",
+      "expect": {
+        "sent": true,
+        "intent": "spam",
+        "reply_contains": ["errado"],
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "Não, é sobre o carro mesmo, obrigado.",
+      "expect": {
+        "sent": false,
+        "skipped_in": ["spam_after_close", "personal"],
+        "requires": ["ignored"]
+      }
+    }
+  ]
+}

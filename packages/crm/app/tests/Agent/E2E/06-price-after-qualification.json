@@ -1,0 +1,45 @@
+{
+  "name": "price-after-qualification",
+  "description": "Once the project is fully qualified, the agent quotes exactly the price-book value.",
+  "lead_name": "Diego",
+  "price_book": [
+    {
+      "placement": "braco",
+      "body_zone": "pequeno",
+      "base_price_cents": 35000,
+      "session_duration_min": 60,
+      "buffer_min": 30
+    }
+  ],
+  "turns": [
+    {
+      "message": "Quero uma tatuagem nova, pequena, no braço, fine line, é minha primeira tatuagem",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "É uma flor de lótus em homenagem à minha mãe",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "Pode me passar o valor?",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "Não, sem dúvidas. Pode me passar o valor?",
+      "expect": {
+        "sent": true,
+        "reply_contains": ["R$ 350"],
+        "requires": ["safe_resolution", "no_known_question"]
+      }
+    }
+  ]
+}

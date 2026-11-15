@@ -190,6 +190,36 @@ Changes:
 - **Review status** — reviews have an `incorporated_at` field and an “Incorporada na calibração” checkbox. The five existing reviews were marked incorporated.
 - **Regression** — new scenarios `14-personal-skip`, `15-spam-after-close` and `16-handoff-stops-followup`; the pinned 8 real-failure suite still passes 8/8 with the photo-only cover-up policy.
 
+## End-to-end conversations (2026-11-15)
+
+`php artisan agent:e2e --dir=tests/Agent/E2E` runs fake multi-turn WhatsApp
+conversations through the real Postgres RPCs and the real Beatriz model. The
+scenario is created inside a transaction that is always rolled back, so no
+synthetic artist, lead or message stays in the CRM. Only WAHA is replaced by an
+in-memory transport, and photo role can be supplied by the fixture.
+
+The first suite covers six edge cases: new tattoo inferred from context,
+cover-up photo with handoff and silence, a reference photo that is not the
+current tattoo, a personal message followed by a real request, spam close
+followed by silence, and a qualified lead receiving the exact price-book value.
+
+The first run found and fixed two real gaps:
+
+- A generic “quero fazer uma tatuagem” was treated as a new-tattoo assumption
+  because of the loose `fazer uma` pattern. The pattern now requires “do mesmo
+  lado / ao lado / mais uma / outra tattoo”.
+- A high-confidence new-tattoo assumption could be skipped: the agent asked
+  placement or size without confirming the type. The validator now requires the
+  closed confirmation before another discovery question.
+
+It also exposed that fields supplied in the current turn (meaning, first tattoo)
+were missing from `facts.project`, so the agent could re-ask them. `TurnFacts`
+now merges current entities into the turn facts before the prompt and validator.
+
+`agent:e2e` is manual because it spends real model calls and uses the production
+database. The fixture shape is documented in `tests/Agent/E2E/README.md`; a PHPUnit
+test validates the JSON without calling the model.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.

@@ -251,6 +251,19 @@ class PreflightClassifierTest extends TestCase
         $this->assertSame(0.7, $result['assumptions']['tattoo_type']['confidence']);
     }
 
+    public function test_a_generic_new_tattoo_request_does_not_imply_the_type(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'new_lead',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Oi, quero fazer uma tatuagem');
+
+        $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
+    }
+
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void
     {
         $result = $this->classifier([

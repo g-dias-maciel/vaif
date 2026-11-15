@@ -71,6 +71,7 @@ class ReplyValidator
         $hasDeferredHandoff = false;
         $hasBusyNoNextStep = false;
         $hasOpenAssumptionQuestion = false;
+        $hasUnconfirmedAssumption = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -364,6 +365,23 @@ class ReplyValidator
             $hasOpenAssumptionQuestion = true;
         }
 
+        // The context already points to a new tattoo. Asking another
+        // discovery question first leaves the inference unconfirmed and lets
+        // the conversation drift back to the open type question later.
+        $hasTypeConfirmation = preg_match('/\b(nova|novo)\b/u', $this->norm($reply)) === 1
+            && preg_match('/\b(certo|correto|isso|seria|confirma)\b/u', $this->norm($reply)) === 1;
+
+        if (empty($project['tattoo_type']) && $typeAssumptionConfident && ! $hasTypeConfirmation) {
+            foreach ($claims as $claim) {
+                if (($claim['type'] ?? null) === 'question'
+                    && in_array($claim['field'] ?? '', ['placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
+                    $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_not_confirmed'];
+                    $hasUnconfirmedAssumption = true;
+                    break;
+                }
+            }
+        }
+
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
@@ -559,7 +577,7 @@ class ReplyValidator
                 $resolution = 'canonical_aftercare';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasOpenAssumptionQuestion) {
+            } elseif ($hasUnconfirmedAssumption || $hasOpenAssumptionQuestion) {
                 $finalReply = 'Essa tatuagem seria uma tatuagem nova, certo?';
                 $resolution = 'canonical_assumption_confirm';
                 $offeredSlots = [];

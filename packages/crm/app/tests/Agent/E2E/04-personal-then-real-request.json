@@ -1,0 +1,23 @@
+{
+  "name": "personal-then-real-request",
+  "description": "A personal message is ignored; a clear tattoo request in the next message is answered.",
+  "lead_name": "Visitante",
+  "turns": [
+    {
+      "message": "Fala vagabundo, sem vergonha. Beleza, mano? Meu carro deu problema, tem que arrumar.",
+      "expect": {
+        "sent": false,
+        "skipped": "personal",
+        "requires": ["ignored"]
+      }
+    },
+    {
+      "message": "Brincadeira, mano. Quero fazer uma tattoo no braço",
+      "expect": {
+        "sent": true,
+        "intent": "qualify",
+        "requires": ["safe_resolution"]
+      }
+    }
+  ]
+}

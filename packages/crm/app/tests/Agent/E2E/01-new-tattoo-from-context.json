@@ -1,0 +1,30 @@
+{
+  "name": "new-tattoo-from-context",
+  "description": "The lead implies a new tattoo next to an existing one; the agent closes the inference instead of asking the open type question.",
+  "lead_name": "Eliza",
+  "turns": [
+    {
+      "message": "Oi, quero fazer uma tatuagem",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    },
+    {
+      "message": "Quero fazer o ramo de flor do mesmo lado",
+      "expect": {
+        "sent": true,
+        "reply_contains": ["nova"],
+        "reply_not_contains": ["cobertura ou reforma"],
+        "requires": ["safe_resolution", "closed_new_tattoo"]
+      }
+    },
+    {
+      "message": "Isso, quero uma tattoo nova",
+      "expect": {
+        "sent": true,
+        "requires": ["safe_resolution"]
+      }
+    }
+  ]
+}

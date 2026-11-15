@@ -103,6 +103,7 @@ class DraftProcessor
             $intent,
             $entities,
         );
+        $facts = TurnFacts::mergeEntities($facts, $entities);
 
         [$facts, $simulated] = $this->simulate($facts, $start, $intent, $entities);
 

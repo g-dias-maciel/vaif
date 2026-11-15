@@ -1,0 +1,35 @@
+{
+  "name": "cover-up-photo-handoff",
+  "description": "The cover-up photo is already in the conversation. The agent recognizes it, hands off, asks for no photo and no video, and stays silent afterwards.",
+  "lead_name": "Grazi",
+  "turns": [
+    {
+      "message": "Quero cobrir essa tatuagem antiga do braço, segue a foto",
+      "media": {
+        "text": "Quero cobrir essa tatuagem antiga do braço, segue a foto",
+        "analysis": {
+          "referencia_de_tatuagem": true,
+          "assunto": "tatuagem antiga no braço",
+          "tipo": "foto_de_tatuagem",
+          "papel": "tatuagem_atual",
+          "papel_confianca": "alta"
+        }
+      },
+      "expect": {
+        "sent": true,
+        "flags": {"cover_photo_received": true},
+        "reply_contains": ["adriano"],
+        "reply_not_contains": ["video", "vídeo"],
+        "requires": ["handoff", "no_price", "no_video", "no_photo_request"]
+      }
+    },
+    {
+      "message": "Oi, tudo bem?",
+      "expect": {
+        "sent": false,
+        "skipped": "agent_blocked",
+        "requires": ["ignored"]
+      }
+    }
+  ]
+}
