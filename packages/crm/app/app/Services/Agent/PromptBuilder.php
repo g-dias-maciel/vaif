@@ -183,6 +183,10 @@ class PromptBuilder
             $lines[] = '- O lead já enviou foto/vídeo no histórico. NÃO peça a mesma foto de novo: reconheça ("Recebi as fotos") e siga com a próxima informação que falta.';
         }
 
+        if (! empty($flags['lead_photos']) && ! empty($flags['mentions_coverup'])) {
+            $lines[] = '- O lead já enviou a foto da tatuagem atual. NÃO peça foto nem vídeo de novo: reconheça e faça o handoff, como a revisão da equipe pediu.';
+        }
+
         if (! empty($flags['lead_busy'])) {
             $lines[] = '- O lead está dirigindo/ocupado/na correria. Responda ao pedido dele em UMA frase e NÃO faça pergunta de qualificação; deixe a porta aberta para ele voltar.';
         }

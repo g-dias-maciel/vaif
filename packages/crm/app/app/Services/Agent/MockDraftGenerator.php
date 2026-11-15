@@ -3,6 +3,7 @@
 namespace App\Services\Agent;
 
 use App\Models\AgentDraft;
+use App\Models\AgentDraftReview;
 use App\Models\Artist;
 use App\Models\ChatMessage;
 use App\Models\Lead;
@@ -39,6 +40,20 @@ class MockDraftGenerator
 
                 if (! $regenerate) {
                     return $block['draft'] === null;
+                }
+
+                // A reviewed case must be rebuilt even when the prompt hash
+                // has not changed (validator/rules changes do not alter it).
+                $reviewed = AgentDraftReview::query()
+                    ->where('verdict', AgentDraftReview::VERDICT_NEEDS_FIX)
+                    ->whereIn('agent_draft_id', AgentDraft::query()
+                        ->where('artist_id', $artist->id)
+                        ->where('lead_message_id', $block['message']['id'])
+                        ->pluck('id'))
+                    ->exists();
+
+                if ($reviewed) {
+                    return true;
                 }
 
                 // Every customer message needs a simulated draft built with
