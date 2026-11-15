@@ -182,7 +182,7 @@ Five reviews were taken in: two `context`, two `handoff`, one `good`.
 
 Changes:
 
-- **Context implies a new tattoo** — “do mesmo lado”, “ao lado”, “mais uma” now create a `tattoo_type=nova` assumption and the briefing asks a closed confirmation. If the model asks the open “nova, cobertura ou reforma?” anyway, the validator replaces it with “Essa tatuagem seria uma tatuagem nova, certo?”. Verified on Eliza’s “ramo de flor do mesmo lado”.
+- **Context implies a new tattoo** — the preflight model infers a `tattoo_type=nova` assumption from the conversation and the briefing asks a closed confirmation. There is no PHP keyword list for this: the model reads the context. The validator only enforces the closed question when the model returned a confident assumption. Verified on Eliza’s “ramo de flor do mesmo lado”.
 - **Cover-up with photo already sent** — the photo is enough: recognize it and hand off. The video requirement was removed from the prompt and validator, and from the regression requirements. Verified on Grazi’s “Deixar com qualidade”.
 - **Photo role from the chat** — every incoming image is now classified as `tatuagem_atual`, `referencia` or `outra` using the recent conversation as context. Only a `tatuagem_atual` image sets `cover_photo_received`; a reference image (someone else’s tattoo, flash, drawing) does not. Historical analyses are kept, so a later reference image never erases the current-tattoo evidence. Rows analyzed before this change fall back to the old `lead_photos` + cover-up rule.
 - **Personal / abusive chats** — the new `personal` intent is not answered. After a first wrong-number close, a second spam message is also ignored. The real preflight classified the reviewed “Fala vagabundo…” message as `personal`; the agent skips it.
@@ -203,14 +203,18 @@ cover-up photo with handoff and silence, a reference photo that is not the
 current tattoo, a personal message followed by a real request, spam close
 followed by silence, and a qualified lead receiving the exact price-book value.
 
-The first run found and fixed two real gaps:
+The first run found and fixed three real gaps:
 
 - A generic “quero fazer uma tatuagem” was treated as a new-tattoo assumption
-  because of the loose `fazer uma` pattern. The pattern now requires “do mesmo
-  lado / ao lado / mais uma / outra tattoo”.
+  by a deterministic keyword fallback. The fallback was removed: inference is
+  now the model's job, from the conversation context. The prompt explicitly says
+  that a generic request is not enough.
 - A high-confidence new-tattoo assumption could be skipped: the agent asked
   placement or size without confirming the type. The validator now requires the
   closed confirmation before another discovery question.
+- A lead who said “sem dúvidas” was asked once more, because the current turn's
+  `doubts_cleared` flag only reached the prompt on the following turn. The state
+  is now merged before composition.
 
 It also exposed that fields supplied in the current turn (meaning, first tattoo)
 were missing from `facts.project`, so the agent could re-ask them. `TurnFacts`

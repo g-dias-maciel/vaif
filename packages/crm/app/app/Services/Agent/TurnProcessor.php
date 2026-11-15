@@ -89,6 +89,18 @@ class TurnProcessor
             (string) ($start['tattoo_type'] ?? ''),
         );
 
+        // State the prompt reads in this same turn. Without this, the lead who
+        // just said "sem dúvidas" is asked again once.
+        if (! empty($preflight['flags']['doubts_cleared'])) {
+            $start['agent_state']['duvidas_eliminadas'] = true;
+            $state['duvidas_eliminadas'] = true;
+        }
+
+        if ($photoAnalyzed) {
+            $start['agent_state']['photo_confirmed'] = true;
+            $state['photo_confirmed'] = true;
+        }
+
         $this->maybeBook($artist, $start, $state, $intent, $entities);
 
         $facts = $this->store->facts(

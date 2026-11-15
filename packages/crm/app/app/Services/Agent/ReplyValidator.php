@@ -360,7 +360,8 @@ class ReplyValidator
 
         if (empty($project['tattoo_type'])
             && $typeAssumptionConfident
-            && preg_match('/nova, uma cobertura ou uma reforma|nova, cobertura ou reforma|nova ou uma cobertura|nova ou cobertura/u', $this->norm($reply)) === 1) {
+            && str_contains($reply, '?')
+            && preg_match('/(nova|novo).{0,45}(cobertura|reforma|cobrir|reformar)|(cobertura|reforma|cobrir|reformar).{0,45}(nova|novo)/u', $this->norm($reply)) === 1) {
             $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_question_open'];
             $hasOpenAssumptionQuestion = true;
         }

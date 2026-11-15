@@ -301,7 +301,7 @@ class ConversationEvaluator
             'closed_new_tattoo' => str_contains($reply, 'nova')
                 && str_contains($reply, '?')
                 && preg_match('/certo|correto|isso|seria|confirma/u', $reply) === 1
-                && ! str_contains($reply, 'cobertura ou reforma')
+                && preg_match('/cobertura|reforma|cobrir|reformar/u', $reply) !== 1
                 ? null
                 : 'did not close the new-tattoo confirmation',
             'ignored' => (bool) ($report['sent'] ?? false) ? 'answered a message that should be ignored' : null,

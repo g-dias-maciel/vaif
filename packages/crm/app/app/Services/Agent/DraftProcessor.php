@@ -96,6 +96,16 @@ class DraftProcessor
             (string) ($start['tattoo_type'] ?? ''),
         );
 
+        if (! empty($preflight['flags']['doubts_cleared'])) {
+            $start['agent_state']['duvidas_eliminadas'] = true;
+            $state['duvidas_eliminadas'] = true;
+        }
+
+        if ($photoAnalyzed) {
+            $start['agent_state']['photo_confirmed'] = true;
+            $state['photo_confirmed'] = true;
+        }
+
         $facts = $this->store->facts(
             $artist->id,
             (string) $start['project_id'],

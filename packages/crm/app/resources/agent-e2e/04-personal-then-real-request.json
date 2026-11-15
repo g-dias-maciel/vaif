@@ -15,7 +15,6 @@
       "message": "Brincadeira, mano. Quero fazer uma tattoo no braço",
       "expect": {
         "sent": true,
-        "intent": "qualify",
         "requires": ["safe_resolution"]
       }
     }

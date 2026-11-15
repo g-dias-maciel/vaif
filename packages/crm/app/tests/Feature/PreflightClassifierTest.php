@@ -237,18 +237,33 @@ class PreflightClassifierTest extends TestCase
         $this->assertSame(0.7, $result['assumptions']['body_zone']['confidence']);
     }
 
-    public function test_context_implies_a_new_tattoo_next_to_an_existing_one(): void
+    public function test_the_model_context_assumption_for_a_new_tattoo_is_kept(): void
     {
         $result = $this->classifier([
             'intent' => 'qualify',
             'entities' => ['placement' => 'braco'],
-            'assumptions' => [],
+            'assumptions' => [
+                'tattoo_type' => ['value' => 'nova', 'confidence' => 0.7, 'reason' => 'ramo ao lado de uma tatuagem existente'],
+            ],
             'flags' => [],
             'confidence' => 0.8,
         ])->classify('contexto', 'Quero fazer o ramo de flor do mesmo lado');
 
         $this->assertSame('nova', $result['assumptions']['tattoo_type']['value']);
         $this->assertSame(0.7, $result['assumptions']['tattoo_type']['confidence']);
+    }
+
+    public function test_the_classifier_does_not_infer_the_type_from_keywords_without_the_model(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => [],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Quero fazer o ramo de flor do mesmo lado');
+
+        $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
     }
 
     public function test_a_generic_new_tattoo_request_does_not_imply_the_type(): void

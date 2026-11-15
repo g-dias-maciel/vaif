@@ -128,6 +128,10 @@ class MockDraftGenerator
                     (string) ($start['tattoo_type'] ?? ''),
                 );
 
+                if (! empty($preflight['flags']['doubts_cleared'])) {
+                    $start['agent_state']['duvidas_eliminadas'] = true;
+                }
+
                 $facts = $this->store->facts(
                     $artist->id,
                     (string) $start['project_id'],

@@ -91,6 +91,7 @@ Nunca invente um campo que o lead não disse em nenhuma das mensagens.
 A assistente usa isto para **confirmar** em vez de perguntar aberto. Exemplo: se o lead diz “quero fazer na mão”, faz sentido assumir que é uma tatuagem nova e perguntar “Essa tatuagem seria uma tatuagem nova, certo?”.
 
 - Só preencha um campo aqui quando ele **não** estiver em `entities` e o contexto (mensagem, histórico ou análise da foto) der uma pista real. Se não houver pista, deixe `null`.
+- A inferência de `tattoo_type=nova` é sua, pelo contexto da conversa. Uma mensagem genérica como “quero fazer uma tatuagem” **não** basta: deixe `null`. Assuma `nova` quando o contexto mostrar que é uma tatuagem nova ao lado/junto de uma existente (“do mesmo lado”, “ao lado”, “mais uma”, “outra tattoo”) ou quando o pedido claramente não é cobertura/reforma.
 - `value` usa os mesmos valores de `entities` (`tattoo_type`, `placement`, `body_zone`, `style`, `first_tattoo`, `meaning`).
 - `confidence` de 0 a 1. Use ≥ 0.7 só quando a inferência for forte (“na mão” quase sempre é tattoo nova; cobertura/reforma explícita é 0.95). Use 0.4–0.6 para palpites plausíveis.
 - `reason` em poucas palavras, citando a pista (“pediu na mão”, “foto mostra desenho pequeno”, “falou em cobrir”).
