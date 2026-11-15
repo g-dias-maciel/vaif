@@ -42,6 +42,7 @@ runtime via `getenv()` in the PHP API files.
 | `CRM_INGEST_TOKEN` | Bearer token for the CRM ingest endpoint; must match `SALES_INGEST_TOKEN` in the CRM | required for the sales CRM |
 | `API_CREATE_KEY` | Shared secret for the authenticated artist-creation endpoint (`POST /api/artists/create.php`) and legacy fallback for the review panel | required for automation |
 | `LP_ARTIST_API_KEY` | Shared secret the CRM sends as `X-Api-Key` to `GET /api/artists/profile.php`. Leave empty only in local development. | required for the CRM content workflow |
+| `LP_INTAKE_API_KEY` | Shared secret the CRM sends as `X-Api-Key` to `POST /api/artists/intake-token.php` when generating a landing-page intake link. | required for the CRM intake link |
 | `LP_BASE_URL` | Public base URL used by dynamic `llms.txt`, `sitemap.xml` and the profile API. Defaults to `https://vaif.com.br`. | optional |
 | `ARTISTS_ADMIN_TOKEN` | Secret token that unlocks the artist review panel at `/artistas-admin/<token>`. Falls back to `API_CREATE_KEY` if unset. Generate something long and random. | required for the review panel |
 

@@ -10,6 +10,7 @@ use App\Models\Prospect;
 use App\Models\User;
 use App\Services\ArtistInviteService;
 use App\Services\Content\ArtistFactSheet;
+use App\Services\Content\ArtistIntake;
 use App\Services\Content\ContentException;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
@@ -97,6 +98,33 @@ class ArtistController extends Controller
             'error' => $error,
             'publicUrl' => $publicUrl,
         ]);
+    }
+
+    /**
+     * Staff: mint a single-use intake link for the artist to fill the landing
+     * page form. The LP owns the form and the token.
+     */
+    public function intakeLink(Artist $artist, ArtistIntake $intake)
+    {
+        $artist->loadMissing('settings');
+
+        try {
+            $url = $intake->link($artist->displayName());
+        } catch (ContentException $e) {
+            return back()->with('error', 'Não foi possível gerar o link de cadastro: '.$e->getMessage());
+        }
+
+        $query = array_filter([
+            'name' => $artist->displayName(),
+            'whatsapp' => (string) ($artist->settings?->whatsapp_number ?? ''),
+            'instagram' => ltrim((string) ($artist->settings?->instagram_handle ?? ''), '@'),
+        ], fn ($value) => $value !== '');
+
+        if ($query !== []) {
+            $url .= (str_contains($url, '?') ? '&' : '?').http_build_query($query);
+        }
+
+        return back()->with('intake_link', $url);
     }
 
     /**

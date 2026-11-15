@@ -122,6 +122,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/artists/{artist}/select', [ArtistController::class, 'select'])->name('artists.select');
         Route::get('/artists/{artist}/edit', [ArtistController::class, 'edit'])->name('artists.edit');
         Route::get('/artists/{artist}/landing-page', [ArtistController::class, 'landingPage'])->name('artists.landing-page');
+        Route::post('/artists/{artist}/intake-link', [ArtistController::class, 'intakeLink'])->name('artists.intake-link');
         Route::put('/artists/{artist}', [ArtistController::class, 'update'])->name('artists.update');
         Route::delete('/artists/{artist}', [ArtistController::class, 'destroy'])->name('artists.destroy');
         Route::get('/artists/{artist}', [ArtistController::class, 'show'])->name('artists.show');

@@ -28,6 +28,35 @@
     <div class="flash error" style="margin-bottom:18px;">{{ $error }}</div>
 @endif
 
+<div class="panel" style="margin-bottom:18px;">
+    <h2 class="section-title" style="margin-top:0;">Formulário para o artista</h2>
+    <p class="meta" style="margin-top:0; max-width:820px;">
+        Gere um link de uso único para o artista preencher o primeiro cadastro da landing page:
+        nome, contato, bio, fotos, portfólio, antes/depois, depoimentos, FAQ, endereço e horários.
+        O link já leva nome, WhatsApp e Instagram preenchidos a partir do CRM.
+    </p>
+    <p class="meta" style="margin-top:0;">
+        Use para o primeiro cadastro. Para editar uma página já publicada, use o painel de artistas da LP.
+    </p>
+
+    @if (session('intake_link'))
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin:14px 0;">
+            <input id="intake-link" type="text" readonly value="{{ session('intake_link') }}"
+                style="flex:1; min-width:260px; background:var(--bg); color:var(--ink); border:1px solid var(--border); border-radius:8px; padding:10px; font-family:inherit; font-size:.82rem;">
+            <button type="button" class="btn"
+                onclick="navigator.clipboard.writeText(document.getElementById('intake-link').value).then(()=>{this.textContent='Copiado'; setTimeout(()=>this.textContent='Copiar link',1500);})">
+                Copiar link
+            </button>
+        </div>
+        <p class="meta">Link de uso único. Depois do envio, a ficha fica como rascunho no painel de artistas da LP para revisão.</p>
+    @endif
+
+    <form method="post" action="{{ route('artists.intake-link', $artist) }}" style="margin-top:12px;">
+        @csrf
+        <button class="btn" type="submit">Gerar link para o artista</button>
+    </form>
+</div>
+
 @if ($profile)
     @include('partials.artist-facts', ['facts' => $profile])
 @elseif (! $error)

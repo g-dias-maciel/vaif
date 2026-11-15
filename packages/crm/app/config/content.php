@@ -76,6 +76,13 @@ return [
         'cache_seconds' => (int) env('CONTENT_CATALOG_CACHE', 900),
     ],
 
+    'intake' => [
+        // LP endpoint that mints a single-use intake link.
+        'url' => (string) env('LP_INTAKE_TOKEN_URL', $lpBase.'/api/artists/intake-token.php'),
+        'key' => env('LP_INTAKE_API_KEY'),
+        'timeout' => (int) env('LP_INTAKE_API_TIMEOUT', 15),
+    ],
+
     'mail' => (bool) env('CONTENT_MAIL', true),
 
     // Empty = every staff user.

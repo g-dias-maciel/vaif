@@ -41,6 +41,8 @@ class ContentWorkflowTest extends TestCase
             'content.github.api_url' => 'https://api.github.test',
             'content.lp.base_url' => 'https://lp.test',
             'content.lp.artist_api_url' => 'https://lp.test/api/artists/profile.php',
+            'content.intake.url' => 'https://lp.test/api/artists/intake-token.php',
+            'content.intake.key' => 'test-intake-key',
             'content.indexnow.endpoint' => 'https://indexnow.test',
             'content.verify.attempts' => 1,
             'content.verify.sleep_seconds' => 1,
@@ -275,6 +277,76 @@ class ContentWorkflowTest extends TestCase
 
         $this->actingAs($this->artistUser($artist))
             ->get(route('artists.landing-page', $artist))
+            ->assertForbidden();
+    }
+
+    public function test_staff_can_generate_an_intake_link_for_the_artist(): void
+    {
+        $artist = $this->artist();
+        $artist->settings()->update([
+            'whatsapp_number' => '553599968249',
+            'instagram_handle' => 'studiomadri_tattoo',
+        ]);
+
+        Http::fake([
+            'https://lp.test/api/artists/intake-token.php' => Http::response([
+                'success' => true,
+                'token' => 'token123',
+                'url' => 'https://vaif.com.br/novo-artista/token123',
+            ], 200),
+            'https://lp.test/api/artists/profile.php*' => Http::response([
+                'success' => true,
+                'slug' => 'adriano-santos',
+                'display_name' => 'Adriano Santos',
+                'city' => 'Poços de Caldas',
+                'styles' => [],
+                'portfolio' => [],
+                'testimonials' => [],
+                'faq' => [],
+                'stats' => [],
+            ], 200),
+        ]);
+
+        $response = $this->actingAs($this->staff())
+            ->post(route('artists.intake-link', $artist));
+
+        $response->assertRedirect();
+        $response->assertSessionHas('intake_link', function (string $url): bool {
+            return str_contains($url, 'token123')
+                && str_contains($url, 'name=Adriano')
+                && str_contains($url, 'whatsapp=')
+                && str_contains($url, 'instagram=');
+        });
+
+        $link = (string) session('intake_link');
+        $this->withSession(['intake_link' => $link])
+            ->actingAs($this->staff())
+            ->get(route('artists.landing-page', $artist))
+            ->assertOk()
+            ->assertSee('Formulário para o artista')
+            ->assertSee($link);
+    }
+
+    public function test_intake_link_failure_is_shown_to_staff(): void
+    {
+        $artist = $this->artist();
+
+        Http::fake([
+            'https://lp.test/api/artists/intake-token.php' => Http::response(['error' => 'down'], 500),
+        ]);
+
+        $this->actingAs($this->staff())
+            ->post(route('artists.intake-link', $artist))
+            ->assertRedirect()
+            ->assertSessionHas('error');
+    }
+
+    public function test_artists_cannot_generate_an_intake_link(): void
+    {
+        $artist = $this->artist();
+
+        $this->actingAs($this->artistUser($artist))
+            ->post(route('artists.intake-link', $artist))
             ->assertForbidden();
     }
 

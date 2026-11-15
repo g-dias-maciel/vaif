@@ -93,6 +93,26 @@ slug in **Artistas → Editar → Slug da landing page**.
 
 For Adriano Santos, the slug is `adriano-santos`.
 
+## Landing-page intake
+
+The CRM artist page has **Landing page → Formulário para o artista**. Clicking
+**Gerar link para o artista** asks the LP for a single-use intake token and
+shows a link like:
+
+```text
+https://vaif.com.br/novo-artista/<token>?name=...&whatsapp=...&instagram=...
+```
+
+Send that link to the artist. The form collects the full landing-page brief:
+name, contact, bio, photos, portfolio, before/after, stats, testimonials, FAQ,
+location and opening hours. Name, WhatsApp and Instagram are prefilled from the
+CRM.
+
+When the artist submits, the page is created as a **draft** in the LP artist
+panel for review. The link is single-use; generate another one if it expires or
+is lost. For an artist with a published page, edit it in the LP panel rather
+than creating a new intake.
+
 ## Publishing and Coolify
 
 The commit goes to `packages/lp/content/blog/<slug>.md`. The LP is a separate

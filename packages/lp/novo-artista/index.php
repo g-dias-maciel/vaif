@@ -79,7 +79,21 @@ if (!intake_token_is_active($pdo, $token)) {
 // Render the form
 // ================================================================
 
-$formHtml = render_artist_intake_form([], 'create', 0, '', $token);
+// The CRM can prefill the three fields it already knows. Everything else is
+// collected by the form.
+$prefill = [];
+foreach ([
+    'name' => 'display_name',
+    'whatsapp' => 'whatsapp_number',
+    'instagram' => 'instagram_handle',
+] as $param => $field) {
+    $value = trim((string) ($_GET[$param] ?? ''));
+    if ($value !== '') {
+        $prefill[$field] = mb_substr($value, 0, 255);
+    }
+}
+
+$formHtml = render_artist_intake_form($prefill, 'create', 0, '', $token);
 
 intake_page_head('Cadastro de Artista');
 echo '<main class="intake-shell">' . $formHtml . '</main>
