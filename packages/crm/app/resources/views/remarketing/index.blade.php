@@ -84,7 +84,7 @@
 </div>
 
 <div class="panel">
-    <form method="get" action="{{ route('remarketing.index') }}" class="sales-toolbar">
+    <form method="get" action="{{ route('remarketing.index') }}" class="sales-toolbar" data-auto-filter>
         <input type="hidden" name="segment" value="{{ $segment }}">
 
         <input type="search" name="q" value="{{ $filters['q'] }}" placeholder="Buscar por nome ou telefone" autocomplete="off">

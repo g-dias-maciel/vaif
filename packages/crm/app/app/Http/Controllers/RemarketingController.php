@@ -128,8 +128,12 @@ class RemarketingController extends Controller
             return redirect()->away($lead->whatsapp_url.'?text='.rawurlencode($text));
         }
 
-        return back()->with('status', $data['action'] === 'dismissed'
-            ? 'Lead dispensado. Ele sai da fila por 90 dias.'
+        if ($data['action'] === 'dismissed') {
+            return back()->with('status', 'Lead dispensado. Ele sai da fila por 90 dias.');
+        }
+
+        return back()->with('status', $data['segment'] === 'abertos'
+            ? 'Contato registrado.'
             : 'Contato registrado. Ele sai da fila por 14 dias.');
     }
 }
