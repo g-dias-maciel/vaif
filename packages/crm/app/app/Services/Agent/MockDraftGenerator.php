@@ -98,6 +98,13 @@ class MockDraftGenerator
 
                 $context = $this->prompts->context($artist, $start);
                 $preflight = $this->preflight->classify($context, $text, $history);
+
+                if (ConversationGuard::skipReason($preflight['intent'], $history) !== null) {
+                    $result['skipped']++;
+
+                    continue;
+                }
+
                 $facts = $this->store->facts(
                     $artist->id,
                     (string) $start['project_id'],

@@ -77,6 +77,12 @@ class DraftProcessor
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
+        $skipReason = ConversationGuard::skipReason($intent, $history);
+
+        if ($skipReason !== null) {
+            return ['skipped' => $skipReason, 'intent' => $intent];
+        }
+
         $facts = $this->store->facts(
             $artist->id,
             (string) $start['project_id'],

@@ -1,0 +1,25 @@
+{
+  "name": "personal-chat-is-not-answered",
+  "description": "A personal/abusive message that is not about tattoos is ignored.",
+  "artist": {"name": "Eva", "timezone": "America/Sao_Paulo"},
+  "phone": "5511900000020",
+  "chat_id": "eval:5511900000020@c.us",
+  "message": "Fala vagabundo, sem vergonha. Beleza, mano? Meu carro deu problema, tem que arrumar.",
+  "turn": {"name": "Visitante", "is_new": false, "stage_key": "novo"},
+  "facts": {
+    "pricing": {"status": "no_price_row"},
+    "availability": {"status": "not_ready", "missing": "tipo,local,tamanho", "slots": []},
+    "project": {"tattoo_type": null, "placement": null, "body_zone": null, "style": null, "first_tattoo": null, "meaning": null},
+    "booking": {"active": false, "created_this_turn": false},
+    "conditions": {"pix_available": true},
+    "client": {"returning": false},
+    "studio": {"city": "São Paulo", "timezone": "America/Sao_Paulo"}
+  },
+  "script": {
+    "preflight": {"intent": "personal", "entities": {}, "assumptions": {}, "flags": {}, "confidence": 0.95}
+  },
+  "expect": {
+    "sent": false,
+    "resolution": "personal"
+  }
+}

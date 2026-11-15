@@ -270,6 +270,9 @@
                                     {{ \App\Models\AgentDraftReview::CATEGORIES[$review->category] ?? $review->category }}
                                 </div>
                             @endif
+                            @if ($review->incorporated_at)
+                                <span class="tag tag-success">incorporada</span>
+                            @endif
                         </td>
                         <td class="meta" style="padding:6px; max-width:260px;">
                             {{ \Illuminate\Support\Str::limit($review->note ?? '', 180) }}

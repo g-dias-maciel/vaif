@@ -170,10 +170,6 @@ class AgentExportRegression extends Command
             $require[] = 'handoff';
         }
 
-        if (str_contains($missingText, 'video') || str_contains($missingText, 'video')) {
-            $require[] = 'video';
-        }
-
         if (str_contains($missingText, 'laser')) {
             $require[] = 'laser';
         }

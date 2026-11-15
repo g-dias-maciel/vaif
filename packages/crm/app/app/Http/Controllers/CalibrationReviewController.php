@@ -26,6 +26,7 @@ class CalibrationReviewController extends Controller
             'category' => ['nullable', Rule::in(array_keys(AgentDraftReview::CATEGORIES))],
             'note' => ['nullable', 'string', 'max:2000'],
             'corrected_reply' => ['nullable', 'string', 'max:2000'],
+            'incorporated' => ['nullable', 'boolean'],
         ]);
 
         $note = trim((string) ($data['note'] ?? ''));
@@ -35,18 +36,24 @@ class CalibrationReviewController extends Controller
             return back()->with('error', 'Explique o que deveria ser diferente ou escreva a resposta correta.');
         }
 
-        AgentDraftReview::updateOrCreate(
-            ['agent_draft_id' => $draft->id],
-            [
-                'artist_id' => $artist->id,
-                'lead_id' => $draft->lead_id,
-                'reviewer_id' => $request->user()?->id,
-                'verdict' => $data['verdict'],
-                'category' => $data['category'] ?? null,
-                'note' => $note !== '' ? $note : null,
-                'corrected_reply' => $corrected !== '' ? $corrected : null,
-            ],
-        );
+        $review = AgentDraftReview::firstOrNew(['agent_draft_id' => $draft->id]);
+        $review->fill([
+            'artist_id' => $artist->id,
+            'lead_id' => $draft->lead_id,
+            'reviewer_id' => $request->user()?->id,
+            'verdict' => $data['verdict'],
+            'category' => $data['category'] ?? null,
+            'note' => $note !== '' ? $note : null,
+            'corrected_reply' => $corrected !== '' ? $corrected : null,
+        ]);
+
+        if ($request->boolean('incorporated')) {
+            $review->incorporated_at ??= now();
+        } else {
+            $review->incorporated_at = null;
+        }
+
+        $review->save();
 
         return back()->with('status', 'Revisão salva.');
     }

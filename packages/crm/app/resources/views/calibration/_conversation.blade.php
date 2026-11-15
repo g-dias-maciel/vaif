@@ -113,6 +113,9 @@
                                     @if ($review->updated_at)
                                         · {{ $review->updated_at->format('d/m H:i') }}
                                     @endif
+                                    @if ($review->incorporated_at)
+                                        · <span class="tag tag-success">incorporada</span>
+                                    @endif
                                 </div>
 
                                 @if ($review->note)
@@ -148,6 +151,10 @@
                                     </div>
                                     <textarea name="note" maxlength="2000" rows="2" placeholder="O que deveria ser diferente? (contexto, regra, tom...)">{{ $review?->note }}</textarea>
                                     <textarea name="corrected_reply" maxlength="2000" rows="2" placeholder="Resposta correta que a Beatriz deveria ter enviado (opcional)">{{ $review?->corrected_reply }}</textarea>
+                                    <label class="meta" style="display:flex; gap:6px; align-items:center;">
+                                        <input type="checkbox" name="incorporated" value="1" @checked($review?->incorporated_at)>
+                                        Incorporada na calibração
+                                    </label>
                                     <div style="display:flex; gap:8px; align-items:center;">
                                         <button type="submit" class="btn btn--ghost">Salvar revisão</button>
                                         @if ($review)

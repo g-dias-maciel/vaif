@@ -250,6 +250,7 @@ class CalibrationPanelTest extends TestCase
                 'category' => 'handoff',
                 'note' => 'Cobertura precisa de handoff, não de qualificação.',
                 'corrected_reply' => 'Me manda uma foto da tatuagem atual que eu passo para o Adriano avaliar.',
+                'incorporated' => 1,
             ])
             ->assertRedirect()
             ->assertSessionHas('status');
@@ -260,12 +261,16 @@ class CalibrationPanelTest extends TestCase
             'category' => 'handoff',
         ]);
 
+        $review = \App\Models\AgentDraftReview::where('agent_draft_id', $draft->id)->firstOrFail();
+        $this->assertNotNull($review->incorporated_at);
+
         $this->actingAs($this->staff())
             ->get(route('calibration.show', $artist))
             ->assertOk()
             ->assertSee('deveria ser diferente')
             ->assertSee('Cobertura precisa de handoff')
-            ->assertSee('Me manda uma foto da tatuagem atual que eu passo para o Adriano avaliar.');
+            ->assertSee('Me manda uma foto da tatuagem atual que eu passo para o Adriano avaliar.')
+            ->assertSee('incorporada');
     }
 
     public function test_a_needs_fix_review_requires_a_reason_or_correction(): void

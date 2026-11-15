@@ -237,6 +237,20 @@ class PreflightClassifierTest extends TestCase
         $this->assertSame(0.7, $result['assumptions']['body_zone']['confidence']);
     }
 
+    public function test_context_implies_a_new_tattoo_next_to_an_existing_one(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => ['placement' => 'braco'],
+            'assumptions' => [],
+            'flags' => [],
+            'confidence' => 0.8,
+        ])->classify('contexto', 'Quero fazer o ramo de flor do mesmo lado');
+
+        $this->assertSame('nova', $result['assumptions']['tattoo_type']['value']);
+        $this->assertSame(0.7, $result['assumptions']['tattoo_type']['confidence']);
+    }
+
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void
     {
         $result = $this->classifier([

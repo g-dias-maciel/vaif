@@ -70,6 +70,12 @@ class TurnProcessor
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
+        $skipReason = ConversationGuard::skipReason($intent, $history);
+
+        if ($skipReason !== null) {
+            return ['skipped' => $skipReason];
+        }
+
         $this->maybeBook($artist, $start, $state, $intent, $entities);
 
         $facts = $this->store->facts(

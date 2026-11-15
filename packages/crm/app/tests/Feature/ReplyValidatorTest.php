@@ -408,6 +408,8 @@ class ReplyValidatorTest extends TestCase
         $this->assertContains('photo_reasked', array_column($result['violations'], 'rule'));
         $this->assertSame('canonical_cover_up', $result['resolution']);
         $this->assertStringNotContainsString('foto da tatuagem atual', $result['final_reply']);
+        $this->assertStringNotContainsString('vídeo', $result['final_reply']);
+        $this->assertStringContainsString('Vou passar', $result['final_reply']);
     }
 
     public function test_a_question_while_the_lead_is_driving_is_replaced(): void

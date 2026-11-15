@@ -44,6 +44,11 @@ class AgentDraftReview extends Model
         'category',
         'note',
         'corrected_reply',
+        'incorporated_at',
+    ];
+
+    protected $casts = [
+        'incorporated_at' => 'datetime',
     ];
 
     public function draft(): BelongsTo

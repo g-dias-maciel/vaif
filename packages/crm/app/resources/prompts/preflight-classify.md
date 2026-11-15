@@ -58,7 +58,8 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
 - `objection` — hesita por preço, tempo, medo, decisão de outra pessoa.
 - `close` — aceita fechar/agendar.
 - `other` — qualquer outra coisa.
-- `spam` — brincadeira, número errado, mensagem sem intenção real.
+- `spam` — número errado, mensagem comercial de outra empresa, sem intenção real de tatuagem.
+- `personal` — conversa pessoal, cobrança, brincadeira, ofensa, assunto que não é tatuagem e não é uma abordagem comercial.
 
 ## `entities`
 
@@ -136,6 +137,15 @@ Lead: “vcs são de Nova Resende?”
 
 Lead: “quero cobrir uma tatuagem antiga no braço”
 → `intent=coverup`, `needs_human=true`.
+
+Lead: “Fala vagabundo, sem vergonha. Meu carro deu problema, tem que arrumar.”
+→ `intent=personal`, sem entidades, `needs_human=false`.
+
+Lead: “Oi, Adriano! Aqui é da equipe da Biofisic, seu treino está atrasado.”
+→ `intent=spam`, sem entidades, `needs_human=false`.
+
+Lead: “Quero fazer o ramo de flor do mesmo lado”
+→ `intent=qualify`, `entities.tattoo_type=null`, `assumptions.tattoo_type={value:nova, confidence:0.7}` porque “do mesmo lado” sugere uma tattoo nova ao lado de uma existente.
 
 ## Regras
 

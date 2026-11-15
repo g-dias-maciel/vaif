@@ -196,7 +196,7 @@ class PromptBuilder
                 || ! empty($facts['turn']['agent_state']['photo_confirmed']);
 
             $lines[] = $photos
-                ? '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. O lead já enviou fotos: reconheça ("Recebi as fotos"), NÃO peça foto de novo e peça um vídeo curto parando 3 a 4 segundos em cada posição do local. Explique que o artista vai avaliar e montar a proposta, e faça o handoff na mesma mensagem.'
+                ? '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. O lead já enviou fotos: reconheça ("Recebi as fotos"), NÃO peça foto nem vídeo de novo e faça o handoff na mesma mensagem. Se a foto estiver desfocada ou não mostrar o local inteiro, peça uma complementar antes.'
                 : '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Peça fotos da tatuagem atual do local inteiro e de perto, com boa luz. Explique que o artista vai avaliar e montar a proposta, e faça o handoff na mesma mensagem.';
         } else {
             $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];

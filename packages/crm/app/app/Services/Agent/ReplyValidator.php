@@ -70,7 +70,6 @@ class ReplyValidator
         $hasRemovalUnanswered = false;
         $hasDeferredHandoff = false;
         $hasBusyNoNextStep = false;
-        $hasVideoMissing = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -336,14 +335,6 @@ class ReplyValidator
             }
         }
 
-        if ($coverCase
-            && ! empty($flags['lead_photos'])
-            && ! str_contains($this->norm($reply), 'video')
-            && ! str_contains($this->norm($reply), 'vídeo')) {
-            $violations[] = ['claim' => ['type' => 'question', 'field' => 'photo'], 'rule' => 'coverup_video_missing'];
-            $hasVideoMissing = true;
-        }
-
         if ($coverCase && preg_match('/depois (disso )?(eu )?(te )?passo|vou passar depois|assim que [a-z ]{0,25}passo/u', $this->norm($reply)) === 1) {
             $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'deferred_handoff'];
             $hasDeferredHandoff = true;
@@ -518,7 +509,7 @@ class ReplyValidator
                 $resolution = 'canonical_busy';
                 $offeredSlots = [];
                 $effectiveClaims = [];
-            } elseif ($hasDeferredHandoff || $hasPhotoReasked || $hasVideoMissing || $hasCoverupQuestion || $hasCoverupNoHandoff) {
+            } elseif ($hasDeferredHandoff || $hasPhotoReasked || $hasCoverupQuestion || $hasCoverupNoHandoff) {
                 $finalReply = $this->coverupReply($facts, $studio, $flags);
                 $resolution = 'canonical_cover_up';
                 $offeredSlots = [];
@@ -670,11 +661,14 @@ class ReplyValidator
                 .'Me manda uma foto da tatuagem atual, de perto e com boa luz. Vou passar seu caso para '.$artistName.' avaliar a cobertura e o valor.';
         }
 
-        $prefix = $photos ? 'Recebi as fotos. ' : '';
+        if ($photos) {
+            return 'Recebi as fotos. Vou passar para '.$artistName.' avaliar a cobertura e te passar o valor.';
+        }
+
         $ack = $small ? 'Entendi que ela é pequena. ' : '';
 
-        return $prefix.'A cobertura é avaliada pelo '.$artistName.'; ele confirma a viabilidade e o valor, porque é mais complexa e tem garantia. '.$ack
-            .'Para ele avaliar, me manda fotos do local inteiro e de perto, com boa luz, e um vídeo curto parando 3 a 4 segundos em cada posição. '
+        return 'A cobertura é avaliada pelo '.$artistName.'; ele confirma a viabilidade e o valor, porque é mais complexa e tem garantia. '.$ack
+            .'Para ele avaliar, me manda fotos do local inteiro e de perto, com boa luz. '
             .'Vou passar para '.$artistName.' avaliar e montar a proposta.';
     }
 

@@ -45,6 +45,7 @@ class PreflightClassifier
 
         [$entities, $assumptions] = $this->guardEntities($entities, $assumptions, $evidenceText);
         $assumptions = $this->sizeAssumption($assumptions, $leadText, $history);
+        $assumptions = $this->typeAssumption($assumptions, $entities, $leadText, $history);
 
         $flags = is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [];
 
@@ -139,6 +140,49 @@ class PreflightClassifier
                 'value' => 'pequeno',
                 'confidence' => 0.7,
                 'reason' => 'disse que quer menor/pequena',
+            ];
+        }
+
+        return $assumptions;
+    }
+
+    /**
+     * "Quero fazer um ramo de flor do mesmo lado" implies a new tattoo next to
+     * an existing one. Ask a closed confirmation instead of the open type
+     * question. Cover-up wording disables this assumption.
+     *
+     * @param  array<string, array{value: mixed, confidence: float, reason: string}>  $assumptions
+     * @param  array<string, mixed>  $entities
+     * @param  array<int, array{role: string, content: string}>  $history
+     * @return array<string, array{value: mixed, confidence: float, reason: string}>
+     */
+    private function typeAssumption(array $assumptions, array $entities, string $leadText, array $history): array
+    {
+        if (isset($assumptions['tattoo_type']) || ! empty($entities['tattoo_type'])) {
+            return $assumptions;
+        }
+
+        $text = '';
+
+        foreach (array_slice($history, -6) as $message) {
+            if (($message['role'] ?? 'user') === 'assistant') {
+                continue;
+            }
+            $text .= ' '.(string) ($message['content'] ?? '');
+        }
+
+        $text .= ' '.$leadText;
+        $text = Str::ascii(mb_strtolower($text));
+
+        if (preg_match('/\b(cobrir|cobertura|reforma|reformar|retocar)\b/u', $text) === 1) {
+            return $assumptions;
+        }
+
+        if (preg_match('/\b(mesmo lado|ao lado|do lado|mais uma|outra tattoo|outra tatuagem|nova tattoo|nova tatuagem|fazer um|fazer uma)\b/u', $text) === 1) {
+            $assumptions['tattoo_type'] = [
+                'value' => 'nova',
+                'confidence' => 0.7,
+                'reason' => 'contexto de tatuagem nova ao lado/mais uma',
             ];
         }
 
