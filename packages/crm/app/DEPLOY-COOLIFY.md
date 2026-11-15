@@ -169,8 +169,8 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `CONTENT_QUEUE` | `content` (the entrypoint runs a dedicated worker) |
 | `CONTENT_MODEL` | OpenRouter model for the draft |
 | `CONTENT_REVIEW_MODEL` | OpenRouter model for the Copilot review |
-| `CONTENT_MAX_TOKENS` | `6000` |
-| `CONTENT_AI_TIMEOUT` | `120` |
+| `CONTENT_MAX_TOKENS` | `12000` |
+| `CONTENT_AI_TIMEOUT` | `150` |
 | `CONTENT_MAIL` | `true` |
 | `CONTENT_RECIPIENTS` | staff e-mails, comma-separated (empty = all staff users) |
 | `LP_BASE_URL` | `https://vaif.com.br` |

@@ -28,8 +28,8 @@ return [
     'model' => env('CONTENT_MODEL') ?: env('AGENT_MODEL', 'anthropic/claude-haiku-5.5'),
     'review_model' => env('CONTENT_REVIEW_MODEL') ?: (env('CONTENT_MODEL') ?: env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
 
-    'max_tokens' => (int) env('CONTENT_MAX_TOKENS', 6000),
-    'timeout' => (int) env('CONTENT_AI_TIMEOUT', 120),
+    'max_tokens' => (int) env('CONTENT_MAX_TOKENS', 12000),
+    'timeout' => (int) env('CONTENT_AI_TIMEOUT', 150),
 
     'min_words' => (int) env('CONTENT_MIN_WORDS', 900),
     'max_words' => (int) env('CONTENT_MAX_WORDS', 1800),

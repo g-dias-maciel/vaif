@@ -4,7 +4,6 @@ namespace App\Services\Agent;
 
 use Illuminate\Http\Client\ConnectionException;
 use Illuminate\Support\Facades\Http;
-use RuntimeException;
 
 class OpenRouterClient implements AiClient
 {
@@ -53,6 +52,12 @@ class OpenRouterClient implements AiClient
 
         if (! is_string($content) || trim($content) === '') {
             throw new AgentException('OpenRouter returned an empty message.');
+        }
+
+        if ($response->json('choices.0.finish_reason') === 'length') {
+            throw new AgentException(
+                'OpenRouter stopped at the output limit (finish_reason=length). Increase max_tokens or shorten the prompt.'
+            );
         }
 
         return $content;

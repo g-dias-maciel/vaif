@@ -4,6 +4,7 @@ namespace App\Services\Content;
 
 use App\Services\Agent\Json;
 use App\Services\Agent\OpenRouterClient;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 
 /**
@@ -56,6 +57,13 @@ class BlogDraftGenerator
 
         $parsed = Json::parse($content);
         if ($parsed === []) {
+            Log::warning('Blog draft JSON parse failed', [
+                'model' => (string) config('content.model'),
+                'length' => strlen($content),
+                'head' => mb_substr($content, 0, 1200),
+                'tail' => mb_substr($content, -800),
+            ]);
+
             throw new ContentException('O modelo não devolveu um JSON de artigo válido.');
         }
 
