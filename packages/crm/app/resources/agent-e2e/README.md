@@ -24,14 +24,14 @@ the transaction: the command must never leave test data behind.
 Against the deployed container:
 
 ```bash
-docker exec <crm-container> php artisan agent:e2e --dir=tests/Agent/E2E
+docker exec <crm-container> php artisan agent:e2e --dir=resources/agent-e2e
 ```
 
 One conversation:
 
 ```bash
 docker exec <crm-container> php artisan agent:e2e \
-  --scenario=tests/Agent/E2E/02-cover-up-photo-handoff.json
+  --scenario=resources/agent-e2e/02-cover-up-photo-handoff.json
 ```
 
 Reports are written to `storage/app/agent-e2e/`. The command exits non-zero

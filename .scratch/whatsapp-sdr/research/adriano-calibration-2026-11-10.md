@@ -192,7 +192,7 @@ Changes:
 
 ## End-to-end conversations (2026-11-15)
 
-`php artisan agent:e2e --dir=tests/Agent/E2E` runs fake multi-turn WhatsApp
+`php artisan agent:e2e --dir=resources/agent-e2e` runs fake multi-turn WhatsApp
 conversations through the real Postgres RPCs and the real Beatriz model. The
 scenario is created inside a transaction that is always rolled back, so no
 synthetic artist, lead or message stays in the CRM. Only WAHA is replaced by an
@@ -217,7 +217,7 @@ were missing from `facts.project`, so the agent could re-ask them. `TurnFacts`
 now merges current entities into the turn facts before the prompt and validator.
 
 `agent:e2e` is manual because it spends real model calls and uses the production
-database. The fixture shape is documented in `tests/Agent/E2E/README.md`; a PHPUnit
+database. The fixture shape is documented in `resources/agent-e2e/README.md`; a PHPUnit
 test validates the JSON without calling the model.
 
 ## Recommendation

@@ -34,7 +34,7 @@ class AgentE2e extends Command
             return self::FAILURE;
         }
 
-        $path = (string) ($this->option('scenario') ?: $this->option('dir') ?: base_path('tests/Agent/E2E'));
+        $path = (string) ($this->option('scenario') ?: $this->option('dir') ?: resource_path('agent-e2e'));
         $model = (string) ($this->option('model') ?: config('agent.models.agent'));
         config(['agent.models.agent' => $model]);
 
