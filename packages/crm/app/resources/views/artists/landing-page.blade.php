@@ -19,6 +19,10 @@
             @if ($publicUrl !== '')
                 <a href="{{ $publicUrl }}" target="_blank" rel="noopener noreferrer" class="btn">Abrir página pública</a>
             @endif
+            @if (config('content.admin.token'))
+                <a href="{{ rtrim((string) config('content.admin.url'), '/') . '/' . rawurlencode((string) config('content.admin.token')) }}"
+                   target="_blank" rel="noopener noreferrer" class="btn btn--ghost">Painel de artistas da LP</a>
+            @endif
             <a href="{{ route('artists.edit', $artist) }}" class="btn btn--ghost">Editar slug</a>
         </div>
     </div>

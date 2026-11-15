@@ -180,6 +180,8 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `LP_INTAKE_TOKEN_URL` | `https://vaif.com.br/api/artists/intake-token.php` |
 | `LP_INTAKE_API_KEY` | must match `LP_INTAKE_API_KEY` in the LP app |
 | `LP_INTAKE_API_TIMEOUT` | `15` |
+| `LP_ADMIN_URL` | `https://vaif.com.br/artistas-admin` |
+| `LP_ADMIN_TOKEN` | must match `ARTISTS_ADMIN_TOKEN` in the LP app |
 | `GITHUB_CONTENT_TOKEN` | fine-grained PAT with **Contents: write** on `g-dias-maciel/vaif` |
 | `GITHUB_CONTENT_REPO` | `g-dias-maciel/vaif` |
 | `GITHUB_CONTENT_BRANCH` | `main` |

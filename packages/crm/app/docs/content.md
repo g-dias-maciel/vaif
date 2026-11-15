@@ -113,6 +113,10 @@ panel for review. The link is single-use; generate another one if it expires or
 is lost. For an artist with a published page, edit it in the LP panel rather
 than creating a new intake.
 
+The **Painel de artistas da LP** button in the landing-page header opens the
+review/publish panel. It uses `LP_ADMIN_TOKEN`, which must match
+`ARTISTS_ADMIN_TOKEN` in the LP app.
+
 ## Publishing and Coolify
 
 The commit goes to `packages/lp/content/blog/<slug>.md`. The LP is a separate

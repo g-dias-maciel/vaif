@@ -83,6 +83,12 @@ return [
         'timeout' => (int) env('LP_INTAKE_API_TIMEOUT', 15),
     ],
 
+    'admin' => [
+        // Staff-only LP artist review/publish panel.
+        'url' => (string) env('LP_ADMIN_URL', $lpBase.'/artistas-admin'),
+        'token' => env('LP_ADMIN_TOKEN'),
+    ],
+
     'mail' => (bool) env('CONTENT_MAIL', true),
 
     // Empty = every staff user.
