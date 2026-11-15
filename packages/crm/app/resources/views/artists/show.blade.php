@@ -10,6 +10,9 @@
     <a href="{{ route('artists.edit', $artist) }}" class="btn btn--ghost">
         Editar artista
     </a>
+    <a href="{{ route('artists.landing-page', $artist) }}" class="btn btn--ghost">
+        Landing page
+    </a>
     <form method="post" action="{{ route('artists.invite', $artist) }}">
         @csrf
         <button type="submit" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--muted);">

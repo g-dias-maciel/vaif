@@ -67,6 +67,20 @@
     </div>
 @endif
 
+@if (! empty($post->facts))
+    <details class="panel" style="margin-bottom:18px;">
+        <summary style="cursor:pointer; font-weight:600;">
+            Ficha do artista usada na geração
+            @if ($post->artist_id)
+                <a href="{{ route('artists.landing-page', $post->artist_id) }}" style="margin-left:8px; font-weight:400; font-size:.78rem;" onclick="event.stopPropagation()">ver landing page atual</a>
+            @endif
+        </summary>
+        <div style="margin-top:14px;">
+            @include('partials.artist-facts', ['facts' => $post->facts])
+        </div>
+    </details>
+@endif
+
 @php($review = $post->ai_review ?? [])
 @php($previewImage = $post->featured_image
     ? (str_starts_with((string) $post->featured_image, '/')

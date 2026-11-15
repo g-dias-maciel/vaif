@@ -190,6 +190,94 @@ class ContentWorkflowTest extends TestCase
             ->assertForbidden();
     }
 
+    public function test_staff_can_view_the_landing_page_profile(): void
+    {
+        $artist = $this->artist();
+
+        Http::fake([
+            'https://lp.test/api/artists/profile.php*' => Http::response([
+                'success' => true,
+                'slug' => 'adriano-santos',
+                'display_name' => 'Adriano Santos',
+                'city' => 'Poços de Caldas',
+                'state' => 'MG',
+                'studio_name' => 'Studio Madri Tattoo',
+                'address' => 'Rua Osvaldo Cruz, 135',
+                'neighborhood' => 'Jardim Santa Rita',
+                'style_summary' => 'Realismo Preto & Cinza, Coberturas',
+                'styles' => ['Realismo Preto & Cinza', 'Coberturas'],
+                'specialty' => 'coberturas',
+                'bio_plain' => 'Tatuador especializado em coberturas.',
+                'portfolio' => [
+                    ['src' => '/artists/adriano-santos/media/portfolio-01.webp', 'alt' => 'Tatuagem no antebraço'],
+                ],
+                'testimonials' => [
+                    ['name' => 'Cliente', 'meta' => 'Cliente desde 2025', 'text' => 'Excelente trabalho.', 'rating' => 5],
+                ],
+                'faq' => [
+                    ['question' => 'Quem faz cobertura?', 'answer' => 'Adriano Santos.'],
+                ],
+                'stats' => [
+                    ['value' => '20+', 'label' => 'Anos de Experiência'],
+                ],
+                'opening_hours' => ['days' => ['Monday'], 'opens' => '10:00', 'closes' => '19:00'],
+                'landing_page_url' => 'https://vaif.com.br/artists/adriano-santos',
+                'instagram_url' => 'https://instagram.com/studiomadri_tattoo',
+                'whatsapp_url' => 'https://wa.me/553599968249',
+                'whatsapp_number' => '553599968249',
+                'years_experience' => '20',
+                'price_range' => 'R$ 1.200+',
+                'source' => 'config',
+            ], 200),
+        ]);
+
+        $this->actingAs($this->staff())
+            ->get(route('artists.landing-page', $artist))
+            ->assertOk()
+            ->assertSee('Landing page')
+            ->assertSee('Adriano Santos')
+            ->assertSee('Poços de Caldas')
+            ->assertSee('Tatuador especializado em coberturas.')
+            ->assertSee('Portfólio')
+            ->assertSee('Depoimentos')
+            ->assertSee('JSON usado pelo blog');
+    }
+
+    public function test_landing_page_without_a_slug_shows_instructions(): void
+    {
+        $artist = $this->artist();
+        $artist->settings()->update(['landing_page_slug' => null]);
+
+        $this->actingAs($this->staff())
+            ->get(route('artists.landing-page', $artist))
+            ->assertOk()
+            ->assertSee('slug de landing page')
+            ->assertSee('Editar slug');
+    }
+
+    public function test_landing_page_api_failure_shows_a_friendly_error(): void
+    {
+        $artist = $this->artist();
+
+        Http::fake([
+            'https://lp.test/api/artists/profile.php*' => Http::response(['error' => 'down'], 500),
+        ]);
+
+        $this->actingAs($this->staff())
+            ->get(route('artists.landing-page', $artist))
+            ->assertOk()
+            ->assertSee('A API do artista retornou HTTP 500');
+    }
+
+    public function test_artists_cannot_view_the_landing_page_profile(): void
+    {
+        $artist = $this->artist();
+
+        $this->actingAs($this->artistUser($artist))
+            ->get(route('artists.landing-page', $artist))
+            ->assertForbidden();
+    }
+
     public function test_staff_can_set_the_landing_page_slug(): void
     {
         $artist = $this->artist();
@@ -253,13 +341,28 @@ class ContentWorkflowTest extends TestCase
     {
         $artist = $this->artist();
         $topic = $this->topic($artist);
-        $post = $this->makePost($artist, $topic);
+        $post = $this->makePost($artist, $topic, [
+            'facts' => [
+                'display_name' => 'Adriano Santos',
+                'city' => 'Poços de Caldas',
+                'state' => 'MG',
+                'studio_name' => 'Studio Madri Tattoo',
+                'bio_plain' => 'Tatuador especializado em coberturas.',
+                'styles' => ['Coberturas'],
+                'portfolio' => [],
+                'testimonials' => [],
+                'faq' => [],
+                'stats' => [],
+            ],
+        ]);
 
         $this->actingAs($this->staff())
             ->get(route('content.show', $post))
             ->assertOk()
             ->assertSee('Resumo para aprovação')
             ->assertSee('O artigo posiciona Adriano como especialista local')
+            ->assertSee('Ficha do artista usada na geração')
+            ->assertSee('Adriano Santos')
             ->assertSee('Prévia do artigo')
             ->assertSee('Como agendar');
     }

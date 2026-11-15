@@ -9,6 +9,8 @@ use App\Models\Project;
 use App\Models\Prospect;
 use App\Models\User;
 use App\Services\ArtistInviteService;
+use App\Services\Content\ArtistFactSheet;
+use App\Services\Content\ContentException;
 use App\Services\WahaService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -60,6 +62,40 @@ class ArtistController extends Controller
             'lastMessageAt' => $lastMessageAt,
             'bookings' => $bookings,
             'pipeline' => config('crm.pipeline_statuses'),
+        ]);
+    }
+
+    /**
+     * Staff: read-only mirror of the public landing-page profile. This is the
+     * same fact sheet the weekly blog workflow uses.
+     */
+    public function landingPage(Artist $artist, ArtistFactSheet $factSheet)
+    {
+        $artist->loadMissing('settings');
+        $slug = (string) ($artist->settings?->landing_page_slug ?? '');
+        $profile = null;
+        $error = null;
+
+        if ($slug === '') {
+            $error = 'Este artista ainda não tem slug de landing page. Configure em Editar artista.';
+        } else {
+            try {
+                $profile = $factSheet->fetch($slug);
+            } catch (ContentException $e) {
+                $error = $e->getMessage();
+            }
+        }
+
+        $publicUrl = $slug !== ''
+            ? rtrim((string) config('content.lp.base_url', 'https://vaif.com.br'), '/').'/artists/'.rawurlencode($slug)
+            : '';
+
+        return view('artists.landing-page', [
+            'artist' => $artist,
+            'slug' => $slug,
+            'profile' => $profile,
+            'error' => $error,
+            'publicUrl' => $publicUrl,
         ]);
     }
 
