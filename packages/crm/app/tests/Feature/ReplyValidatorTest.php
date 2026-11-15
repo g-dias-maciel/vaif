@@ -473,6 +473,26 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('laser', $result['final_reply']);
     }
 
+    public function test_an_open_type_question_is_replaced_by_the_context_confirmation(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'project' => ['tattoo_type' => null],
+                'assumptions' => [
+                    'tattoo_type' => ['value' => 'nova', 'confidence' => 0.8, 'reason' => 'do mesmo lado'],
+                ],
+            ]),
+            [['type' => 'question', 'field' => 'type']],
+            'Essa tatuagem é nova, uma cobertura ou uma reforma?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertSame('assumption_question_open', $result['violations'][0]['rule']);
+        $this->assertSame('canonical_assumption_confirm', $result['resolution']);
+        $this->assertStringContainsString('seria uma tatuagem nova, certo?', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

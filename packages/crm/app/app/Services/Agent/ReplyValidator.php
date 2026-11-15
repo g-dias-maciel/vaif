@@ -70,6 +70,7 @@ class ReplyValidator
         $hasRemovalUnanswered = false;
         $hasDeferredHandoff = false;
         $hasBusyNoNextStep = false;
+        $hasOpenAssumptionQuestion = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -347,6 +348,19 @@ class ReplyValidator
             $hasBusyNoNextStep = true;
         }
 
+        $typeAssumption = is_array($facts['assumptions']['tattoo_type'] ?? null)
+            ? $facts['assumptions']['tattoo_type']
+            : null;
+        $typeAssumptionConfident = $typeAssumption !== null
+            && (float) ($typeAssumption['confidence'] ?? 0) >= (float) config('agent.assumptions.min_confidence', 0.65);
+
+        if (empty($project['tattoo_type'])
+            && $typeAssumptionConfident
+            && preg_match('/nova, uma cobertura ou uma reforma|nova, cobertura ou reforma|nova ou uma cobertura|nova ou cobertura/u', $this->norm($reply)) === 1) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_question_open'];
+            $hasOpenAssumptionQuestion = true;
+        }
+
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
@@ -540,6 +554,11 @@ class ReplyValidator
             } elseif ($hasAftercareViolation) {
                 $finalReply = 'Sinto muito que esteja assim. Como não sou médica, o ideal é procurar um médico ou uma UBS. Vou passar seu caso para o Adriano agora.';
                 $resolution = 'canonical_aftercare';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasOpenAssumptionQuestion) {
+                $finalReply = 'Essa tatuagem seria uma tatuagem nova, certo?';
+                $resolution = 'canonical_assumption_confirm';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasKnownFieldQuestion) {
