@@ -135,14 +135,14 @@ class MockDraftGenerator
                 $facts['studio']['artist_name'] = $artist->name;
 
                 $composed = $this->composer->compose($artist, $start, $facts, $text, $history, $preflight);
-                $turnId = TurnId::make($chatId, 'sim:'.$message->id);
+                $turnId = TurnId::stable($chatId, 'sim:'.$message->id);
                 $existing = AgentDraft::query()
                     ->where('artist_id', $artist->id)
                     ->where('turn_id', $turnId)
                     ->where('source', AgentDraft::SOURCE_SIMULATED)
                     ->exists();
 
-                AgentDraft::updateOrCreate(
+                $simulated = AgentDraft::updateOrCreate(
                     ['artist_id' => $artist->id, 'turn_id' => $turnId],
                     [
                         'lead_id' => $start['lead_id'] ?? null,
@@ -167,6 +167,17 @@ class MockDraftGenerator
                         'status' => AgentDraft::STATUS_SIMULATED,
                     ],
                 );
+
+                // Older runs used a time-bucketed turn id. Remove duplicate
+                // simulated drafts for the same message, but keep a reviewed
+                // row so its correction stays available.
+                AgentDraft::query()
+                    ->where('artist_id', $artist->id)
+                    ->where('lead_message_id', $message->id)
+                    ->where('source', AgentDraft::SOURCE_SIMULATED)
+                    ->where('id', '!=', $simulated->id)
+                    ->whereDoesntHave('review')
+                    ->delete();
 
                 $result['generated']++;
 
