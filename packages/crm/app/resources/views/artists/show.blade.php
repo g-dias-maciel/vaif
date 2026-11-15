@@ -13,6 +13,9 @@
     <a href="{{ route('artists.landing-page', $artist) }}" class="btn btn--ghost">
         Landing page
     </a>
+    <a href="{{ route('artists.select', $artist) }}" class="btn btn--ghost">
+        Abrir CRM do artista
+    </a>
     <form method="post" action="{{ route('artists.invite', $artist) }}">
         @csrf
         <button type="submit" class="btn" style="background: transparent; border: 1px solid var(--border); color: var(--muted);">

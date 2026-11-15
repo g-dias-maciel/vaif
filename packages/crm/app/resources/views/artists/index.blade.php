@@ -11,12 +11,13 @@
     <ul class="artist-list">
         @forelse ($artists as $a)
             <li>
-                <a href="{{ route('artists.select', $a) }}">
+                <a href="{{ route('artists.show', $a) }}">
                     <strong>{{ $a->displayName() }}</strong>
                     <span class="meta">{{ $a->leads_count }} lead(s)</span>
                     <span class="badge">{{ $a->status }}</span>
                 </a>
                 <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+                    <a href="{{ route('artists.select', $a) }}" class="btn btn--ghost btn--small" style="flex:0 0 auto;">Abrir CRM</a>
                     <a href="{{ route('artists.edit', $a) }}" class="btn btn--ghost btn--small" style="flex:0 0 auto;">Editar</a>
                     <form method="post" action="{{ route('artists.toggle', $a) }}" class="inline">
                         @csrf

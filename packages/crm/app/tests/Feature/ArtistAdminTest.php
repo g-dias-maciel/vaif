@@ -66,6 +66,19 @@ class ArtistAdminTest extends TestCase
         ]);
     }
 
+    public function test_artist_name_opens_the_admin_page_and_crm_is_a_separate_action(): void
+    {
+        $artist = $this->artist();
+        $staff = $this->staff();
+
+        $this->actingAs($staff)
+            ->get('/artists')
+            ->assertOk()
+            ->assertSee('href="'.route('artists.show', $artist).'"', false)
+            ->assertSee('href="'.route('artists.select', $artist).'"', false)
+            ->assertSee('Abrir CRM');
+    }
+
     public function test_staff_can_edit_artist_core_data_and_login(): void
     {
         $artist = $this->artist();
