@@ -78,7 +78,8 @@ class DraftProcessor
         }
 
         $context = $this->prompts->context($artist, $start);
-        $preflight = $this->preflight->classify($context, $effectiveText, $history);
+        $pendingInput = QualificationFlow::pendingInput($state);
+        $preflight = $this->preflight->classify($context, $effectiveText, $history, $pendingInput);
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
@@ -106,6 +107,16 @@ class DraftProcessor
             $state['photo_confirmed'] = true;
         }
 
+        $flow = QualificationFlow::applyPending($state, $preflight['pending'] ?? null);
+        $start['agent_state']['skipped_fields'] = $flow['skipped'];
+        $start['agent_state']['pending_attempts'] = $flow['attempts'];
+        $state['skipped_fields'] = $flow['skipped'];
+        $state['pending_attempts'] = $flow['attempts'];
+
+        if ($flow['stuck']) {
+            $preflight['flags']['discovery_stuck'] = true;
+        }
+
         $facts = $this->store->facts(
             $artist->id,
             (string) $start['project_id'],
@@ -117,12 +128,16 @@ class DraftProcessor
 
         [$facts, $simulated] = $this->simulate($facts, $start, $intent, $entities);
 
+        $preflight['flags']['price_missing'] = QualificationFlow::priceMissing($facts);
+
         // What the AI inferred from the context. Used only to phrase a
         // confirmation question; it is never written to the project.
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
         $facts['turn']['flags'] = $preflight['flags'] ?? [];
         $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
         $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
+        $facts['turn']['skipped_fields'] = $flow['skipped'];
+        $facts['turn']['pending_field'] = $pendingInput['field'] ?? null;
         $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
         $facts['studio']['artist_name'] = $artist->name;
 

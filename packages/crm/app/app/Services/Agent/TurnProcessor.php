@@ -71,7 +71,8 @@ class TurnProcessor
         }
 
         $context = $this->prompts->context($artist, $start);
-        $preflight = $this->preflight->classify($context, $effectiveText, $history);
+        $pendingInput = QualificationFlow::pendingInput($state);
+        $preflight = $this->preflight->classify($context, $effectiveText, $history, $pendingInput);
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
@@ -101,6 +102,16 @@ class TurnProcessor
             $state['photo_confirmed'] = true;
         }
 
+        $flow = QualificationFlow::applyPending($state, $preflight['pending'] ?? null);
+        $start['agent_state']['skipped_fields'] = $flow['skipped'];
+        $start['agent_state']['pending_attempts'] = $flow['attempts'];
+        $state['skipped_fields'] = $flow['skipped'];
+        $state['pending_attempts'] = $flow['attempts'];
+
+        if ($flow['stuck']) {
+            $preflight['flags']['discovery_stuck'] = true;
+        }
+
         $this->maybeBook($artist, $start, $state, $intent, $entities);
 
         $facts = $this->store->facts(
@@ -112,10 +123,14 @@ class TurnProcessor
         );
         $facts = TurnFacts::mergeEntities($facts, $entities);
 
+        $preflight['flags']['price_missing'] = QualificationFlow::priceMissing($facts);
+
         $facts['assumptions'] = $preflight['assumptions'] ?? [];
         $facts['turn']['flags'] = $preflight['flags'] ?? [];
         $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
         $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
+        $facts['turn']['skipped_fields'] = $flow['skipped'];
+        $facts['turn']['pending_field'] = $pendingInput['field'] ?? null;
         $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
         $facts['studio']['artist_name'] = $artist->name;
 
@@ -178,6 +193,31 @@ class TurnProcessor
         if ($photoAnalyzed) {
             $chatPatch['photo_confirmed'] = true;
         }
+        if (! empty($state['processo_explicado']) || QualificationFlow::explainedProcess((string) $validation['final_reply'])) {
+            $chatPatch['processo_explicado'] = true;
+        }
+        if (! empty($state['aguardando_confirmacao_duvidas']) || QualificationFlow::askedAboutDoubts((string) $validation['final_reply'])) {
+            $chatPatch['aguardando_confirmacao_duvidas'] = true;
+        }
+
+        $after = QualificationFlow::afterReply(
+            $facts['project'] ?? [],
+            $facts['assumptions'] ?? [],
+            ['skipped_fields' => $flow['skipped'], 'pending_attempts' => $flow['attempts']],
+            (string) $validation['final_reply'],
+            (string) $validation['resolution'],
+        );
+
+        if (! empty($preflight['flags']['price_missing']) || $flow['stuck']) {
+            $after['pending_field'] = null;
+            $after['pending_question'] = null;
+        }
+
+        $chatPatch['pending_field'] = $after['pending_field'];
+        $chatPatch['pending_question'] = $after['pending_question'];
+        $chatPatch['pending_attempts'] = $after['pending_attempts'];
+        $chatPatch['skipped_fields'] = $after['skipped_fields'];
+
         if ($chatPatch !== []) {
             try {
                 $this->store->patchChatState($artist->id, $chatId, $chatPatch);

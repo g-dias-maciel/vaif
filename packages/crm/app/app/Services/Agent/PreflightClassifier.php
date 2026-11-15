@@ -14,9 +14,10 @@ class PreflightClassifier
 
     /**
      * @param  array<int, array{role: string, content: string}>  $history
-     * @return array{intent: string, entities: array, flags: array, confidence: float}
+     * @param  array{field: string, question: string}|null  $pending
+     * @return array{intent: string, entities: array, assumptions: array, flags: array, pending: ?array, confidence: float}
      */
-    public function classify(string $context, string $leadText, array $history = []): array
+    public function classify(string $context, string $leadText, array $history = [], ?array $pending = null): array
     {
         $system = (string) file_get_contents(resource_path('prompts/preflight-classify.md'));
 
@@ -29,10 +30,17 @@ class PreflightClassifier
             $lines[] = (($message['role'] ?? 'user') === 'assistant' ? 'Estúdio' : 'Lead').': '.$content;
         }
 
+        $pendingBlock = '';
+        if (is_array($pending) && ! empty($pending['field'])) {
+            $pendingBlock = "\n\nCAMPO PENDENTE: ".$pending['field']
+                ."\nPERGUNTA PENDENTE: ".($pending['question'] ?? '');
+        }
+
         $content = $this->ai->chat([
             ['role' => 'system', 'content' => $system],
             ['role' => 'user', 'content' => "CONTEXTO:\n".$context
                 ."\n\nHISTÓRICO RECENTE (mais antigo primeiro):\n".($lines === [] ? '_(sem histórico)_' : implode("\n", $lines))
+                .$pendingBlock
                 ."\n\nMENSAGEM DO LEAD:\n".$leadText],
         ], $this->model);
 
@@ -42,9 +50,34 @@ class PreflightClassifier
         $assumptions = $this->assumptions($parsed['assumptions'] ?? null);
         $entities = is_array($parsed['entities'] ?? null) ? $parsed['entities'] : [];
         $evidenceText = $this->leadEvidenceText($leadText, $history);
+        $pendingResult = $this->pendingAnswer($pending, $parsed['pending'] ?? null);
+        $reconciled = [];
+
+        if (is_array($pendingResult) && $pendingResult['status'] === 'answered' && $pendingResult['value'] !== null) {
+            $reconciled[$pendingResult['field']] = $pendingResult['value'];
+        }
 
         [$entities, $assumptions] = $this->guardEntities($entities, $assumptions, $evidenceText);
-        $assumptions = $this->sizeAssumption($assumptions, $leadText, $history);
+
+        // An assumption the lead actually stated is a fact, even if the model
+        // put it in the wrong block. This is still evidence from the lead's
+        // words, never a keyword list for placement expressions.
+        $evidence = new EntityEvidence($evidenceText);
+
+        foreach ($assumptions as $field => $entry) {
+            if ($evidence->supports($field, $entry['value'] ?? null)) {
+                $entities[$field] = $entry['value'];
+                unset($assumptions[$field]);
+            }
+        }
+
+        // The pending field answer is already an AI mapping to the canonical
+        // vocabulary, not a keyword match. Do not demote it just because the
+        // lead's exact words are not in the evidence list.
+        foreach ($reconciled as $field => $value) {
+            $entities[$field] = $value;
+            unset($assumptions[$field]);
+        }
 
         $flags = is_array($parsed['flags'] ?? null) ? $parsed['flags'] : [];
 
@@ -70,6 +103,7 @@ class PreflightClassifier
             'entities' => $entities,
             'assumptions' => $assumptions,
             'flags' => $flags,
+            'pending' => $pendingResult,
             'confidence' => max(0.0, min(1.0, $confidence)),
         ];
     }
@@ -106,43 +140,6 @@ class PreflightClassifier
         }
 
         return $text;
-    }
-
-    /**
-     * A relative size ("menor um pouco", "pequenininha") is a useful
-     * assumption: it becomes a confirmation instead of an open size question.
-     *
-     * @param  array<string, array{value: mixed, confidence: float, reason: string}>  $assumptions
-     * @param  array<int, array{role: string, content: string}>  $history
-     * @return array<string, array{value: mixed, confidence: float, reason: string}>
-     */
-    private function sizeAssumption(array $assumptions, string $leadText, array $history): array
-    {
-        if (isset($assumptions['body_zone'])) {
-            return $assumptions;
-        }
-
-        $text = '';
-
-        foreach (array_slice($history, -10) as $message) {
-            if (($message['role'] ?? 'user') === 'assistant') {
-                continue;
-            }
-            $text .= ' '.(string) ($message['content'] ?? '');
-        }
-
-        $text .= ' '.$leadText;
-        $text = Str::ascii(mb_strtolower($text));
-
-        if (preg_match('/\b(menor um pouco|bem menor|pequenininha|pequena|mini)\b/u', $text) === 1) {
-            $assumptions['body_zone'] = [
-                'value' => 'pequeno',
-                'confidence' => 0.7,
-                'reason' => 'disse que quer menor/pequena',
-            ];
-        }
-
-        return $assumptions;
     }
 
     /**
@@ -282,8 +279,19 @@ class PreflightClassifier
             }
 
             // Context-only fields are resolved by the system, not by words.
-            if (in_array($field, ['requested_day', 'requested_window', 'selected_slot_start', 'meaning'], true)) {
+            if (in_array($field, ['requested_day', 'requested_window', 'selected_slot_start'], true)) {
                 $keep[$field] = $value;
+
+                continue;
+            }
+
+            // The model does the semantic mapping, including natural
+            // placement expressions ("parte de cima do braço" ->
+            // braco_externo). Do not demote a canonical value just because the
+            // exact words are not in a PHP keyword list.
+            if (in_array($field, ['placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
+                $keep[$field] = $value;
+                unset($assumptions[$field]);
 
                 continue;
             }
@@ -313,6 +321,75 @@ class PreflightClassifier
         }
 
         return [$keep, $assumptions];
+    }
+
+    /**
+     * Interpret the model's answer to the pending qualification question.
+     * The model does the semantic mapping; this method only validates that its
+     * output uses the canonical vocabulary.
+     *
+     * @param  array{field: string, question: string}|null  $pending
+     * @return array{field: string, status: string, value: mixed, confidence: float}|null
+     */
+    private function pendingAnswer(?array $pending, mixed $raw): ?array
+    {
+        $field = is_array($pending) ? (string) ($pending['field'] ?? '') : '';
+
+        if ($field === '') {
+            return null;
+        }
+
+        $raw = is_array($raw) ? $raw : [];
+        $status = (string) ($raw['status'] ?? 'unclear');
+
+        if (! in_array($status, ['answered', 'unclear', 'declined', 'off_topic'], true)) {
+            $status = 'unclear';
+        }
+
+        $value = $this->pendingValue($field, $raw['value'] ?? null);
+
+        if ($status === 'answered' && $value === null) {
+            $status = 'unclear';
+        }
+
+        return [
+            'field' => $field,
+            'status' => $status,
+            'value' => $value,
+            'confidence' => max(0.0, min(1.0, (float) ($raw['confidence'] ?? 0))),
+        ];
+    }
+
+    private function pendingValue(string $field, mixed $value): mixed
+    {
+        if ($value === null || $value === '' || $value === []) {
+            return null;
+        }
+
+        return match ($field) {
+            'tattoo_type' => match (mb_strtolower(trim((string) $value))) {
+                'nova', 'new' => 'nova',
+                'cobertura', 'cover_up' => 'cobertura',
+                'reforma', 'rework' => 'reforma',
+                default => null,
+            },
+            'placement' => in_array($value, [
+                'braco', 'braco_externo', 'braco_interno', 'antebraco', 'costas', 'peito',
+                'perna', 'coxa', 'panturrilha', 'tornozelo', 'pescoco', 'costela',
+                'barriga', 'ombro', 'pulso', 'mao', 'pe', 'dedo',
+            ], true) ? $value : null,
+            'body_zone' => in_array($value, ['pequeno', 'medio', 'grande', 'fechamento'], true) ? $value : null,
+            'style' => in_array($value, [
+                'realismo', 'blackwork', 'fine_line', 'old_school', 'neo_tradicional',
+                'tradicional', 'oriental', 'tribal', 'geometrico', 'pontilhismo',
+                'aquarela', 'floral', 'japones', 'minimalista',
+            ], true) ? $value : null,
+            'first_tattoo' => is_bool($value)
+                ? $value
+                : (in_array($value, ['true', 'sim', 1, '1'], true) ? true : (in_array($value, ['false', 'nao', 'não', 0, '0'], true) ? false : null)),
+            'meaning' => is_string($value) && trim($value) !== '' ? mb_substr(trim($value), 0, 500) : null,
+            default => null,
+        };
     }
 
     /**

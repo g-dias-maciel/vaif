@@ -558,6 +558,94 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('seria uma tatuagem nova, certo?', $result['final_reply']);
     }
 
+    public function test_an_out_of_order_discovery_question_is_replaced_with_the_next_field(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => [
+                'tattoo_type' => 'new',
+                'placement' => null,
+                'body_zone' => null,
+                'style' => null,
+                'first_tattoo' => null,
+                'meaning' => null,
+            ]]),
+            [['type' => 'question', 'field' => 'style']],
+            'Qual estilo você tem em mente?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('question_out_of_order', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_next_field', $result['resolution']);
+        $this->assertSame('Onde no corpo você quer fazer?', $result['final_reply']);
+    }
+
+    public function test_a_reply_that_stops_discovery_gets_the_next_question_appended(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => [
+                'tattoo_type' => 'new',
+                'placement' => null,
+                'body_zone' => null,
+                'style' => null,
+                'first_tattoo' => null,
+                'meaning' => null,
+            ]]),
+            [],
+            'Entendi, vamos fazer sim.',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('discovery_stopped', array_column($result['violations'], 'rule'));
+        $this->assertStringContainsString('Onde no corpo você quer fazer?', $result['final_reply']);
+    }
+
+    public function test_a_missing_price_row_for_a_known_placement_requires_handoff(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'pricing' => ['status' => 'no_price_row', 'base_cents' => null, 'offered_cents' => null, 'deposit_cents' => 0],
+                'project' => [
+                    'tattoo_type' => 'new',
+                    'placement' => 'braco',
+                    'body_zone' => 'pequeno',
+                    'style' => 'fine_line',
+                    'first_tattoo' => true,
+                    'meaning' => null,
+                ],
+            ]),
+            [],
+            'Vou te passar o valor em breve.',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('price_missing_without_handoff', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_price_missing_handoff', $result['resolution']);
+        $this->assertStringContainsString('Vou passar', $result['final_reply']);
+    }
+
+    public function test_internal_reasoning_never_reaches_the_lead(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => [
+                'tattoo_type' => 'new',
+                'placement' => null,
+                'body_zone' => null,
+                'style' => null,
+            ]]),
+            [['type' => 'question', 'field' => 'placement']],
+            'Hmm, wait: the system says to ask placement. Correct question: onde no corpo?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('meta_reasoning', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_next_field', $result['resolution']);
+        $this->assertSame('Onde no corpo você quer fazer?', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

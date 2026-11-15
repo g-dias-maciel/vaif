@@ -1,0 +1,27 @@
+{
+  "name": "price-missing-handoff",
+  "description": "The placement/size are known but the artist has no price row. The agent must hand off immediately instead of continuing discovery or inventing a price.",
+  "lead_name": "Diego",
+  "price_book": [
+    {
+      "placement": "braco",
+      "body_zone": "pequeno",
+      "base_price_cents": 35000,
+      "session_duration_min": 60,
+      "buffer_min": 30
+    }
+  ],
+  "turns": [
+    {
+      "message": "Quero uma tatuagem nova, grande, na perna, fine line, é minha primeira tatuagem",
+      "expect": {
+        "sent": true,
+        "next_field": null,
+        "reply_contains": ["adriano"],
+        "reply_not_contains": ["R$"],
+        "requires": ["handoff", "no_price"],
+        "project": {"placement": "perna", "body_zone": "grande", "style": "fine_line"}
+      }
+    }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "natural-placement-mapping",
+  "description": "The model maps 'parte de cima do braço' to the canonical braco_externo; there is no PHP keyword table for placement.",
+  "lead_name": "Rafa",
+  "price_book": [
+    {
+      "placement": "braco_externo",
+      "body_zone": "pequeno",
+      "base_price_cents": 40000,
+      "session_duration_min": 60,
+      "buffer_min": 30
+    }
+  ],
+  "turns": [
+    {
+      "message": "Quero uma tatuagem nova na parte de cima do braço",
+      "expect": {
+        "sent": true,
+        "next_field": "body_zone",
+        "project": {
+          "placement": "braco_externo"
+        },
+        "requires": [
+          "safe_resolution"
+        ]
+      }
+    }
+  ]
+}

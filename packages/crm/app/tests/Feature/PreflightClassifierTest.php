@@ -73,7 +73,7 @@ class PreflightClassifierTest extends TestCase
         $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
     }
 
-    public function test_a_wrong_placement_is_demoted_to_an_assumption(): void
+    public function test_a_natural_placement_expression_is_mapped_by_the_model(): void
     {
         $result = $this->classifier([
             'intent' => 'ask_price',
@@ -83,10 +83,9 @@ class PreflightClassifierTest extends TestCase
             'confidence' => 0.8,
         ])->classify('contexto', 'Pode me passar o orçamento para fazer na parte da frente da perna, uns 13 cm?');
 
-        $this->assertArrayNotHasKey('placement', $result['entities']);
-        $this->assertSame('coxa', $result['assumptions']['placement']['value']);
-        $this->assertSame(0.7, $result['assumptions']['placement']['confidence']);
-        $this->assertSame('medio', $result['assumptions']['body_zone']['value']);
+        $this->assertSame('coxa', $result['entities']['placement']);
+        $this->assertSame('medio', $result['entities']['body_zone']);
+        $this->assertArrayNotHasKey('placement', $result['assumptions']);
     }
 
     public function test_negated_cover_up_is_not_explicit(): void
@@ -223,12 +222,14 @@ class PreflightClassifierTest extends TestCase
         $this->assertTrue($result['flags']['mentions_removal']);
     }
 
-    public function test_a_relative_size_becomes_a_size_assumption(): void
+    public function test_a_relative_size_assumption_from_the_model_is_kept(): void
     {
         $result = $this->classifier([
             'intent' => 'qualify',
             'entities' => ['placement' => 'panturrilha'],
-            'assumptions' => [],
+            'assumptions' => [
+                'body_zone' => ['value' => 'pequeno', 'confidence' => 0.7, 'reason' => 'menor um pouco'],
+            ],
             'flags' => [],
             'confidence' => 0.8,
         ])->classify('contexto', 'Quero na panturrilha, mas menor um pouco que aquela.');
@@ -277,6 +278,47 @@ class PreflightClassifierTest extends TestCase
         ])->classify('contexto', 'Oi, quero fazer uma tatuagem');
 
         $this->assertArrayNotHasKey('tattoo_type', $result['assumptions']);
+    }
+
+    public function test_the_pending_answer_is_mapped_by_the_model_and_kept_even_without_keyword_evidence(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => [],
+            'assumptions' => [],
+            'pending' => ['field' => 'placement', 'status' => 'answered', 'value' => 'braco_externo', 'confidence' => 0.9],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify(
+            'contexto',
+            'quero na parte de cima do braço',
+            [],
+            ['field' => 'placement', 'question' => 'Onde no corpo você quer fazer?'],
+        );
+
+        $this->assertSame('braco_externo', $result['entities']['placement']);
+        $this->assertSame('answered', $result['pending']['status']);
+        $this->assertSame('braco_externo', $result['pending']['value']);
+    }
+
+    public function test_an_unmapped_pending_value_is_unclear(): void
+    {
+        $result = $this->classifier([
+            'intent' => 'qualify',
+            'entities' => [],
+            'assumptions' => [],
+            'pending' => ['field' => 'placement', 'status' => 'answered', 'value' => 'aqui', 'confidence' => 0.9],
+            'flags' => [],
+            'confidence' => 0.9,
+        ])->classify(
+            'contexto',
+            'naquele lugar ali',
+            [],
+            ['field' => 'placement', 'question' => 'Onde no corpo você quer fazer?'],
+        );
+
+        $this->assertSame('unclear', $result['pending']['status']);
+        $this->assertArrayNotHasKey('placement', $result['entities']);
     }
 
     public function test_it_drops_low_confidence_and_unknown_assumptions(): void

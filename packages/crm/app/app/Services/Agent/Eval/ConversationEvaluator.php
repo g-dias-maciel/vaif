@@ -91,6 +91,7 @@ class ConversationEvaluator
                 );
 
                 $report = $this->reportTurn($index + 1, $message, $result, $transport, $turnStartedAt);
+                $report = array_merge($report, $this->stateAfter($artist->id, $chatId));
                 $failures = array_merge(
                     $failures,
                     $this->checkTurn($index + 1, is_array($turn['expect'] ?? null) ? $turn['expect'] : [], $report),
@@ -196,6 +197,7 @@ class ConversationEvaluator
             'message' => $message,
             'skipped' => $result['skipped'] ?? null,
             'intent' => $preflight['intent'] ?? null,
+            'assumptions' => is_array($preflight['assumptions'] ?? null) ? $preflight['assumptions'] : [],
             'flags' => is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [],
             'resolution' => $validation['resolution'] ?? ($result['skipped'] ?? null),
             'reply' => (string) ($result['reply'] ?? ($validation['final_reply'] ?? '')),
@@ -205,6 +207,39 @@ class ConversationEvaluator
             'repaired' => (bool) ($result['repaired'] ?? false),
             'sent' => $transport->sent !== [],
             'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000),
+        ];
+    }
+
+    /**
+     * The live state after the turn: what is pending and what the project
+     * knows. This is the E2E invariant for "no early stop, no restart".
+     *
+     * @return array<string, mixed>
+     */
+    private function stateAfter(string $artistId, string $chatId): array
+    {
+        $row = DB::table('chat_sessions')
+            ->where('artist_id', $artistId)
+            ->where('chat_id', $chatId)
+            ->first();
+
+        if (! $row) {
+            return [];
+        }
+
+        $project = DB::table('projects')->where('lead_id', $row->lead_id)->first();
+        $state = is_string($row->agent_state ?? null) ? json_decode($row->agent_state, true) : (array) ($row->agent_state ?? []);
+
+        return [
+            'next_field' => $state['pending_field'] ?? null,
+            'project' => [
+                'tattoo_type' => $project?->tattoo_type,
+                'placement' => $project?->placement,
+                'body_zone' => $project?->body_zone,
+                'style' => $project?->style,
+                'first_tattoo' => $project?->first_tattoo,
+                'meaning' => $project?->meaning,
+            ],
         ];
     }
 
@@ -236,6 +271,18 @@ class ConversationEvaluator
         foreach ((array) ($expect['flags'] ?? []) as $flag => $value) {
             if ((bool) ($report['flags'][$flag] ?? false) !== (bool) $value) {
                 $failures[] = "turn {$number}: expected flag {$flag}=".($value ? 'true' : 'false');
+            }
+        }
+
+        if (array_key_exists('next_field', $expect) && (string) ($expect['next_field'] ?? '') !== (string) ($report['next_field'] ?? '')) {
+            $failures[] = "turn {$number}: expected next_field ".($expect['next_field'] ?? 'null').', got '.($report['next_field'] ?? 'null');
+        }
+
+        foreach ((array) ($expect['project'] ?? []) as $field => $value) {
+            $actual = $report['project'][$field] ?? null;
+
+            if ((string) $actual !== (string) $value) {
+                $failures[] = "turn {$number}: expected project.{$field} ".($value ?? 'null').', got '.($actual ?? 'null');
             }
         }
 

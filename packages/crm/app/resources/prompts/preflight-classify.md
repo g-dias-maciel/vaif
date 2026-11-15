@@ -29,6 +29,12 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
     "first_tattoo": null,
     "meaning": null
   },
+  "pending": {
+    "field": "placement",
+    "status": "answered",
+    "value": "braco",
+    "confidence": 0.9
+  },
   "flags": {
     "asks_for_price": false,
     "asks_location": false,
@@ -61,6 +67,20 @@ Não converse. Não responda ao lead. Responda **SOMENTE** com um objeto JSON v�
 - `spam` — número errado, mensagem comercial de outra empresa, sem intenção real de tatuagem.
 - `personal` — conversa pessoal, cobrança, brincadeira, ofensa, assunto que não é tatuagem e não é uma abordagem comercial.
 
+## `pending` — a resposta ao campo que a assistente acabou de perguntar
+
+Quando o usuário incluir `CAMPO PENDENTE`, interprete a mensagem do lead como a resposta daquele campo e devolva `pending`.
+
+- `answered` — o lead respondeu. `value` precisa estar no vocabulário canônico do campo.
+- `unclear` — a resposta é ambígua, não responde à pergunta, ou não dá para mapear com segurança para um valor canônico.
+- `declined` — o lead recusou responder ou disse “não sei”, “tanto faz”.
+- `off_topic` — o lead mudou de assunto ou fez outra pergunta; se também respondeu, use `answered`.
+
+Para `placement`, faça você a interpretação semântica e escolha o item canônico mais próximo da lista. Exemplos: “parte de cima do braço” → `braco_externo`; “lado de dentro do braço” → `braco_interno`; “meio do braço” → `braco`; “batata da perna” → `panturrilha`. Nunca invente um valor fora da lista; se não houver correspondência segura, use `unclear`.
+Para `body_zone`: “pequenininha” → `pequeno`; “mais ou menos um palmo” → `medio`; “tampa o braço” → `fechamento`.
+Para `first_tattoo`, `value` é booleano. Para `meaning`, `value` é o texto curto do significado.
+Se não houver `CAMPO PENDENTE`, devolva `pending: null`.
+
 ## `entities`
 
 Extraia o que o lead **disse com palavras dele** nesta mensagem. O bloco `HISTÓRICO RECENTE` existe para resolver respostas curtas: se o lead responder "sim", "isso" ou "certo" a uma pergunta de confirmação anterior, use o valor que estava na pergunta.
@@ -91,7 +111,9 @@ Nunca invente um campo que o lead não disse em nenhuma das mensagens.
 A assistente usa isto para **confirmar** em vez de perguntar aberto. Exemplo: se o lead diz “quero fazer na mão”, faz sentido assumir que é uma tatuagem nova e perguntar “Essa tatuagem seria uma tatuagem nova, certo?”.
 
 - Só preencha um campo aqui quando ele **não** estiver em `entities` e o contexto (mensagem, histórico ou análise da foto) der uma pista real. Se não houver pista, deixe `null`.
-- A inferência de `tattoo_type=nova` é sua, pelo contexto da conversa. Uma mensagem genérica como “quero fazer uma tatuagem” **não** basta: deixe `null`. Assuma `nova` quando o contexto mostrar que é uma tatuagem nova ao lado/junto de uma existente (“do mesmo lado”, “ao lado”, “mais uma”, “outra tattoo”) ou quando o pedido claramente não é cobertura/reforma.
+- A inferência de `tattoo_type=nova` é sua, pelo contexto da conversa. Uma mensagem genérica como “quero fazer uma tatuagem” **não** basta: deixe `null`.
+- REGRA CRÍTICA: se o lead pedir uma tatuagem “do mesmo lado”, “ao lado”, “mais uma”, “outra tattoo” ou descrever uma tatuagem junto de uma existente, você DEVE preencher `assumptions.tattoo_type` com `{"value":"nova","confidence":0.7,"reason":"..."}`. Não deixe `null` nesse caso.
+- Assuma `nova` também quando o pedido claramente não é cobertura/reforma.
 - `value` usa os mesmos valores de `entities` (`tattoo_type`, `placement`, `body_zone`, `style`, `first_tattoo`, `meaning`).
 - `confidence` de 0 a 1. Use ≥ 0.7 só quando a inferência for forte (“na mão” quase sempre é tattoo nova; cobertura/reforma explícita é 0.95). Use 0.4–0.6 para palpites plausíveis.
 - `reason` em poucas palavras, citando a pista (“pediu na mão”, “foto mostra desenho pequeno”, “falou em cobrir”).

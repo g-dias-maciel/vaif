@@ -224,6 +224,36 @@ now merges current entities into the turn facts before the prompt and validator.
 database. The fixture shape is documented in `resources/agent-e2e/README.md`; a PHPUnit
 test validates the JSON without calling the model.
 
+## Qualification state machine (2026-11-15)
+
+The agent no longer relies on the model remembering which field it asked. The
+CRM owns the qualification order (`tattoo_type → placement → body_zone →
+style`; first tattoo and meaning are optional) and persists `pending_field`,
+`pending_question` and attempts in `chat_sessions.agent_state`.
+
+- **AI maps the answer.** The preflight receives `CAMPO PENDENTE` and returns a
+  `pending` object (`answered`, `unclear`, `declined`, `off_topic`). Placement
+  is mapped by the model to the canonical list — “parte de cima do braço” →
+  `braco_externo` — with no PHP placement keyword table.
+- **Validator owns the next question.** `question_out_of_order` replaces a
+  question about another field with the allowed next field. `discovery_stopped`
+  appends the next required question to an answer that would otherwise stop
+  discovery. Known-field repeats and optional fields are not forced.
+- **No price row = handoff.** Once placement and size are known, if the price
+  book has no row, the prompt and validator hand off immediately instead of
+  continuing discovery or inventing a price.
+- **State advances in the same turn.** `processo_explicado` and
+  `aguardando_confirmacao_duvidas` are patched from the reply itself, so the
+  next turn does not repeat the process explanation.
+- **Internal reasoning is blocked.** `meta_reasoning` replaces leaked text such
+  as “Hmm, wait / the system says / Correct question” with the canonical next
+  question.
+
+E2E coverage now includes natural placement mapping, price-missing handoff and
+out-of-order discovery, and asserts the persisted `next_field` after every
+turn. Current result: **9/9 conversations**, **8/8 pinned regressions**, **508
+PHPUnit tests**.
+
 ## Recommendation
 
-Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
+Keep Adriano on `draft`. After including the artist's audio and images, the honest baseline is 113 comparable pairs, 51% acceptance, 32 missed handoffs and 13 artist quotes outside the price book. The latest rules target those failures, but auto still needs ~40+ comparable turns with ≥90% acceptance, zero unsafe and zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.

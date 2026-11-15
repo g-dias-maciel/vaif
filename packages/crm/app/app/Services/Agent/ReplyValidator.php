@@ -72,6 +72,10 @@ class ReplyValidator
         $hasBusyNoNextStep = false;
         $hasOpenAssumptionQuestion = false;
         $hasUnconfirmedAssumption = false;
+        $hasOutOfOrderQuestion = false;
+        $hasDiscoveryStopped = false;
+        $hasPriceMissingNoHandoff = false;
+        $hasMetaReasoning = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -283,6 +287,71 @@ class ReplyValidator
             $hasAftercareViolation = true;
         }
 
+        $typeAssumption = is_array($facts['assumptions']['tattoo_type'] ?? null)
+            ? $facts['assumptions']['tattoo_type']
+            : null;
+        $typeAssumptionConfident = $typeAssumption !== null
+            && (float) ($typeAssumption['confidence'] ?? 0) >= (float) config('agent.assumptions.min_confidence', 0.65);
+
+        $skippedFields = is_array($facts['turn']['skipped_fields'] ?? null) ? $facts['turn']['skipped_fields'] : [];
+        $qualification = new QualificationState($project, $facts['assumptions'] ?? [], $skippedFields, $project['tattoo_type'] ?? null);
+        $nextField = $qualification->requiredNextField();
+        $priceMissing = ! empty($flags['price_missing']) || QualificationFlow::priceMissing($facts);
+        $discoveryStuck = ! empty($flags['discovery_stuck']);
+
+        if ($priceMissing && ! $coverCase && ! $hasHandoff && ! $hasPriceViolation) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'price_missing_without_handoff'];
+            $hasPriceMissingNoHandoff = true;
+        }
+
+        if ($discoveryStuck && ! $coverCase && ! $hasHandoff) {
+            $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'discovery_stuck_without_handoff'];
+            $hasPriceMissingNoHandoff = true;
+        }
+
+        if ($violations === []
+            && $nextField !== null
+            && ! $isCover
+            && ! $coverCase
+            && ! $priceMissing
+            && ! $discoveryStuck
+            && ! $hasHandoff
+            && ! (empty($project['tattoo_type']) && $typeAssumptionConfident)
+            && ! $hasKnownFieldQuestion
+            && ! $hasBooking
+            && empty($booking['active'])
+            && ! $slotIntent
+            && empty($flags['lead_busy'])
+            && empty($flags['booking_in_chat'])
+            && ! in_array($intent, ['personal', 'spam', 'aftercare', 'close', 'choose_slot', 'reschedule', 'ask_availability'], true)) {
+            $discoveryFields = ['tattoo_type', 'placement', 'body_zone', 'style', 'first_tattoo', 'meaning'];
+            $asked = [];
+
+            foreach ($claims as $claim) {
+                if (($claim['type'] ?? null) !== 'question') {
+                    continue;
+                }
+
+                $field = (string) ($claim['field'] ?? '');
+                $field = $field === 'type' ? 'tattoo_type' : $field;
+
+                if (in_array($field, $discoveryFields, true)) {
+                    $asked[] = $field;
+                }
+            }
+
+            $asked = array_values(array_unique($asked));
+
+            if ($asked !== []
+                && (! in_array($nextField, $asked, true) || ! $qualification->asks($reply, $nextField))) {
+                $violations[] = ['claim' => ['type' => 'question', 'field' => 'next'], 'rule' => 'question_out_of_order', 'expected' => $nextField, 'actual' => $asked];
+                $hasOutOfOrderQuestion = true;
+            } elseif ($asked === [] && ! $qualification->asks($reply, $nextField)) {
+                $violations[] = ['claim' => ['type' => 'question', 'field' => 'next'], 'rule' => 'discovery_stopped', 'expected' => $nextField];
+                $hasDiscoveryStopped = true;
+            }
+        }
+
         // Cover-up is a handoff case. Asking for the photos is fine; never
         // leaving the case with the artist is not.
         if ($coverCase && ! $hasHandoff && ! $hasPriceViolation && ! $hasConditionViolation) {
@@ -352,16 +421,10 @@ class ReplyValidator
             $hasBusyNoNextStep = true;
         }
 
-        $typeAssumption = is_array($facts['assumptions']['tattoo_type'] ?? null)
-            ? $facts['assumptions']['tattoo_type']
-            : null;
-        $typeAssumptionConfident = $typeAssumption !== null
-            && (float) ($typeAssumption['confidence'] ?? 0) >= (float) config('agent.assumptions.min_confidence', 0.65);
-
         if (empty($project['tattoo_type'])
             && $typeAssumptionConfident
             && str_contains($reply, '?')
-            && preg_match('/(nova|novo).{0,45}(cobertura|reforma|cobrir|reformar)|(cobertura|reforma|cobrir|reformar).{0,45}(nova|novo)/u', $this->norm($reply)) === 1) {
+            && preg_match('/(nova|novo).{0,120}(cobertura|reforma|cobrir|reformar)|(cobertura|reforma|cobrir|reformar).{0,120}(nova|novo)/u', $this->norm($reply)) === 1) {
             $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_question_open'];
             $hasOpenAssumptionQuestion = true;
         }
@@ -372,20 +435,26 @@ class ReplyValidator
         $hasTypeConfirmation = preg_match('/\b(nova|novo)\b/u', $this->norm($reply)) === 1
             && preg_match('/\b(certo|correto|isso|seria|confirma)\b/u', $this->norm($reply)) === 1;
 
-        if (empty($project['tattoo_type']) && $typeAssumptionConfident && ! $hasTypeConfirmation) {
-            foreach ($claims as $claim) {
-                if (($claim['type'] ?? null) === 'question'
-                    && in_array($claim['field'] ?? '', ['placement', 'body_zone', 'style', 'first_tattoo', 'meaning'], true)) {
-                    $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_not_confirmed'];
-                    $hasUnconfirmedAssumption = true;
-                    break;
-                }
-            }
+        if (empty($project['tattoo_type'])
+            && $typeAssumptionConfident
+            && ! $hasTypeConfirmation
+            && ! $hasHandoff
+            && ! $coverCase
+            && empty($flags['lead_busy'])
+            && ! in_array($intent, ['personal', 'spam', 'aftercare'], true)) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_not_confirmed'];
+            $hasUnconfirmedAssumption = true;
         }
 
         // The lead already sent the current-tattoo photo. Asking for it again
         // is the most common calibration miss in cover-up conversations.
         $normReply = $this->norm($reply);
+
+        if (preg_match('/hmm,? wait|system says|correct question|let me redo|the system says|pergunta correta|deixa eu refazer|o sistema (diz|pede)|wait,? the system/u', $normReply) === 1) {
+            $violations[] = ['claim' => ['type' => 'meta'], 'rule' => 'meta_reasoning'];
+            $hasMetaReasoning = true;
+        }
+
         $asksPhoto = preg_match('/(foto|fotos)/u', $normReply) === 1
             && preg_match('/(manda|mandar|envia|enviar|tirar|quando conseguir|quando tiver|pode mandar|me manda)/u', $normReply) === 1;
         $photoNegated = preg_match('/(nao precisa|nao e necessario|ja recebi|dispensa)[^.]{0,35}(foto|fotos)/u', $normReply) === 1;
@@ -578,6 +647,25 @@ class ReplyValidator
                 $resolution = 'canonical_aftercare';
                 $offeredSlots = [];
                 $effectiveClaims = [];
+            } elseif ($hasPriceMissingNoHandoff) {
+                $artistName = (string) ($studio['artist_name'] ?? 'o artista');
+                $finalReply = 'Para esse local/tamanho, o '.$artistName.' precisa avaliar e montar o orçamento. Vou passar seu caso para ele agora.';
+                $resolution = 'canonical_price_missing_handoff';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasOutOfOrderQuestion && $nextField !== null) {
+                $finalReply = $qualification->questionFor($nextField);
+                $resolution = 'canonical_next_field';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasDiscoveryStopped && $nextField !== null) {
+                $question = $qualification->questionFor($nextField);
+                $finalReply = trim($reply) === ''
+                    ? $question
+                    : rtrim($reply, " \t\n\r\0\x0B.").'. '.$question;
+                $resolution = 'canonical_next_field';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             } elseif ($hasUnconfirmedAssumption || $hasOpenAssumptionQuestion) {
                 $finalReply = 'Essa tatuagem seria uma tatuagem nova, certo?';
                 $resolution = 'canonical_assumption_confirm';
@@ -598,6 +686,13 @@ class ReplyValidator
             } elseif ($hasTimeViolation) {
                 $finalReply = 'Esse horário está fora do funcionamento do estúdio. Me conta o dia e o período que funciona para você, que eu vejo a agenda com o artista.';
                 $resolution = 'canonical_time';
+                $offeredSlots = [];
+                $effectiveClaims = [];
+            } elseif ($hasMetaReasoning) {
+                $finalReply = $nextField !== null
+                    ? $qualification->questionFor($nextField)
+                    : 'Vou confirmar isso com o artista e já te respondo.';
+                $resolution = $nextField !== null ? 'canonical_next_field' : 'canonical_defer';
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } else {

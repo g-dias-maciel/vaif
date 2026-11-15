@@ -112,7 +112,8 @@ class MockDraftGenerator
                 );
 
                 $context = $this->prompts->context($artist, $start);
-                $preflight = $this->preflight->classify($context, $text, $history);
+                $pendingInput = QualificationFlow::pendingInput($start['agent_state'] ?? []);
+                $preflight = $this->preflight->classify($context, $text, $history, $pendingInput);
 
                 if (ConversationGuard::skipReason($preflight['intent'], $history) !== null) {
                     $result['skipped']++;
@@ -140,10 +141,15 @@ class MockDraftGenerator
                     $preflight['entities'],
                 );
                 $facts = TurnFacts::mergeEntities($facts, $preflight['entities']);
+
+                $preflight['flags']['price_missing'] = QualificationFlow::priceMissing($facts);
+
                 $facts['assumptions'] = $preflight['assumptions'] ?? [];
                 $facts['turn']['flags'] = $preflight['flags'] ?? [];
                 $facts['turn']['stage_key'] = $start['stage_key'] ?? null;
                 $facts['turn']['agent_state'] = $start['agent_state'] ?? [];
+                $facts['turn']['skipped_fields'] = $flow['skipped'];
+                $facts['turn']['pending_field'] = null;
                 $facts['booking']['deposit_status'] = $start['deposit_status'] ?? null;
                 $facts['studio']['artist_name'] = $artist->name;
 

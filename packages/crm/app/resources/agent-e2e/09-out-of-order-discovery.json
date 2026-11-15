@@ -1,0 +1,30 @@
+{
+  "name": "out-of-order-discovery",
+  "description": "The lead gives style before placement. The validator must ask placement, not style, and keep the pending field aligned.",
+  "lead_name": "Rafa",
+  "turns": [
+    {
+      "message": "Quero uma tatuagem nova fine line",
+      "expect": {
+        "sent": true,
+        "next_field": "placement",
+        "requires": [
+          "safe_resolution"
+        ]
+      }
+    },
+    {
+      "message": "Na perna",
+      "expect": {
+        "sent": true,
+        "next_field": "body_zone",
+        "project": {
+          "placement": "perna"
+        },
+        "requires": [
+          "safe_resolution"
+        ]
+      }
+    }
+  ]
+}

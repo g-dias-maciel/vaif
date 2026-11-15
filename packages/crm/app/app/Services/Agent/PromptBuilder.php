@@ -204,30 +204,19 @@ class PromptBuilder
             $lines[] = $photos
                 ? '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. O lead já enviou fotos: reconheça ("Recebi as fotos"), NÃO peça foto nem vídeo de novo e faça o handoff na mesma mensagem. Se a foto estiver desfocada ou não mostrar o local inteiro, peça uma complementar antes.'
                 : '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. Peça fotos da tatuagem atual do local inteiro e de perto, com boa luz. Explique que o artista vai avaliar e montar a proposta, e faça o handoff na mesma mensagem.';
+        } elseif (! empty($flags['price_missing'])) {
+            $lines[] = '- Não existe preço de tabela para este local/tamanho. NÃO faça mais perguntas de qualificação, NÃO invente valor: faça o handoff para o artista agora e diga que ele vai montar o orçamento.';
+        } elseif (! empty($flags['discovery_stuck'])) {
+            $lines[] = '- O lead não conseguiu responder ao campo pendente. NÃO repita a mesma pergunta: faça o handoff para o artista agora.';
         } else {
             $assumptions = is_array($facts['assumptions'] ?? null) ? $facts['assumptions'] : [];
-            $next = null;
-            $key = null;
-
-            if ($typeLabel === null) {
-                $key = 'tattoo_type';
-                $next = ['tipo', 'A tatuagem que você quer é nova, uma cobertura ou uma reforma?'];
-            } elseif (empty($project['placement'])) {
-                $key = 'placement';
-                $next = ['local do corpo', 'Onde no corpo você quer fazer?'];
-            } elseif (empty($project['body_zone'])) {
-                $key = 'body_zone';
-                $next = ['tamanho', 'Nesse local, você quer uma tattoo pequena, uma área média ou o local inteiro?'];
-            } elseif (empty($project['style'])) {
-                $key = 'style';
-                $next = ['estilo', 'Qual estilo você tem em mente?'];
-            } elseif (! array_key_exists('first_tattoo', $project) || $project['first_tattoo'] === null) {
-                $key = 'first_tattoo';
-                $next = ['primeira tatuagem', 'É a sua primeira tatuagem?'];
-            } elseif (empty($project['meaning'])) {
-                $key = 'meaning';
-                $next = ['significado', 'Tem algum significado ou referência para essa tattoo?'];
-            }
+            $qualification = new QualificationState(
+                is_array($project ?? null) ? $project : [],
+                $assumptions,
+                is_array($facts['turn']['skipped_fields'] ?? null) ? $facts['turn']['skipped_fields'] : [],
+                $type,
+            );
+            $nextField = $qualification->nextField();
 
             if ($assumptions !== []) {
                 $bits = [];
@@ -239,29 +228,18 @@ class PromptBuilder
                 $lines[] = '- As suposições acima NÃO foram confirmadas. NUNCA escreva "então é nova", "fica no braço" ou "é uma tatuagem nova" como fato. Se for usar, pergunte confirmando ("Seria nova, certo?") e só trate como fato depois do "sim".';
             }
 
-            if ($next === null) {
+            if ($nextField === null) {
                 $lines[] = '- Qualificação completa. O próximo passo é o orçamento (se o gate estiver aberto) ou o fechamento.';
             } else {
-                $minConfidence = (float) config('agent.assumptions.min_confidence', 0.65);
-                $assumption = $key !== null ? ($assumptions[$key] ?? null) : null;
-                $confirmed = is_array($assumption)
-                    && (float) ($assumption['confidence'] ?? 0) >= $minConfidence
-                    && isset($assumption['value'])
-                        ? $this->confirmationQuestion($key, $assumption['value'])
-                        : null;
+                $question = $qualification->questionFor($nextField);
+                $lines[] = '- Ainda falta: '.$qualification->label($nextField).'. Próxima pergunta permitida (UMA só): "'.$question.'"';
 
-                $lines[] = '- Ainda falta: '.$next[0].'. Próxima pergunta permitida (UMA só): "'.($confirmed ?? $next[1]).'"';
-
-                if ($confirmed !== null) {
+                if ($qualification->isConfirmation($nextField)) {
                     $lines[] = '- Essa pergunta é uma CONFIRMAÇÃO de uma suposição do contexto. Use a forma fechada ("certo?"/"é isso?"), não a pergunta aberta.';
                 }
             }
 
             $lines[] = '- NUNCA pergunte de novo um campo que já aparece preenchido acima, mesmo que o lead tenha mudado de assunto.';
-
-            if (! empty($project['placement'])) {
-                $lines[] = '- Se o lead estiver avançando, ofereça uma visita ao estúdio para o Adriano ver o local ao vivo e montar a arte. Não use isso para pular a próxima pergunta que falta.';
-            }
         }
 
         $hours = is_array($studio['working_hours'] ?? null) ? $studio['working_hours'] : [];
