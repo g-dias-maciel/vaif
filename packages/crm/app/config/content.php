@@ -29,6 +29,7 @@ return [
     'review_model' => env('CONTENT_REVIEW_MODEL') ?: (env('CONTENT_MODEL') ?: env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
 
     'max_tokens' => (int) env('CONTENT_MAX_TOKENS', 12000),
+    'review_max_tokens' => (int) env('CONTENT_REVIEW_MAX_TOKENS', 6000),
     'timeout' => (int) env('CONTENT_AI_TIMEOUT', 150),
 
     'min_words' => (int) env('CONTENT_MIN_WORDS', 900),

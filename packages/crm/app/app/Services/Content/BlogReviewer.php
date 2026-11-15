@@ -66,8 +66,8 @@ class BlogReviewer
                 $model,
                 [
                     'temperature' => 0.1,
-                    'max_tokens' => 2500,
-                    '_timeout' => (int) config('content.timeout', 120),
+                    'max_tokens' => (int) config('content.review_max_tokens', 6000),
+                    '_timeout' => (int) config('content.timeout', 150),
                 ],
             );
 
