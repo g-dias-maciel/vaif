@@ -127,7 +127,7 @@ class ConversationEvaluator
     {
         $artist = Artist::create([
             'id' => (string) Str::uuid(),
-            'name' => 'E2E '.$scenario->name(),
+            'name' => 'Adriano',
             'status' => 'live',
             'timezone' => 'America/Sao_Paulo',
             'wa_session_slug' => 'e2e-'.Str::lower(Str::random(12)),
