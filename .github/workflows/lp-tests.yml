@@ -38,9 +38,15 @@ jobs:
           php tests/artists/media.test.php
           php tests/artists/specialty.test.php
           php tests/artists/before_after.test.php
+          php tests/blog/load-posts.test.php
+          php tests/blog/parse-frontmatter.test.php
+          php tests/blog/render-markdown.test.php
+          php tests/blog/slugify.test.php
           php tests/artist_mobile_acceptance_test.php
           php tests/artist_photos_acceptance_test.php
           php tests/artist_seo_acceptance_test.php
+          php tests/artist_profile_api_acceptance_test.php
+          php tests/blog/seo_acceptance_test.php
           php tests/before_after_acceptance_test.php
           php tests/routing_acceptance_test.php
           php tests/acceptance_test.php

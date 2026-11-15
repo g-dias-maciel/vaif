@@ -67,14 +67,26 @@ function generateBlogPostingJsonLd(array $post): string
         'publisher' => [
             '@type' => 'Organization',
             'name' => 'VAIF',
+            'url' => 'https://vaif.com.br',
+            'logo' => [
+                '@type' => 'ImageObject',
+                'url' => 'https://vaif.com.br/img/vaif_logo.png',
+            ],
         ],
     ];
 
     if (!empty($post['author'])) {
+        $authorType = ($post['author_type'] ?? 'Person') === 'Organization' ? 'Organization' : 'Person';
         $data['author'] = [
-            '@type' => 'Person',
+            '@type' => $authorType,
             'name' => $post['author'],
         ];
+        if (!empty($post['author_url'])) {
+            $data['author']['url'] = $post['author_url'];
+        }
+        if ($authorType === 'Organization') {
+            $data['author']['sameAs'] = $post['author_same_as'] ?? ['https://instagram.com/vaifmarketing'];
+        }
     }
 
     if (!empty($post['image'])) {
@@ -85,7 +97,71 @@ function generateBlogPostingJsonLd(array $post): string
         $data['mainEntityOfPage'] = $post['mainEntityOfPage'];
     }
 
+    if (!empty($post['articleSection'])) {
+        $data['articleSection'] = $post['articleSection'];
+    }
+
+    if (!empty($post['keywords'])) {
+        $data['keywords'] = $post['keywords'];
+    }
+
+    if (!empty($post['about'])) {
+        $data['about'] = $post['about'];
+    }
+
+    if (!empty($post['mentions'])) {
+        $data['mentions'] = $post['mentions'];
+    }
+
+    if (!empty($post['wordCount'])) {
+        $data['wordCount'] = (int) $post['wordCount'];
+    }
+
+    if (!empty($post['timeRequired'])) {
+        $data['timeRequired'] = $post['timeRequired'];
+    }
+
+    $data['inLanguage'] = $post['inLanguage'] ?? 'pt-BR';
+    $data['isAccessibleForFree'] = $post['isAccessibleForFree'] ?? true;
+
     return encodeJsonLd($data);
+}
+
+/**
+ * Blog listing schema: the archive as a Blog with its published posts.
+ *
+ * @param array<int, array<string, mixed>> $posts
+ */
+function generateBlogJsonLd(array $posts): string
+{
+    $items = [];
+    foreach ($posts as $post) {
+        if (empty($post['title']) || empty($post['slug'])) {
+            continue;
+        }
+        $items[] = [
+            '@type' => 'BlogPosting',
+            'headline' => $post['title'],
+            'url' => 'https://vaif.com.br/blog/' . $post['slug'],
+            'datePublished' => $post['date'] ?? '',
+            'dateModified' => $post['updated'] ?? ($post['date'] ?? ''),
+        ];
+        if (!empty($post['description'])) {
+            $items[count($items) - 1]['description'] = $post['description'];
+        }
+        if (!empty($post['featured_image'])) {
+            $items[count($items) - 1]['image'] = $post['featured_image'];
+        }
+    }
+
+    return encodeJsonLd([
+        '@context' => 'https://schema.org',
+        '@type' => 'Blog',
+        'name' => 'Blog VAIF',
+        'url' => 'https://vaif.com.br/blog',
+        'inLanguage' => 'pt-BR',
+        'blogPost' => $items,
+    ]);
 }
 
 /**

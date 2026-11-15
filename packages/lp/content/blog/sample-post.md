@@ -4,10 +4,11 @@ date: 2026-01-15
 slug: escalar-estudio-tatuagem-automacao
 description: Descubra como a automação inteligente pode transformar seu estúdio de tatuagem, aumentar o faturamento e liberar seu tempo para focar na arte.
 author: Equipe VAIF
+author_url: https://vaif.com.br
 featured_image: /img/blog/estudio-automacao.jpg
 tags: automacao, tatuagem, negocios
 category: Estratégia
-draft: false
+draft: true
 ---
 
 # Como Escalar Seu Estúdio de Tatuagem com Automação

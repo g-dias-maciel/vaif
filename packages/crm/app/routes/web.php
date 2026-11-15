@@ -8,6 +8,7 @@ use App\Http\Controllers\BookingController;
 use App\Http\Controllers\CalibrationController;
 use App\Http\Controllers\CalibrationReviewController;
 use App\Http\Controllers\ClientController;
+use App\Http\Controllers\ContentController;
 use App\Http\Controllers\ConversationAuditController;
 use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
@@ -147,6 +148,18 @@ Route::middleware('auth')->group(function () {
         Route::get('/copilot', [CopilotController::class, 'index'])->name('copilot.index');
         Route::post('/copilot/generate', [CopilotController::class, 'generate'])->name('copilot.generate');
         Route::get('/copilot/{report}', [CopilotController::class, 'show'])->name('copilot.show');
+
+        // Blog content cockpit: weekly calendar, AI draft, Copilot review,
+        // admin approval and GitHub publishing.
+        Route::get('/content', [ContentController::class, 'index'])->name('content.index');
+        Route::post('/content/generate', [ContentController::class, 'generate'])->name('content.generate');
+        Route::post('/content/topics', [ContentController::class, 'storeTopic'])->name('content.topics.store');
+        Route::get('/content/{post}', [ContentController::class, 'show'])->name('content.show');
+        Route::post('/content/{post}/approve', [ContentController::class, 'approve'])->name('content.approve');
+        Route::post('/content/{post}/regenerate', [ContentController::class, 'regenerate'])->name('content.regenerate');
+        Route::post('/content/{post}/reject', [ContentController::class, 'reject'])->name('content.reject');
+        Route::post('/content/{post}/publish', [ContentController::class, 'retryPublish'])->name('content.publish');
+        Route::post('/content/{post}/reset', [ContentController::class, 'reset'])->name('content.reset');
 
         Route::get('/metrics', [StaffMetricsController::class, 'index'])->name('metrics.index');
         Route::post('/leads/{lead}/audit', [ConversationAuditController::class, 'store'])->name('leads.audit');

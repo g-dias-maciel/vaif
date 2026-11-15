@@ -158,6 +158,37 @@ The agent runs inside the CRM now; n8n is no longer on the message path.
 | `AGENT_TYPING_GRACE_MS` | `30000` |
 | `AGENT_EVAL_ENABLED` | `false` in production |
 
+### Weekly blog content (CRM → GitHub → LP)
+
+| Variable | Value |
+|---|---|
+| `CONTENT_ENABLED` | `true` |
+| `CONTENT_TIMEZONE` | `America/Sao_Paulo` |
+| `CONTENT_WEEKLY_DAY` | `1` (Monday) |
+| `CONTENT_WEEKLY_TIME` | `08:00` |
+| `CONTENT_QUEUE` | `content` (the entrypoint runs a dedicated worker) |
+| `CONTENT_MODEL` | OpenRouter model for the draft |
+| `CONTENT_REVIEW_MODEL` | OpenRouter model for the Copilot review |
+| `CONTENT_MAX_TOKENS` | `6000` |
+| `CONTENT_AI_TIMEOUT` | `120` |
+| `CONTENT_MAIL` | `true` |
+| `CONTENT_RECIPIENTS` | staff e-mails, comma-separated (empty = all staff users) |
+| `LP_BASE_URL` | `https://vaif.com.br` |
+| `LP_ARTIST_API_URL` | `https://vaif.com.br/api/artists/profile.php` |
+| `LP_ARTIST_API_KEY` | must match the LP app |
+| `GITHUB_CONTENT_TOKEN` | fine-grained PAT with **Contents: write** on `g-dias-maciel/vaif` |
+| `GITHUB_CONTENT_REPO` | `g-dias-maciel/vaif` |
+| `GITHUB_CONTENT_BRANCH` | `main` |
+| `GITHUB_CONTENT_PATH` | `packages/lp/content/blog` |
+| `INDEXNOW_KEY` | `vaif-blog-indexnow-2026` |
+| `INDEXNOW_KEY_LOCATION` | `https://vaif.com.br/vaif-blog-indexnow-2026.txt` |
+| `CONTENT_VERIFY_ATTEMPTS` | `20` |
+| `CONTENT_VERIFY_SLEEP` | `15` |
+
+The entrypoint runs a separate `queue:work --queue=content` worker, so a long
+article generation or deploy verification never blocks the WhatsApp agent.
+See [content.md](content.md) for the workflow, commands and claims policy.
+
 The entrypoint starts `php artisan queue:work --queue=agent` next to the
 scheduler and restarts it if it exits. The `jobs` table is created by
 `app/database/migrations/2026_11_08_000003_create_jobs_table.php`; run

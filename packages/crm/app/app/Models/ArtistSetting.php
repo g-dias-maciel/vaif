@@ -38,6 +38,7 @@ class ArtistSetting extends Model
         'whatsapp_number',
         'address',
         'city',
+        'landing_page_slug',
         'telegram_group_id',
         'working_hours',
         'ai_active_hours',

@@ -23,36 +23,26 @@ if ($slug === null) {
     exit;
 }
 
-$configPath = __DIR__ . "/config/{$slug}.php";
+require_once __DIR__ . '/../lib/artists/load.php';
 
-$artist = null;
+$loaded = artist_load_by_slug($slug);
 
-if (file_exists($configPath)) {
-    // Legacy config-file artist.
-    $artist = include $configPath;
-} else {
-    // DB-backed artist (created via the intake form).
-    require_once __DIR__ . '/../lib/artists/store.php';
-    $pdo = artist_db();
-    if ($pdo !== null) {
-        $db_row = artist_db_load_by_slug($pdo, $slug);
-        if ($db_row !== null) {
-            // Drafts are only visible through the admin preview link.
-            if (($db_row['status'] ?? '') !== 'published' && !artist_preview_authorized($db_row)) {
-                http_response_code(404);
-                render_404();
-                exit;
-            }
-            $artist = $db_row['data'];
-        }
-    }
-}
-
-if ($artist === null) {
+if ($loaded === null) {
     http_response_code(404);
     render_404();
     exit;
 }
+
+// Drafts are only visible through the admin preview link.
+if ($loaded['source'] === 'db'
+    && $loaded['status'] !== 'published'
+    && !artist_preview_authorized($loaded['db_row'] ?? [])) {
+    http_response_code(404);
+    render_404();
+    exit;
+}
+
+$artist = $loaded['artist'];
 
 if (!is_array($artist) || empty($artist['slug']) || empty($artist['display_name']) || empty($artist['whatsapp_number'])) {
     http_response_code(500);
@@ -240,6 +230,7 @@ require_once __DIR__ . '/sections/before-after.php';
 require_once __DIR__ . '/sections/testimonials.php';
 require_once __DIR__ . '/sections/instagram.php';
 require_once __DIR__ . '/sections/location.php';
+require_once __DIR__ . '/sections/articles.php';
 
 // ================================================================
 // Escaped values for inline HTML
@@ -395,6 +386,7 @@ echo <<<PAGE
     </section>
 
 {$location_html}
+{$articles_section_html}
     <!-- ═══ CLOSING CTA ═══ -->
     <section class="closing-cta">
         <h2 class="section-heading">Sua próxima <span>obra de arte</span> começa aqui</h2>

@@ -6,6 +6,9 @@ Supabase Postgres** the SDR agent (Beatriz) writes to — one source of truth.
 - **Artists** log in, see their own **Leads pipeline** and **upcoming bookings**,
   and can **mark a lead lost**, **reschedule a booking**, and **add notes**.
 - **VAIF staff** log in and browse every Artist's CRM **read-only**.
+- **Staff** also get a weekly **Conteúdo** cockpit: AI drafts, Copilot review,
+  human approval and GitHub publishing to `vaif.com.br/blog/`. See
+  [`docs/content.md`](docs/content.md).
 
 ## Layout
 

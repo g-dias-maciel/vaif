@@ -101,6 +101,13 @@ class ArtistController extends Controller
             'timezone' => ['nullable', 'string', 'max:64'],
             'whatsapp_number' => ['nullable', 'string', 'max:32'],
             'instagram_handle' => ['nullable', 'string', 'max:255'],
+            'landing_page_slug' => [
+                'nullable',
+                'string',
+                'max:120',
+                'regex:/^[a-z0-9]+(?:-[a-z0-9]+)*$/',
+                Rule::unique('artist_settings', 'landing_page_slug')->ignore($artist->id, 'artist_id'),
+            ],
             'deposit_value' => ['nullable', 'numeric', 'min:1', 'max:100'],
             'status' => ['required', Rule::in(['live', 'onboarding', 'suspended'])],
         ]);
@@ -121,6 +128,9 @@ class ArtistController extends Controller
                 'display_name' => $data['name'],
                 'whatsapp_number' => $whatsapp !== '' ? $whatsapp : null,
                 'instagram_handle' => $instagram !== '' ? $instagram : null,
+                'landing_page_slug' => array_key_exists('landing_page_slug', $data)
+                    ? (($data['landing_page_slug'] ?? null) ?: null)
+                    : $settings->landing_page_slug,
                 'deposit_type' => 'percent',
                 'deposit_value' => ($data['deposit_value'] ?? null) !== null
                     ? (float) $data['deposit_value']

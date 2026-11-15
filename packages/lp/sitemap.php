@@ -32,6 +32,11 @@ require_once __DIR__ . '/lib/blog/parse-frontmatter.php';
         <changefreq>weekly</changefreq>
         <priority>0.8</priority>
     </url>
+    <url>
+        <loc><?php echo $baseUrl; ?>/blog</loc>
+        <changefreq>weekly</changefreq>
+        <priority>0.7</priority>
+    </url>
 <?php
 
 $blogDir = __DIR__ . '/content/blog';
@@ -55,7 +60,9 @@ if (is_dir($blogDir)) {
         }
 
         $lastmod = '';
-        if (!empty($fm['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fm['date'])) {
+        if (!empty($fm['updated']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fm['updated'])) {
+            $lastmod = formatDate($fm['updated']);
+        } elseif (!empty($fm['date']) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $fm['date'])) {
             $lastmod = formatDate($fm['date']);
         } else {
             $lastmod = fileMtimeDate($file);

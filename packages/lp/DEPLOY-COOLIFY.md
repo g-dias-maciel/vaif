@@ -40,6 +40,9 @@ runtime via `getenv()` in the PHP API files.
 | `N8N_DIAGNOSTICO_WEBHOOK_URL` | n8n webhook for the free diagnostic form (`/api/leads/diagnostico.php`) — leads are sent to Telegram approval then emailed. Set to `https://n8n.vaif.com.br/webhook/diagnostico` | optional |
 | `CRM_INGEST_URL` | Internal CRM ingest endpoint: `https://crm.vaif.com.br/api/sales/prospects` | required for the sales CRM |
 | `CRM_INGEST_TOKEN` | Bearer token for the CRM ingest endpoint; must match `SALES_INGEST_TOKEN` in the CRM | required for the sales CRM |
+| `API_CREATE_KEY` | Shared secret for the authenticated artist-creation endpoint (`POST /api/artists/create.php`) and legacy fallback for the review panel | required for automation |
+| `LP_ARTIST_API_KEY` | Shared secret the CRM sends as `X-Api-Key` to `GET /api/artists/profile.php`. Leave empty only in local development. | required for the CRM content workflow |
+| `LP_BASE_URL` | Public base URL used by dynamic `llms.txt`, `sitemap.xml` and the profile API. Defaults to `https://vaif.com.br`. | optional |
 | `ARTISTS_ADMIN_TOKEN` | Secret token that unlocks the artist review panel at `/artistas-admin/<token>`. Falls back to `API_CREATE_KEY` if unset. Generate something long and random. | required for the review panel |
 
 Use Coolify's **`@` secret/database linking** if you attach a Coolify-managed
@@ -52,6 +55,16 @@ MySQL database so credentials are injected automatically.
 Routing for `/blog`, `/artists`, `/onboard`, `/agenda`, `/novo-artista` and
 `/artistas-admin` is handled by the bundled `deploy/nginx.conf` **inside the
 container** — no Custom Nginx Config is needed for the Docker deployment.
+
+The same file also routes the dynamic discovery endpoints:
+
+| URL | Handler |
+|---|---|
+| `/sitemap.xml` | `sitemap.php` (blog posts + artist pages) |
+| `/llms.txt` | `llms.php` (artists + published posts, generated at request time) |
+| `/blog/feed.xml` | `blog/index.php` (RSS 2.0) |
+| `/vaif-blog-indexnow-2026.txt` | static IndexNow key file |
+| `/api/artists/profile.php` | public artist profile feed used by the CRM |
 
 > The legacy `nginx-routing.conf` file is only for the old manual
 > (non-Docker) Coolify setup. It is not used by this Docker build.

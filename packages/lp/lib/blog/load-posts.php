@@ -58,15 +58,59 @@ function load_posts(string $dir): array
             $tags = array_map('trim', explode(',', $fm['tags']));
         }
 
+        $faq = [];
+        if (!empty($fm['faq_json'])) {
+            $decoded = json_decode($fm['faq_json'], true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $item) {
+                    if (!is_array($item)) {
+                        continue;
+                    }
+                    $q = trim((string) ($item['question'] ?? $item['q'] ?? ''));
+                    $a = trim((string) ($item['answer'] ?? $item['a'] ?? ''));
+                    if ($q !== '' && $a !== '') {
+                        $faq[] = ['question' => $q, 'answer' => $a];
+                    }
+                }
+            }
+        }
+
+        $sources = [];
+        if (!empty($fm['sources_json'])) {
+            $decoded = json_decode($fm['sources_json'], true);
+            if (is_array($decoded)) {
+                foreach ($decoded as $source) {
+                    if (is_string($source) && trim($source) !== '') {
+                        $sources[] = trim($source);
+                    }
+                }
+            }
+        }
+
+        $updated = $fm['updated'] ?? $date;
+        if (!preg_match('/^\d{4}-\d{2}-\d{2}$/', $updated)) {
+            $updated = $date;
+        }
+
+        $wordCount = count(preg_split('/\s+/u', trim(strip_tags($body))) ?: []);
+
         $posts[] = [
             'title' => $title,
             'date' => $date,
+            'updated' => $updated,
             'slug' => $slug,
             'description' => $description,
             'author' => $fm['author'] ?? '',
+            'author_url' => $fm['author_url'] ?? '',
+            'artist_slug' => $fm['artist_slug'] ?? '',
             'featured_image' => $fm['featured_image'] ?? '',
+            'featured_image_alt' => $fm['featured_image_alt'] ?? $title,
             'tags' => $tags,
             'category' => $fm['category'] ?? '',
+            'faq' => $faq,
+            'sources' => $sources,
+            'word_count' => $wordCount,
+            'reading_time' => max(1, (int) ceil($wordCount / 200)),
             'draft' => $draft,
             'body' => $body,
             'file' => $file,
@@ -74,11 +118,20 @@ function load_posts(string $dir): array
     }
 
     usort($posts, function (array $a, array $b): int {
-        return strcmp($b['date'], $a['date']);
+        $byDate = strcmp($b['date'], $a['date']);
+        if ($byDate !== 0) {
+            return $byDate;
+        }
+
+        return strcmp($b['slug'], $a['slug']);
     });
 
     $indexed = [];
     foreach ($posts as $post) {
+        if (isset($indexed[$post['slug']])) {
+            error_log("Blog post {$post['file']} duplicates slug {$post['slug']}; keeping the first file");
+            continue;
+        }
         $indexed[$post['slug']] = $post;
     }
 

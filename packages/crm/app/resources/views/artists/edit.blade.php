@@ -50,6 +50,14 @@
         </div>
 
         <div class="form-field">
+            <label for="landing_page_slug">Slug da landing page</label>
+            <input type="text" name="landing_page_slug" id="landing_page_slug"
+                value="{{ old('landing_page_slug', $artist->settings?->landing_page_slug) }}"
+                placeholder="adriano-santos">
+            <span class="meta">Slug público em vaif.com.br/artists/&lt;slug&gt;. Vazio = sem blog.</span>
+        </div>
+
+        <div class="form-field">
             <label for="timezone">Fuso horário</label>
             <input type="text" name="timezone" id="timezone"
                 value="{{ old('timezone', $artist->timezone ?: 'America/Sao_Paulo') }}">

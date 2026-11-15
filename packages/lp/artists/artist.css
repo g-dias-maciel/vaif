@@ -1179,3 +1179,78 @@
             .lightbox-nav,
             .lightbox-close { width: 44px; height: 44px; font-size: 22px; }
         }
+
+/* ─── ARTICLES ABOUT THIS ARTIST ─── */
+.artist-articles {
+    background: var(--bg-card);
+    border-top: 1px solid var(--border-color);
+}
+
+.artist-articles-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 16px;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 0 1.5rem;
+}
+
+.artist-article-card {
+    background: var(--bg-dark);
+    border: 1px solid var(--border-color);
+    border-radius: 12px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    transition: border-color 0.2s ease, transform 0.2s ease;
+}
+
+.artist-article-card:hover {
+    border-color: var(--gold);
+    transform: translateY(-2px);
+}
+
+.artist-article-card time {
+    color: var(--text-muted);
+    font-size: 11px;
+    letter-spacing: 1px;
+    text-transform: uppercase;
+}
+
+.artist-article-card h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.35rem;
+    line-height: 1.25;
+    margin: 0;
+}
+
+.artist-article-card h3 a {
+    color: var(--text-main);
+    text-decoration: none;
+}
+
+.artist-article-card h3 a:hover {
+    color: var(--gold);
+}
+
+.artist-article-card p {
+    color: var(--text-muted);
+    font-size: 0.86rem;
+    line-height: 1.6;
+    margin: 0;
+    flex: 1;
+}
+
+.artist-article-link {
+    color: var(--gold);
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.6px;
+    text-decoration: none;
+    text-transform: uppercase;
+}
+
+.artist-article-link:hover {
+    opacity: 0.8;
+}

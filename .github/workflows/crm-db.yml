@@ -74,6 +74,23 @@ jobs:
           PGPASSWORD: postgres
           PSQL: psql -h localhost -U postgres -d vaif_v2_test -v ON_ERROR_STOP=1 -q
         run: |
+          # Laravel owns `users`; create its shape before the SQL migrations that
+          # reference it. This mirrors app/database/migrations/2014_10_12_000000.
+          psql -h localhost -U postgres -d vaif_v2_test -v ON_ERROR_STOP=1 -q <<'SQL'
+          create table if not exists public.users (
+            id bigserial primary key,
+            name text not null,
+            email text not null unique,
+            email_verified_at timestamptz,
+            password text not null,
+            role text not null default 'artist',
+            artist_id uuid,
+            remember_token text,
+            created_at timestamptz,
+            updated_at timestamptz
+          );
+          SQL
+
           # Apply in filename order so a new migration is covered automatically.
           for f in $(ls packages/crm/db/migrations/*.sql | sort); do
             echo "→ $f"

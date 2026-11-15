@@ -17,6 +17,18 @@ if ($path === '/') {
     return false;
 }
 
+// Dynamic llms.txt — must be handled before the static-file check.
+if ($path === '/llms.txt') {
+    include __DIR__ . '/llms.php';
+    return;
+}
+
+// Dynamic sitemap — the public URL is /sitemap.xml, not /sitemap.php.
+if ($path === '/sitemap.xml') {
+    include __DIR__ . '/sitemap.php';
+    return;
+}
+
 $file = $_SERVER['DOCUMENT_ROOT'] . $path;
 if (is_file($file)) {
     return false;

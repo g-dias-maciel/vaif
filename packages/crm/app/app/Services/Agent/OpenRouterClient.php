@@ -24,6 +24,8 @@ class OpenRouterClient implements AiClient
     {
         $key = (string) config('agent.openrouter.key');
         $url = (string) config('agent.openrouter.url');
+        $timeout = (int) ($options['_timeout'] ?? config('agent.openrouter.timeout', 30));
+        unset($options['_timeout']);
 
         if ($key === '') {
             throw new AgentException('OPENROUTER_API_KEY is not configured.');
@@ -32,7 +34,7 @@ class OpenRouterClient implements AiClient
         try {
             $response = Http::withToken($key)
                 ->acceptJson()
-                ->timeout((int) config('agent.openrouter.timeout', 30))
+                ->timeout($timeout)
                 ->retry((int) config('agent.openrouter.retries', 2), 300)
                 ->post($url.'/chat/completions', array_merge([
                     'model' => $model,

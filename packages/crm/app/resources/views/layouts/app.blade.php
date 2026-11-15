@@ -698,6 +698,9 @@
                                 <a href="{{ route('copilot.index') }}" class="nav-item {{ request()->routeIs('copilot.*') ? 'is-active' : '' }}">
                                     <x-icon name="grid" /> <span>Copiloto</span>
                                 </a>
+                                <a href="{{ route('content.index') }}" class="nav-item {{ request()->routeIs('content.*') ? 'is-active' : '' }}">
+                                    <x-icon name="grid" /> <span>Conteúdo</span>
+                                </a>
                             </div>
                         @endif
 

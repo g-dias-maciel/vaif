@@ -85,6 +85,15 @@ su -s /bin/sh www-data -c 'while true; do
     sleep 2
 done' >> storage/logs/queue-mock.log 2>&1 &
 
+# --- Content queue -----------------------------------------------------------
+# Weekly blog generation/review and the GitHub publish verification. Kept
+# separate from the live WhatsApp queue because an article can take minutes.
+echo "[entrypoint] starting the content queue worker"
+su -s /bin/sh www-data -c 'while true; do
+    php artisan queue:work --queue=content --sleep=2 --tries=1 --timeout=600 --memory=256
+    sleep 2
+done' >> storage/logs/queue-content.log 2>&1 &
+
 # --- Serve -------------------------------------------------------------------
 echo "[entrypoint] starting php-fpm + nginx"
 php-fpm -D

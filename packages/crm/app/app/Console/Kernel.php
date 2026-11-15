@@ -71,6 +71,18 @@ class Kernel extends ConsoleKernel
                 ->withoutOverlapping(30);
         }
 
+        // Weekly blog content: queue the next due topic. A human still approves
+        // every article in the CRM before it is committed to the LP.
+        if (config('content.enabled', true)) {
+            $schedule->command('content:generate')
+                ->weeklyOn(
+                    (int) config('content.weekly_day', 1),
+                    (string) config('content.weekly_time', '08:00')
+                )
+                ->timezone((string) config('content.timezone', 'America/Sao_Paulo'))
+                ->withoutOverlapping(30);
+        }
+
         // Finance: generate the PIX invoices that are due and flag overdue
         // balances. Card charges are recorded manually or by the MP webhook.
         $schedule->command('finance:generate-invoices')
