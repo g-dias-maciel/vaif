@@ -30,8 +30,17 @@ class AgentMedia
     /**
      * @return array{text: string, analysis: ?array}
      */
-    public function prepare(Artist $artist, string $projectId, string $text, string $tattooType): array
-    {
+    /**
+     * @param  array<int, array{role?: string, content?: string}>  $history
+     * @return array{text: string, analysis: ?array}
+     */
+    public function prepare(
+        Artist $artist,
+        string $projectId,
+        string $text,
+        string $tattooType,
+        array $history = [],
+    ): array {
         if (! str_contains($text, '[[REF_')) {
             return ['text' => $text, 'analysis' => null];
         }
@@ -42,6 +51,7 @@ class AgentMedia
         $text = preg_replace('/\[\[REF_(?:FOTO|AUDIO):[^\]]+\]\]/', '', $text) ?? $text;
 
         $analysis = null;
+        $chatContext = $this->chatContext($history, $text);
 
         foreach (array_slice(array_unique($photoMatches[1] ?? []), 0, 3) as $url) {
             $stored = $this->storeImage($artist, $projectId, $url);
@@ -51,7 +61,7 @@ class AgentMedia
             }
 
             if ($analysis === null) {
-                $analysis = $this->analyze($stored['body'], $stored['mime'], $tattooType);
+                $analysis = $this->analyze($stored['body'], $stored['mime'], $tattooType, $chatContext);
                 if ($analysis !== null) {
                     $this->saveAnalysis($projectId, $analysis, $stored['url']);
                 }
@@ -115,11 +125,11 @@ class AgentMedia
     /**
      * @return array<string, mixed>|null
      */
-    public function analyze(string $body, string $mime, string $tattooType): ?array
+    public function analyze(string $body, string $mime, string $tattooType, string $chatContext = ''): ?array
     {
         $cover = in_array($tattooType, ['cover_up', 'rework'], true);
         $context = $cover
-            ? ' ATENÇÃO: esta imagem é a TATUAGEM EXISTENTE que o cliente quer '.($tattooType === 'rework' ? 'reformar' : 'cobrir').'. Descreva-a como tatuagem atual a ser coberta, nunca como referência de desenho novo.'
+            ? ' A conversa indica cobertura/reforma. Use o contexto para confirmar se a imagem é a TATUAGEM ATUAL do cliente ou uma referência do desenho novo.'
             : '';
 
         $system = 'Você é um assistente de um estúdio de tatuagem. Analise a imagem que o cliente enviou: pode ser uma referência para uma tatuagem nova ou a tatuagem EXISTENTE que ele quer cobrir/reformar.
@@ -133,22 +143,36 @@ Responda SOMENTE com um objeto JSON válido, sem markdown, com estas chaves:
   "cores": "preto e cinza | colorido | indefinido",
   "complexidade": "baixa | media | alta",
   "tipo": "desenho | foto_de_tatuagem | flash | outra",
+  "papel": "tatuagem_atual | referencia | outra",
+  "papel_confianca": "alta | media | baixa",
   "local": "braco | braco_externo | braco_interno | antebraco | peito | costas | perna | coxa | panturrilha | tornozelo | pescoco | costela | barriga | ombro | pulso | dedo | mao | pe | indefinido",
   "tamanho": "pequeno | medio | grande | fechamento | indefinido",
   "cobertura": "sim | nao | talvez | indefinido",
   "confianca": "alta | media | baixa",
   "observacoes": "detalhes úteis, ou string vazia"
 }
-Se a imagem mostrar uma tatuagem no corpo, identifique o local e o tamanho aproximado. Não estime preço. Não invente detalhes que não dá para ver. NUNCA devolva assunto ou resumo vazios.';
+Se a imagem mostrar uma tatuagem no corpo, identifique o local e o tamanho aproximado. Não estime preço. Não invente detalhes que não dá para ver. NUNCA devolva assunto ou resumo vazios.
+
+`papel` classifica o que a imagem É para esta conversa:
+- "tatuagem_atual" — a tatuagem que o cliente já tem no corpo e quer cobrir/reformar. Normalmente o contexto fala em cobrir, reformar, melhorar ou a foto vem logo depois disso.
+- "referencia" — desenho, flash, ou tatuagem de outra pessoa usada como inspiração para a tatuagem NOVA. O contexto pede um desenho novo ou manda uma ideia.
+- "outra" — print, comprovante, foto do estúdio ou qualquer imagem que não é tatuagem do cliente nem referência.
+Quando o contexto for ambíguo, decida pelo que a imagem mostra: tatuagem no corpo do cliente = tatuagem_atual; desenho/papel/tela = referencia. Não invente: use "outra" se não der para saber.';
+
+        $userText = 'Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido.'.$context;
+
+        if ($chatContext !== '') {
+            $userText .= "\n\nContexto recente da conversa (use para decidir `papel`; quando o contexto for ambíguo, a imagem manda):\n".$chatContext;
+        }
 
         try {
             $content = $this->ai->complete([
                 ['role' => 'system', 'content' => $system],
                 ['role' => 'user', 'content' => [
-                    ['type' => 'text', 'text' => 'Analise esta imagem enviada pelo cliente e devolva apenas o JSON pedido.'.$context],
+                    ['type' => 'text', 'text' => $userText],
                     ['type' => 'image_url', 'image_url' => ['url' => 'data:'.$mime.';base64,'.base64_encode($body)]],
                 ]],
-            ], (string) config('agent.models.vision'), ['max_tokens' => 500]);
+            ], (string) config('agent.models.vision'), ['max_tokens' => 600]);
         } catch (\Throwable $e) {
             Log::warning('Reference analysis failed', ['error' => $e->getMessage()]);
 
@@ -161,8 +185,65 @@ Se a imagem mostrar uma tatuagem no corpo, identifique o local e o tamanho aprox
         }
 
         $data['assunto'] = $data['assunto'] ?? ($data['resumo'] ?? 'imagem recebida');
+        $data['papel'] = $this->normalizeRole($data['papel'] ?? null);
+
+        if ($data['papel'] === null) {
+            $data['papel'] = $cover && ($data['tipo'] ?? null) === 'foto_de_tatuagem'
+                ? 'tatuagem_atual'
+                : 'indefinido';
+        }
 
         return $data;
+    }
+
+    /**
+     * The visual role of an image is the difference between asking for the
+     * current-tattoo photo again and handing off a cover-up.
+     *
+     * @param  array<int, array{role?: string, content?: string}>  $history
+     */
+    private function chatContext(array $history, string $leadText): string
+    {
+        $lines = [];
+
+        foreach (array_slice($history, -8) as $message) {
+            $content = $this->plainText((string) ($message['content'] ?? ''));
+
+            if ($content === '') {
+                continue;
+            }
+
+            $role = ($message['role'] ?? 'user') === 'assistant' ? 'Atendente' : 'Cliente';
+            $lines[] = $role.': '.mb_substr($content, 0, 180);
+        }
+
+        $content = $this->plainText($leadText);
+
+        if ($content !== '') {
+            $lines[] = 'Cliente: '.mb_substr($content, 0, 180);
+        }
+
+        return implode("\n", $lines);
+    }
+
+    private function plainText(string $content): string
+    {
+        $content = preg_replace('/\[\[REF_(?:FOTO|AUDIO):[^\]]+\]\]/', '', $content) ?? $content;
+        $content = preg_replace('/\[(?:FOTO|ÁUDIO) RECEBIDO\]/u', '', $content) ?? $content;
+
+        return trim(preg_replace('/\s+/', ' ', $content) ?? $content);
+    }
+
+    private function normalizeRole(?string $role): ?string
+    {
+        $role = Str::ascii(mb_strtolower(trim((string) $role)));
+
+        return match (true) {
+            str_contains($role, 'atual') => 'tatuagem_atual',
+            str_contains($role, 'refer') => 'referencia',
+            str_contains($role, 'outra') => 'outra',
+            default => null,
+        };
     }
 
     /**
@@ -273,6 +354,16 @@ Não invente. Se não der para identificar, responda "imagem sem detalhe legíve
 
         $analysis['image_url'] = $imageUrl;
         $analysis['analyzed_at'] = now()->toIso8601String();
+
+        // Once the lead's current tattoo has been seen, a later reference
+        // image must not erase that evidence: it is what lets the agent hand
+        // off a cover-up without asking for the same photo again.
+        $existing = is_array($project->reference_analysis) ? $project->reference_analysis : [];
+
+        if (($existing['papel'] ?? null) === 'tatuagem_atual'
+            && ($analysis['papel'] ?? null) !== 'tatuagem_atual') {
+            return;
+        }
 
         $project->reference_analysis = $analysis;
         $project->save();

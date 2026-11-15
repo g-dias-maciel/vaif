@@ -98,6 +98,42 @@ class AgentMediaTest extends TestCase
         $this->assertSame('leão com bússola', $project->reference_analysis['assunto']);
     }
 
+
+    public function test_the_chat_context_classifies_the_photo_as_the_current_tattoo(): void
+    {
+        $project = $this->project();
+
+        Http::fake([
+            'https://waha.test/api/files/*' => Http::response('jpeg-bytes', 200, ['Content-Type' => 'image/jpeg']),
+            'https://openrouter.test/*' => Http::response([
+                'choices' => [[
+                    'message' => ['content' => '{"referencia_de_tatuagem":true,"assunto":"tatuagem antiga no braço","tipo":"foto_de_tatuagem","papel":"Tatuagem Atual","papel_confianca":"alta"}'],
+                ]],
+            ], 200),
+        ]);
+
+        $result = (new AgentMedia(new OpenRouterClient()))->prepare(
+            $project->artist,
+            $project->id,
+            "[FOTO RECEBIDA]\n[[REF_FOTO:https://waha.test/api/files/2.jpg]]",
+            'cover_up',
+            [
+                ['role' => 'user', 'content' => 'Quero cobrir essa tatuagem antiga do braço'],
+                ['role' => 'assistant', 'content' => 'Me manda uma foto dela de perto'],
+            ],
+        );
+
+        $this->assertSame('tatuagem_atual', $result['analysis']['papel']);
+
+        $project->refresh();
+        $this->assertSame('tatuagem_atual', $project->reference_analysis['papel']);
+
+        Http::assertSent(function ($request) {
+            return str_contains($request->url(), 'openrouter.test')
+                && str_contains((string) $request->body(), 'Quero cobrir essa tatuagem antiga do bra');
+        });
+    }
+
     public function test_an_audio_is_transcribed_into_the_lead_text(): void
     {
         $project = $this->project();

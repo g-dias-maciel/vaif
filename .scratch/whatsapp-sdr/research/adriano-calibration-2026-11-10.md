@@ -184,9 +184,11 @@ Changes:
 
 - **Context implies a new tattoo** — “do mesmo lado”, “ao lado”, “mais uma” now create a `tattoo_type=nova` assumption and the briefing asks a closed confirmation. If the model asks the open “nova, cobertura ou reforma?” anyway, the validator replaces it with “Essa tatuagem seria uma tatuagem nova, certo?”. Verified on Eliza’s “ramo de flor do mesmo lado”.
 - **Cover-up with photo already sent** — the photo is enough: recognize it and hand off. The video requirement was removed from the prompt and validator, and from the regression requirements. Verified on Grazi’s “Deixar com qualidade”.
+- **Photo role from the chat** — every incoming image is now classified as `tatuagem_atual`, `referencia` or `outra` using the recent conversation as context. Only a `tatuagem_atual` image sets `cover_photo_received`; a reference image (someone else’s tattoo, flash, drawing) does not. Historical analyses are kept, so a later reference image never erases the current-tattoo evidence. Rows analyzed before this change fall back to the old `lead_photos` + cover-up rule.
 - **Personal / abusive chats** — the new `personal` intent is not answered. After a first wrong-number close, a second spam message is also ignored. The real preflight classified the reviewed “Fala vagabundo…” message as `personal`; the agent skips it.
+- **All handoffs stop the agent** — after any handoff phrase (“vou passar para o Adriano”, “vou encaminhar”, “ele vai entrar em contato”…), later turns are skipped, including in simulated drafts. Scenario `16-handoff-stops-followup` covers it.
 - **Review status** — reviews have an `incorporated_at` field and an “Incorporada na calibração” checkbox. The five existing reviews were marked incorporated.
-- **Regression** — new scenarios `14-personal-skip` and `15-spam-after-close`; the pinned 8 real-failure suite still passes 8/8 with the photo-only cover-up policy.
+- **Regression** — new scenarios `14-personal-skip`, `15-spam-after-close` and `16-handoff-stops-followup`; the pinned 8 real-failure suite still passes 8/8 with the photo-only cover-up policy.
 
 ## Recommendation
 

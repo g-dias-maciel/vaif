@@ -51,6 +51,13 @@ class DraftProcessor
 
         $state = is_array($start['agent_state'] ?? null) ? $start['agent_state'] : [];
 
+        // History before this turn: the classifier needs it to resolve short
+        // answers, and the vision analysis needs it to tell the current tattoo
+        // apart from a reference image.
+        $history = $this->store->history((string) $start['lead_id'], 16, $msgAt);
+
+        $projectAnalysis = is_array($start['reference_analysis'] ?? null) ? $start['reference_analysis'] : [];
+        $currentAnalysis = null;
         $effectiveText = $leadText;
         $photoAnalyzed = false;
         if ($this->media !== null) {
@@ -59,18 +66,16 @@ class DraftProcessor
                 (string) ($start['project_id'] ?? ''),
                 $leadText,
                 (string) ($start['tattoo_type'] ?? ''),
+                $history,
             );
             $effectiveText = $prepared['text'];
 
             if ($prepared['analysis'] !== null) {
+                $currentAnalysis = $prepared['analysis'];
                 $start['reference_analysis'] = $prepared['analysis'];
                 $photoAnalyzed = true;
             }
         }
-
-        // History before this turn: the classifier needs it to resolve short
-        // answers and to know which discovery fields are already established.
-        $history = $this->store->history((string) $start['lead_id'], 16, $msgAt);
 
         $context = $this->prompts->context($artist, $start);
         $preflight = $this->preflight->classify($context, $effectiveText, $history);
@@ -82,6 +87,14 @@ class DraftProcessor
         if ($skipReason !== null) {
             return ['skipped' => $skipReason, 'intent' => $intent];
         }
+
+        $preflight['flags'] = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
+        $preflight['flags']['cover_photo_received'] = CoverPhoto::received(
+            $projectAnalysis,
+            $currentAnalysis,
+            $preflight['flags'],
+            (string) ($start['tattoo_type'] ?? ''),
+        );
 
         $facts = $this->store->facts(
             $artist->id,

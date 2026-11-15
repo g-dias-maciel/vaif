@@ -412,6 +412,31 @@ class ReplyValidatorTest extends TestCase
         $this->assertStringContainsString('Vou passar', $result['final_reply']);
     }
 
+    public function test_a_reference_photo_does_not_count_as_the_current_tattoo_photo(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'handoff'], ['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto da tatuagem atual do braço? Vou passar para o Adriano avaliar.',
+            ['flags' => ['lead_photos' => true, 'mentions_coverup' => true, 'cover_photo_received' => false]],
+        );
+
+        $this->assertNotContains('photo_reasked', array_column($result['violations'], 'rule'));
+    }
+
+    public function test_the_current_tattoo_photo_flag_alone_blocks_a_photo_reask(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto da tatuagem atual do braço?',
+            ['flags' => ['lead_photos' => false, 'cover_photo_received' => true]],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('photo_reasked', array_column($result['violations'], 'rule'));
+    }
+
     public function test_a_question_while_the_lead_is_driving_is_replaced(): void
     {
         $result = (new ReplyValidator())->validate(

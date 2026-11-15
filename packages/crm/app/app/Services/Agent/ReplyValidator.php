@@ -75,6 +75,9 @@ class ReplyValidator
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
         $coverCase = $isCover || $coverHint;
+        $coverPhoto = array_key_exists('cover_photo_received', $flags)
+            ? ! empty($flags['cover_photo_received'])
+            : (! empty($flags['lead_photos']) && $coverCase);
         $coverIntent = $intent === 'coverup' || $coverCase;
         $hasHandoff = false;
 
@@ -369,7 +372,7 @@ class ReplyValidator
         $photoNegated = preg_match('/(nao precisa|nao e necessario|ja recebi|dispensa)[^.]{0,35}(foto|fotos)/u', $normReply) === 1;
 
         if ($coverCase
-            && ! empty($flags['lead_photos'])
+            && $coverPhoto
             && $asksPhoto
             && ! $photoNegated
             && preg_match('/(foto|fotos)[^?]{0,45}(tatuagem atual|tattoo atual|como esta|do local|do braco|do antebraco)|(tatuagem atual|tattoo atual)[^?]{0,45}(foto|fotos)/u', $normReply) === 1) {
@@ -670,7 +673,7 @@ class ReplyValidator
     private function coverupReply(array $facts, array $studio, array $flags): string
     {
         $artistName = (string) ($studio['artist_name'] ?? 'o artista');
-        $photos = ! empty($flags['lead_photos'])
+        $photos = ! empty($flags['cover_photo_received'])
             || ! empty($facts['turn']['agent_state']['photo_confirmed']);
         $small = (! empty($facts['project']['body_zone']) && $facts['project']['body_zone'] === 'pequeno')
             || ! empty($facts['assumptions']['body_zone']);

@@ -120,6 +120,14 @@ class MockDraftGenerator
                     continue;
                 }
 
+                $preflight['flags'] = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
+                $preflight['flags']['cover_photo_received'] = CoverPhoto::received(
+                    is_array($start['reference_analysis'] ?? null) ? $start['reference_analysis'] : [],
+                    null,
+                    $preflight['flags'],
+                    (string) ($start['tattoo_type'] ?? ''),
+                );
+
                 $facts = $this->store->facts(
                     $artist->id,
                     (string) $start['project_id'],

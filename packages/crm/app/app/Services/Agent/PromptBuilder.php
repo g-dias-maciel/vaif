@@ -183,8 +183,8 @@ class PromptBuilder
             $lines[] = '- O lead já enviou foto/vídeo no histórico. NÃO peça a mesma foto de novo: reconheça ("Recebi as fotos") e siga com a próxima informação que falta.';
         }
 
-        if (! empty($flags['lead_photos']) && ! empty($flags['mentions_coverup'])) {
-            $lines[] = '- O lead já enviou a foto da tatuagem atual. NÃO peça foto nem vídeo de novo: reconheça e faça o handoff, como a revisão da equipe pediu.';
+        if (! empty($flags['cover_photo_received'])) {
+            $lines[] = '- A foto da tatuagem ATUAL do lead já está na conversa. NÃO peça foto nem vídeo de novo: reconheça e faça o handoff, como a revisão da equipe pediu.';
         }
 
         if (! empty($flags['lead_busy'])) {
@@ -196,8 +196,10 @@ class PromptBuilder
         }
 
         if (in_array($type, ['cover_up', 'rework'], true)) {
-            $photos = ! empty($flags['lead_photos'])
-                || ! empty($facts['turn']['agent_state']['photo_confirmed']);
+            $photos = array_key_exists('cover_photo_received', $flags)
+                ? ! empty($flags['cover_photo_received'])
+                : (! empty($flags['lead_photos']) && (! empty($flags['mentions_coverup']) || in_array($type, ['cover_up', 'rework'], true)));
+            $photos = $photos || ! empty($facts['turn']['agent_state']['photo_confirmed']);
 
             $lines[] = $photos
                 ? '- Cobertura/reforma: NÃO pergunte tipo, estilo, primeira tatuagem nem significado. O lead já enviou fotos: reconheça ("Recebi as fotos"), NÃO peça foto nem vídeo de novo e faça o handoff na mesma mensagem. Se a foto estiver desfocada ou não mostrar o local inteiro, peça uma complementar antes.'
@@ -405,10 +407,18 @@ class PromptBuilder
 
         $flag = fn ($value) => in_array($value, [false, 'nao', 'não'], true) ? 'não' : 'sim';
         $summary = trim((string) ($analysis['assunto'] ?? $analysis['resumo'] ?? 'imagem recebida'));
+        $roles = [
+            'tatuagem_atual' => 'tatuagem ATUAL do lead (a que ele quer cobrir/reformar)',
+            'referencia' => 'referência para o desenho NOVO',
+            'outra' => 'outra imagem (não é a tatuagem atual nem referência direta)',
+            'indefinido' => 'não foi possível definir',
+        ];
+        $role = (string) ($analysis['papel'] ?? 'indefinido');
 
         $lines = [
             '## Referência visual (análise automática)',
             'A imagem recebida foi analisada automaticamente. Use como apoio, não como verdade absoluta.',
+            '- Papel da imagem: '.($roles[$role] ?? $role),
             '- É referência de tatuagem: '.$flag($analysis['referencia_de_tatuagem'] ?? null),
             '- Referência: '.$summary,
         ];
@@ -427,7 +437,15 @@ class PromptBuilder
             }
         }
 
-        $lines[] = 'Regras: na PRIMEIRA resposta após esta análise, reconheça a referência em uma frase curta usando o assunto; não descreva detalhes minuciosos; não aja como se não tivesse visto a imagem. Se a confiança for baixa ou não for referência, peça outra foto. NUNCA use esta análise para calcular preço — o preço vem da tabela.';
+        if ($role === 'tatuagem_atual') {
+            $lines[] = 'Regra: esta é a foto da tatuagem ATUAL. Reconheça em uma frase curta, NÃO peça outra foto e, se for cobertura/reforma, faça o handoff na mesma mensagem.';
+        } elseif ($role === 'referencia') {
+            $lines[] = 'Regra: esta é uma referência do desenho NOVO. Reconheça em uma frase curta usando o assunto e siga a qualificação; não trate como a tatuagem atual.';
+        } else {
+            $lines[] = 'Regra: na PRIMEIRA resposta após esta análise, reconheça a imagem em uma frase curta; não descreva detalhes minuciosos; não aja como se não tivesse visto. Se a confiança for baixa, peça outra foto.';
+        }
+
+        $lines[] = 'NUNCA use esta análise para calcular preço — o preço vem da tabela.';
 
         return implode("\n", $lines);
     }

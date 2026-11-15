@@ -44,8 +44,13 @@ class TurnProcessor
 
         $state = is_array($start['agent_state'] ?? null) ? $start['agent_state'] : [];
 
+        $history = $this->store->history((string) $start['lead_id'], 16);
+
         // Audio becomes text and a reference photo becomes an analysis before
-        // the classifier/agent see the turn.
+        // the classifier/agent see the turn. The history is the context the
+        // vision model uses to tell the current tattoo from a reference image.
+        $projectAnalysis = is_array($start['reference_analysis'] ?? null) ? $start['reference_analysis'] : [];
+        $currentAnalysis = null;
         $effectiveText = $leadText;
         $photoAnalyzed = false;
         if ($this->media !== null) {
@@ -54,16 +59,16 @@ class TurnProcessor
                 (string) ($start['project_id'] ?? ''),
                 $leadText,
                 (string) ($start['tattoo_type'] ?? ''),
+                $history,
             );
             $effectiveText = $prepared['text'];
 
             if ($prepared['analysis'] !== null) {
+                $currentAnalysis = $prepared['analysis'];
                 $start['reference_analysis'] = $prepared['analysis'];
                 $photoAnalyzed = true;
             }
         }
-
-        $history = $this->store->history((string) $start['lead_id'], 16);
 
         $context = $this->prompts->context($artist, $start);
         $preflight = $this->preflight->classify($context, $effectiveText, $history);
@@ -75,6 +80,14 @@ class TurnProcessor
         if ($skipReason !== null) {
             return ['skipped' => $skipReason];
         }
+
+        $preflight['flags'] = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
+        $preflight['flags']['cover_photo_received'] = CoverPhoto::received(
+            $projectAnalysis,
+            $currentAnalysis,
+            $preflight['flags'],
+            (string) ($start['tattoo_type'] ?? ''),
+        );
 
         $this->maybeBook($artist, $start, $state, $intent, $entities);
 
