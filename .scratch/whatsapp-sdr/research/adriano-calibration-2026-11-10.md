@@ -176,6 +176,18 @@ The weekly Copilot calibration facts now include `reviews`: total, `needs_fix`, 
 
 Reviews do not change the gates or send anything; they are staff input for calibration.
 
+## Staff reviews incorporated (2026-11-15)
+
+Five reviews were taken in: two `context`, two `handoff`, one `good`.
+
+Changes:
+
+- **Context implies a new tattoo** — “do mesmo lado”, “ao lado”, “mais uma” now create a `tattoo_type=nova` assumption and the briefing asks a closed confirmation. If the model asks the open “nova, cobertura ou reforma?” anyway, the validator replaces it with “Essa tatuagem seria uma tatuagem nova, certo?”. Verified on Eliza’s “ramo de flor do mesmo lado”.
+- **Cover-up with photo already sent** — the photo is enough: recognize it and hand off. The video requirement was removed from the prompt and validator, and from the regression requirements. Verified on Grazi’s “Deixar com qualidade”.
+- **Personal / abusive chats** — the new `personal` intent is not answered. After a first wrong-number close, a second spam message is also ignored. The real preflight classified the reviewed “Fala vagabundo…” message as `personal`; the agent skips it.
+- **Review status** — reviews have an `incorporated_at` field and an “Incorporada na calibração” checkbox. The five existing reviews were marked incorporated.
+- **Regression** — new scenarios `14-personal-skip` and `15-spam-after-close`; the pinned 8 real-failure suite still passes 8/8 with the photo-only cover-up policy.
+
 ## Recommendation
 
 Keep Adriano on `draft`. Auto is still blocked: 12/40 comparable pairs, one historical unsafe draft, one missed handoff, acceptance 83% and response 30%. Next target: ~40 text-comparable turns with ≥90% acceptance, zero unsafe, zero missed handoff. Reconcile the price book before enabling `auto` with `full_selling=true`.
