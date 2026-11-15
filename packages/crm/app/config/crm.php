@@ -40,6 +40,98 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | Remarketing score
+    |--------------------------------------------------------------------------
+    |
+    | A heuristic chance-to-close score for open Projects, plus a separate
+    | revival score for Leads whose last Project was lost. The stage base rates
+    | are calibrated against historical outcomes (`crm:score-baseline`); the
+    | adjustments make the score explainable to the Artist. The score is a
+    | queue order, never a gate.
+    |
+    */
+
+    'lead_score' => [
+        'stage_base_rates' => [
+            'novo' => 15,
+            'qualificando' => 35,
+            'orcamento_enviado' => 55,
+            'aguardando_deposito' => 80,
+            'aguardando_artista' => 70,
+        ],
+
+        'tier_thresholds' => [
+            'hot' => 70,
+            'warm' => 40,
+        ],
+
+        'tier_labels' => [
+            'hot' => 'Quente',
+            'warm' => 'Morno',
+            'cold' => 'Frio',
+            'won' => 'Ganho',
+            'closed' => 'Encerrado',
+        ],
+
+        'adjustments' => [
+            'quote_accepted' => 18,
+            'quote_open' => 4,
+            'quote_expired' => -8,
+            'quote_declined' => -10,
+            'deposit_confirmed' => 20,
+            'deposit_requested' => 8,
+            'booking_active' => 25,
+            'replied_after_quote' => 10,
+            'recent_2d' => 8,
+            'recent_7d' => 5,
+            'stale_30d' => -6,
+            'stale_60d' => -12,
+            'ghosted' => -12,
+            'brief_full' => 8,
+            'brief_partial' => 4,
+            'returning' => 10,
+            'agent_blocked' => -8,
+            'archived' => -20,
+        ],
+
+        'revival' => [
+            'stage_points' => [
+                'agendado' => 40,
+                'aguardando_deposito' => 35,
+                'aguardando_artista' => 35,
+                'orcamento_enviado' => 25,
+                'qualificando' => 15,
+                'novo' => 5,
+            ],
+            'quote' => 10,
+            'deposit' => 15,
+            'booking' => 20,
+            'returning' => 10,
+            'brief' => 5,
+            'agent_blocked' => -10,
+            'recency' => [
+                'under_14' => 5,
+                '14_90' => 15,
+                '91_180' => 8,
+                'older' => 0,
+            ],
+            'window_days' => 365,
+        ],
+
+        'remarketing' => [
+            'default_days' => 7,
+            'allowed_days' => [7, 15, 30, 60, 90],
+            'hide_after_opened_days' => 3,
+            'hide_after_contacted_days' => 14,
+            'hide_after_dismissed_days' => 90,
+            'page_size' => 50,
+            'attempt_window_days' => 30,
+            'max_attempts' => 2,
+        ],
+    ],
+
+    /*
+    |--------------------------------------------------------------------------
     | Google Calendar sync window
     |--------------------------------------------------------------------------
     |
@@ -165,6 +257,7 @@ return [
         'agent_unblocked' => 'Agente reativado',
         'lead_anonymized' => 'Dados anonimizados (LGPD)',
         'tattoo_completed' => 'Tattoo concluída',
+        'remarketing_touch' => 'Contato de remarketing',
     ],
 
     /*

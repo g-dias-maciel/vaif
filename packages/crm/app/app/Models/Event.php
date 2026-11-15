@@ -27,6 +27,7 @@ class Event extends Model
         'actor',
         'type',
         'payload',
+        'created_at',
     ];
 
     protected $casts = [
@@ -78,6 +79,12 @@ class Event extends Model
                 ? implode(', ', $p['fields'])
                 : null,
             'handoff_triggered' => $p['reason'] ?? null,
+            'remarketing_touch' => match ($p['action'] ?? null) {
+                'whatsapp_opened' => 'WhatsApp aberto',
+                'marked_contacted' => 'Contato registrado',
+                'dismissed' => 'Dispensado',
+                default => null,
+            },
             default => null,
         };
     }

@@ -22,6 +22,7 @@ use App\Http\Controllers\Finance\SettingController as FinanceSettingController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\ObservedWriteController;
 use App\Http\Controllers\PromotionAdminController;
+use App\Http\Controllers\RemarketingController;
 use App\Http\Controllers\Sales\BacklogController;
 use App\Http\Controllers\Sales\CampaignController;
 use App\Http\Controllers\Sales\ProspectController;
@@ -58,6 +59,9 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/clients', [ClientController::class, 'index'])->name('clients.index');
         Route::delete('/clients/{lead}', [ClientController::class, 'destroy'])->name('clients.destroy');
+
+        Route::get('/remarketing', [RemarketingController::class, 'index'])->name('remarketing.index');
+        Route::post('/remarketing/{lead}/contact', [RemarketingController::class, 'contact'])->name('remarketing.contact');
 
         Route::get('/bookings', [BookingController::class, 'index'])->name('bookings.index');
         Route::post('/bookings/block', [BookingController::class, 'block'])->name('bookings.block');

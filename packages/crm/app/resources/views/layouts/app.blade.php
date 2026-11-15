@@ -658,6 +658,9 @@
                             <a href="{{ route('clients.index') }}" class="nav-item {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
                                 <x-icon name="user" /> <span>Clientes</span>
                             </a>
+                            <a href="{{ route('remarketing.index') }}" class="nav-item {{ request()->routeIs('remarketing.*') ? 'is-active' : '' }}">
+                                <x-icon name="target" /> <span>Remarketing</span>
+                            </a>
                             <a href="{{ route('analytics.index') }}" class="nav-item {{ request()->routeIs('analytics.*') ? 'is-active' : '' }}">
                                 <x-icon name="chart" /> <span>Análises</span>
                             </a>
@@ -760,6 +763,9 @@
                                 </a>
                                 <a href="{{ route('clients.index') }}" class="nav-item {{ request()->routeIs('clients.*') ? 'is-active' : '' }}">
                                     <x-icon name="user" /> <span>Clientes</span>
+                                </a>
+                                <a href="{{ route('remarketing.index') }}" class="nav-item {{ request()->routeIs('remarketing.*') ? 'is-active' : '' }}">
+                                    <x-icon name="target" /> <span>Remarketing</span>
                                 </a>
                                 <a href="{{ route('analytics.index') }}" class="nav-item {{ request()->routeIs('analytics.*') ? 'is-active' : '' }}">
                                     <x-icon name="chart" /> <span>Análises</span>

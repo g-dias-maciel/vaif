@@ -18,6 +18,12 @@
             <path d="M4 20V11M10 20V4M16 20v-6M22 20H2"/>
             @break
 
+        @case('target')
+            <circle cx="12" cy="12" r="8"/>
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>
+            @break
+
         @case('settings')
             <path d="M4 6h16M4 12h16M4 18h16"/>
             <circle cx="9" cy="6" r="2.2"/>
