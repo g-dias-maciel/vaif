@@ -76,7 +76,7 @@ class TurnProcessor
         $intent = $preflight['intent'];
         $entities = $preflight['entities'];
 
-        $skipReason = ConversationGuard::skipReason($intent, $history);
+        $skipReason = ConversationGuard::skipReason($intent, $history, $effectiveText);
 
         if ($skipReason !== null) {
             return ['skipped' => $skipReason];

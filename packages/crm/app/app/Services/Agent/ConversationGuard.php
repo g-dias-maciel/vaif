@@ -13,7 +13,7 @@ class ConversationGuard
     /**
      * @param  array<int, array{role: string, content: string}>  $history
      */
-    public static function skipReason(string $intent, array $history): ?string
+    public static function skipReason(string $intent, array $history, ?string $leadText = null): ?string
     {
         if ($intent === 'personal') {
             return 'personal';
@@ -27,7 +27,45 @@ class ConversationGuard
             return 'handoff_done';
         }
 
+        if ($leadText !== null && self::isClosing($leadText, $intent)) {
+            return 'closing';
+        }
+
         return null;
+    }
+
+    /**
+     * A lead who is thanking, saying goodbye, postponing or already got the
+     * tattoo elsewhere does not need another qualification question.
+     */
+    public static function isClosing(string $leadText, string $intent): bool
+    {
+        if (in_array($intent, ['ask_price', 'ask_availability', 'choose_slot', 'close'], true)) {
+            return false;
+        }
+
+        $text = Str::ascii(mb_strtolower(trim($leadText)));
+
+        if ($text === '' || str_contains($text, '?')) {
+            return false;
+        }
+
+        foreach ([
+            '/\bobrigad/',
+            '/\b(valeu|tchau|ate mais|boa semana|bom trabalho)\b/',
+            '/(vou|vamos) (ver|pensar|conversar|dar uma pensada)[^.]{0,60}(te aviso|avisar|retorno|falo|chamo)/',
+            '/\b(te aviso|te falo depois|depois eu te falo|te chamo depois)\b/',
+            '/\b(pode ficar tranquilo|sem pressa|vai no seu tempo)\b/',
+            '/\bconsegui (fazer )?(com )?(outro|um amigo|um tatuador)\b/',
+            '/\bnao vou (fazer )?(agora|conseguir agora)\b/',
+            '/\bvou deixar (para|pra) (o ano|depois|mais pra frente|dezembro|janeiro)\b/',
+        ] as $pattern) {
+            if (preg_match($pattern, $text) === 1) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**

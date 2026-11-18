@@ -76,6 +76,7 @@ class ReplyValidator
         $hasDiscoveryStopped = false;
         $hasPriceMissingNoHandoff = false;
         $hasMetaReasoning = false;
+        $hasLocationUnanswered = false;
         $flags = is_array($preflight['flags'] ?? null) ? $preflight['flags'] : [];
         $isAftercare = $intent === 'aftercare' || ! empty($flags['is_aftercare']);
         $coverHint = ! empty($flags['mentions_coverup']);
@@ -253,6 +254,35 @@ class ReplyValidator
         $hasBooking = ! empty($booking['active']) || ! empty($booking['created_this_turn']);
         $normalizedReply = $this->norm($reply);
 
+        // The claim extractor sometimes misses a conversational handoff. Scan
+        // the final text so a real "vou passar para o Adriano" is not treated
+        // as a missing handoff, and a promise to pass the price is not.
+        $hasHandoff = $hasHandoff || preg_match(
+            '/vou (te )?passar (?!o valor|o orcamento|a proposta|o preco|os valores)|passo (o|seu) caso|vou encaminhar|encaminhei|vou confirmar com o (artista|adriano)|ele (vai|entra) em contato|o (artista|adriano) (vai|pode) avaliar|deixa com o (artista|adriano)/u',
+            $normalizedReply,
+        ) === 1;
+
+        // A concrete time cannot be offered/confirmed while the agenda is not
+        // ready. The claim extractor may miss a bare "amanhã às 10h".
+        $studioCity = trim((string) ($studio['city'] ?? ''));
+        $studioAddress = trim((string) ($studio['address'] ?? ''));
+
+        if (! empty($flags['asks_location'])
+            && ! $hasHandoff
+            && $studioCity !== ''
+            && ! str_contains($normalizedReply, $this->norm($studioCity))
+            && ($studioAddress === '' || ! str_contains($normalizedReply, $this->norm($studioAddress)))) {
+            $violations[] = ['claim' => ['type' => 'location'], 'rule' => 'location_unanswered'];
+            $hasLocationUnanswered = true;
+        }
+
+        if (! $hasAvailabilityViolation
+            && ($availability['status'] ?? null) !== 'ready'
+            && preg_match('/(consigo|tenho|pode|fica|marcamos|agendamos|te espero|horario)[^.]{0,35}(às|as)\s*\d{1,2}(h|:\d{2})|\b(amanha|hoje|segunda|terca|quarta|quinta|sexta|sabado|domingo)\b[^.]{0,25}\b(às|as)\s*\d{1,2}/u', $normalizedReply) === 1) {
+            $violations[] = ['claim' => ['type' => 'slot_offer'], 'rule' => 'availability_not_ready', 'expected' => 'ready', 'actual' => $availability['status'] ?? null];
+            $hasAvailabilityViolation = true;
+        }
+
         if (! $hasBooking && empty($conditions['allow_hold_slot']) && $this->promisesHold($normalizedReply)) {
             $violations[] = ['claim' => ['type' => 'promise', 'key' => 'hold_slot'], 'rule' => 'promise_not_allowed', 'expected' => 'hold_slot', 'actual' => true];
             $hasConditionViolation = true;
@@ -298,6 +328,26 @@ class ReplyValidator
         $nextField = $qualification->requiredNextField();
         $priceMissing = ! empty($flags['price_missing']) || QualificationFlow::priceMissing($facts);
         $discoveryStuck = ! empty($flags['discovery_stuck']);
+
+        // If the context says cover-up but the draft asks "nova?", the
+        // confirmation is about the wrong type. Replace it with the right one.
+        $assumptionType = is_array($typeAssumption) ? (string) ($typeAssumption['value'] ?? '') : '';
+        $replyType = preg_match('/\b(nova|novo)\b/u', $this->norm($reply)) === 1
+            ? 'nova'
+            : (preg_match('/\b(cobertura|cobrir)\b/u', $this->norm($reply)) === 1
+                ? 'cobertura'
+                : (preg_match('/\b(reforma|reformar)\b/u', $this->norm($reply)) === 1 ? 'reforma' : null));
+        $negatedType = preg_match('/(nao|nunca)\s+(e|seria|é|seria)\s+(nova|cobertura|reforma)/u', $this->norm($reply)) === 1;
+
+        if (empty($project['tattoo_type'])
+            && $typeAssumptionConfident
+            && $assumptionType !== ''
+            && $replyType !== null
+            && $replyType !== $assumptionType
+            && ! $negatedType) {
+            $violations[] = ['claim' => ['type' => 'question', 'field' => 'type'], 'rule' => 'assumption_conflict', 'expected' => $assumptionType, 'actual' => $replyType];
+            $hasUnconfirmedAssumption = true;
+        }
 
         if ($priceMissing && ! $coverCase && ! $hasHandoff && ! $hasPriceViolation) {
             $violations[] = ['claim' => ['type' => 'handoff'], 'rule' => 'price_missing_without_handoff'];
@@ -653,6 +703,16 @@ class ReplyValidator
                 $resolution = 'canonical_price_missing_handoff';
                 $offeredSlots = [];
                 $effectiveClaims = [];
+            } elseif ($hasLocationUnanswered) {
+                $place = trim(implode(', ', array_filter([
+                    (string) ($studio['city'] ?? ''),
+                    (string) ($studio['address'] ?? ''),
+                ])));
+                $finalReply = 'O estúdio fica em '.$place.'.'
+                    .($nextField !== null ? ' '.$qualification->questionFor($nextField) : '');
+                $resolution = 'canonical_location';
+                $offeredSlots = [];
+                $effectiveClaims = [];
             } elseif ($hasOutOfOrderQuestion && $nextField !== null) {
                 $finalReply = $qualification->questionFor($nextField);
                 $resolution = 'canonical_next_field';
@@ -667,7 +727,7 @@ class ReplyValidator
                 $offeredSlots = [];
                 $effectiveClaims = [];
             } elseif ($hasUnconfirmedAssumption || $hasOpenAssumptionQuestion) {
-                $finalReply = 'Essa tatuagem seria uma tatuagem nova, certo?';
+                $finalReply = $qualification->questionFor('tattoo_type');
                 $resolution = 'canonical_assumption_confirm';
                 $offeredSlots = [];
                 $effectiveClaims = [];

@@ -46,13 +46,25 @@ class ReplyComposer
             if ($repair['reply'] !== '') {
                 $second = $this->validator->validate($facts, $repair['claims'], $repair['reply'], $preflight);
 
-                if ($second['final_reply'] !== '') {
+                // A repair that still violates the rules must never replace the
+                // safe canonical reply. This is the last gate before send.
+                $safeRepair = ! empty($second['ok'])
+                    || str_starts_with((string) ($second['resolution'] ?? ''), 'canonical_');
+
+                if ($safeRepair && $second['final_reply'] !== '') {
                     $second['repaired'] = true;
                     $second['original_violations'] = $originalViolations;
                     $validation = $second;
                     $repaired = true;
                 }
             }
+        }
+
+        if ((string) ($validation['final_reply'] ?? '') === ''
+            || (! $validation['ok'] && ! str_starts_with((string) ($validation['resolution'] ?? ''), 'canonical_'))) {
+            $validation['final_reply'] = 'Vou confirmar isso com o artista e já te respondo.';
+            $validation['resolution'] = 'canonical_defer';
+            $validation['ok'] = false;
         }
 
         return [

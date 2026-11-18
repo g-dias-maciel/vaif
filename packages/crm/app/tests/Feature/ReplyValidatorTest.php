@@ -646,6 +646,70 @@ class ReplyValidatorTest extends TestCase
         $this->assertSame('Onde no corpo você quer fazer?', $result['final_reply']);
     }
 
+    public function test_a_cover_up_reply_with_the_handoff_in_text_is_accepted(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(['project' => ['tattoo_type' => 'cover_up']]),
+            [['type' => 'question', 'field' => 'photo']],
+            'Me manda uma foto da tatuagem atual. Vou passar para o Adriano avaliar.',
+            ['flags' => ['cover_photo_received' => false]],
+        );
+
+        $this->assertTrue($result['ok']);
+        $this->assertNotContains('coverup_without_handoff', array_column($result['violations'], 'rule'));
+    }
+
+    public function test_a_concrete_time_is_blocked_when_the_agenda_is_not_ready(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'availability' => ['status' => 'not_ready', 'missing' => 'local,tamanho', 'slots' => []],
+            ]),
+            [],
+            'Consigo te encaixar amanhã às 10h.',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('availability_not_ready', array_column($result['violations'], 'rule'));
+        $this->assertStringNotContainsString('10h', $result['final_reply']);
+    }
+
+    public function test_a_location_question_is_answered_with_the_studio_address(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts(),
+            [],
+            'A tatuagem que você quer é nova, uma cobertura ou uma reforma?',
+            ['flags' => ['asks_location' => true]],
+        );
+
+                $this->assertFalse($result['ok']);
+        $this->assertContains('location_unanswered', array_column($result['violations'], 'rule'));
+        $this->assertStringContainsString('São Paulo', $result['final_reply']);
+    }
+
+    public function test_a_cover_up_context_is_not_confirmed_as_a_new_tattoo(): void
+    {
+        $result = (new ReplyValidator())->validate(
+            $this->facts([
+                'project' => ['tattoo_type' => null],
+                'assumptions' => [
+                    'tattoo_type' => ['value' => 'cobertura', 'confidence' => 0.95, 'reason' => 'lead já disse que quer cobrir'],
+                ],
+            ]),
+            [['type' => 'question', 'field' => 'type']],
+            'Essa tatuagem seria uma tatuagem nova, certo?',
+            ['flags' => []],
+        );
+
+        $this->assertFalse($result['ok']);
+        $this->assertContains('assumption_conflict', array_column($result['violations'], 'rule'));
+        $this->assertSame('canonical_assumption_confirm', $result['resolution']);
+        $this->assertStringContainsString('cobertura', $result['final_reply']);
+        $this->assertStringNotContainsString('nova', $result['final_reply']);
+    }
+
     public function test_a_time_outside_the_studio_hours_is_blocked(): void
     {
         $result = (new ReplyValidator())->validate(

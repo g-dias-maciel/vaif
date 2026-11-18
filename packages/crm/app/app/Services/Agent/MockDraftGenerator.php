@@ -115,7 +115,7 @@ class MockDraftGenerator
                 $pendingInput = QualificationFlow::pendingInput($start['agent_state'] ?? []);
                 $preflight = $this->preflight->classify($context, $text, $history, $pendingInput);
 
-                if (ConversationGuard::skipReason($preflight['intent'], $history) !== null) {
+                if (ConversationGuard::skipReason($preflight['intent'], $history, $text) !== null) {
                     $result['skipped']++;
 
                     continue;
