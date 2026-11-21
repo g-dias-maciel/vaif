@@ -3,12 +3,17 @@
 namespace App\Services\Finance;
 
 use App\Models\BillingInvoice;
+use App\Models\BillingSetting;
 use App\Models\ProspectContract;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 
 /**
  * Generates the next PIX invoice for a contract and advances its billing date.
+ *
+ * Invoices are created as drafts for approval. The generator fires a few days
+ * before the next period starts (billing_settings.invoice_lead_days), so the
+ * client receives the next invoice before the current period ends.
  *
  * Idempotent by (contract_id, period_start): running twice returns the existing
  * invoice instead of duplicating it.
@@ -17,7 +22,7 @@ class InvoiceGenerator
 {
     public function __construct(private readonly InvoiceNumberGenerator $numbers) {}
 
-    public function generateForContract(ProspectContract $contract, ?Carbon $asOf = null): ?BillingInvoice
+    public function generateForContract(ProspectContract $contract, ?Carbon $asOf = null, bool $ignoreLead = false): ?BillingInvoice
     {
         $asOf = ($asOf ?? now())->copy()->startOfDay();
 
@@ -27,7 +32,13 @@ class InvoiceGenerator
 
         $next = $contract->next_invoice_at;
 
-        if ($next === null || $next->copy()->startOfDay()->gt($asOf)) {
+        if ($next === null) {
+            return null;
+        }
+
+        $leadDays = $ignoreLead ? 0 : BillingSetting::current()->invoiceLeadDays();
+
+        if (! $ignoreLead && $next->copy()->subDays($leadDays)->startOfDay()->gt($asOf)) {
             return null;
         }
 
@@ -55,19 +66,22 @@ class InvoiceGenerator
             return $existing;
         }
 
-        return DB::transaction(function () use ($contract, $periodStart, $periodEnd, $amount): BillingInvoice {
+        return DB::transaction(function () use ($contract, $periodStart, $periodEnd, $amount, $asOf): BillingInvoice {
             $invoice = BillingInvoice::create([
-                'number' => $this->numbers->next($periodStart),
+                'number' => $this->numbers->next($asOf),
                 'contract_id' => $contract->id,
                 'prospect_id' => $contract->prospect_id,
                 'period_start' => $periodStart->toDateString(),
                 'period_end' => $periodEnd->toDateString(),
-                'issue_date' => $periodStart->toDateString(),
+                'issue_date' => $asOf->toDateString(),
                 'due_date' => $this->dueDate($contract, $periodStart)->toDateString(),
                 'amount_cents' => $amount,
                 'paid_cents' => 0,
-                'status' => BillingInvoice::STATUS_SENT,
+                'subtotal_cents' => $amount,
+                'discount_cents' => 0,
+                'status' => BillingInvoice::STATUS_DRAFT,
                 'payment_method' => BillingInvoice::METHOD_PIX,
+                'delivery_status' => BillingInvoice::DELIVERY_PENDING,
                 'notes' => $contract->isMembersArea()
                     ? 'Plano 697 — área de membros.'
                     : null,

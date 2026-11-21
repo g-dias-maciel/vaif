@@ -8,11 +8,15 @@ use App\Models\BillingSetting;
 use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\ProspectContract;
+use App\Services\Finance\InvoiceNotifier;
 use App\Services\Finance\InvoiceNumberGenerator;
+use App\Services\Finance\InvoicePdfRenderer;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
+use Symfony\Component\HttpFoundation\Response;
 
 class InvoiceController extends Controller
 {
@@ -64,56 +68,52 @@ class InvoiceController extends Controller
             ->orderBy('name')
             ->get(['id', 'name']);
 
-        $start = now()->startOfDay();
+        $month = now()->startOfMonth();
+
+        if ($request->filled('month')) {
+            try {
+                $month = Carbon::createFromFormat('Y-m', (string) $request->input('month'))->startOfMonth();
+            } catch (\Throwable) {
+                $month = now()->startOfMonth();
+            }
+        }
+
+        $start = $month->isCurrentMonth() ? now()->startOfDay() : $month->copy();
 
         return view('finance.invoices.form', [
             'contracts' => $contracts,
             'prospects' => $prospects,
             'selected' => $selected,
             'invoice' => new BillingInvoice([
-                'period_start' => $start->toDateString(),
-                'period_end' => $start->copy()->addMonthNoOverflow()->subDay()->toDateString(),
+                'period_start' => $month->copy()->startOfMonth()->toDateString(),
+                'period_end' => $month->copy()->endOfMonth()->toDateString(),
                 'issue_date' => $start->toDateString(),
                 'due_date' => $start->toDateString(),
-                'status' => BillingInvoice::STATUS_SENT,
+                'status' => BillingInvoice::STATUS_DRAFT,
                 'payment_method' => BillingInvoice::METHOD_PIX,
+                'discount_cents' => 0,
+                'subtotal_cents' => 0,
             ]),
         ]);
     }
 
     public function store(Request $request, InvoiceNumberGenerator $numbers): RedirectResponse
     {
-        $data = $request->validate([
-            'prospect_id' => ['required', 'uuid', 'exists:prospects,id'],
-            'contract_id' => ['nullable', 'uuid', 'exists:prospect_contracts,id'],
-            'amount' => ['required', 'numeric', 'min:0.01', 'max:99999999'],
-            'period_start' => ['required', 'date'],
-            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
-            'issue_date' => ['required', 'date'],
-            'due_date' => ['required', 'date', 'after_or_equal:issue_date'],
-            'status' => ['required', Rule::in([BillingInvoice::STATUS_DRAFT, BillingInvoice::STATUS_SENT])],
-            'payment_method' => ['required', Rule::in([
-                BillingInvoice::METHOD_PIX,
-                BillingInvoice::METHOD_CREDIT_CARD,
-                BillingInvoice::METHOD_BOLETO,
-                BillingInvoice::METHOD_TRANSFER,
-                BillingInvoice::METHOD_CASH,
-                BillingInvoice::METHOD_OTHER,
-            ])],
-            'description' => ['required', 'string', 'max:255'],
-            'external_ref' => ['nullable', 'string', 'max:255'],
-            'notes' => ['nullable', 'string', 'max:5000'],
-        ]);
+        $data = $this->validated($request);
+        $this->guardContractBelongsToProspect($data);
 
-        if (($data['contract_id'] ?? null) !== null) {
-            $contract = ProspectContract::find($data['contract_id']);
+        $items = $this->itemsFromRequest($data);
+        $subtotal = array_sum(array_column($items, 'total_cents'));
+        $discount = (int) round(((float) ($data['discount'] ?? 0)) * 100);
+        $amount = $subtotal - $discount;
 
-            if ($contract === null || $contract->prospect_id !== $data['prospect_id']) {
-                return back()->withErrors(['contract_id' => 'O contrato não pertence a este cliente.'])->withInput();
-            }
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'items' => 'O total da fatura deve ser maior que zero.',
+            ]);
         }
 
-        $amount = (int) round(((float) $data['amount']) * 100);
+        $status = $data['status'] ?? BillingInvoice::STATUS_DRAFT;
 
         $invoice = BillingInvoice::create([
             'number' => $numbers->next(Carbon::parse($data['issue_date'])),
@@ -125,19 +125,18 @@ class InvoiceController extends Controller
             'due_date' => $data['due_date'],
             'amount_cents' => $amount,
             'paid_cents' => 0,
-            'status' => $data['status'],
+            'subtotal_cents' => $subtotal,
+            'discount_cents' => $discount,
+            'status' => $status,
             'payment_method' => $data['payment_method'],
             'external_ref' => $data['external_ref'] ?? null,
             'notes' => $data['notes'] ?? null,
+            'approved_at' => $status === BillingInvoice::STATUS_SENT ? now() : null,
+            'approved_by' => $status === BillingInvoice::STATUS_SENT ? $request->user()?->id : null,
+            'delivery_status' => BillingInvoice::DELIVERY_PENDING,
         ]);
 
-        $invoice->items()->create([
-            'description' => $data['description'],
-            'quantity' => 1,
-            'unit_amount_cents' => $amount,
-            'total_cents' => $amount,
-            'sort_order' => 0,
-        ]);
+        $this->replaceItems($invoice, $items);
 
         $invoice->prospect?->activities()->create([
             'user_id' => $request->user()?->id,
@@ -153,9 +152,102 @@ class InvoiceController extends Controller
             ->with('status', 'Cobrança '.$invoice->number.' criada.');
     }
 
+    public function edit(BillingInvoice $invoice)
+    {
+        if ($invoice->isPaid() || $invoice->isCancelled()) {
+            return redirect()
+                ->route('finance.invoices.show', $invoice)
+                ->withErrors(['invoice' => 'Cobrança paga ou cancelada não pode ser editada.']);
+        }
+
+        $invoice->load(['prospect', 'items']);
+
+        $contracts = ProspectContract::query()
+            ->with('prospect')
+            ->where(function ($query) use ($invoice): void {
+                $query->whereIn('status', [ProspectContract::STATUS_ACTIVE, ProspectContract::STATUS_DRAFT])
+                    ->orWhere('id', $invoice->contract_id);
+            })
+            ->orderBy('id')
+            ->get();
+
+        $prospects = Prospect::query()
+            ->where(function ($query) use ($invoice): void {
+                $query->where('status', Prospect::STATUS_ACTIVE)
+                    ->orWhere('id', $invoice->prospect_id);
+            })
+            ->orderBy('name')
+            ->get(['id', 'name']);
+
+        return view('finance.invoices.form', [
+            'contracts' => $contracts,
+            'prospects' => $prospects,
+            'selected' => $invoice->contract,
+            'invoice' => $invoice,
+        ]);
+    }
+
+    public function update(Request $request, BillingInvoice $invoice): RedirectResponse
+    {
+        if ($invoice->isPaid() || $invoice->isCancelled()) {
+            return back()->withErrors(['invoice' => 'Cobrança paga ou cancelada não pode ser editada.']);
+        }
+
+        $data = $this->validated($request);
+        $this->guardContractBelongsToProspect($data);
+
+        $items = $this->itemsFromRequest($data);
+        $subtotal = array_sum(array_column($items, 'total_cents'));
+        $discount = (int) round(((float) ($data['discount'] ?? 0)) * 100);
+        $amount = $subtotal - $discount;
+
+        if ($amount <= 0) {
+            throw ValidationException::withMessages([
+                'items' => 'O total da fatura deve ser maior que zero.',
+            ]);
+        }
+
+        if ($invoice->paid_cents > $amount) {
+            throw ValidationException::withMessages([
+                'items' => 'O total não pode ficar abaixo do valor já pago.',
+            ]);
+        }
+
+        $invoice->update([
+            'contract_id' => $data['contract_id'] ?? null,
+            'prospect_id' => $data['prospect_id'],
+            'period_start' => $data['period_start'],
+            'period_end' => $data['period_end'],
+            'issue_date' => $data['issue_date'],
+            'due_date' => $data['due_date'],
+            'amount_cents' => $amount,
+            'subtotal_cents' => $subtotal,
+            'discount_cents' => $discount,
+            'payment_method' => $data['payment_method'],
+            'external_ref' => $data['external_ref'] ?? null,
+            'notes' => $data['notes'] ?? null,
+        ]);
+
+        // A sent invoice that changed no longer matches the PDF the client
+        // received; ask staff to resend it from the invoice page.
+        if (in_array($invoice->status, [BillingInvoice::STATUS_SENT, BillingInvoice::STATUS_OVERDUE], true)) {
+            $invoice->forceFill([
+                'delivery_status' => BillingInvoice::DELIVERY_PENDING,
+                'delivery_error' => null,
+                'sent_at' => null,
+            ])->save();
+        }
+
+        $this->replaceItems($invoice, $items);
+
+        return redirect()
+            ->route('finance.invoices.show', $invoice)
+            ->with('status', 'Cobrança atualizada.');
+    }
+
     public function show(BillingInvoice $invoice)
     {
-        $invoice->load(['prospect', 'contract', 'items', 'payments.recorder']);
+        $invoice->load(['prospect', 'contract', 'items', 'payments.recorder', 'approver']);
 
         return view('finance.invoices.show', [
             'invoice' => $invoice,
@@ -163,10 +255,87 @@ class InvoiceController extends Controller
         ]);
     }
 
+    public function approve(Request $request, BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
+    {
+        if (! $invoice->isDraft()) {
+            return back()->withErrors(['invoice' => 'Apenas faturas aguardando aprovação podem ser aprovadas.']);
+        }
+
+        $invoice->forceFill([
+            'status' => BillingInvoice::STATUS_SENT,
+            'approved_at' => now(),
+            'approved_by' => $request->user()?->id,
+        ])->save();
+
+        $sent = $notifier->send($invoice);
+
+        return redirect()
+            ->route('finance.invoices.show', $invoice)
+            ->with(
+                $sent ? 'status' : 'error',
+                $sent
+                    ? 'Fatura aprovada e enviada pelo WhatsApp.'
+                    : 'Fatura aprovada, mas o envio falhou: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
+            );
+    }
+
+    public function resend(BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
+    {
+        if ($invoice->isDraft() || $invoice->isPaid() || $invoice->isCancelled()) {
+            return back()->withErrors(['invoice' => 'Esta fatura não pode ser reenviada.']);
+        }
+
+        $sent = $notifier->send($invoice);
+
+        return back()->with(
+            $sent ? 'status' : 'error',
+            $sent ? 'Fatura reenviada.' : 'Falha ao reenviar: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
+        );
+    }
+
+    public function remind(BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
+    {
+        if (! $invoice->isOverdue()) {
+            return back()->withErrors(['invoice' => 'Esta fatura ainda não está atrasada.']);
+        }
+
+        if ($invoice->isDraft() || $invoice->isPaid() || $invoice->isCancelled()) {
+            return back()->withErrors(['invoice' => 'Esta fatura não pode receber cobrança de atraso.']);
+        }
+
+        $sent = $notifier->sendReminder($invoice);
+
+        return back()->with(
+            $sent ? 'status' : 'error',
+            $sent ? 'Cobrança de atraso enviada.' : 'Falha ao cobrar atraso: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
+        );
+    }
+
+    public function remindOverdue(Request $request, InvoiceNotifier $notifier): RedirectResponse
+    {
+        $invoices = BillingInvoice::query()
+            ->overdue()
+            ->with('prospect')
+            ->orderBy('due_date')
+            ->get();
+
+        $sent = 0;
+        $failed = 0;
+
+        foreach ($invoices as $invoice) {
+            $notifier->sendReminder($invoice) ? $sent++ : $failed++;
+        }
+
+        return back()->with(
+            $failed > 0 ? 'error' : 'status',
+            $sent.' cobrança(s) de atraso enviada(s).'.($failed > 0 ? ' '.$failed.' falharam.' : ''),
+        );
+    }
+
     public function cancel(Request $request, BillingInvoice $invoice): RedirectResponse
     {
-        if ($invoice->isPaid()) {
-            return back()->withErrors(['invoice' => 'Cobrança paga não pode ser cancelada.']);
+        if ($invoice->isPaid() || $invoice->paid_cents > 0) {
+            return back()->withErrors(['invoice' => 'Cobrança com pagamento não pode ser cancelada.']);
         }
 
         $invoice->update(['status' => BillingInvoice::STATUS_CANCELLED]);
@@ -193,5 +362,141 @@ class InvoiceController extends Controller
             'invoice' => $invoice,
             'setting' => BillingSetting::current(),
         ]);
+    }
+
+    public function pdf(BillingInvoice $invoice, InvoicePdfRenderer $renderer)
+    {
+        return $renderer->download($invoice);
+    }
+
+    public function publicPdf(BillingInvoice $invoice, InvoicePdfRenderer $renderer): Response
+    {
+        $invoice->load(['prospect', 'items', 'contract']);
+
+        return response($renderer->render($invoice), 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'inline; filename="fatura-'.$invoice->number.'.pdf"',
+        ]);
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function validated(Request $request): array
+    {
+        $data = $request->validate([
+            'prospect_id' => ['required', 'uuid', 'exists:prospects,id'],
+            'contract_id' => ['nullable', 'uuid', 'exists:prospect_contracts,id'],
+            'period_start' => ['required', 'date'],
+            'period_end' => ['required', 'date', 'after_or_equal:period_start'],
+            'issue_date' => ['required', 'date'],
+            'due_date' => ['required', 'date', 'after_or_equal:issue_date'],
+            'payment_method' => ['required', Rule::in([
+                BillingInvoice::METHOD_PIX,
+                BillingInvoice::METHOD_CREDIT_CARD,
+                BillingInvoice::METHOD_BOLETO,
+                BillingInvoice::METHOD_TRANSFER,
+                BillingInvoice::METHOD_CASH,
+                BillingInvoice::METHOD_OTHER,
+            ])],
+            'discount' => ['nullable', 'numeric', 'min:0', 'max:99999999'],
+            'external_ref' => ['nullable', 'string', 'max:255'],
+            'notes' => ['nullable', 'string', 'max:5000'],
+            'status' => ['nullable', Rule::in([
+                BillingInvoice::STATUS_DRAFT,
+                BillingInvoice::STATUS_SENT,
+            ])],
+            'items' => ['nullable', 'array'],
+            'items.*.description' => ['required_with:items', 'string', 'max:255'],
+            'items.*.quantity' => ['nullable', 'numeric', 'min:0.01', 'max:9999'],
+            'items.*.unit_amount' => ['required_with:items', 'numeric', 'min:0', 'max:99999999'],
+            'description' => ['nullable', 'string', 'max:255'],
+            'amount' => ['nullable', 'numeric', 'min:0.01', 'max:99999999'],
+        ]);
+
+        if (empty($data['items']) && (empty($data['description']) || empty($data['amount']))) {
+            throw ValidationException::withMessages([
+                'items' => 'Adicione pelo menos um item à fatura.',
+            ]);
+        }
+
+        return $data;
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     * @return array<int, array<string, mixed>>
+     */
+    private function itemsFromRequest(array $data): array
+    {
+        $rows = [];
+
+        foreach ((array) ($data['items'] ?? []) as $item) {
+            $description = trim((string) ($item['description'] ?? ''));
+
+            if ($description === '') {
+                continue;
+            }
+
+            $quantity = max(0.01, (float) ($item['quantity'] ?? 1));
+            $unit = (int) round(((float) ($item['unit_amount'] ?? 0)) * 100);
+            $total = (int) round($unit * $quantity);
+
+            if ($total <= 0) {
+                continue;
+            }
+
+            $rows[] = [
+                'description' => $description,
+                'quantity' => $quantity,
+                'unit_amount_cents' => $unit,
+                'total_cents' => $total,
+                'sort_order' => count($rows),
+            ];
+        }
+
+        if ($rows === [] && ! empty($data['description']) && ! empty($data['amount'])) {
+            $unit = (int) round(((float) $data['amount']) * 100);
+
+            $rows[] = [
+                'description' => (string) $data['description'],
+                'quantity' => 1,
+                'unit_amount_cents' => $unit,
+                'total_cents' => $unit,
+                'sort_order' => 0,
+            ];
+        }
+
+        return $rows;
+    }
+
+    /**
+     * @param  array<int, array<string, mixed>>  $items
+     */
+    private function replaceItems(BillingInvoice $invoice, array $items): void
+    {
+        $invoice->items()->delete();
+
+        foreach ($items as $item) {
+            $invoice->items()->create($item);
+        }
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function guardContractBelongsToProspect(array $data): void
+    {
+        if (($data['contract_id'] ?? null) === null) {
+            return;
+        }
+
+        $contract = ProspectContract::find($data['contract_id']);
+
+        if ($contract === null || $contract->prospect_id !== $data['prospect_id']) {
+            throw ValidationException::withMessages([
+                'contract_id' => 'O contrato não pertence a este cliente.',
+            ]);
+        }
     }
 }

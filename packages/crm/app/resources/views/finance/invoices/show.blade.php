@@ -14,6 +14,16 @@
             </p>
         </div>
         <div class="fin-actions">
+            @if (! $invoice->isPaid() && ! $invoice->isCancelled())
+                <a href="{{ route('finance.invoices.edit', $invoice) }}" class="btn btn--ghost btn--small">Editar</a>
+            @endif
+            @if (! $invoice->isDraft() && ! $invoice->isPaid() && ! $invoice->isCancelled())
+                <form method="post" action="{{ route('finance.invoices.resend', $invoice) }}">
+                    @csrf
+                    <button type="submit" class="btn btn--ghost btn--small">Reenviar fatura</button>
+                </form>
+            @endif
+            <a href="{{ route('finance.invoices.pdf', $invoice) }}" class="btn btn--ghost btn--small">Baixar PDF</a>
             <a href="{{ route('finance.invoices.receipt', $invoice) }}" class="btn btn--ghost btn--small" target="_blank">Recibo</a>
             <a href="{{ route('finance.invoices.index') }}" class="btn btn--ghost btn--small">Voltar</a>
         </div>
@@ -23,6 +33,10 @@
         <div class="flash">{{ session('status') }}</div>
     @endif
 
+    @if (session('error'))
+        <div class="sales-errors">{{ session('error') }}</div>
+    @endif
+
     @if ($errors->any())
         <div class="sales-errors">
             <ul>
@@ -30,6 +44,34 @@
                     <li>{{ $error }}</li>
                 @endforeach
             </ul>
+        </div>
+    @endif
+
+    @if ($invoice->isDraft())
+        <div class="flash" style="background:#2a1f0a;border-color:#fbbf24;color:#fde68a;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span>Esta fatura está aguardando aprovação. Revise os itens e o vencimento antes de enviar.</span>
+            <form method="post" action="{{ route('finance.invoices.approve', $invoice) }}">
+                @csrf
+                <button type="submit" class="btn btn--small" onclick="return confirm('Aprovar e enviar esta fatura pelo WhatsApp?');">Aprovar e enviar</button>
+            </form>
+        </div>
+    @elseif ($invoice->delivery_status === \App\Models\BillingInvoice::DELIVERY_FAILED)
+        <div class="flash" style="background:#2a0a0a;border-color:var(--danger);color:#fecaca;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span>Falha no envio: {{ $invoice->delivery_error ?: 'erro desconhecido' }}.</span>
+            <form method="post" action="{{ route('finance.invoices.resend', $invoice) }}">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small">Tentar novamente</button>
+            </form>
+        </div>
+    @endif
+
+    @if ($invoice->isOverdue())
+        <div class="flash" style="background:#2a0a0a;border-color:var(--danger);color:#fecaca;display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;">
+            <span>Fatura atrasada. {{ $invoice->reminder_count > 0 ? $invoice->reminder_count.' lembrete(s) enviado(s).' : 'Nenhum lembrete enviado ainda.' }}</span>
+            <form method="post" action="{{ route('finance.invoices.remind', $invoice) }}">
+                @csrf
+                <button type="submit" class="btn btn--ghost btn--small" onclick="return confirm('Enviar cobrança de atraso pelo WhatsApp?');">Cobrar atraso</button>
+            </form>
         </div>
     @endif
 
@@ -57,6 +99,22 @@
             <div class="label">Saldo</div>
             <div class="value {{ $invoice->balanceCents() > 0 ? 'fin-tone-pending' : 'fin-tone-ok' }}"><x-money :cents="$invoice->balanceCents()" /></div>
             <div class="hint">Emissão {{ $invoice->issue_date?->format('d/m/Y') }}</div>
+        </div>
+        <div class="fin-card">
+            <div class="label">Envio</div>
+            <div class="value">{{ $invoice->deliveryLabel() }}</div>
+            <div class="hint">
+                @if ($invoice->sent_at)
+                    {{ $invoice->sent_at->format('d/m/Y H:i') }}
+                @else
+                    Ainda não enviada
+                @endif
+            </div>
+        </div>
+        <div class="fin-card">
+            <div class="label">Aprovação</div>
+            <div class="value">{{ $invoice->approved_at ? $invoice->approved_at->format('d/m/Y') : '—' }}</div>
+            <div class="hint">{{ $invoice->approver?->name ?? '—' }}</div>
         </div>
     </div>
 
@@ -87,6 +145,22 @@
                     </tr>
                 @endforeach
             </tbody>
+            <tfoot>
+                <tr>
+                    <td colspan="3" style="text-align:right;">Subtotal</td>
+                    <td><strong><x-money :cents="$invoice->subtotalCents()" /></strong></td>
+                </tr>
+                @if ($invoice->discountCents() > 0)
+                    <tr>
+                        <td colspan="3" style="text-align:right;">Desconto</td>
+                        <td>- <x-money :cents="$invoice->discountCents()" /></td>
+                    </tr>
+                @endif
+                <tr>
+                    <td colspan="3" style="text-align:right;"><strong>Total</strong></td>
+                    <td><strong><x-money :cents="$invoice->amount_cents" /></strong></td>
+                </tr>
+            </tfoot>
         </table>
     </div>
 
@@ -113,7 +187,7 @@
         @endif
     </div>
 
-    @if (! $invoice->isPaid() && ! $invoice->isCancelled())
+    @if (! $invoice->isPaid() && ! $invoice->isCancelled() && ! $invoice->isDraft())
         <div class="fin-section" style="display:grid; grid-template-columns:1fr 1fr; gap:22px;">
             <div>
                 <h2>Registrar pagamento</h2>
@@ -184,10 +258,12 @@
                     <button type="submit" class="btn">Receber saldo (<x-money :cents="$invoice->balanceCents()" />)</button>
                 </form>
 
-                <form method="post" action="{{ route('finance.invoices.cancel', $invoice) }}" onsubmit="return confirm('Cancelar esta cobrança?');">
-                    @csrf
-                    <button type="submit" class="btn btn--danger">Cancelar cobrança</button>
-                </form>
+                @if ($invoice->paid_cents === 0)
+                    <form method="post" action="{{ route('finance.invoices.cancel', $invoice) }}" onsubmit="return confirm('Cancelar esta cobrança?');">
+                        @csrf
+                        <button type="submit" class="btn btn--danger">Cancelar cobrança</button>
+                    </form>
+                @endif
 
                 @if ($invoice->contract)
                     <p class="fin-note" style="margin-top:16px;">

@@ -18,6 +18,23 @@
     .fin-section { margin-top: 22px; }
     .fin-section h2 { margin: 0 0 10px; font-size: 1rem; }
     .fin-note { color: var(--muted); font-size: .78rem; }
+    .fin-tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 22px 0 16px; flex-wrap: wrap; }
+    .fin-tab { background: transparent; border: 0; color: var(--muted); padding: 9px 14px; cursor: pointer; font: inherit; font-size: .82rem; border-bottom: 2px solid transparent; }
+    .fin-tab:hover { color: var(--ink); }
+    .fin-tab.is-active { color: var(--ink); border-bottom-color: #fbbf24; font-weight: 600; }
+    .fin-tab-panel { display: none; }
+    .fin-tab-panel.is-active { display: block; }
+    .fin-partner { border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 14px; background: var(--panel-2); }
+    .fin-partner__head { display: flex; justify-content: space-between; gap: 12px; align-items: baseline; flex-wrap: wrap; margin-bottom: 10px; }
+    .fin-partner__name { font-weight: 600; }
+    .fin-partner__total { font-size: 1.1rem; }
+    .fin-expense-pick { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--border); font-size: .8rem; }
+    .fin-expense-pick:last-child { border-bottom: 0; }
+    .fin-expense-pick label { display: flex; gap: 8px; align-items: flex-start; flex: 1; cursor: pointer; }
+    .fin-subtotal { display: flex; justify-content: space-between; gap: 12px; padding-top: 10px; margin-top: 8px; border-top: 1px dashed var(--border); font-size: .8rem; }
+    .fin-item-row { display: grid; grid-template-columns: 1fr 90px 130px 34px; gap: 8px; margin-bottom: 8px; align-items: end; }
+    .fin-item-row label { font-size: .7rem; color: var(--muted); display: flex; flex-direction: column; gap: 4px; }
+    .fin-mini { font-size: .7rem; color: var(--muted); }
     .fin-print-only { display: none; }
     @media print {
         .nav, .sidebar, .topbar, .fin-no-print { display: none !important; }

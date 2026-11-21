@@ -14,9 +14,11 @@ use App\Http\Controllers\CopilotController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\Finance\ContractController as FinanceContractController;
 use App\Http\Controllers\Finance\DashboardController as FinanceDashboardController;
+use App\Http\Controllers\Finance\DistributionController as FinanceDistributionController;
 use App\Http\Controllers\Finance\ExpenseController as FinanceExpenseController;
 use App\Http\Controllers\Finance\InvoiceController as FinanceInvoiceController;
 use App\Http\Controllers\Finance\MonthlyController as FinanceMonthlyController;
+use App\Http\Controllers\Finance\PartnerController as FinancePartnerController;
 use App\Http\Controllers\Finance\PaymentController as FinancePaymentController;
 use App\Http\Controllers\Finance\SettingController as FinanceSettingController;
 use App\Http\Controllers\LeadController;
@@ -48,6 +50,11 @@ Route::middleware('guest')->group(function () {
     Route::get('/password/set/{token}', [PasswordSetupController::class, 'show'])->name('password.set');
     Route::post('/password/set', [PasswordSetupController::class, 'store'])->middleware('throttle:5,1')->name('password.set.store');
 });
+
+// Signed invoice PDFs sent over WhatsApp (no login, signature required).
+Route::get('/finance/invoices/{invoice}/pdf-public', [FinanceInvoiceController::class, 'publicPdf'])
+    ->middleware('signed')
+    ->name('finance.invoices.public-pdf');
 
 Route::middleware('auth')->group(function () {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
@@ -214,6 +221,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/', [FinanceDashboardController::class, 'index'])->name('dashboard');
         Route::get('/clients', [FinanceDashboardController::class, 'clients'])->name('clients');
         Route::get('/months', [FinanceMonthlyController::class, 'index'])->name('months');
+        Route::post('/months/distribution', [FinanceDistributionController::class, 'store'])->name('months.distribution');
 
         Route::get('/expenses', [FinanceExpenseController::class, 'index'])->name('expenses.index');
         Route::get('/expenses/create', [FinanceExpenseController::class, 'create'])->name('expenses.create');
@@ -231,12 +239,20 @@ Route::middleware('auth')->group(function () {
         Route::post('/clients/{prospect}/contract', [FinanceContractController::class, 'store'])->name('contracts.store');
         Route::get('/contracts/{contract}/edit', [FinanceContractController::class, 'edit'])->name('contracts.edit');
         Route::put('/contracts/{contract}', [FinanceContractController::class, 'update'])->name('contracts.update');
+        Route::post('/contracts/{contract}/generate-invoice', [FinanceContractController::class, 'generateInvoice'])->name('contracts.generate-invoice');
 
         Route::get('/invoices', [FinanceInvoiceController::class, 'index'])->name('invoices.index');
         Route::get('/invoices/create', [FinanceInvoiceController::class, 'create'])->name('invoices.create');
         Route::post('/invoices', [FinanceInvoiceController::class, 'store'])->name('invoices.store');
+        Route::post('/invoices/remind-overdue', [FinanceInvoiceController::class, 'remindOverdue'])->name('invoices.remind-overdue');
+        Route::get('/invoices/{invoice}/edit', [FinanceInvoiceController::class, 'edit'])->name('invoices.edit');
+        Route::put('/invoices/{invoice}', [FinanceInvoiceController::class, 'update'])->name('invoices.update');
         Route::get('/invoices/{invoice}', [FinanceInvoiceController::class, 'show'])->name('invoices.show');
+        Route::post('/invoices/{invoice}/approve', [FinanceInvoiceController::class, 'approve'])->name('invoices.approve');
+        Route::post('/invoices/{invoice}/resend', [FinanceInvoiceController::class, 'resend'])->name('invoices.resend');
+        Route::post('/invoices/{invoice}/remind', [FinanceInvoiceController::class, 'remind'])->name('invoices.remind');
         Route::post('/invoices/{invoice}/cancel', [FinanceInvoiceController::class, 'cancel'])->name('invoices.cancel');
+        Route::get('/invoices/{invoice}/pdf', [FinanceInvoiceController::class, 'pdf'])->name('invoices.pdf');
         Route::get('/invoices/{invoice}/receipt', [FinanceInvoiceController::class, 'receipt'])->name('invoices.receipt');
 
         Route::get('/payments', [FinancePaymentController::class, 'index'])->name('payments.index');
@@ -244,5 +260,8 @@ Route::middleware('auth')->group(function () {
 
         Route::get('/settings', [FinanceSettingController::class, 'edit'])->name('settings');
         Route::put('/settings', [FinanceSettingController::class, 'update'])->name('settings.update');
+        Route::post('/settings/partners', [FinancePartnerController::class, 'store'])->name('partners.store');
+        Route::put('/settings/partners/{partner}', [FinancePartnerController::class, 'update'])->name('partners.update');
+        Route::delete('/settings/partners/{partner}', [FinancePartnerController::class, 'destroy'])->name('partners.destroy');
     });
 });

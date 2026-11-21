@@ -499,13 +499,26 @@ class WahaService
      */
     public function sendText(Artist $artist, string $chatId, string $text): bool
     {
-        if (! $artist->wa_session_slug || $chatId === '' || $text === '') {
+        if (! $artist->wa_session_slug) {
+            return false;
+        }
+
+        return $this->sendTextToSession($artist->wa_session_slug, $chatId, $text);
+    }
+
+    /**
+     * Send a plain-text message through a raw WAHA session. Used by finance,
+     * where the sender is the company session instead of an Artist session.
+     */
+    public function sendTextToSession(string $session, string $chatId, string $text): bool
+    {
+        if ($session === '' || $chatId === '' || $text === '') {
             return false;
         }
 
         try {
             $resp = $this->client()->post('/api/sendText', [
-                'session' => $artist->wa_session_slug,
+                'session' => $session,
                 'chatId' => $chatId,
                 'text' => $text,
             ]);
@@ -514,6 +527,41 @@ class WahaService
         }
 
         return $resp->successful();
+    }
+
+    /**
+     * Ask WAHA whether a phone is a registered WhatsApp number and return its
+     * chat id. Mirrors the check the n8n invoice workflow used before sending.
+     *
+     * @return array{numberExists: bool, chatId: ?string}|null
+     */
+    public function checkNumber(string $session, string $phone): ?array
+    {
+        $digits = preg_replace('/\D+/', '', $phone) ?? '';
+
+        if ($session === '' || $digits === '') {
+            return null;
+        }
+
+        try {
+            $resp = $this->client()->get('/api/contacts/check-exists', [
+                'session' => $session,
+                'phone' => $digits,
+            ]);
+        } catch (ConnectionException) {
+            return null;
+        }
+
+        if (! $resp->successful()) {
+            return null;
+        }
+
+        $data = $resp->json() ?? [];
+
+        return [
+            'numberExists' => (bool) ($data['numberExists'] ?? false),
+            'chatId' => isset($data['chatId']) ? (string) $data['chatId'] : null,
+        ];
     }
 
     public function startTyping(Artist $artist, string $chatId): bool

@@ -32,7 +32,7 @@
         <input type="search" name="q" value="{{ request('q') }}" placeholder="Número ou cliente">
         <select name="status">
             <option value="">Todos os status</option>
-            @foreach (['draft' => 'Rascunho', 'sent' => 'Enviada', 'paid' => 'Paga', 'overdue' => 'Atrasada', 'cancelled' => 'Cancelada'] as $value => $label)
+            @foreach (['draft' => 'Aguardando aprovação', 'sent' => 'Enviada', 'paid' => 'Paga', 'overdue' => 'Atrasada', 'cancelled' => 'Cancelada'] as $value => $label)
                 <option value="{{ $value }}" @selected(request('status') === $value)>{{ $label }}</option>
             @endforeach
         </select>
@@ -69,7 +69,12 @@
                         <td>{{ $invoice->prospect?->name ?? '—' }}</td>
                         <td>{{ $invoice->periodLabel() }}</td>
                         <td>{{ $invoice->due_date?->format('d/m/Y') }}</td>
-                        <td><span class="fin-badge fin-badge--{{ $invoice->statusTone() }}">{{ $invoice->statusLabel() }}</span></td>
+                        <td>
+                            <span class="fin-badge fin-badge--{{ $invoice->statusTone() }}">{{ $invoice->statusLabel() }}</span>
+                            @if ($invoice->delivery_status === 'failed')
+                                <div class="sales-sub fin-tone-danger">falha no envio</div>
+                            @endif
+                        </td>
                         <td><x-money :cents="$invoice->amount_cents" /></td>
                         <td><x-money :cents="$invoice->paid_cents" /></td>
                         <td><x-money :cents="$invoice->balanceCents()" /></td>

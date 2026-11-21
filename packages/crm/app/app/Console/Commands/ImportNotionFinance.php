@@ -5,6 +5,8 @@ namespace App\Console\Commands;
 use App\Models\BillingExpense;
 use App\Models\BillingInvoice;
 use App\Models\BillingPayment;
+use App\Models\FinanceMonth;
+use App\Models\FinancePartner;
 use App\Models\Prospect;
 use App\Models\User;
 use App\Services\Finance\InvoiceNumberGenerator;
@@ -59,6 +61,9 @@ class ImportNotionFinance extends Command
     /** @var array<string, int> */
     private array $usersByName = [];
 
+    /** @var array<string, FinancePartner> */
+    private array $partnersByName = [];
+
     /** @var array<string, Carbon> */
     private array $monthsByPageId = [];
 
@@ -111,6 +116,7 @@ class ImportNotionFinance extends Command
 
         $this->loadProspects();
         $this->loadUsers();
+        $this->loadPartners();
         $this->loadMonths($payload['Overview'] ?? []);
 
         $entradas = $payload['Entradas'];
@@ -135,6 +141,8 @@ class ImportNotionFinance extends Command
             foreach ($saidas as $row) {
                 $this->importSaida($row, $people);
             }
+
+            $this->seedHistoricalMonths();
 
             $dryRun ? DB::rollBack() : DB::commit();
         } catch (Throwable $e) {
@@ -223,10 +231,15 @@ class ImportNotionFinance extends Command
                 'due_date' => $dueDate->toDateString(),
                 'amount_cents' => $amountCents,
                 'paid_cents' => 0,
+                'subtotal_cents' => $amountCents,
+                'discount_cents' => 0,
                 'status' => $status,
                 'payment_method' => $method,
                 'external_ref' => $externalRef,
                 'notes' => $this->entradaNotes($row),
+                'delivery_status' => BillingInvoice::DELIVERY_SENT,
+                'sent_at' => $issueDate->copy()->startOfDay(),
+                'approved_at' => $issueDate->copy()->startOfDay(),
             ]);
 
             $invoice->items()->create([
@@ -331,6 +344,8 @@ class ImportNotionFinance extends Command
             }
         }
 
+        $payerPartner = $this->partnerFor($payerNames[0] ?? null);
+
         $notes = ['Importado do Notion Financeiro.'];
 
         if ($payerNames !== []) {
@@ -359,6 +374,10 @@ class ImportNotionFinance extends Command
             'notes' => implode(' ', $notes),
             'created_by' => $createdBy,
             'notion_page_id' => $pageId,
+            'paid_by_partner_id' => $payerPartner?->id,
+            // Historical payouts were not imported; treat old partner-paid
+            // expenses as already settled so they do not create a backlog.
+            'reimbursed_at' => $payerPartner !== null ? $paidInMonth->toDateString() : null,
         ]);
 
         $this->stats['expenses_created']++;
@@ -524,6 +543,64 @@ class ImportNotionFinance extends Command
                 }
             }
         }
+    }
+
+    /**
+     * Months before the current one have Guardado = 0 in the Notion model
+     * (Pagamentos were not imported). The schema migration seeds this for
+     * existing data; the import seeds it for the data it just created.
+     */
+    private function seedHistoricalMonths(): void
+    {
+        $current = now()->startOfMonth();
+
+        $months = collect()
+            ->merge(\App\Models\BillingInvoice::query()->pluck('period_start'))
+            ->merge(\App\Models\BillingPayment::query()->pluck('paid_at'))
+            ->merge(BillingExpense::query()->pluck('competence_month'))
+            ->filter()
+            ->map(fn ($date) => Carbon::parse((string) $date)->startOfMonth())
+            ->filter(fn (Carbon $month) => $month->lt($current))
+            ->unique(fn (Carbon $month) => $month->format('Y-m'));
+
+        foreach ($months as $month) {
+            FinanceMonth::firstOrCreate(
+                ['month' => $month->toDateString()],
+                ['saved_cents' => 0],
+            );
+        }
+    }
+
+    private function loadPartners(): void
+    {
+        foreach (FinancePartner::query()->get() as $partner) {
+            $this->partnersByName[$this->nameKey($partner->name)] = $partner;
+        }
+    }
+
+    private function partnerFor(?string $name): ?FinancePartner
+    {
+        $key = $this->nameKey($name ?? '');
+
+        if ($key === '' || $key === 'vaif' || str_contains($key, 'vaif')) {
+            return null;
+        }
+
+        if (isset($this->partnersByName[$key])) {
+            return $this->partnersByName[$key];
+        }
+
+        $share = FinancePartner::query()->count() < 2 ? 5000 : 0;
+
+        $partner = FinancePartner::create([
+            'name' => trim((string) $name),
+            'share_bps' => $share,
+            'active' => true,
+        ]);
+
+        $this->partnersByName[$key] = $partner;
+
+        return $partner;
     }
 
     private function loadUsers(): void

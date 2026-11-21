@@ -112,6 +112,9 @@ keep artists logged in across redeploys.
 | `WAHA_API_KEY` | WAHA API key |
 | `WAHA_WEBHOOK_URL` | `https://crm.vaif.com.br/api/webhooks/waha` |
 | `WAHA_WEBHOOK_TOKEN` | shared header token WAHA sends to the CRM webhook |
+| `WAHA_FINANCE_SESSION` | WAHA session used to send invoices/dunning messages (default `default`) |
+| `FINANCE_APPROVAL_EMAIL` | fallback inbox for the invoice approval digest (settings field wins) |
+| `FINANCE_PDF_LINK_DAYS` | how long the signed invoice PDF link sent over WhatsApp stays valid (default `30`) |
 | `ONBOARD_WEBHOOK_TOKEN` | shared secret used by the onboarding flow |
 | `SALES_INGEST_TOKEN` | bearer token for the LP calculator → internal sales CRM |
 | `NOTION_SYNC_TOKEN` | bearer token for the n8n Notion pipeline sync (optional; falls back to `SALES_INGEST_TOKEN`) |
@@ -199,6 +202,15 @@ The entrypoint starts `php artisan queue:work --queue=agent` next to the
 scheduler and restarts it if it exits. The `jobs` table is created by
 `app/database/migrations/2026_11_08_000003_create_jobs_table.php`; run
 `php artisan migrate --force` once (the deploy job already does this).
+
+### Finance setup
+
+After the finance migration, run `php artisan finance:setup-partners` once (or
+add Daniel/Gabriel in **Configuração financeira**). In the same page set the
+issuer data, PIX key, invoice prefix (`INV`), approval e-mail, lead days and the
+WhatsApp texts. Invoice/dunning delivery uses `WAHA_FINANCE_SESSION` (default
+`default`). The old n8n **Create Invoice** workflow and its Google Docs/Drive
+nodes should be deactivated after a successful CRM send.
 
 ### Switching WAHA to the CRM
 

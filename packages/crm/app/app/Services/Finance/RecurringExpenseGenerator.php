@@ -63,6 +63,7 @@ class RecurringExpenseGenerator
                     'payment_method' => $latest->payment_method,
                     'recurrence' => BillingExpense::RECURRENCE_MONTHLY,
                     'recurrence_key' => $key,
+                    'paid_by_partner_id' => $latest->paid_by_partner_id,
                     'notes' => $latest->notes,
                     'created_by' => $actor?->id ?? $latest->created_by,
                 ]);

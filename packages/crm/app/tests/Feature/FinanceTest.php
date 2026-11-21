@@ -62,11 +62,13 @@ class FinanceTest extends TestCase
         $invoice = BillingInvoice::firstOrFail();
 
         $this->assertSame(1, BillingInvoice::count());
-        $this->assertMatchesRegularExpression('/^VAIF-\d{4}-0001$/', $invoice->number);
+        $this->assertMatchesRegularExpression('/^INV-\d{4}-0001$/', $invoice->number);
         $this->assertSame($contract->id, $invoice->contract_id);
         $this->assertSame($this->prospect->id, $invoice->prospect_id);
         $this->assertSame(180_000, $invoice->amount_cents);
-        $this->assertSame(BillingInvoice::STATUS_SENT, $invoice->status);
+        $this->assertSame(BillingInvoice::STATUS_DRAFT, $invoice->status);
+        $this->assertSame(BillingInvoice::DELIVERY_PENDING, $invoice->delivery_status);
+        $this->assertSame(180_000, $invoice->subtotal_cents);
         $this->assertSame(now()->toDateString(), $invoice->period_start->toDateString());
         $this->assertSame(1, $invoice->items()->count());
         $this->assertSame(0, $invoice->paid_cents);
@@ -308,7 +310,11 @@ class FinanceTest extends TestCase
                 'legal_name' => 'VAIF Marketing LTDA',
                 'tax_id' => '12.345.678/0001-90',
                 'invoice_prefix' => 'VAIF',
-                'default_due_day' => 10,
+                'invoice_lead_days' => 3,
+                'invoice_approval_email' => 'financeiro@vaif.test',
+                'invoice_terms' => 'Multa de 1% ao mês.',
+                'invoice_whatsapp_message' => 'Olá {primeiro_nome}, segue {link}',
+                'dunning_whatsapp_message' => 'Olá {primeiro_nome}, {numero} venceu.',
                 'pix_key' => 'financeiro@vaif.com.br',
                 'payment_instructions' => 'Pague via PIX e envie o comprovante.',
                 'receipt_footer' => 'Obrigado.',

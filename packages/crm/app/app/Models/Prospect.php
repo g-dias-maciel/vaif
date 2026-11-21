@@ -60,6 +60,8 @@ class Prospect extends Model
         'studio',
         'style',
         'city',
+        'billing_address',
+        'tax_id',
         'source',
         'status',
         'stage_key',

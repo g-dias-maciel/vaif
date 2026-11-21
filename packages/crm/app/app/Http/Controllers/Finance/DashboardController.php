@@ -13,59 +13,31 @@ use Carbon\Carbon;
 use Illuminate\Http\Request;
 
 /**
- * Staff-only finance cockpit. Sales users never reach these routes.
+ * Staff-only finance home: the year overview (the Notion "Financeiro" page)
+ * plus the alerts that need action.
  */
 class DashboardController extends Controller
 {
-    public function index(MonthlyFinanceReport $report)
+    public function index(Request $request, MonthlyFinanceReport $report)
     {
-        $today = now()->startOfDay();
-        $monthStart = $today->copy()->startOfMonth();
-        $monthEnd = $today->copy()->endOfMonth();
-        $in30 = $today->copy()->addDays(30);
+        $year = (int) $request->input('year', now()->year);
 
-        $contracts = ProspectContract::query()->where('status', ProspectContract::STATUS_ACTIVE);
+        if ($year < 2000 || $year > 2100) {
+            $year = now()->year;
+        }
 
-        $mrr = (int) (clone $contracts)->sum('monthly_value_cents');
-        $contractCount = (clone $contracts)->count();
-        $cardCount = (clone $contracts)->where('billing_mode', 'card')->count();
-        $pixCount = (clone $contracts)->where('billing_mode', 'pix')->count();
+        $overview = $report->overviewForYear($year);
+        $current = $report->summary(now()->startOfMonth());
 
-        $received = (int) BillingPayment::query()
-            ->whereBetween('paid_at', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->sum('amount_cents');
-        $receivedCard = (int) BillingPayment::query()
-            ->whereBetween('paid_at', [$monthStart->toDateString(), $monthEnd->toDateString()])
-            ->where('method', BillingPayment::METHOD_CREDIT_CARD)
-            ->sum('amount_cents');
-
-        $outstanding = (int) BillingInvoice::query()
-            ->open()
-            ->selectRaw('coalesce(sum(amount_cents - paid_cents), 0) as total')
-            ->value('total');
-        $overdue = (int) BillingInvoice::query()
-            ->overdue()
-            ->selectRaw('coalesce(sum(amount_cents - paid_cents), 0) as total')
-            ->value('total');
-        $overdueCount = BillingInvoice::query()->overdue()->count();
-
-        $invoicesNext30 = (int) BillingInvoice::query()
-            ->open()
-            ->whereBetween('due_date', [$today->toDateString(), $in30->toDateString()])
-            ->selectRaw('coalesce(sum(amount_cents - paid_cents), 0) as total')
-            ->value('total');
-
-        $recentInvoices = BillingInvoice::query()
-            ->with('prospect')
-            ->orderByDesc('created_at')
-            ->limit(8)
+        $awaiting = BillingInvoice::query()
+            ->awaitingApproval()
+            ->orderBy('due_date')
+            ->orderBy('number')
             ->get();
 
-        $recentPayments = BillingPayment::query()
-            ->with('prospect')
-            ->orderByDesc('paid_at')
-            ->orderByDesc('created_at')
-            ->limit(8)
+        $overdue = BillingInvoice::query()
+            ->overdue()
+            ->orderBy('due_date')
             ->get();
 
         $withoutContract = Prospect::query()
@@ -73,44 +45,31 @@ class DashboardController extends Controller
             ->whereDoesntHave('contracts', fn ($q) => $q->where('status', ProspectContract::STATUS_ACTIVE))
             ->count();
 
-        $upcoming = ProspectContract::query()
-            ->where('status', ProspectContract::STATUS_ACTIVE)
-            ->with(['prospect', 'artist'])
-            ->where(function ($query) use ($today, $in30): void {
-                $query->whereBetween('next_invoice_at', [$today->toDateString(), $in30->toDateString()])
-                    ->orWhereBetween('next_charge_at', [$today->toDateString(), $in30->toDateString()]);
-            })
-            ->orderBy('next_invoice_at')
-            ->orderBy('next_charge_at')
-            ->limit(10)
-            ->get();
+        $overdueExpenses = BillingExpense::query()
+            ->overdue()
+            ->count();
 
-        $upcomingExpenses = BillingExpense::query()
-            ->where('status', BillingExpense::STATUS_PENDING)
-            ->whereBetween('due_date', [$today->toDateString(), $in30->toDateString()])
-            ->orderBy('due_date')
-            ->limit(10)
-            ->get();
+        $earliest = collect([
+            BillingInvoice::min('period_start'),
+            BillingPayment::min('paid_at'),
+            BillingExpense::min('competence_month'),
+            ProspectContract::min('start_date'),
+        ])
+            ->filter()
+            ->map(fn ($date) => (int) Carbon::parse((string) $date)->format('Y'))
+            ->min() ?? now()->year;
 
-        $monthly = $report->summary($today->copy()->startOfMonth());
+        $years = range(now()->year, min($earliest, now()->year));
 
-        return view('finance.dashboard', [
-            'mrr' => $mrr,
-            'contractCount' => $contractCount,
-            'cardCount' => $cardCount,
-            'pixCount' => $pixCount,
-            'received' => $received,
-            'receivedCard' => $receivedCard,
-            'outstanding' => $outstanding,
+        return view('finance.overview', [
+            'year' => $year,
+            'years' => $years,
+            'overview' => $overview,
+            'current' => $current,
+            'awaiting' => $awaiting,
             'overdue' => $overdue,
-            'overdueCount' => $overdueCount,
-            'invoicesNext30' => $invoicesNext30,
-            'recentInvoices' => $recentInvoices,
-            'recentPayments' => $recentPayments,
             'withoutContract' => $withoutContract,
-            'upcoming' => $upcoming,
-            'upcomingExpenses' => $upcomingExpenses,
-            'monthly' => $monthly,
+            'overdueExpenses' => $overdueExpenses,
         ]);
     }
 

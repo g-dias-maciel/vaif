@@ -93,6 +93,16 @@
         </label>
 
         <label>
+            Pago por
+            <select name="paid_by_partner_id">
+                <option value="">VAIF (conta da empresa)</option>
+                @foreach ($partners as $partner)
+                    <option value="{{ $partner->id }}" @selected(old('paid_by_partner_id', $expense->paid_by_partner_id) === $partner->id)>{{ $partner->name }} (pessoal — reembolsar)</option>
+                @endforeach
+            </select>
+        </label>
+
+        <label>
             Recorrência
             <select name="recurrence" required>
                 <option value="one_off" @selected(old('recurrence', $expense->recurrence) === 'one_off')>Avulsa</option>
@@ -109,6 +119,8 @@
             <p class="fin-note" style="margin-bottom:10px;">
                 Despesas mensais são clonadas automaticamente para o mês seguinte todos os dias às 06:20. A primeira ocorrência
                 precisa existir neste mês; a partir dela o sistema reproduz o mesmo valor e vencimento.
+                Se o pagamento saiu da conta pessoal de um sócio, escolha o nome em <strong>Pago por</strong> — o valor entra
+                automaticamente no reembolso da distribuição.
             </p>
             <button type="submit" class="btn">{{ $editing ? 'Salvar despesa' : 'Criar despesa' }}</button>
         </div>

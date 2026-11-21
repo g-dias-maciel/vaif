@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', 'Pagamentos')
+@section('title', 'Recebimentos')
 
 @section('content')
 @include('finance.partials.styles')
@@ -8,7 +8,7 @@
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
         <div>
-            <h1 style="margin:0;">Pagamentos</h1>
+            <h1 style="margin:0;">Recebimentos</h1>
             <p class="meta" style="margin-top:6px;">Receita recebida. Cartão do Mercado Pago entra aqui sem cobrança vinculada.</p>
         </div>
         <div class="fin-actions">

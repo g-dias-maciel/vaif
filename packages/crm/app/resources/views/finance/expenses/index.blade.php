@@ -12,8 +12,7 @@
             <p class="meta" style="margin-top:6px;">Saídas por mês de competência. O que está pendente e vencido aparece como contas a pagar.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.expenses.create') }}" class="btn btn--small">Nova despesa</a>
-            <a href="{{ route('finance.expenses.copy', ['source' => $month->copy()->subMonthNoOverflow()->format('Y-m'), 'target' => $month->format('Y-m')]) }}" class="btn btn--ghost btn--small">Copiar despesas</a>
+            <a href="{{ route('finance.expenses.create', ['month' => $month->format('Y-m')]) }}" class="btn btn--small">Nova despesa</a>
             <a href="{{ route('finance.months') }}" class="btn btn--ghost btn--small">Visão mensal</a>
             <form method="post" action="{{ route('finance.expenses.generate-recurring') }}" onsubmit="return confirm('Gerar as despesas recorrentes até o próximo mês?');">
                 @csrf
@@ -72,6 +71,7 @@
                     <th>Categoria</th>
                     <th>Mês</th>
                     <th>Vencimento</th>
+                    <th>Pago por</th>
                     <th>Status</th>
                     <th>Recorrência</th>
                     <th>Valor</th>
@@ -93,6 +93,14 @@
                             {{ $expense->due_date?->format('d/m/Y') }}
                             @if ($expense->isOverdue())
                                 <div class="sales-sub fin-tone-danger">vencida</div>
+                            @endif
+                        </td>
+                        <td>
+                            {{ $expense->payerLabel() }}
+                            @if ($expense->paid_by_partner_id)
+                                <div class="sales-sub {{ $expense->reimbursed_at ? 'fin-tone-ok' : 'fin-tone-pending' }}">
+                                    {{ $expense->reimbursed_at ? 'reembolsado' : 'a reembolsar' }}
+                                </div>
                             @endif
                         </td>
                         <td><span class="fin-badge fin-badge--{{ $expense->statusTone() }}">{{ $expense->statusLabel() }}</span></td>

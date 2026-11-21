@@ -31,6 +31,12 @@
             @if ($editing && $contract->prospect)
                 <a href="{{ route('sales.prospects.show', $prospect) }}" class="btn btn--ghost btn--small">Prospect</a>
             @endif
+            @if ($editing && $contract->isPix() && $contract->status === 'active')
+                <form method="post" action="{{ route('finance.contracts.generate-invoice', $contract) }}" onsubmit="return confirm('Gerar a próxima cobrança agora?');">
+                    @csrf
+                    <button type="submit" class="btn btn--small">Gerar cobrança</button>
+                </form>
+            @endif
         </div>
     </div>
 
@@ -109,7 +115,7 @@
             Modo de cobrança
             <select name="billing_mode">
                 <option value="pix" @selected(old('billing_mode', $contract->billing_mode ?? 'pix') === 'pix')>PIX — gera cobrança</option>
-                <option value="card" @selected(old('billing_mode', $contract->billing_mode ?? 'pix') === 'card')>Cartão — Mercado Pago recorrente</option>
+                <option value="card" @selected(old('billing_mode', $contract->billing_mode ?? 'pix') === 'card')>Cartão — link de pagamento recorrente</option>
             </select>
         </label>
 
@@ -132,19 +138,14 @@
             <input type="date" name="next_charge_at" value="{{ old('next_charge_at', $contract->next_charge_at?->toDateString()) }}">
         </label>
 
-        <label>
-            Mercado Pago — preapproval ID
-            <input type="text" name="mercado_pago_preapproval_id" value="{{ old('mercado_pago_preapproval_id', $contract->mercado_pago_preapproval_id) }}" placeholder="Opcional">
+        <label class="full">
+            Endereço de cobrança do cliente
+            <textarea name="billing_address" placeholder="Usado na fatura">{{ old('billing_address', $prospect->billing_address) }}</textarea>
         </label>
 
         <label>
-            Mercado Pago — customer ID
-            <input type="text" name="mercado_pago_customer_id" value="{{ old('mercado_pago_customer_id', $contract->mercado_pago_customer_id) }}" placeholder="Opcional">
-        </label>
-
-        <label>
-            Notion page ID
-            <input type="text" name="notion_page_id" value="{{ old('notion_page_id', $contract->notion_page_id) }}" placeholder="Opcional">
+            CPF / CNPJ do cliente
+            <input type="text" name="tax_id" value="{{ old('tax_id', $prospect->tax_id) }}" placeholder="Opcional">
         </label>
 
         <label class="full">
@@ -155,7 +156,7 @@
         <div class="full">
             <p class="fin-note" style="margin-bottom:10px;">
                 O contrato não cria login, convite ou tarefa de onboarding. Para o 697, o valor mensal é zerado e o total deve ser R$ 697.
-                A cobrança PIX é gerada pelo comando diário quando a data chega; o cartão é registrado como pagamento.
+                A cobrança PIX é gerada alguns dias antes do próximo período e entra na fila de aprovação; o cartão é registrado como pagamento.
                 <strong>Para clientes já existentes, informe a próxima cobrança em aberto</strong> — assim o sistema não gera meses retroativos.
             </p>
             <button type="submit" class="btn">{{ $editing ? 'Salvar contrato' : 'Criar contrato' }}</button>

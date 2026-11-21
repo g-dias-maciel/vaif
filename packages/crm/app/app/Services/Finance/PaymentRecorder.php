@@ -35,6 +35,10 @@ class PaymentRecorder
                 throw ValidationException::withMessages(['invoice_id' => 'Cobrança cancelada não recebe pagamento.']);
             }
 
+            if ($invoice?->isDraft()) {
+                throw ValidationException::withMessages(['invoice_id' => 'Aprove a cobrança antes de registrar pagamento.']);
+            }
+
             $contract = $this->contractFor($data, $invoice);
             $prospectId = $data['prospect_id'] ?? $invoice?->prospect_id ?? $contract?->prospect_id;
 

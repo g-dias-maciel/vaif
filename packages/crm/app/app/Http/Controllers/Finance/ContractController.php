@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\ProspectContract;
+use App\Services\Finance\InvoiceGenerator;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -61,6 +62,7 @@ class ContractController extends Controller
 
         $contract = $prospect->contracts()->create($this->attributes($data, $prospect));
 
+        $this->updateBillingData($prospect, $data);
         $this->log($request, $prospect, $contract, true);
 
         return redirect()
@@ -89,6 +91,7 @@ class ContractController extends Controller
         $oldPlan = $contract->plan;
         $contract->update($this->attributes($data, $prospect, $contract));
 
+        $this->updateBillingData($prospect, $data);
         $this->log($request, $prospect, $contract, false, $oldPlan);
 
         return redirect()
@@ -122,6 +125,8 @@ class ContractController extends Controller
             'mercado_pago_preapproval_id' => ['nullable', 'string', 'max:255'],
             'mercado_pago_customer_id' => ['nullable', 'string', 'max:255'],
             'notion_page_id' => ['nullable', 'string', 'max:255'],
+            'billing_address' => ['nullable', 'string', 'max:2000'],
+            'tax_id' => ['nullable', 'string', 'max:32'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -211,11 +216,40 @@ class ContractController extends Controller
             'next_charge_at' => $nextCharge,
             'billing_mode' => $billingMode,
             'payment_method' => $data['payment_method'] ?? ($billingMode === 'card' ? 'credit_card' : 'pix'),
-            'mercado_pago_preapproval_id' => $data['mercado_pago_preapproval_id'] ?? null,
-            'mercado_pago_customer_id' => $data['mercado_pago_customer_id'] ?? null,
-            'notion_page_id' => $data['notion_page_id'] ?? null,
+            'mercado_pago_preapproval_id' => $data['mercado_pago_preapproval_id'] ?? $current?->mercado_pago_preapproval_id,
+            'mercado_pago_customer_id' => $data['mercado_pago_customer_id'] ?? $current?->mercado_pago_customer_id,
+            'notion_page_id' => $data['notion_page_id'] ?? $current?->notion_page_id,
             'notes' => $data['notes'] ?? null,
         ];
+    }
+
+    public function generateInvoice(
+        Request $request,
+        ProspectContract $contract,
+        InvoiceGenerator $generator,
+    ): RedirectResponse {
+        $invoice = $generator->generateForContract($contract, now(), ignoreLead: true);
+
+        if ($invoice === null) {
+            return back()->withErrors([
+                'invoice' => 'Nada a gerar: contrato sem próxima cobrança, valor zero ou cobrança já existente.',
+            ]);
+        }
+
+        return redirect()
+            ->route('finance.invoices.show', $invoice)
+            ->with('status', 'Cobrança '.$invoice->number.' gerada para aprovação.');
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function updateBillingData(Prospect $prospect, array $data): void
+    {
+        $prospect->update([
+            'billing_address' => $data['billing_address'] ?? $prospect->billing_address,
+            'tax_id' => $data['tax_id'] ?? $prospect->tax_id,
+        ]);
     }
 
     private function guardAgainstDuplicateActive(Prospect $prospect, ?string $ignoreId, string $status): void

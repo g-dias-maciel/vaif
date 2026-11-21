@@ -75,6 +75,9 @@ class BillingExpense extends Model
         'created_by',
         'notion_page_id',
         'copied_from_id',
+        'paid_by_partner_id',
+        'reimbursed_at',
+        'reimbursed_distribution_id',
     ];
 
     protected $casts = [
@@ -82,11 +85,34 @@ class BillingExpense extends Model
         'competence_month' => 'date',
         'due_date' => 'date',
         'paid_at' => 'date',
+        'reimbursed_at' => 'date',
     ];
 
     public function creator(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function payer(): BelongsTo
+    {
+        return $this->belongsTo(FinancePartner::class, 'paid_by_partner_id');
+    }
+
+    public function reimbursementDistribution(): BelongsTo
+    {
+        return $this->belongsTo(FinanceDistribution::class, 'reimbursed_distribution_id');
+    }
+
+    public function scopeUnreimbursedForPartner(Builder $query, string $partnerId): Builder
+    {
+        return $query->where('paid_by_partner_id', $partnerId)
+            ->where('status', self::STATUS_PAID)
+            ->whereNull('reimbursed_at');
+    }
+
+    public function payerLabel(): string
+    {
+        return $this->payer?->name ?? 'VAIF (empresa)';
     }
 
     public function scopeForMonth(Builder $query, Carbon $month): Builder

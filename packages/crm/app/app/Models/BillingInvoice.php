@@ -38,6 +38,12 @@ class BillingInvoice extends Model
 
     public const METHOD_OTHER = 'other';
 
+    public const DELIVERY_PENDING = 'pending';
+
+    public const DELIVERY_SENT = 'sent';
+
+    public const DELIVERY_FAILED = 'failed';
+
     public $incrementing = false;
 
     protected $keyType = 'string';
@@ -55,12 +61,21 @@ class BillingInvoice extends Model
         'due_date',
         'amount_cents',
         'paid_cents',
+        'subtotal_cents',
+        'discount_cents',
         'status',
         'payment_method',
         'external_ref',
         'pix_copy_paste',
         'pix_qr_code',
         'notes',
+        'approved_at',
+        'approved_by',
+        'sent_at',
+        'delivery_status',
+        'delivery_error',
+        'reminder_count',
+        'last_reminded_at',
     ];
 
     protected $casts = [
@@ -70,6 +85,12 @@ class BillingInvoice extends Model
         'due_date' => 'date',
         'amount_cents' => 'integer',
         'paid_cents' => 'integer',
+        'subtotal_cents' => 'integer',
+        'discount_cents' => 'integer',
+        'approved_at' => 'datetime',
+        'sent_at' => 'datetime',
+        'last_reminded_at' => 'datetime',
+        'reminder_count' => 'integer',
     ];
 
     public function contract(): BelongsTo
@@ -92,14 +113,24 @@ class BillingInvoice extends Model
         return $this->hasMany(BillingPayment::class, 'invoice_id')->orderByDesc('paid_at');
     }
 
+    public function approver(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'approved_by');
+    }
+
     public function scopeOpen(Builder $query): Builder
     {
         return $query->whereIn('status', [self::STATUS_DRAFT, self::STATUS_SENT, self::STATUS_OVERDUE]);
     }
 
+    public function scopeAwaitingApproval(Builder $query): Builder
+    {
+        return $query->where('status', self::STATUS_DRAFT);
+    }
+
     public function scopeOverdue(Builder $query): Builder
     {
-        return $query->whereIn('status', [self::STATUS_DRAFT, self::STATUS_SENT, self::STATUS_OVERDUE])
+        return $query->whereIn('status', [self::STATUS_SENT, self::STATUS_OVERDUE])
             ->whereDate('due_date', '<', now()->toDateString())
             ->whereColumn('paid_cents', '<', 'amount_cents');
     }
@@ -107,6 +138,21 @@ class BillingInvoice extends Model
     public function balanceCents(): int
     {
         return max(0, $this->amount_cents - $this->paid_cents);
+    }
+
+    public function subtotalCents(): int
+    {
+        return $this->subtotal_cents ?? $this->amount_cents;
+    }
+
+    public function discountCents(): int
+    {
+        return $this->discount_cents ?? 0;
+    }
+
+    public function isDraft(): bool
+    {
+        return $this->status === self::STATUS_DRAFT;
     }
 
     public function isPaid(): bool
@@ -121,7 +167,7 @@ class BillingInvoice extends Model
 
     public function isOverdue(): bool
     {
-        if ($this->isPaid() || $this->isCancelled()) {
+        if ($this->isPaid() || $this->isCancelled() || $this->isDraft()) {
             return false;
         }
 
@@ -129,10 +175,24 @@ class BillingInvoice extends Model
             || ($this->due_date !== null && $this->due_date->isPast());
     }
 
+    public function isDelivered(): bool
+    {
+        return $this->delivery_status === self::DELIVERY_SENT;
+    }
+
+    public function deliveryLabel(): string
+    {
+        return match ($this->delivery_status) {
+            self::DELIVERY_SENT => 'Enviada',
+            self::DELIVERY_FAILED => 'Falha no envio',
+            default => $this->isDraft() ? 'Aguardando aprovação' : 'Pendente',
+        };
+    }
+
     public function statusLabel(): string
     {
         return match ($this->status) {
-            self::STATUS_DRAFT => 'Rascunho',
+            self::STATUS_DRAFT => 'Aguardando aprovação',
             self::STATUS_SENT => 'Enviada',
             self::STATUS_PAID => 'Paga',
             self::STATUS_OVERDUE => 'Atrasada',

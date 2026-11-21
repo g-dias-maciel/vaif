@@ -24,7 +24,7 @@ class MarkBillingOverdue extends Command
             : now()->startOfDay();
 
         $query = BillingInvoice::query()
-            ->whereIn('status', [BillingInvoice::STATUS_DRAFT, BillingInvoice::STATUS_SENT])
+            ->where('status', BillingInvoice::STATUS_SENT)
             ->whereDate('due_date', '<', $asOf->toDateString())
             ->whereColumn('paid_cents', '<', 'amount_cents');
 

@@ -728,25 +728,13 @@
                         @if ($navUser->isStaff())
                             <div class="nav-group">
                                 <span class="nav-group-label">Financeiro</span>
-                                <a href="{{ route('finance.dashboard') }}" class="nav-item {{ request()->routeIs('finance.dashboard') ? 'is-active' : '' }}">
-                                    <x-icon name="chart" /> <span>Visão financeira</span>
-                                </a>
-                                <a href="{{ route('finance.months') }}" class="nav-item {{ request()->routeIs('finance.months') ? 'is-active' : '' }}">
-                                    <x-icon name="grid" /> <span>Visão mensal</span>
-                                </a>
-                                <a href="{{ route('finance.invoices.index') }}" class="nav-item {{ request()->routeIs('finance.invoices.*') ? 'is-active' : '' }}">
-                                    <x-icon name="promo" /> <span>Cobranças</span>
-                                </a>
-                                <a href="{{ route('finance.expenses.index') }}" class="nav-item {{ request()->routeIs('finance.expenses.*') ? 'is-active' : '' }}">
-                                    <x-icon name="promo" /> <span>Despesas</span>
+                                <a href="{{ route('finance.dashboard') }}" class="nav-item {{ request()->routeIs('finance.dashboard') || request()->routeIs('finance.months') || request()->routeIs('finance.invoices.*') || request()->routeIs('finance.expenses.*') || request()->routeIs('finance.payments.*') ? 'is-active' : '' }}">
+                                    <x-icon name="chart" /> <span>Financeiro</span>
                                 </a>
                                 <a href="{{ route('finance.clients') }}" class="nav-item {{ request()->routeIs('finance.clients') || request()->routeIs('finance.contracts.*') ? 'is-active' : '' }}">
-                                    <x-icon name="users" /> <span>Clientes e contratos</span>
+                                    <x-icon name="users" /> <span>Contratos</span>
                                 </a>
-                                <a href="{{ route('finance.payments.index') }}" class="nav-item {{ request()->routeIs('finance.payments.*') ? 'is-active' : '' }}">
-                                    <x-icon name="grid" /> <span>Pagamentos</span>
-                                </a>
-                                <a href="{{ route('finance.settings') }}" class="nav-item {{ request()->routeIs('finance.settings*') ? 'is-active' : '' }}">
+                                <a href="{{ route('finance.settings') }}" class="nav-item {{ request()->routeIs('finance.settings*') || request()->routeIs('finance.partners.*') ? 'is-active' : '' }}">
                                     <x-icon name="settings" /> <span>Configuração financeira</span>
                                 </a>
                             </div>

@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Finance;
 
 use App\Http\Controllers\Controller;
 use App\Models\BillingExpense;
+use App\Models\FinancePartner;
 use App\Services\Finance\RecurringExpenseGenerator;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
@@ -22,7 +23,7 @@ class ExpenseController extends Controller
         $end = $month->copy()->endOfMonth();
 
         $query = BillingExpense::query()
-            ->with('creator')
+            ->with(['creator', 'payer'])
             ->whereBetween('competence_month', [$start->toDateString(), $end->toDateString()])
             ->when($request->filled('status'), function ($query) use ($request): void {
                 $request->input('status') === 'overdue'
@@ -63,19 +64,22 @@ class ExpenseController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
+        $month = $this->monthFromRequest($request);
+
         return view('finance.expenses.form', [
             'expense' => new BillingExpense([
                 'status' => BillingExpense::STATUS_PENDING,
                 'category' => BillingExpense::CATEGORY_OTHER,
                 'recurrence' => BillingExpense::RECURRENCE_ONE_OFF,
                 'payment_method' => BillingExpense::METHOD_PIX,
-                'competence_month' => now()->startOfMonth()->toDateString(),
+                'competence_month' => $month->toDateString(),
                 'due_date' => now()->toDateString(),
             ]),
             'categories' => BillingExpense::categoryOptions(),
             'methods' => BillingExpense::methodOptions(),
+            'partners' => $this->partners(),
         ]);
     }
 
@@ -128,6 +132,7 @@ class ExpenseController extends Controller
             'source' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/'],
             'target' => ['required', 'regex:/^\d{4}-(0[1-9]|1[0-2])$/', 'different:source'],
             'mark_monthly' => ['sometimes', 'boolean'],
+            'redirect' => ['nullable', 'string', 'in:month'],
         ]);
 
         $source = $this->parseMonth($data['source'], now()->subMonthNoOverflow());
@@ -214,6 +219,9 @@ class ExpenseController extends Controller
                     'notes' => $notes !== '' ? $notes : null,
                     'created_by' => $request->user()?->id,
                     'copied_from_id' => $expense->id,
+                    'paid_by_partner_id' => $expense->paid_by_partner_id,
+                    'reimbursed_at' => null,
+                    'reimbursed_distribution_id' => null,
                 ]);
 
                 $copied++;
@@ -227,8 +235,11 @@ class ExpenseController extends Controller
             return back()->with('error', 'Não foi possível copiar as despesas: '.$e->getMessage());
         }
 
-        return redirect()
-            ->route('finance.expenses.index', ['month' => $target->format('Y-m')])
+        $destination = ($data['redirect'] ?? null) === 'month'
+            ? route('finance.months', ['month' => $target->format('Y-m')])
+            : route('finance.expenses.index', ['month' => $target->format('Y-m')]);
+
+        return redirect($destination)
             ->with('status', sprintf(
                 '%d despesa(s) copiadas de %s para %s.%s',
                 $copied,
@@ -256,6 +267,7 @@ class ExpenseController extends Controller
             'expense' => $expense,
             'categories' => BillingExpense::categoryOptions(),
             'methods' => BillingExpense::methodOptions(),
+            'partners' => $this->partners(),
         ]);
     }
 
@@ -330,6 +342,7 @@ class ExpenseController extends Controller
                 BillingExpense::RECURRENCE_ONE_OFF,
                 BillingExpense::RECURRENCE_MONTHLY,
             ])],
+            'paid_by_partner_id' => ['nullable', 'uuid', 'exists:finance_partners,id'],
             'notes' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -362,8 +375,20 @@ class ExpenseController extends Controller
             'payment_method' => $data['payment_method'] ?? null,
             'recurrence' => $data['recurrence'],
             'recurrence_key' => $recurrenceKey,
+            'paid_by_partner_id' => $data['paid_by_partner_id'] ?? null,
             'notes' => $data['notes'] ?? null,
         ];
+    }
+
+    /**
+     * @return \Illuminate\Support\Collection<int, FinancePartner>
+     */
+    private function partners()
+    {
+        return FinancePartner::query()
+            ->where('active', true)
+            ->orderBy('name')
+            ->get();
     }
 
     private function monthFromRequest(Request $request): Carbon

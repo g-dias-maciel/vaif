@@ -154,24 +154,24 @@ class FinanceExpenseTest extends TestCase
         $this->assertSame(20_000, $summary['expenses_paid_cents']);
         $this->assertSame(40_000, $summary['payables_cents']);
         $this->assertSame(0, $summary['overdue_payables_cents']);
-        $this->assertSame(80_000, $summary['profit_cash_cents']);
-        $this->assertSame(40_000, $summary['profit_accrual_cents']);
+        $this->assertSame(80_000, $summary['profit_cents']);
+        $this->assertSame(80_000, $summary['saved_cents']);
+        $this->assertSame(0, $summary['distributed_profit_cents']);
+        $this->assertSame(400.0, $summary['roi_percent']);
         $this->assertSame(180_000, $summary['mrr_cents']);
         $this->assertSame(1, $summary['contracts_count']);
 
         $this->actingAs($this->staff)
             ->get(route('finance.months', ['month' => now()->format('Y-m')]))
             ->assertOk()
-            ->assertSee('Visão mensal')
-            ->assertSee('Lucro caixa')
-            ->assertSee('Entradas do mês')
-            ->assertDontSee('Recebimentos do mês')
-            ->assertSee('Saídas do mês')
+            ->assertSee('Lucro líquido')
+            ->assertSee('Guardado')
+            ->assertSee('Entradas')
+            ->assertSee('Saídas')
+            ->assertSee('Distribuição')
             ->assertSee('VAIF-2026-7001')
             ->assertSee('Salário')
-            ->assertSee('Ferramenta')
-            ->assertDontSee('Ver mês')
-            ->assertSee('showPicker', false);
+            ->assertSee('Ferramenta');
     }
 
     public function test_recurring_expenses_are_cloned_once_per_month(): void
