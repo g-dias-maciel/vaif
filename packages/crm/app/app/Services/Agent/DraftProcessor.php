@@ -46,6 +46,15 @@ class DraftProcessor
         }
 
         if (! empty($start['agent_blocked'])) {
+            try {
+                $this->store->rememberHuman((string) $start['lead_id'], $leadText, $msgAt);
+            } catch (\Throwable $e) {
+                Log::warning('Draft blocked human message write failed', [
+                    'lead_id' => $start['lead_id'] ?? null,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
             return ['skipped' => 'agent_blocked', 'turn_id' => $turnId, 'lead_id' => $start['lead_id'] ?? null];
         }
 
@@ -75,6 +84,17 @@ class DraftProcessor
                 $start['reference_analysis'] = $prepared['analysis'];
                 $photoAnalyzed = true;
             }
+        }
+
+        // The customer message is written before the model call. A model error
+        // or a guard skip must never hide the message from the conversation.
+        try {
+            $this->store->rememberHuman((string) $start['lead_id'], $effectiveText, $msgAt);
+        } catch (\Throwable $e) {
+            Log::warning('Draft human message write failed', [
+                'lead_id' => $start['lead_id'] ?? null,
+                'error' => $e->getMessage(),
+            ]);
         }
 
         $context = $this->prompts->context($artist, $start);
@@ -169,17 +189,6 @@ class DraftProcessor
             'latency_ms' => (int) round((microtime(true) - $startedAt) * 1000),
             'status' => 'pending',
         ]);
-
-        // The draft does not enter the live conversation as an AI message. The
-        // lead message does, so the next draft has the real context.
-        try {
-            $this->store->rememberHuman((string) $start['lead_id'], $effectiveText, $msgAt);
-        } catch (\Throwable $e) {
-            Log::warning('Draft human message write failed', [
-                'lead_id' => $start['lead_id'] ?? null,
-                'error' => $e->getMessage(),
-            ]);
-        }
 
         if ($photoAnalyzed) {
             try {

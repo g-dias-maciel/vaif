@@ -33,12 +33,16 @@ class TurnProcessor
         }
 
         if (! empty($start['agent_blocked'])) {
+            $this->rememberHuman((string) $start['lead_id'], $leadText);
+
             return ['skipped' => 'agent_blocked'];
         }
 
         // A number saved in the artist's contacts is held on first contact
         // until the artist explicitly allows the agent to answer.
         if (! empty($start['is_new']) && $this->gate !== null && $this->gate->shouldHold($artist, $start)) {
+            $this->rememberHuman((string) $start['lead_id'], $leadText);
+
             return ['skipped' => 'contact_gate', 'lead_id' => $start['lead_id'] ?? null];
         }
 
@@ -69,6 +73,10 @@ class TurnProcessor
                 $photoAnalyzed = true;
             }
         }
+
+        // Persist the customer message before any model call. A 402/rate-limit
+        // or a guard skip must never hide the message from the conversation.
+        $this->rememberHuman((string) $start['lead_id'], $effectiveText);
 
         $context = $this->prompts->context($artist, $start);
         $pendingInput = QualificationFlow::pendingInput($state);
@@ -229,7 +237,7 @@ class TurnProcessor
             }
         }
 
-        $this->store->remember((string) $start['lead_id'], $effectiveText, (string) $validation['final_reply']);
+        $this->store->rememberReply((string) $start['lead_id'], (string) $validation['final_reply']);
 
         $latency = (int) round((microtime(true) - $startedAt) * 1000);
 
@@ -267,6 +275,18 @@ class TurnProcessor
             'repaired' => $repaired,
             'latency_ms' => $latency,
         ];
+    }
+
+    private function rememberHuman(string $leadId, string $text): void
+    {
+        try {
+            $this->store->rememberHuman($leadId, $text);
+        } catch (\Throwable $e) {
+            Log::warning('Agent human message write failed', [
+                'lead_id' => $leadId,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     private function maybeBook(Artist $artist, array $start, array $state, string $intent, array $entities): void

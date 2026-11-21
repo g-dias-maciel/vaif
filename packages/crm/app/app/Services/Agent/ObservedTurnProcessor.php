@@ -63,11 +63,6 @@ class ObservedTurnProcessor
             }
         }
 
-        $history = $this->store->history($leadId, 8, $msgAt === '' ? null : $msgAt);
-        $context = $this->prompts->context($artist, $start);
-        $preflight = $this->preflight->classify($context, $effectiveText, $history);
-        $entities = EntitySanitizer::sanitize($preflight['entities']);
-
         // The transcript is the one thing that must survive every failure.
         try {
             $this->store->rememberHuman($leadId, $effectiveText, $msgAt === '' ? null : $msgAt);
@@ -78,6 +73,11 @@ class ObservedTurnProcessor
                 'error' => $e->getMessage(),
             ]);
         }
+
+        $history = $this->store->history($leadId, 8, $msgAt === '' ? null : $msgAt);
+        $context = $this->prompts->context($artist, $start);
+        $preflight = $this->preflight->classify($context, $effectiveText, $history);
+        $entities = EntitySanitizer::sanitize($preflight['entities']);
 
         $changed = [];
         if ($entities !== []) {

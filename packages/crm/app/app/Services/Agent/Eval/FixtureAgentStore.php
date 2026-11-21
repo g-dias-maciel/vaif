@@ -138,6 +138,11 @@ class FixtureAgentStore implements AgentStore
         $this->rememberedHumans[] = ['lead' => $leadId, 'text' => $leadText, 'at' => $at];
     }
 
+    public function rememberReply(string $leadId, string $reply): void
+    {
+        $this->remembered[] = ['lead' => $leadId, 'text' => '', 'reply' => $reply];
+    }
+
     public function latestArtistMessageAfter(string $leadId, string $after): ?array
     {
         return null;

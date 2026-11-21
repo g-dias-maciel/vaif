@@ -67,6 +67,40 @@ class DraftProcessorTest extends TestCase
         $this->assertNotEmpty($draft->facts);
     }
 
+    public function test_the_customer_message_is_saved_before_the_model_can_fail(): void
+    {
+        $scenario = Scenario::fromFile(base_path('tests/Agent/Scenarios/04-valid-price.json'));
+        $store = new FixtureAgentStore($scenario->data);
+        $ai = new class extends ScriptedAiClient {
+            public function __construct()
+            {
+                parent::__construct([]);
+            }
+
+            public function chat(array $messages, string $model): string
+            {
+                throw new \RuntimeException('HTTP 402: insufficient credits');
+            }
+        };
+
+        try {
+            $this->processor($store, $ai, new DraftStore())->draft(
+                $scenario->artist(),
+                $scenario->chatId(),
+                $scenario->phone(),
+                $scenario->message(),
+                'Diego',
+                date('c', time() - 30),
+            );
+            $this->fail('The model failure should bubble up');
+        } catch (\RuntimeException $e) {
+            $this->assertStringContainsString('402', $e->getMessage());
+        }
+
+        $this->assertCount(1, $store->rememberedHumans);
+        $this->assertSame($scenario->message(), $store->rememberedHumans[0]['text']);
+    }
+
     public function test_a_selected_slot_is_simulated_without_writing_a_booking(): void
     {
         $scenario = Scenario::fromFile(base_path('tests/Agent/Scenarios/11-valid-booking-confirmation.json'));

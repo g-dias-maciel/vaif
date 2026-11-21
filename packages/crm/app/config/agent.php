@@ -34,6 +34,11 @@ return [
         'typing_grace_ms' => (int) env('AGENT_TYPING_GRACE_MS', 30000),
     ],
 
+    // OpenRouter defaults to the model's maximum output window when
+    // max_tokens is omitted. That reserves far more credit than the agent
+    // needs and causes 402s on low-balance accounts.
+    'max_tokens' => (int) env('AGENT_MAX_TOKENS', 2000),
+
     'models' => [
         'preflight' => env('AGENT_PREFLIGHT_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
         'agent' => env('AGENT_MODEL', 'anthropic/claude-haiku-5.5'),

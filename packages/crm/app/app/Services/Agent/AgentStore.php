@@ -31,6 +31,12 @@ interface AgentStore
     public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void;
 
     /**
+     * Store only the agent reply. The lead message is written before the model
+     * call, so a model failure never hides the customer from the conversation.
+     */
+    public function rememberReply(string $leadId, string $reply): void;
+
+    /**
      * Latest message the artist typed on their own phone after a given time.
      *
      * @return array{content: string, created_at: mixed}|null

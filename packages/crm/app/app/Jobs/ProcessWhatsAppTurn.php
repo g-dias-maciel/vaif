@@ -53,6 +53,7 @@ class ProcessWhatsAppTurn implements ShouldQueue
         }
 
         $mode = (string) ($artist->settings?->reply_mode ?? 'draft');
+        $state = $store->bufferState($artist->id, $this->chatId);
 
         if ($artist->status === 'suspended' && $mode !== 'draft') {
             return;
@@ -65,18 +66,18 @@ class ProcessWhatsAppTurn implements ShouldQueue
                 'artist_id' => $artist->id,
                 'chat_id' => $this->chatId,
             ]);
+            $this->recordInbound($store, (string) ($state['pending'] ?? ''));
             $store->bufferClear($artist->id, $this->chatId);
 
             return;
         }
 
         if ($mode === 'off') {
+            $this->recordInbound($store, (string) ($state['pending'] ?? ''));
             $store->bufferClear($artist->id, $this->chatId);
 
             return;
         }
-
-        $state = $store->bufferState($artist->id, $this->chatId);
 
         if ($state === null || trim((string) ($state['pending'] ?? '')) === '') {
             return;
@@ -115,6 +116,7 @@ class ProcessWhatsAppTurn implements ShouldQueue
         // In auto mode an artist takeover silences the agent. In draft mode the
         // artist is expected to answer, and we still want the suggestion.
         if ($mode === 'auto' && $store->chatOwner($artist->id, $this->chatId) === 'artist') {
+            $this->recordInbound($store, (string) ($state['pending'] ?? ''));
             $store->bufferClear($artist->id, $this->chatId);
 
             return;
@@ -161,6 +163,34 @@ class ProcessWhatsAppTurn implements ShouldQueue
             Log::info('WhatsApp agent held by contact gate', [
                 'artist_id' => $artist->id,
                 'chat_id' => $this->chatId,
+            ]);
+        }
+    }
+
+    /**
+     * Record an inbound burst that will not reach a processor (mode off,
+     * artist takeover, missing schema). The lead conversation must still show
+     * the customer message.
+     */
+    private function recordInbound(AgentStore $store, string $pending): void
+    {
+        $text = trim($this->cleanPending($pending));
+
+        if ($text === '') {
+            return;
+        }
+
+        try {
+            $start = $store->startTurn($this->artistId, $this->chatId, $this->phone, $this->name);
+
+            if ($start !== []) {
+                $store->rememberHuman((string) $start['lead_id'], $text, $this->msgAt);
+            }
+        } catch (\Throwable $e) {
+            Log::warning('Inbound message write failed', [
+                'artist_id' => $this->artistId,
+                'chat_id' => $this->chatId,
+                'error' => $e->getMessage(),
             ]);
         }
     }

@@ -9,7 +9,9 @@ class OpenRouterClient implements AiClient
 {
     public function chat(array $messages, string $model): string
     {
-        return $this->complete($messages, $model);
+        return $this->complete($messages, $model, [
+            'max_tokens' => (int) config('agent.max_tokens', 2000),
+        ]);
     }
 
     /**

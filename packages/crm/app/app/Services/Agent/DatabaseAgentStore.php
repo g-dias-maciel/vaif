@@ -112,6 +112,23 @@ class DatabaseAgentStore implements AgentStore
         );
     }
 
+    public function rememberReply(string $leadId, string $reply): void
+    {
+        $ai = $this->json([
+            'type' => 'ai',
+            'content' => $reply,
+            'tool_calls' => [],
+            'additional_kwargs' => [],
+            'response_metadata' => [],
+            'invalid_tool_calls' => [],
+        ]);
+
+        DB::statement(
+            'insert into agent_memory.chat_memory (session_id, message) values (?, ?::jsonb)',
+            [$leadId, $ai]
+        );
+    }
+
     public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void
     {
         $human = $this->json([
