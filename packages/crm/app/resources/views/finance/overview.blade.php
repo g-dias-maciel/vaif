@@ -4,6 +4,7 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'overview'])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
@@ -14,7 +15,6 @@
         <div class="fin-actions">
             <a href="{{ route('finance.invoices.create') }}" class="btn btn--small">Nova cobrança</a>
             <a href="{{ route('finance.expenses.create') }}" class="btn btn--ghost btn--small">Nova despesa</a>
-            <a href="{{ route('finance.months', ['month' => now()->format('Y-m')]) }}" class="btn btn--ghost btn--small">Mês atual</a>
         </div>
     </div>
 

@@ -4,9 +4,18 @@
 
 @section('content')
 @include('finance.partials.styles')
-
 @php
     $editing = $contract->exists;
+    $backUrl = \App\Support\FinanceNavigation::backUrl(request('return_to'), route('finance.clients'));
+@endphp
+@include('finance.partials.nav', ['active' => 'contracts', 'navMonth' => now(), 'backUrl' => $backUrl])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => 'Contratos', 'url' => route('finance.clients')],
+    ['label' => $prospect->name, 'url' => null],
+    ['label' => $editing ? 'Editar contrato' : 'Vincular contrato', 'url' => null],
+]])
+
+@php
     $monthly = old('monthly_value', $contract->monthly_value_cents !== null && $contract->monthly_value_cents > 0
         ? number_format($contract->monthly_value_cents / 100, 2, '.', '')
         : '');
@@ -27,13 +36,14 @@
             </p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.clients') }}" class="btn btn--ghost btn--small">Voltar</a>
+            <a href="{{ $backUrl }}" class="btn btn--ghost btn--small">Voltar</a>
             @if ($editing && $contract->prospect)
                 <a href="{{ route('sales.prospects.show', $prospect) }}" class="btn btn--ghost btn--small">Prospect</a>
             @endif
             @if ($editing && $contract->isPix() && $contract->status === 'active')
                 <form method="post" action="{{ route('finance.contracts.generate-invoice', $contract) }}" onsubmit="return confirm('Gerar a próxima cobrança agora?');">
                     @csrf
+                    <input type="hidden" name="return_to" value="{{ url()->full() }}">
                     <button type="submit" class="btn btn--small">Gerar cobrança</button>
                 </form>
             @endif
@@ -52,6 +62,7 @@
 
     <form method="post" action="{{ $editing ? route('finance.contracts.update', $contract) : route('finance.contracts.store', $prospect) }}" class="sales-form">
         @csrf
+        <input type="hidden" name="return_to" value="{{ old('return_to', request('return_to')) }}">
         @if ($editing)
             @method('put')
             <input type="hidden" name="prospect_id" value="{{ $prospect->id }}">

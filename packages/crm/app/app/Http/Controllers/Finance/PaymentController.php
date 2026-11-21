@@ -8,6 +8,7 @@ use App\Models\BillingPayment;
 use App\Models\ProspectActivity;
 use App\Models\ProspectContract;
 use App\Services\Finance\PaymentRecorder;
+use App\Support\FinanceNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -114,12 +115,15 @@ class PaymentController extends Controller
 
         if ($payment->invoice_id !== null) {
             return redirect()
-                ->route('finance.invoices.show', $payment->invoice_id)
+                ->to(FinanceNavigation::backUrl(
+                    $request->input('return_to'),
+                    route('finance.invoices.show', $payment->invoice_id),
+                ))
                 ->with('status', 'Pagamento registrado.');
         }
 
         return redirect()
-            ->route('finance.payments.index')
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.payments.index')))
             ->with('status', 'Pagamento registrado.');
     }
 }

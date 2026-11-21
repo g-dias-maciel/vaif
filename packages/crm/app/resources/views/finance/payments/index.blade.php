@@ -4,6 +4,9 @@
 
 @section('content')
 @include('finance.partials.styles')
+@php($backUrl = \App\Support\FinanceNavigation::backUrl(request('return_to'), route('finance.dashboard')))
+@include('finance.partials.nav', ['active' => 'payments', 'navMonth' => now(), 'backUrl' => $backUrl])
+@include('finance.partials.breadcrumbs', ['items' => [['label' => 'Recebimentos', 'url' => null]]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
@@ -12,8 +15,6 @@
             <p class="meta" style="margin-top:6px;">Receita recebida. Cartão do Mercado Pago entra aqui sem cobrança vinculada.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.dashboard') }}" class="btn btn--ghost btn--small">Financeiro</a>
-            <a href="{{ route('finance.invoices.index') }}" class="btn btn--ghost btn--small">Cobranças</a>
         </div>
     </div>
 

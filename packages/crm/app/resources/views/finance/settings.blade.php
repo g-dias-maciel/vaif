@@ -4,6 +4,8 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'settings'])
+@include('finance.partials.breadcrumbs', ['items' => [['label' => 'Configuração', 'url' => null]]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
@@ -11,7 +13,6 @@
             <h1 style="margin:0;">Configuração financeira</h1>
             <p class="meta" style="margin-top:6px;">Emissor, PIX, textos da fatura, aprovação e sócios.</p>
         </div>
-        <a href="{{ route('finance.dashboard') }}" class="btn btn--ghost btn--small">Voltar</a>
     </div>
 
     @if (session('status'))

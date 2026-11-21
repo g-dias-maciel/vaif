@@ -4,6 +4,16 @@
 
 @section('content')
 @include('finance.partials.styles')
+@php
+    $backUrl = \App\Support\FinanceNavigation::backUrl(request('return_to'), route('finance.invoices.index'));
+    $navMonth = $invoice->period_start ?? now();
+@endphp
+@include('finance.partials.nav', ['active' => 'invoices', 'navMonth' => $navMonth, 'backUrl' => $backUrl])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => $navMonth->format('m/Y'), 'url' => route('finance.months', ['month' => $navMonth->format('Y-m')])],
+    ['label' => 'Cobranças', 'url' => route('finance.invoices.index')],
+    ['label' => $invoice->number, 'url' => null],
+]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
@@ -15,7 +25,7 @@
         </div>
         <div class="fin-actions">
             @if (! $invoice->isPaid() && ! $invoice->isCancelled())
-                <a href="{{ route('finance.invoices.edit', $invoice) }}" class="btn btn--ghost btn--small">Editar</a>
+                <a href="{{ route('finance.invoices.edit', ['invoice' => $invoice, 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Editar</a>
             @endif
             @if (! $invoice->isDraft() && ! $invoice->isPaid() && ! $invoice->isCancelled())
                 <form method="post" action="{{ route('finance.invoices.resend', $invoice) }}">
@@ -25,7 +35,7 @@
             @endif
             <a href="{{ route('finance.invoices.pdf', $invoice) }}" class="btn btn--ghost btn--small">Baixar PDF</a>
             <a href="{{ route('finance.invoices.receipt', $invoice) }}" class="btn btn--ghost btn--small" target="_blank">Recibo</a>
-            <a href="{{ route('finance.invoices.index') }}" class="btn btn--ghost btn--small">Voltar</a>
+            <a href="{{ $backUrl }}" class="btn btn--ghost btn--small">Voltar</a>
         </div>
     </div>
 
@@ -52,6 +62,7 @@
             <span>Esta fatura está aguardando aprovação. Revise os itens e o vencimento antes de enviar.</span>
             <form method="post" action="{{ route('finance.invoices.approve', $invoice) }}">
                 @csrf
+                <input type="hidden" name="return_to" value="{{ request('return_to') }}">
                 <button type="submit" class="btn btn--small" onclick="return confirm('Aprovar e enviar esta fatura pelo WhatsApp?');">Aprovar e enviar</button>
             </form>
         </div>
@@ -60,6 +71,7 @@
             <span>Falha no envio: {{ $invoice->delivery_error ?: 'erro desconhecido' }}.</span>
             <form method="post" action="{{ route('finance.invoices.resend', $invoice) }}">
                 @csrf
+                <input type="hidden" name="return_to" value="{{ request('return_to') }}">
                 <button type="submit" class="btn btn--ghost btn--small">Tentar novamente</button>
             </form>
         </div>
@@ -70,6 +82,7 @@
             <span>Fatura atrasada. {{ $invoice->reminder_count > 0 ? $invoice->reminder_count.' lembrete(s) enviado(s).' : 'Nenhum lembrete enviado ainda.' }}</span>
             <form method="post" action="{{ route('finance.invoices.remind', $invoice) }}">
                 @csrf
+                <input type="hidden" name="return_to" value="{{ request('return_to') }}">
                 <button type="submit" class="btn btn--ghost btn--small" onclick="return confirm('Enviar cobrança de atraso pelo WhatsApp?');">Cobrar atraso</button>
             </form>
         </div>
@@ -193,6 +206,7 @@
                 <h2>Registrar pagamento</h2>
                 <form method="post" action="{{ route('finance.payments.store') }}" class="sales-form">
                     @csrf
+                    <input type="hidden" name="return_to" value="{{ url()->full() }}">
                     <input type="hidden" name="invoice_id" value="{{ $invoice->id }}">
                     <input type="hidden" name="contract_id" value="{{ $invoice->contract_id }}">
 
@@ -250,6 +264,7 @@
                 <p class="fin-note" style="margin-bottom:12px;">Recebe o saldo restante de uma vez e marca a cobrança como paga.</p>
                 <form method="post" action="{{ route('finance.payments.store') }}" style="margin-bottom:16px;">
                     @csrf
+                    <input type="hidden" name="return_to" value="{{ url()->full() }}">
                     <input type="hidden" name="invoice_id" value="{{ $invoice->id }}">
                     <input type="hidden" name="contract_id" value="{{ $invoice->contract_id }}">
                     <input type="hidden" name="amount" value="{{ number_format($invoice->balanceCents() / 100, 2, '.', '') }}">
@@ -261,13 +276,14 @@
                 @if ($invoice->paid_cents === 0)
                     <form method="post" action="{{ route('finance.invoices.cancel', $invoice) }}" onsubmit="return confirm('Cancelar esta cobrança?');">
                         @csrf
+                        <input type="hidden" name="return_to" value="{{ request('return_to') }}">
                         <button type="submit" class="btn btn--danger">Cancelar cobrança</button>
                     </form>
                 @endif
 
                 @if ($invoice->contract)
                     <p class="fin-note" style="margin-top:16px;">
-                        Contrato: <a href="{{ route('finance.contracts.edit', $invoice->contract) }}">{{ $invoice->contract->planLabel() }}</a>
+                        Contrato: <a href="{{ route('finance.contracts.edit', ['contract' => $invoice->contract, 'return_to' => url()->full()]) }}">{{ $invoice->contract->planLabel() }}</a>
                         · {{ $invoice->contract->billingModeLabel() }}
                     </p>
                 @endif

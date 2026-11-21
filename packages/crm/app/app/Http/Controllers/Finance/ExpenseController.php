@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Models\BillingExpense;
 use App\Models\FinancePartner;
 use App\Services\Finance\RecurringExpenseGenerator;
+use App\Support\FinanceNavigation;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -256,8 +257,10 @@ class ExpenseController extends Controller
 
         BillingExpense::create($data);
 
+        $month = Carbon::parse($data['competence_month'])->format('Y-m');
+
         return redirect()
-            ->route('finance.expenses.index', ['month' => Carbon::parse($data['competence_month'])->format('Y-m')])
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.expenses.index', ['month' => $month])))
             ->with('status', 'Despesa registrada.');
     }
 
@@ -277,8 +280,10 @@ class ExpenseController extends Controller
 
         $expense->update($data);
 
+        $month = $expense->fresh()->competence_month->format('Y-m');
+
         return redirect()
-            ->route('finance.expenses.index', ['month' => $expense->fresh()->competence_month->format('Y-m')])
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.expenses.index', ['month' => $month])))
             ->with('status', 'Despesa atualizada.');
     }
 

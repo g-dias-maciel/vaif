@@ -4,6 +4,11 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'expenses', 'navMonth' => $month, 'backUrl' => route('finance.months', ['month' => $month->format('Y-m')])])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => 'Despesas', 'url' => route('finance.expenses.index', ['month' => $month->format('Y-m')])],
+    ['label' => $month->format('m/Y'), 'url' => null],
+]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
@@ -12,8 +17,7 @@
             <p class="meta" style="margin-top:6px;">Saídas por mês de competência. O que está pendente e vencido aparece como contas a pagar.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.expenses.create', ['month' => $month->format('Y-m')]) }}" class="btn btn--small">Nova despesa</a>
-            <a href="{{ route('finance.months') }}" class="btn btn--ghost btn--small">Visão mensal</a>
+            <a href="{{ route('finance.expenses.create', ['month' => $month->format('Y-m'), 'return_to' => url()->full()]) }}" class="btn btn--small">Nova despesa</a>
             <form method="post" action="{{ route('finance.expenses.generate-recurring') }}" onsubmit="return confirm('Gerar as despesas recorrentes até o próximo mês?');">
                 @csrf
                 <button type="submit" class="btn btn--ghost btn--small">Gerar recorrentes</button>
@@ -108,7 +112,7 @@
                         <td><x-money :cents="$expense->amount_cents" /></td>
                         <td>
                             <div class="fin-actions">
-                                <a href="{{ route('finance.expenses.edit', $expense) }}" class="btn btn--ghost btn--small">Editar</a>
+                                <a href="{{ route('finance.expenses.edit', ['expense' => $expense, 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Editar</a>
                                 @if ($expense->status === 'pending')
                                     <form method="post" action="{{ route('finance.expenses.paid', $expense) }}">
                                         @csrf

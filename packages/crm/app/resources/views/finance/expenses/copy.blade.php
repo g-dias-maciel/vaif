@@ -4,6 +4,11 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'expenses', 'navMonth' => $target, 'backUrl' => route('finance.expenses.index', ['month' => $target->format('Y-m')])])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => 'Despesas', 'url' => route('finance.expenses.index', ['month' => $target->format('Y-m')])],
+    ['label' => 'Copiar despesas', 'url' => null],
+]])
 
 @php
     $sameMonth = $source->format('Y-m') === $target->format('Y-m');

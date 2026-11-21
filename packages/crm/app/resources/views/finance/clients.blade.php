@@ -4,6 +4,8 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'contracts'])
+@include('finance.partials.breadcrumbs', ['items' => [['label' => 'Contratos', 'url' => null]]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
@@ -12,8 +14,6 @@
             <p class="meta" style="margin-top:6px;">{{ $prospects->total() }} cliente(s) ativo(s). MRR vinculado: <x-money :cents="$mrr" />.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.dashboard') }}" class="btn btn--ghost btn--small">Financeiro</a>
-            <a href="{{ route('finance.invoices.index') }}" class="btn btn--ghost btn--small">Cobranças</a>
         </div>
     </div>
 
@@ -96,14 +96,14 @@
                         <td>
                             <div class="fin-actions">
                                 @if ($contract)
-                                    <a href="{{ route('finance.contracts.edit', $contract) }}" class="btn btn--ghost btn--small">Editar</a>
+                                    <a href="{{ route('finance.contracts.edit', ['contract' => $contract, 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Editar</a>
                                     @if ($contract->isPix())
-                                        <a href="{{ route('finance.invoices.create', ['contract' => $contract->id]) }}" class="btn btn--small">Cobrança</a>
+                                        <a href="{{ route('finance.invoices.create', ['contract' => $contract->id, 'return_to' => url()->full()]) }}" class="btn btn--small">Cobrança</a>
                                     @else
-                                        <a href="{{ route('finance.payments.index', ['contract' => $contract->id]) }}" class="btn btn--small">Registrar cartão</a>
+                                        <a href="{{ route('finance.payments.index', ['contract' => $contract->id, 'return_to' => url()->full()]) }}" class="btn btn--small">Registrar cartão</a>
                                     @endif
                                 @else
-                                    <a href="{{ route('finance.contracts.create', $prospect) }}" class="btn btn--small">Vincular contrato</a>
+                                    <a href="{{ route('finance.contracts.create', ['prospect' => $prospect, 'return_to' => url()->full()]) }}" class="btn btn--small">Vincular contrato</a>
                                 @endif
                                 <a href="{{ route('sales.prospects.show', $prospect) }}" class="btn btn--ghost btn--small">Prospect</a>
                             </div>

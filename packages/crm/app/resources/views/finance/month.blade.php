@@ -4,6 +4,8 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'month', 'navMonth' => $month, 'backUrl' => route('finance.dashboard', ['year' => $month->year])])
+@include('finance.partials.breadcrumbs', ['items' => [['label' => $month->format('m/Y'), 'url' => null]]])
 
 @php
     $profit = (int) $summary['profit_cents'];
@@ -19,8 +21,8 @@
             <p class="meta" style="margin-top:6px;">Entradas, saídas e distribuição de lucros do mês.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.invoices.create', ['month' => $month->format('Y-m')]) }}" class="btn btn--small">Nova cobrança</a>
-            <a href="{{ route('finance.expenses.create', ['month' => $month->format('Y-m')]) }}" class="btn btn--ghost btn--small">Nova despesa</a>
+            <a href="{{ route('finance.invoices.create', ['month' => $month->format('Y-m'), 'return_to' => url()->full()]) }}" class="btn btn--small">Nova cobrança</a>
+            <a href="{{ route('finance.expenses.create', ['month' => $month->format('Y-m'), 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Nova despesa</a>
             <a href="{{ route('finance.dashboard', ['year' => $month->year]) }}" class="btn btn--ghost btn--small">Visão anual</a>
         </div>
     </div>
@@ -29,6 +31,12 @@
         <input type="month" name="month" value="{{ $month->format('Y-m') }}" required>
         <span class="meta">Atualiza ao selecionar o mês.</span>
     </form>
+
+    <div class="fin-month-nav" style="margin-bottom:18px;">
+        <a href="{{ route('finance.months', ['month' => $month->copy()->subMonthNoOverflow()->format('Y-m')]) }}" class="btn btn--ghost btn--small">&lsaquo; {{ $month->copy()->subMonthNoOverflow()->format('m/Y') }}</a>
+        <a href="{{ route('finance.months', ['month' => now()->format('Y-m')]) }}" class="btn btn--ghost btn--small">Hoje</a>
+        <a href="{{ route('finance.months', ['month' => $month->copy()->addMonthNoOverflow()->format('Y-m')]) }}" class="btn btn--ghost btn--small">{{ $month->copy()->addMonthNoOverflow()->format('m/Y') }} &rsaquo;</a>
+    </div>
 
     <div class="fin-grid" style="margin-bottom:20px;">
         <div class="fin-card">
@@ -107,7 +115,7 @@
                             <td><strong>{{ $entry['client'] }}</strong></td>
                             <td>
                                 @if ($entry['invoice'])
-                                    <a href="{{ route('finance.invoices.show', $entry['invoice']) }}"><strong>{{ $entry['reference'] }}</strong></a>
+                                    <a href="{{ route('finance.invoices.show', ['invoice' => $entry['invoice'], 'return_to' => url()->full()]) }}"><strong>{{ $entry['reference'] }}</strong></a>
                                     <div class="sales-sub">{{ \Illuminate\Support\Str::limit($entry['description'], 90) }}</div>
                                 @else
                                     <strong>{{ $entry['reference'] }}</strong>
@@ -125,16 +133,18 @@
                                         @if ($entry['is_draft'])
                                             <form method="post" action="{{ route('finance.invoices.approve', $entry['invoice']) }}">
                                                 @csrf
+                                                <input type="hidden" name="return_to" value="{{ url()->full() }}">
                                                 <button type="submit" class="btn btn--small" onclick="return confirm('Aprovar e enviar esta fatura pelo WhatsApp?');">Aprovar</button>
                                             </form>
-                                            <a href="{{ route('finance.invoices.edit', $entry['invoice']) }}" class="btn btn--ghost btn--small">Editar</a>
+                                            <a href="{{ route('finance.invoices.edit', ['invoice' => $entry['invoice'], 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Editar</a>
                                         @elseif ($entry['can_remind'])
                                             <form method="post" action="{{ route('finance.invoices.remind', $entry['invoice']) }}">
                                                 @csrf
+                                                <input type="hidden" name="return_to" value="{{ url()->full() }}">
                                                 <button type="submit" class="btn btn--small" onclick="return confirm('Enviar cobrança de atraso?');">Cobrar atraso</button>
                                             </form>
                                         @endif
-                                        <a href="{{ route('finance.invoices.show', $entry['invoice']) }}" class="btn btn--ghost btn--small">Abrir</a>
+                                        <a href="{{ route('finance.invoices.show', ['invoice' => $entry['invoice'], 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Abrir</a>
                                     @endif
                                 </div>
                             </td>
@@ -199,7 +209,7 @@
                                 @endif
                             </td>
                             <td>
-                                <a href="{{ route('finance.expenses.edit', $expense) }}"><strong>{{ $expense->description }}</strong></a>
+                                <a href="{{ route('finance.expenses.edit', ['expense' => $expense, 'return_to' => url()->full()]) }}"><strong>{{ $expense->description }}</strong></a>
                                 @if ($expense->notes)
                                     <div class="sales-sub">{{ \Illuminate\Support\Str::limit($expense->notes, 90) }}</div>
                                 @endif
@@ -217,7 +227,7 @@
                             <td><x-money :cents="$expense->amount_cents" /></td>
                             <td>
                                 <div class="fin-actions">
-                                    <a href="{{ route('finance.expenses.edit', $expense) }}" class="btn btn--ghost btn--small">Editar</a>
+                                    <a href="{{ route('finance.expenses.edit', ['expense' => $expense, 'return_to' => url()->full()]) }}" class="btn btn--ghost btn--small">Editar</a>
                                     @if ($expense->status === 'pending')
                                         <form method="post" action="{{ route('finance.expenses.paid', $expense) }}">
                                             @csrf

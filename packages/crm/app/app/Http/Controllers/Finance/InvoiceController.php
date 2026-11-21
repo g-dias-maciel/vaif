@@ -11,6 +11,7 @@ use App\Models\ProspectContract;
 use App\Services\Finance\InvoiceNotifier;
 use App\Services\Finance\InvoiceNumberGenerator;
 use App\Services\Finance\InvoicePdfRenderer;
+use App\Support\FinanceNavigation;
 use Carbon\Carbon;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -148,7 +149,7 @@ class InvoiceController extends Controller
         ]);
 
         return redirect()
-            ->route('finance.invoices.show', $invoice)
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
             ->with('status', 'Cobrança '.$invoice->number.' criada.');
     }
 
@@ -241,7 +242,7 @@ class InvoiceController extends Controller
         $this->replaceItems($invoice, $items);
 
         return redirect()
-            ->route('finance.invoices.show', $invoice)
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
             ->with('status', 'Cobrança atualizada.');
     }
 
@@ -270,7 +271,7 @@ class InvoiceController extends Controller
         $sent = $notifier->send($invoice);
 
         return redirect()
-            ->route('finance.invoices.show', $invoice)
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
             ->with(
                 $sent ? 'status' : 'error',
                 $sent
@@ -279,7 +280,7 @@ class InvoiceController extends Controller
             );
     }
 
-    public function resend(BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
+    public function resend(Request $request, BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
     {
         if ($invoice->isDraft() || $invoice->isPaid() || $invoice->isCancelled()) {
             return back()->withErrors(['invoice' => 'Esta fatura não pode ser reenviada.']);
@@ -287,13 +288,15 @@ class InvoiceController extends Controller
 
         $sent = $notifier->send($invoice);
 
-        return back()->with(
-            $sent ? 'status' : 'error',
-            $sent ? 'Fatura reenviada.' : 'Falha ao reenviar: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
-        );
+        return redirect()
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
+            ->with(
+                $sent ? 'status' : 'error',
+                $sent ? 'Fatura reenviada.' : 'Falha ao reenviar: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
+            );
     }
 
-    public function remind(BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
+    public function remind(Request $request, BillingInvoice $invoice, InvoiceNotifier $notifier): RedirectResponse
     {
         if (! $invoice->isOverdue()) {
             return back()->withErrors(['invoice' => 'Esta fatura ainda não está atrasada.']);
@@ -305,10 +308,12 @@ class InvoiceController extends Controller
 
         $sent = $notifier->sendReminder($invoice);
 
-        return back()->with(
-            $sent ? 'status' : 'error',
-            $sent ? 'Cobrança de atraso enviada.' : 'Falha ao cobrar atraso: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
-        );
+        return redirect()
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
+            ->with(
+                $sent ? 'status' : 'error',
+                $sent ? 'Cobrança de atraso enviada.' : 'Falha ao cobrar atraso: '.($invoice->fresh()->delivery_error ?? 'erro desconhecido'),
+            );
     }
 
     public function remindOverdue(Request $request, InvoiceNotifier $notifier): RedirectResponse
@@ -350,7 +355,7 @@ class InvoiceController extends Controller
         ]);
 
         return redirect()
-            ->route('finance.invoices.show', $invoice)
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.invoices.show', $invoice)))
             ->with('status', 'Cobrança cancelada.');
     }
 

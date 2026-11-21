@@ -12,6 +12,7 @@ use App\Models\FinancePartner;
 use App\Models\Prospect;
 use App\Models\ProspectContract;
 use App\Models\User;
+use App\Support\FinanceNavigation;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Mail;
@@ -331,6 +332,107 @@ class FinanceOverviewTest extends TestCase
                 'active' => 1,
             ])
             ->assertSessionHasErrors('share_percent');
+    }
+
+    public function test_return_to_is_only_honoured_for_local_finance_urls(): void
+    {
+        $fallback = 'https://crm.test/finance';
+
+        $this->assertSame('/finance/months?month=2026-11', FinanceNavigation::backUrl('/finance/months?month=2026-11', $fallback));
+        $this->assertSame($fallback, FinanceNavigation::backUrl('https://evil.test/finance/x', $fallback));
+        $this->assertSame($fallback, FinanceNavigation::backUrl('/logout', $fallback));
+        $this->assertSame($fallback, FinanceNavigation::backUrl('/finance-evil', $fallback));
+    }
+
+    public function test_month_view_has_the_finance_subnav_and_breadcrumbs(): void
+    {
+        $this->actingAs($this->staff)
+            ->get(route('finance.months', ['month' => now()->format('Y-m')]))
+            ->assertOk()
+            ->assertSee('fin-subnav', false)
+            ->assertSee('Visão anual')
+            ->assertSee('Cobranças')
+            ->assertSee('Configuração')
+            ->assertSee('fin-breadcrumbs', false);
+    }
+
+    public function test_invoice_update_and_show_honour_return_to(): void
+    {
+        $invoice = $this->draftInvoice();
+        $returnTo = '/finance/months?month='.now()->format('Y-m');
+
+        $this->actingAs($this->staff)
+            ->put(route('finance.invoices.update', $invoice), [
+                'prospect_id' => $this->prospect->id,
+                'period_start' => now()->startOfMonth()->toDateString(),
+                'period_end' => now()->endOfMonth()->toDateString(),
+                'issue_date' => now()->toDateString(),
+                'due_date' => now()->addDays(10)->toDateString(),
+                'payment_method' => 'pix',
+                'discount' => 0,
+                'items' => [
+                    ['description' => 'Plano semestral', 'quantity' => 1, 'unit_amount' => 1800],
+                ],
+                'return_to' => $returnTo,
+            ])
+            ->assertRedirect($returnTo);
+
+        $this->actingAs($this->staff)
+            ->get(route('finance.invoices.show', ['invoice' => $invoice, 'return_to' => $returnTo]))
+            ->assertOk()
+            ->assertSee($returnTo, false);
+    }
+
+    public function test_expense_and_contract_updates_honour_return_to(): void
+    {
+        $expense = BillingExpense::create([
+            'description' => 'Despesa de navegação',
+            'category' => BillingExpense::CATEGORY_OTHER,
+            'amount_cents' => 10_000,
+            'competence_month' => now()->startOfMonth()->toDateString(),
+            'due_date' => now()->toDateString(),
+            'status' => BillingExpense::STATUS_PENDING,
+        ]);
+
+        $returnTo = '/finance/months?month='.now()->format('Y-m');
+
+        $this->actingAs($this->staff)
+            ->put(route('finance.expenses.update', $expense), [
+                'description' => 'Despesa de navegação editada',
+                'category' => 'other',
+                'amount' => 100,
+                'competence_month' => now()->format('Y-m'),
+                'due_date' => now()->toDateString(),
+                'status' => 'pending',
+                'recurrence' => 'one_off',
+                'return_to' => $returnTo,
+            ])
+            ->assertRedirect($returnTo);
+
+        $contract = $this->prospect->contracts()->create([
+            'plan' => ProspectContract::PLAN_MENSAL,
+            'monthly_value_cents' => 100_000,
+            'total_value_cents' => 100_000,
+            'start_date' => now()->toDateString(),
+            'status' => ProspectContract::STATUS_ACTIVE,
+            'billing_mode' => 'pix',
+            'payment_method' => 'pix',
+            'billing_day' => 10,
+            'next_invoice_at' => now()->addMonth()->toDateString(),
+        ]);
+
+        $this->actingAs($this->staff)
+            ->put(route('finance.contracts.update', $contract), [
+                'plan' => 'mensal',
+                'monthly_value' => 1000,
+                'start_date' => now()->toDateString(),
+                'billing_day' => 10,
+                'billing_mode' => 'pix',
+                'payment_method' => 'pix',
+                'status' => 'active',
+                'return_to' => $returnTo,
+            ])
+            ->assertRedirect($returnTo);
     }
 
     private function draftInvoice(): BillingInvoice

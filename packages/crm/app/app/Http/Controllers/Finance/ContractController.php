@@ -7,6 +7,7 @@ use App\Models\Prospect;
 use App\Models\ProspectActivity;
 use App\Models\ProspectContract;
 use App\Services\Finance\InvoiceGenerator;
+use App\Support\FinanceNavigation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -66,7 +67,7 @@ class ContractController extends Controller
         $this->log($request, $prospect, $contract, true);
 
         return redirect()
-            ->route('finance.clients')
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.clients')))
             ->with('status', 'Contrato criado para '.$prospect->name.'.');
     }
 
@@ -95,7 +96,7 @@ class ContractController extends Controller
         $this->log($request, $prospect, $contract, false, $oldPlan);
 
         return redirect()
-            ->route('finance.clients')
+            ->to(FinanceNavigation::backUrl($request->input('return_to'), route('finance.clients')))
             ->with('status', 'Contrato atualizado.');
     }
 
@@ -237,7 +238,10 @@ class ContractController extends Controller
         }
 
         return redirect()
-            ->route('finance.invoices.show', $invoice)
+            ->to(FinanceNavigation::withReturnTo(
+                route('finance.invoices.show', $invoice),
+                $request->input('return_to'),
+            ))
             ->with('status', 'Cobrança '.$invoice->number.' gerada para aprovação.');
     }
 

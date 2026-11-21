@@ -4,6 +4,8 @@
 
 @section('content')
 @include('finance.partials.styles')
+@include('finance.partials.nav', ['active' => 'invoices'])
+@include('finance.partials.breadcrumbs', ['items' => [['label' => 'Cobranças', 'url' => null]]])
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:14px;">
@@ -12,8 +14,7 @@
             <p class="meta" style="margin-top:6px;">PIX e cobranças manuais. Cartão não aparece aqui: entra como pagamento.</p>
         </div>
         <div class="fin-actions">
-            <a href="{{ route('finance.invoices.create') }}" class="btn btn--small">Nova cobrança</a>
-            <a href="{{ route('finance.dashboard') }}" class="btn btn--ghost btn--small">Financeiro</a>
+            <a href="{{ route('finance.invoices.create', ['return_to' => url()->full()]) }}" class="btn btn--small">Nova cobrança</a>
         </div>
     </div>
 
@@ -65,7 +66,7 @@
             <tbody>
                 @foreach ($invoices as $invoice)
                     <tr>
-                        <td><a href="{{ route('finance.invoices.show', $invoice) }}"><strong>{{ $invoice->number }}</strong></a></td>
+                        <td><a href="{{ route('finance.invoices.show', ['invoice' => $invoice, 'return_to' => url()->full()]) }}"><strong>{{ $invoice->number }}</strong></a></td>
                         <td>{{ $invoice->prospect?->name ?? '—' }}</td>
                         <td>{{ $invoice->periodLabel() }}</td>
                         <td>{{ $invoice->due_date?->format('d/m/Y') }}</td>

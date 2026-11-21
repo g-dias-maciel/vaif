@@ -4,10 +4,19 @@
 
 @section('content')
 @include('finance.partials.styles')
-
 @php
     $editing = $expense->exists;
+    $navMonth = $expense->competence_month ?? now();
+    $fallbackBack = route('finance.expenses.index', ['month' => $navMonth->format('Y-m')]);
+    $backUrl = \App\Support\FinanceNavigation::backUrl(request('return_to'), $fallbackBack);
 @endphp
+@include('finance.partials.nav', ['active' => 'expenses', 'navMonth' => $navMonth, 'backUrl' => $backUrl])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => 'Despesas', 'url' => route('finance.expenses.index', ['month' => $navMonth->format('Y-m')])],
+    ['label' => $navMonth->format('m/Y'), 'url' => route('finance.expenses.index', ['month' => $navMonth->format('Y-m')])],
+    ['label' => $editing ? 'Editar' : 'Nova despesa', 'url' => null],
+]])
+
 
 <div class="panel">
     <div style="display:flex; justify-content:space-between; align-items:flex-start; gap:16px; flex-wrap:wrap; margin-bottom:18px;">
@@ -15,7 +24,7 @@
             <h1 style="margin:0;">{{ $editing ? 'Editar despesa' : 'Nova despesa' }}</h1>
             <p class="meta" style="margin-top:6px;">A despesa entra no mês de competência e nas contas a pagar até ser marcada como paga.</p>
         </div>
-        <a href="{{ route('finance.expenses.index') }}" class="btn btn--ghost btn--small">Voltar</a>
+        <a href="{{ $backUrl }}" class="btn btn--ghost btn--small">Voltar</a>
     </div>
 
     @if ($errors->any())
@@ -30,6 +39,7 @@
 
     <form method="post" action="{{ $editing ? route('finance.expenses.update', $expense) : route('finance.expenses.store') }}" class="sales-form">
         @csrf
+        <input type="hidden" name="return_to" value="{{ old('return_to', request('return_to')) }}">
         @if ($editing)
             @method('put')
         @endif

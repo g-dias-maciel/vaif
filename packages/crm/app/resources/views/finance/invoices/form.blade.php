@@ -4,9 +4,20 @@
 
 @section('content')
 @include('finance.partials.styles')
-
 @php
     $editing = $invoice->exists;
+    $fallbackBack = $editing ? route('finance.invoices.show', $invoice) : route('finance.invoices.index');
+    $backUrl = \App\Support\FinanceNavigation::backUrl(request('return_to'), $fallbackBack);
+    $navMonth = $invoice->period_start ?? now();
+@endphp
+@include('finance.partials.nav', ['active' => 'invoices', 'navMonth' => $navMonth, 'backUrl' => $backUrl])
+@include('finance.partials.breadcrumbs', ['items' => [
+    ['label' => $navMonth->format('m/Y'), 'url' => route('finance.months', ['month' => $navMonth->format('Y-m')])],
+    ['label' => 'Cobranças', 'url' => route('finance.invoices.index')],
+    ['label' => $editing ? $invoice->number : 'Nova cobrança', 'url' => null],
+]])
+
+@php
     $itemRows = old('items');
 
     if ($itemRows === null) {
@@ -38,7 +49,7 @@
                 A fatura entra como <strong>aguardando aprovação</strong>; depois você aprova e envia pelo WhatsApp.
             </p>
         </div>
-        <a href="{{ $editing ? route('finance.invoices.show', $invoice) : route('finance.invoices.index') }}" class="btn btn--ghost btn--small">Voltar</a>
+        <a href="{{ $backUrl }}" class="btn btn--ghost btn--small">Voltar</a>
     </div>
 
     @if ($errors->any())
@@ -53,6 +64,7 @@
 
     <form method="post" action="{{ $editing ? route('finance.invoices.update', $invoice) : route('finance.invoices.store') }}" class="sales-form" id="invoiceForm">
         @csrf
+        <input type="hidden" name="return_to" value="{{ old('return_to', request('return_to')) }}">
         @if ($editing)
             @method('put')
         @endif
