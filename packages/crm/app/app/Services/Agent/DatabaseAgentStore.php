@@ -142,7 +142,14 @@ class DatabaseAgentStore implements AgentStore
         $when = $at !== null && $at !== ''
             ? \Carbon\CarbonImmutable::parse($this->normalizeTimestamp($at))
             : \Carbon\CarbonImmutable::now();
+        // Long bursts are re-recorded by retries with different message
+        // timestamps; dedupe those for 5 minutes. Short replies ("sim", "ok")
+        // keep a narrow window so a real repeat is not lost.
         $window = $at !== null && $at !== '' ? 2 : 120;
+
+        if (mb_strlen($content) > 40 || str_contains($content, "\n")) {
+            $window = 300;
+        }
 
         $duplicate = DB::table('agent_memory.chat_memory')
             ->where('session_id', $leadId)
