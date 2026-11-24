@@ -4,6 +4,7 @@ namespace App\Jobs;
 
 use App\Models\Artist;
 use App\Services\Agent\AgentStore;
+use App\Services\Agent\CreditMonitor;
 use App\Services\Agent\DraftProcessor;
 use App\Services\Agent\ObservedTurnProcessor;
 use App\Services\Agent\TurnProcessor;
@@ -44,7 +45,13 @@ class ProcessWhatsAppTurn implements ShouldQueue
         public readonly string $msgAt,
     ) {}
 
-    public function handle(AgentStore $store, TurnProcessor $processor, ?DraftProcessor $draftProcessor = null, ?ObservedTurnProcessor $observedProcessor = null): void
+    public function handle(
+        AgentStore $store,
+        TurnProcessor $processor,
+        ?DraftProcessor $draftProcessor = null,
+        ?ObservedTurnProcessor $observedProcessor = null,
+        ?CreditMonitor $creditMonitor = null,
+    ): void
     {
         $artist = Artist::with('settings')->find($this->artistId);
 
@@ -156,6 +163,18 @@ class ProcessWhatsAppTurn implements ShouldQueue
                     'mode' => $mode,
                     'error' => $e->getMessage(),
                 ]);
+
+                try {
+                    $creditMonitor?->alertExhausted([
+                        'artist_id' => $artist->id,
+                        'chat_id' => $this->chatId,
+                        'mode' => $mode,
+                        'error' => $e->getMessage(),
+                    ]);
+                } catch (\Throwable $alertError) {
+                    Log::warning('AI credits alert failed', ['error' => $alertError->getMessage()]);
+                }
+
                 $store->bufferClear($artist->id, $this->chatId);
 
                 return;

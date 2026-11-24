@@ -39,6 +39,14 @@ return [
     // needs and causes 402s on low-balance accounts.
     'max_tokens' => (int) env('AGENT_MAX_TOKENS', 2000),
 
+    // Warn before the account reaches zero. A live 402 also triggers the same
+    // alert immediately; the cache throttle prevents an e-mail per turn.
+    'credits' => [
+        'warn_below' => (float) env('AGENT_CREDITS_WARN_BELOW', 5.0),
+        'throttle_minutes' => (int) env('AGENT_CREDITS_ALERT_MINUTES', 120),
+        'email' => env('AGENT_CREDITS_ALERT_EMAIL', env('VAIF_ADMIN_EMAIL')),
+    ],
+
     'models' => [
         'preflight' => env('AGENT_PREFLIGHT_MODEL', env('AGENT_MODEL', 'anthropic/claude-haiku-5.5')),
         'agent' => env('AGENT_MODEL', 'anthropic/claude-haiku-5.5'),

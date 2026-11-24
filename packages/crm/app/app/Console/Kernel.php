@@ -41,6 +41,12 @@ class Kernel extends ConsoleKernel
             ->everyFiveMinutes()
             ->withoutOverlapping(10);
 
+        // OpenRouter credits: warn the admin before the agent silently stops
+        // transcribing audios and generating answers.
+        $schedule->command('agent:check-credits')
+            ->everyFifteenMinutes()
+            ->withoutOverlapping(10);
+
         // Retrospective media descriptions for calibration. Runs on the mock
         // queue and never touches a live turn.
         $schedule->command('agent:describe-media --all --days=2 --limit=100')
