@@ -46,6 +46,13 @@ class OpenRouterClient implements AiClient
             throw new AgentException('OpenRouter connection failed: '.$e->getMessage(), 0, $e);
         }
 
+        if ($response->status() === 402) {
+            throw new AgentException(
+                'OpenRouter credits exhausted: '.mb_substr($response->body(), 0, 500),
+                402,
+            );
+        }
+
         if (! $response->successful()) {
             throw new AgentException('OpenRouter returned HTTP '.$response->status().': '.mb_substr($response->body(), 0, 500));
         }

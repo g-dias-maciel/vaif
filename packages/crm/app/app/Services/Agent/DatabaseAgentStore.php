@@ -131,6 +131,33 @@ class DatabaseAgentStore implements AgentStore
 
     public function rememberHuman(string $leadId, string $leadText, ?string $at = null): void
     {
+        $content = trim($leadText);
+
+        if ($content === '') {
+            return;
+        }
+
+        // The same burst can be retried by a failed/queued job. Keep the
+        // conversation idempotent: one human row per content and timestamp.
+        $when = $at !== null && $at !== ''
+            ? \Carbon\CarbonImmutable::parse($this->normalizeTimestamp($at))
+            : \Carbon\CarbonImmutable::now();
+        $window = $at !== null && $at !== '' ? 2 : 120;
+
+        $duplicate = DB::table('agent_memory.chat_memory')
+            ->where('session_id', $leadId)
+            ->whereRaw("message->>'type' = 'human'")
+            ->whereRaw("message->>'content' = ?", [$content])
+            ->whereBetween('created_at', [
+                $when->subSeconds($window),
+                $when->addSeconds($window),
+            ])
+            ->exists();
+
+        if ($duplicate) {
+            return;
+        }
+
         $human = $this->json([
             'type' => 'human',
             'content' => $leadText,

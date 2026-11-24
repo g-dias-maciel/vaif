@@ -147,6 +147,20 @@ class ProcessWhatsAppTurn implements ShouldQueue
                 $result = $processor->process($artist, $this->chatId, $this->phone, $text, $this->name);
             }
         } catch (\Throwable $e) {
+            // A credit failure is not retryable. Retrying creates duplicate
+            // turns and a retry storm while the account has no balance.
+            if ($this->isCreditFailure($e)) {
+                Log::warning('WhatsApp agent turn skipped: AI credits exhausted', [
+                    'artist_id' => $artist->id,
+                    'chat_id' => $this->chatId,
+                    'mode' => $mode,
+                    'error' => $e->getMessage(),
+                ]);
+                $store->bufferClear($artist->id, $this->chatId);
+
+                return;
+            }
+
             Log::error('WhatsApp agent turn failed', [
                 'artist_id' => $artist->id,
                 'chat_id' => $this->chatId,
@@ -165,6 +179,13 @@ class ProcessWhatsAppTurn implements ShouldQueue
                 'chat_id' => $this->chatId,
             ]);
         }
+    }
+
+    private function isCreditFailure(\Throwable $e): bool
+    {
+        return $e->getCode() === 402
+            || str_contains($e->getMessage(), 'credits exhausted')
+            || str_contains($e->getMessage(), 'HTTP 402');
     }
 
     /**
